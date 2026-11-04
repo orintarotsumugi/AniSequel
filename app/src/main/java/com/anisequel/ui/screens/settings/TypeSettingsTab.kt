@@ -41,6 +41,7 @@ import com.anisequel.ui.components.LocalTitleMotion
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveShape
+import com.anisequel.ui.components.rememberBoundSliderState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -266,19 +267,21 @@ private fun TextSizeSection(
         }
 
         Slider(
-            value = draft,
+            state = rememberBoundSliderState(
+                value = draft,
+                steps = 11,
+                trackRange = MIN_FONT_SCALE..MAX_FONT_SCALE
+            ),
             onValueChange = { draft = it },
             onValueChangeFinished = {
                 val target = draft
                 scope.launch { themePreferences.setFontScale(target) }
             },
-            valueRange = MIN_FONT_SCALE..MAX_FONT_SCALE,
             // Thirteen stops (80% to 140% in fives): fine enough to matter,
             // coarse enough that every stop is a deliberate size rather than a
             // pixel nudge. The range widened from 85-130 because a reader who
             // needs large text was stopping at the top of a slider, not at the
             // size that worked.
-            steps = 11,
             modifier = Modifier.testTag("text_size_slider")
         )
     }
@@ -368,13 +371,15 @@ private fun TitleMotionSection(
         }
 
         Slider(
-            value = draft,
+            state = rememberBoundSliderState(
+                value = draft,
+                trackRange = MIN_TITLE_SCROLL_DP_PER_SECOND..MAX_TITLE_SCROLL_DP_PER_SECOND
+            ),
             onValueChange = { draft = it },
             onValueChangeFinished = {
                 val target = draft
                 scope.launch { themePreferences.setTitleScrollSpeed(target) }
             },
-            valueRange = MIN_TITLE_SCROLL_DP_PER_SECOND..MAX_TITLE_SCROLL_DP_PER_SECOND,
             modifier = Modifier.testTag("title_scroll_slider")
         )
     }

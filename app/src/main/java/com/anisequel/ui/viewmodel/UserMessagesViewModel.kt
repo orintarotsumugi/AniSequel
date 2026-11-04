@@ -492,7 +492,10 @@ class UserMessagesViewModel(
                             messages = (listOf(sent) + current.messages).distinctBy { it.id }
                         )
                     }
-                    _reply.value = ReplyState(sentTo = counterpart.name ?: "them")
+                    // `ifBlank`, not `?:`: the name is a non-null field, so the fallback was
+                    // never reachable as written and the compiler said so. An empty one is the
+                    // case it meant to catch.
+                    _reply.value = ReplyState(sentTo = counterpart.name.ifBlank { "them" })
                 },
                 onFailure = { failure ->
                     _reply.value = ReplyState(

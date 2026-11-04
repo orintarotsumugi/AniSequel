@@ -93,6 +93,19 @@ It is tracked in [TO-DO.md](TO-DO.md) with the specific extraction.
   120×44 tab renders a 120×44 *ellipse* from `MaterialShapes.Pill`. Use
   `RoundedCornerShape(percent = 50)` for capsules.
   `ExpressiveShapesTest` guards the geometry.
+- **A slider takes `rememberBoundSliderState`, and a sheet takes
+  `rememberFullHeightSheetState` — never the value-first `Slider(value = …)` or
+  `rememberModalBottomSheetState(skipPartiallyExpanded = …)`.** Material 3 moved both
+  widgets to a state object that *owns* its value, and `rememberSliderState` documents
+  that it then ignores later changes to the value, steps and range it was given. That
+  is right for a slider that is the source of truth and wrong for every slider in this
+  app, which are bound to a draft or a preference: the entry editor re-ticks its score
+  track when the account's format changes, and the Seasonal page's Reset writes every
+  slider on the page at once. The two helpers do what the retired overloads did
+  internally — rebuild on a geometry change, push the incoming value in — and are named
+  once so seventeen call sites cannot drift. `DeprecatedMaterial3CallTest` fails if a
+  retired form comes back, because the only symptom of one is a control that stops
+  answering, and a deprecated call compiles, tests green and ships.
 
 ---
 

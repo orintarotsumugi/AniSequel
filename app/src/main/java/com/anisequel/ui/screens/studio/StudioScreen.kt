@@ -25,7 +25,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +48,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
@@ -154,7 +154,7 @@ fun StudioScreen(
     // one packed wall with the years dropped. The choice is this visit's, not a
     // preference - a studio is browsed by mood, and the layout follows the mood.
     var wallLayout by rememberSaveable { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberFullHeightSheetState()
 
     // The title the sheet is showing, as the shelf's own node so the sheet has
     // something to draw on the first frame; the fetched detail takes over as soon

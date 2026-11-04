@@ -18,7 +18,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,6 +55,7 @@ import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.detail.toDetailMedia
 import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.navigation.MainBarClearance
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection
@@ -118,8 +118,8 @@ fun DashboardScreen(
     val profiles = rememberPersonProfileHost(repository)
     val filterCriteria by dashboardViewModel.filterCriteria.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val filterSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val detailSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val filterSheetState = rememberFullHeightSheetState()
+    val detailSheetState = rememberFullHeightSheetState()
 
     // Collected unconditionally. The old form short-circuited on a nullable
     // parameter (`prefs?.settings?.collectAsState(...) ?: remember { ... }`),

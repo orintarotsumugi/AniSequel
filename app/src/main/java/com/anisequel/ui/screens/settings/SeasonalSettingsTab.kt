@@ -73,6 +73,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberBoundSliderState
 import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.seasonal.SeasonalEffectGlyph
 import com.anisequel.ui.components.seasonal.SeasonalParticleLayer
@@ -680,11 +681,12 @@ private fun SeasonalSlider(
         )
     }
     Slider(
-        value = value,
+        // Bound, not owned: every slider on this page is written back by Reset, and a
+        // `SliderState` that only reads its initial value would leave the thumbs where the
+        // reader left them while the numbers under them moved.
+        state = rememberBoundSliderState(value, steps, range),
         onValueChange = onValueChange,
         onValueChangeFinished = onValueChangeFinished,
-        valueRange = range,
-        steps = steps,
         enabled = enabled,
         modifier = Modifier.testTag(testTag)
     )

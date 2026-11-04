@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
@@ -33,6 +32,7 @@ import com.anisequel.domain.gif.GifProvider
 import com.anisequel.domain.usecase.CommentWindow
 import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import com.anisequel.ui.viewmodel.GifSearchStore
 
@@ -186,7 +186,7 @@ fun ActivityCommentsSheet(
     nowEpochSecond: Long? = null
 ) {
     val listState = rememberLazyListState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberFullHeightSheetState()
 
     // The editor's whole state. Held here rather than in the composer because a
     // post clears it and Cancel must not: both are thread-level decisions, and
