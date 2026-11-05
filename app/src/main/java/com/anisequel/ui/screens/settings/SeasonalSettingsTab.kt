@@ -46,7 +46,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
-import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.MAX_SEASONAL_DENSITY
 import com.anisequel.domain.seasonal.MAX_SEASONAL_PILE_DEPTH
@@ -63,7 +62,6 @@ import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.domain.seasonal.SeasonalQualityTier
 import com.anisequel.domain.seasonal.SeasonalSeason
 import com.anisequel.domain.seasonal.SeasonalSettings
-import com.anisequel.domain.seasonal.availableSeasonalFrameRates
 import com.anisequel.domain.seasonal.defaultEffect
 import com.anisequel.domain.seasonal.particleCountFor
 import com.anisequel.domain.seasonal.seasonalEffectsIn
@@ -116,17 +114,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun SeasonalSettingsTab(
     seasonalPreferences: SeasonalPreferences,
-    devicePreferences: DevicePreferences,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
     val settings by seasonalPreferences.settings.collectAsState(initial = SeasonalSettings())
     val context = LocalContext.current
-    val ceiling by devicePreferences.ceiling.collectAsState()
-    // `diskCache.size` is a counter the loader keeps, not a directory walk, so this
-    // costs nothing; it is refreshed on resume because the number only moves when
-    // something has actually been downloaded.
-    var usedBytes by remember { mutableStateOf(context.coverCacheBytes()) }
     val detected = remember { detectSeasonalQualityTier(context) }
     val resolvedQuality = remember(settings.quality, detected) {
         settings.quality.resolve(detected)
@@ -134,15 +126,14 @@ fun SeasonalSettingsTab(
 
     // The panel's own numbers, re-read when the app comes back to the foreground.
     // A reader who goes to the system display settings to unlock 120 Hz and returns
-    // should find the pill here on the way back in, animating into place - a value
-    // taken once at first composition would keep it hidden until the app restarted.
+    // should find the preview pacing itself at the rate the panel reports now - a
+    // value taken once at first composition would keep it hidden until the app
+    // restarted.
     val resumed = rememberIsResumed()
     var screen by remember { mutableStateOf(detectSeasonalScreen(context)) }
     LaunchedEffect(resumed) {
         screen = detectSeasonalScreen(context)
-        usedBytes = context.coverCacheBytes()
     }
-    val offeredRates = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz)
     val previewFrameHz = seasonalFrameHz(
         rate = settings.frameRate,
         tierHz = resolvedQuality.frameHz,
@@ -209,28 +200,6 @@ fun SeasonalSettingsTab(
             onWindStrengthCommit = {
                 val target = draftWind
                 scope.launch { seasonalPreferences.setWindStrength(target) }
-            }
-        )
-
-        DeviceCard(
-            rate = settings.frameRate,
-            offered = offeredRates,
-            resolvedHz = previewFrameHz,
-            screen = screen,
-            tierName = SeasonalQuality.of(resolvedQuality).displayName.lowercase(),
-            ceiling = ceiling,
-            usedBytes = usedBytes,
-            onRateChange = { rate ->
-                scope.launch { seasonalPreferences.setFrameRate(rate) }
-            },
-            onCeilingChange = { option ->
-                // Synchronous by design: one string in a preferences file, whose value
-                // the image loader reads at the next process start.
-                devicePreferences.setCeiling(option)
-            },
-            onClearCache = {
-                context.clearCoverCache()
-                usedBytes = context.coverCacheBytes()
             }
         )
 

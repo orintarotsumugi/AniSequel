@@ -275,15 +275,15 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
     Box(
         modifier = modifier
             .fillMaxWidth()
-            // 260dp, and deliberately not the 200dp this file's own KDoc claimed
-            // until now. The extra height is a real cost - the bio and the pinned
-            // favourites sit below the fold on a phone - and it is left in place
-            // because the fix for it is a header that *collapses* as the page
-            // scrolls rather than a shorter static banner, which [TO-DO.md](TO-DO.md)
-            // §5.2 tracks and which needs a screenshot test to land safely. Making
-            // the block shorter here would have looked like that fix while still
-            // surrendering the artwork the height exists for.
-            .height(260.dp)
+            // 300dp. This was 260 with a note saying the extra height is a real
+            // cost because the bio and the pinned favourites fall below the fold -
+            // and that is still true, which is why the collapse-on-scroll header in
+            // [TO-DO.md](TO-DO.md) §5.2 is the right long-term answer. The height
+            // went up anyway because a profile banner is the one picture a reader
+            // chose for themselves, and at 260dp a 16:9 banner is cropped to its
+            // middle band. The drift below is what makes that crop survivable: the
+            // artwork reaches its own edges without anyone asking.
+            .height(300.dp)
             .clip(MaterialTheme.shapes.extraLarge)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
@@ -291,7 +291,8 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
         if (banner != null) {
             PannableBackdrop(
                 model = banner,
-                contentDescription = "Profile Banner"
+                contentDescription = "Profile Banner",
+                drift = true
             )
             // Weighted toward the bottom so the artwork stays visible at the top
             // while the identity line below has a surface to sit on.

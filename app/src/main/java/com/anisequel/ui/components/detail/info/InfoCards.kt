@@ -596,13 +596,21 @@ private fun InfoFact(
  * Only a franchise recommendation has a parent - an arriving or activity row is a
  * show the viewer already tracks - and this is the card that explains why the sheet
  * is open at all, so it keeps the parent's own artwork rather than a bare title.
+ *
+ * It is also the way to that parent, and used not to be: the card was built with no
+ * callback at all, so the one line on the detail page that names the other entry
+ * answered nothing. [onOpenParent] is null where there is nowhere to open - a
+ * preview, or a host with no detail sheet - and then the card stays a plain surface
+ * rather than looking tappable and swallowing the tap.
  */
 @Composable
 fun InfoParentCard(
     sequel: MissedSequel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOpenParent: (() -> Unit)? = null
 ) {
     val statusColors = AniSequelTheme.statusColors
+    val openable = onOpenParent != null
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -610,7 +618,23 @@ fun InfoParentCard(
         // retained cover tint shows through the card and fights the body text.
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            // Same shape as [StudioCreditChip] below: a `clickable(enabled = false)`
+            // would still publish button semantics for a card that cannot be opened.
+            .then(
+                if (openable) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.98f)
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = "Open " + sequel.parentTitle
+                        ) { onOpenParent?.invoke() }
+                } else {
+                    Modifier
+                }
+            )
+            .testTag("info_parent_card")
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -647,7 +671,11 @@ fun InfoParentCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${sequel.relationLabel} to watched entry",
+                    // `relationLabel` already carries the preposition ("Sequel to",
+                    // "Spin-off of"), so the suffix must not repeat it - the card
+                    // read "Sequel to to watched entry" until this line lost the
+                    // extra word.
+                    text = "${sequel.relationLabel} watched entry",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -658,6 +686,20 @@ fun InfoParentCard(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (openable) {
+                // A card that is a button has to say so: the checkmark on the left
+                // reads as a status, and without an outgoing glyph the only hint was
+                // the ripple, which you only find by tapping something that does not
+                // respond.
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = AppVectorIcons.OpenInNew,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }

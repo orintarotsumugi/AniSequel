@@ -340,6 +340,7 @@ private fun PhotoEmbedCommands(
             if (!photo.isUploading && photoUrl != null) onRestyle(photoUrl, next)
         },
         caption = if (photo.isUploading) "Uploading a photo…" else "Attached photo",
+        isBusy = photo.isUploading,
         tagPrefix = "comment_photo_embed",
         thumbnailUrl = photoUrl.takeIf { !photo.isUploading }
     )

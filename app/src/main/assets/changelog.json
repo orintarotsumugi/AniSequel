@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.8.4",
+      "entries": [
+        {
+          "title": "The parent card on a title's page opens the title it names",
+          "detail": "The dashboard's \"Sequel to ...\" line learned to open its parent in 1.8.3, and the same sentence on a title's own page had the same symptom for a different reason: the card was built with no callback parameter at all, so there was nothing a tap could call. It has one now, and the card springs, announces itself to a screen reader as \"Open <title>\", and carries a small outgoing-arrow glyph - a card whose only mark was a green check reads as a status, not as a button. The caption also stopped reading \"Sequel to to watched entry\": the relation label already ends in its preposition, so the suffix was a second one."
+        },
+        {
+          "title": "The new mark on a message clears when you open it",
+          "detail": "Messages marked a received row as new by comparing it against the moment you last read the inbox. Nothing recorded that moment any more: the code that wrote it was left behind when every row moved to the comment sheet, so the stamp sat at zero, every message you were sent was new forever, and the switch that was supposed to control the whole thing looked disconnected because with it off nothing else on the page changed either. Opening a thread now records it, which clears the rows you have read and keeps the ones that arrived since. The switch and the way back to hidden rows were also sitting at opposite ends of an empty line, drawn as two different widgets; they are one pair of capsules under the filters now, and the hidden one counts what is behind it."
+        },
+        {
+          "title": "Device Manager: the phone's own controls on one page",
+          "detail": "What the phone reports and what it lets the app do were in four pages, because each control was written beside the feature that first needed it - the refresh-rate ceiling and the cover cache under the seasonal sky, full-screen mode under the theme that stores it, the app lock under the session it gates and the hold duration under the cards it acts on. Settings has a Device Manager page for them now, opened from a row under This device. The seasonal density and size sliders deliberately stayed behind: they are the draft values that page's live sky preview follows, and separating them would leave one screen with a preview that answers to nothing and another with sliders that have nothing to preview."
+        },
+        {
+          "title": "Full screen no longer leaves the top of the screen unpainted",
+          "detail": "Hiding the system bars put the window's breathing-room inset on the app's root surface, and an inset shrinks the thing it is applied to - so the painted area moved down with the content and the band where the status bar had been was drawn by the platform rather than by AniSequel. A flat strip with nothing in it, on every screen, in the one mode that asks for the whole display. The surface is full-bleed now and the inset sits one level inside it, which is the ordering the sign-in screen already used and commented: paint first, consume the insets second."
+        },
+        {
+          "title": "The people in your lists are shown against their own banners",
+          "detail": "Followers, following and a \"Liked by\" sheet were columns of an avatar and a name, and forty of those is a search. AniList gives every account a cover image and the rows already know whose they are, so the four queries that build those lists ask for it now and each row is backed by the picture that person chose for themselves - under a scrim in the app's own surface colour rather than black, so the name keeps its theme role and a light theme does not get a dark slab in the middle of a list. An account with no banner keeps the plain surface, which is most of the older ones."
+        },
+        {
+          "title": "A profile banner is taller, and a wide one drifts on its own",
+          "detail": "The header went from 260 to 300dp. A 16:9 banner in a box that shape is cropped to its middle band by definition - covering both axes means the wider one overflows - and the left and right thirds were simply gone, because dragging them into view is switched off at rest: a gesture area that claims both axes eats the page's own vertical scroll. So the banner sweeps sideways by itself, slowly enough to be discovered rather than noticed, and stops the moment you pinch in. The sweep is not composed at all unless there is slack to sweep across, because an infinite animation whose answer is always zero is still an animation."
+        },
+        {
+          "title": "Nothing is off the edge of the attach-size row, and an upload says it is working",
+          "detail": "The five widths a photo or GIF can be embedded at sat in a horizontally scrolling row, which put \"100%\" off the right edge on a phone - and a control that looks static does not invite a swipe, so it read as full width having been removed. The row wraps now, the same change the motion picker made for the same reason. While a file is on its way to AniList the composer wrote \"Uploading a photo...\" in the same voice as everything else and showed no picture, because the URL a thumbnail needs is the thing the upload has not answered with yet; a loader sits beside the caption for exactly that stretch."
+        }
+      ]
+    },
+    {
       "version": "1.8.3",
       "entries": [
         {

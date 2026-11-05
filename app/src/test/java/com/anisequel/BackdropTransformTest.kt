@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Size
 import com.anisequel.ui.components.BackdropFit
 import com.anisequel.ui.components.backdropCoverScale
 import com.anisequel.ui.components.backdropFitScale
+import com.anisequel.ui.components.backdropHorizontalLimit
 import com.anisequel.ui.components.backdropTransform
 import com.anisequel.ui.components.hasOverflow
 import org.junit.Assert.assertEquals
@@ -234,6 +235,62 @@ class BackdropTransformTest {
         )
     }
 
+    /**
+     * The sideways sweep a profile banner makes on its own.
+     *
+     * The cover fit crops the left and third of a 16:9 banner by definition and
+     * `canPan` is shut at zoom 1, so at rest those thirds were unreachable. Drift
+     * is the answer, and the two things it must never do are leave a gap and run
+     * forever while moving nothing.
+     */
+    @Test
+    fun `the drift reaches both edges of the reachable range and no further`() {
+        val limit = backdropHorizontalLimit(boxWidth, 300f, bannerWidth, bannerHeight)
+        assertTrue(
+            "a 1920x1080 banner in a 360x300 box must have sideways slack, or the " +
+                "sweep has nothing to do",
+            limit > 0f
+        )
+
+        val left = backdropTransform(
+            boxWidth, 300f, bannerWidth, bannerHeight, zoom = 1f,
+            offsetX = 0f, offsetY = 0f, drift = -1f
+        )
+        val right = backdropTransform(
+            boxWidth, 300f, bannerWidth, bannerHeight, zoom = 1f,
+            offsetX = 0f, offsetY = 0f, drift = 1f
+        )
+        assertEquals(-limit, left.offsetX, 0.0001f)
+        assertEquals(limit, right.offsetX, 0.0001f)
+
+        val overshoot = backdropTransform(
+            boxWidth, 300f, bannerWidth, bannerHeight, zoom = 1f,
+            offsetX = 0f, offsetY = 0f, drift = 6f
+        )
+        assertEquals(
+            "a drift that outran the limit would show bare background at one edge, " +
+                "which is the one failure this component exists to prevent",
+            limit, overshoot.offsetX, 0.0001f
+        )
+    }
+
+    @Test
+    fun `a picture with no sideways slack drifts nowhere`() {
+        // A square image in a square box: the cover fit leaves no overflow, so the
+        // limit is zero and the caller must not compose an infinite transition for
+        // an animation whose answer is always zero.
+        val limit = backdropHorizontalLimit(360f, 360f, 1080f, 1080f)
+        assertEquals(0f, limit, 0.0001f)
+
+        val still = backdropTransform(
+            360f, 360f, 1080f, 1080f, zoom = 1f,
+            offsetX = 0f, offsetY = 0f, drift = 1f
+        )
+        assertEquals(0f, still.offsetX, 0.0001f)
+    }
+
     private fun at(zoom: Float, x: Float = 0f, y: Float = 0f, fit: BackdropFit) =
-        backdropTransform(boxWidth, boxHeight, bannerWidth, bannerHeight, zoom, x, y, fit)
+        backdropTransform(
+            boxWidth, boxHeight, bannerWidth, bannerHeight, zoom, x, y, fit = fit
+        )
 }

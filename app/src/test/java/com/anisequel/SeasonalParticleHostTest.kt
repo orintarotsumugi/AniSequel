@@ -270,7 +270,10 @@ class SeasonalParticleHostTest {
 
     @Test
     fun `the frame rate is a setting the page can reach`() {
-        val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt")
+        // The card moved out of the Seasonal page when the device controls became a
+        // page of their own. Reading the old file here would have passed on a build
+        // where nothing draws the card at all.
+        val tab = source("app/src/main/java/com/anisequel/ui/screens/settings/DeviceManagerTab.kt")
         val card = source("app/src/main/java/com/anisequel/ui/screens/settings/DeviceManagementCard.kt")
 
         assertTrue("the page does not draw the device card", tab.contains("DeviceCard("))
@@ -302,6 +305,41 @@ class SeasonalParticleHostTest {
             "the cache pills are not tagged, so the ceiling cannot be driven from a test",
             card.contains("\"device_cache_\${option.storageValue}\"")
         )
+    }
+
+    /**
+     * Device Manager is a page with one door, and the four cards it owns appear
+     * nowhere else.
+     *
+     * The failure this pins is the move done half: the new page drawn, and the old
+     * call left in place too. Two switches over one preference is not a cosmetic
+     * problem - the reader turns one off on the page they are looking at and the
+     * other, still showing the old value, is the one they reach for next time.
+     */
+    @Test
+    fun `the device page is reachable and its cards are drawn once`() {
+        val settings = source("app/src/main/java/com/anisequel/ui/screens/settings/SettingsScreen.kt")
+        assertTrue("the enum has no device page", settings.contains("DEVICE("))
+        assertTrue("the hub row is missing, so the page has no door", settings.contains("settings_row_device"))
+        assertTrue("the page is not dispatched", settings.contains("SettingsPage.DEVICE -> DeviceManagerTab("))
+
+        val page = source("app/src/main/java/com/anisequel/ui/screens/settings/DeviceManagerTab.kt")
+        assertTrue("the page does not draw full screen", page.contains("DisplaySection("))
+        assertTrue("the page does not draw the app lock", page.contains("AppLockCard("))
+        assertTrue("the page does not draw the quick-add card", page.contains("QuickAddSectionCard("))
+
+        val movedOut = mapOf(
+            "app/src/main/java/com/anisequel/ui/screens/settings/ThemeTab.kt" to "DisplaySection(",
+            "app/src/main/java/com/anisequel/ui/screens/settings/EditSettingsTab.kt" to "AppLockCard(",
+            "app/src/main/java/com/anisequel/ui/screens/settings/LibrarySettingsTab.kt" to "QuickAddSectionCard(",
+            "app/src/main/java/com/anisequel/ui/screens/settings/SeasonalSettingsTab.kt" to "DeviceCard("
+        )
+        for ((path, call) in movedOut) {
+            assertFalse(
+                "$path still draws $call, so the control exists on two pages at once",
+                source(path).contains(call)
+            )
+        }
     }
 
     @Test

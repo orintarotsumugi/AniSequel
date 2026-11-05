@@ -58,12 +58,14 @@ import kotlin.math.roundToInt
  * around the current settings, while this is the control vocabulary the page draws
  * with and the one card that reads the *device* rather than the preference file.
  *
- * ## Why the device facts live on the Seasonal page
+ * ## Why the device facts are on a page of their own
  *
- * They belong to the heaviest decoration in the app, not to a settings tab of their
- * own. A reader who comes here is asking "is this sky costing me frames, and is this
- * app eating my storage" - and the two answers are a refresh rate and a cache size,
- * which is why they are one card and why the cache pills sit under the rate pills.
+ * They used to sit at the bottom of the Seasonal effects page, because the sky was
+ * the first heavy thing in the app that needed a refresh rate and a cache ceiling -
+ * and that left the rest of the device's controls scattered by accident: full screen
+ * on Appearance, the app lock on the account page, quick-add gestures on Library.
+ * The four now share [DeviceManagerTab], which is the page a reader reaches for when
+ * the question is about the phone rather than about a feature.
  */
 
 /**

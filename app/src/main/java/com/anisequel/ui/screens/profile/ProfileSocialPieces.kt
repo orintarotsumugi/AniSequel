@@ -241,40 +241,50 @@ internal fun FollowerRow(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    Row(
+    Box(
         modifier = modifier
             .widthIn(max = ProfileMaxContentWidth)
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
+            // The floor for a person whose account has no banner. AniList's
+            // default accounts have none, and a transparent row would show
+            // whatever the list happened to paint behind it.
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .testTag("follower_row"),
-        verticalAlignment = Alignment.CenterVertically
+            .testTag("follower_row")
     ) {
-        AsyncImage(
-            model = person.avatar?.medium ?: person.avatar?.large,
-            contentDescription = null,
+        PersonBannerBackdrop(person.bannerImage)
+        Row(
             modifier = Modifier
-                .size(52.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
-            fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
-        )
-        Spacer(modifier = Modifier.width(14.dp))
-        Text(
-            text = person.name,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = person.avatar?.medium ?: person.avatar?.large,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                contentScale = ContentScale.Crop,
+                placeholder = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+                error = rememberVectorPainter(AppVectorIcons.ProfileSocial),
+                fallback = rememberVectorPainter(AppVectorIcons.ProfileSocial)
+            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Text(
+                text = person.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

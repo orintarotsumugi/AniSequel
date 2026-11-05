@@ -200,24 +200,37 @@ private fun LikersHeader(count: Int, isLoading: Boolean) {
 
 @Composable
 private fun LikerRow(liker: FollowUser) {
-    Row(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .testTag("liker_row")
     ) {
-        LikerAvatar(
-            url = liker.avatar?.large ?: liker.avatar?.medium,
-            name = liker.name
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = liker.name,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1
-        )
+        // Their own cover, behind the row. A "Liked by" list is forty names, and
+        // the picture each of those people chose is the only thing in the row that
+        // differs from the next one.
+        PersonBannerBackdrop(liker.bannerImage)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LikerAvatar(
+                url = liker.avatar?.large ?: liker.avatar?.medium,
+                name = liker.name
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = liker.name,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+        }
     }
 }
 

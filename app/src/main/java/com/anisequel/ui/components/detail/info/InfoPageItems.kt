@@ -24,6 +24,7 @@ import com.anisequel.data.model.synonymList
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
+import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.viewmodel.QuickAddStatus
 
 /**
@@ -98,7 +99,16 @@ internal fun LazyListScope.infoPageItems(
     // list, and it earns itself: the card needs a non-null sequel, and there is no
     // honest `visible` flag for "there is no parent to draw".
     subject.sequel?.let { sequel ->
-        cardItem(key = "parent", index = 1, entranceKey = revealKey) { InfoParentCard(sequel = sequel, modifier = it) }
+        cardItem(key = "parent", index = 1, entranceKey = revealKey) {
+            InfoParentCard(
+                sequel = sequel,
+                // The parent is in no list this screen holds, so the tap hands
+                // `onOpenMedia` the summary built from the four fields the relation
+                // walk kept - the same route a dashboard relation banner takes.
+                onOpenParent = { onOpenMedia(sequel.toParentSummary()) },
+                modifier = it
+            )
+        }
     }
 
     cardItem(key = "actions", index = 2, entranceKey = revealKey) {

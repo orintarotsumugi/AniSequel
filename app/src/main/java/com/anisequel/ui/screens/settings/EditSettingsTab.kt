@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import android.app.KeyguardManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -36,7 +35,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.ViewerProfile
-import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.domain.gif.GifProvider
 import com.anisequel.ui.components.AppVectorIcons
@@ -52,9 +50,9 @@ import kotlinx.coroutines.launch
  *
  * It used to be the "Edit" tab and held six unrelated cards. Refresh, arriving
  * rows and quick add moved to [LibrarySettingsTab]; what is left is one subject:
- * who this app is signed in as, and who is allowed to open it. The Client ID and
- * the sign-out button are two ends of the same session, and the app lock sits
- * with them because it is the same question asked about the device.
+ * who this app is signed in as. The Client ID and the sign-out button are two
+ * ends of the same session. The app lock moved to [DeviceManagerTab]: whether the
+ * phone will even let the app open is answered by the device, not by AniList.
  *
  * ## Why the profile card and the list snapshot are here
  *
@@ -68,7 +66,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun EditSettingsTab(
     authViewModel: AuthViewModel,
-    appLockPreferences: AppLockPreferences,
     onNavigateToLogin: () -> Unit,
     viewer: ViewerProfile? = null,
     totalWatchedCount: Int? = null,
@@ -125,7 +122,8 @@ fun EditSettingsTab(
             RedirectUrlHint()
         }
 
-        AppLockCard(appLockPreferences)
+        // The app lock moved to Device Manager: it is answered by this phone's
+        // lock screen, which the account page has no way to know about.
 
         CommentMediaCard(context = context)
 
@@ -223,45 +221,6 @@ private fun ListSnapshotCard(
         InfoRow(
             label = "Planning sync",
             value = if (isSignedIn) "Write-enabled" else "Read-only on public profiles"
-        )
-    }
-}
-
-/**
- * The optional app lock.
- *
- * The switch is disabled, with the reason in its subtitle, when the device has
- * no secure lock. That is not a limitation invented here - the platform's
- * credential prompt has nothing to ask for without one - and offering a switch
- * that would silently fail open is the worse version of the same truth.
- */
-@Composable
-private fun AppLockCard(appLockPreferences: AppLockPreferences) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val enabled by appLockPreferences.enabled.collectAsState(initial = false)
-    val deviceHasSecureLock = remember {
-        context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
-    }
-
-    SectionCard(
-        title = "App lock",
-        icon = AppVectorIcons.Privacy,
-        subtitle = "Who can open AniSequel"
-    ) {
-        SwitchRow(
-            title = "Lock AniSequel",
-            subtitle = if (deviceHasSecureLock) {
-                "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
-            } else {
-                "Set a screen lock on this device first - there is nothing to ask for yet."
-            },
-            checked = enabled,
-            enabled = deviceHasSecureLock,
-            onCheckedChange = { locked ->
-                scope.launch { appLockPreferences.setEnabled(locked) }
-            },
-            modifier = Modifier.testTag("app_lock_switch")
         )
     }
 }
