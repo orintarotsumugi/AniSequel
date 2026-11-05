@@ -536,6 +536,7 @@ object GraphQLQueries {
               id
               name
               avatar { medium }
+              bannerImage
             }
           }
         }
@@ -552,6 +553,7 @@ object GraphQLQueries {
               id
               name
               avatar { medium }
+              bannerImage
             }
           }
         }
@@ -1438,6 +1440,7 @@ object GraphQLQueries {
                   id
                   name
                   avatar { large medium }
+                  bannerImage
                 }
               }
             }
@@ -1456,6 +1459,7 @@ object GraphQLQueries {
                   id
                   name
                   avatar { large medium }
+                  bannerImage
                 }
               }
             }
@@ -1474,6 +1478,7 @@ object GraphQLQueries {
                   id
                   name
                   avatar { large medium }
+                  bannerImage
                 }
               }
             }
@@ -1566,6 +1571,7 @@ object GraphQLQueries {
               id
               name
               avatar { large medium }
+              bannerImage
             }
           }
         }
@@ -1599,6 +1605,7 @@ object GraphQLQueries {
                 id
                 name
                 avatar { large medium }
+                bannerImage
               }
             }
             ... on TextActivity {
@@ -1608,6 +1615,7 @@ object GraphQLQueries {
                 id
                 name
                 avatar { large medium }
+                bannerImage
               }
             }
           }
@@ -1874,6 +1882,7 @@ object GraphQLQueries {
               id
               name
               avatar { large medium }
+              bannerImage
             }
           }
         }
@@ -1912,6 +1921,7 @@ object GraphQLQueries {
               id
               name
               avatar { large medium }
+              bannerImage
             }
           }
         }

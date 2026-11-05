@@ -441,10 +441,17 @@ data class FollowingPage(
  * AniList data, so the id and name are both kept: the id so the profile query
  * can be keyed on it, the name because it is what the grid prints and what the
  * next screen's cache key uses.
+ *
+ * [bannerImage] is what makes a row identifiable before it is readable. AniList
+ * gives every account a cover, the lists already know whose it is, and a name
+ * alone in a column of forty is a search; the same picture the reader chose is
+ * the fastest thing there is to recognise. It is nullable because the site's
+ * default accounts have none, and those rows fall back to the plain surface.
  */
 @JsonClass(generateAdapter = true)
 data class FollowUser(
     val id: Int,
     val name: String,
-    val avatar: UserAvatar? = null
+    val avatar: UserAvatar? = null,
+    val bannerImage: String? = null
 )
