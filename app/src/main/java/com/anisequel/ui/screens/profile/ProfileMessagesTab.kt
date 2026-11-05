@@ -1,10 +1,15 @@
 package com.anisequel.ui.screens.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,8 +23,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -28,10 +33,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MessageNode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.viewmodel.MessageFilter
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
@@ -170,6 +178,7 @@ fun ProfileMessagesTab(
             selected = state.filter,
             onSelect = onSelectFilter,
             hasHidden = hasHidden,
+            hiddenCount = state.visibility.hiddenCount,
             onShowHidden = onShowHidden,
             flagNew = state.visibility.flagNew,
             onFlagNewChange = onFlagNewChange,
@@ -266,11 +275,13 @@ private const val MESSAGE_PAGE_TRIGGER_ROWS = 6
  */
 private const val MESSAGE_END_THRESHOLD = 25
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MessageFilterRow(
     selected: MessageFilter,
     onSelect: (MessageFilter) -> Unit,
     hasHidden: Boolean,
+    hiddenCount: Int,
     onShowHidden: () -> Unit,
     flagNew: Boolean,
     onFlagNewChange: (Boolean) -> Unit,
@@ -305,45 +316,106 @@ private fun MessageFilterRow(
             )
         }
 
-        Row(
+        // The two view options, as one right-aligned group under the filters that
+        // pick which rows you see. They were a bare `TextButton` at the leading edge
+        // and a label-plus-`Switch` pushed to the trailing edge by a weighted
+        // `Spacer`, which read as two unrelated leftovers on either side of an empty
+        // line - and the switch looked like part of the row above it. Same height,
+        // same capsule, same surface tone as each other, and a `FlowRow` because two
+        // pills plus a count is a row that overflows at large font scale: the
+        // alternative was clipping the one control that tells you rows are missing.
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Only when there is something behind it. A "Show hidden" control on an
             // inbox with nothing dismissed is a button that does nothing, and the
-            // tab has no way to say why.
+            // tab has no way to say why. The count is the reason it is worth saying
+            // at all: "Hidden (3)" is the only place the reader learns that three
+            // rows are out of sight, and a control that only says "show" does not.
             if (hasHidden) {
-                TextButton(
+                ViewOptionPill(
                     onClick = onShowHidden,
-                    modifier = Modifier.testTag("message_show_hidden")
+                    onClickLabel = "Show hidden messages",
+                    testTag = "message_show_hidden"
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Visibility,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text("Show hidden")
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Hidden ($hiddenCount)",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
+
             // The option the badge answers to. Kept on the tab rather than in
             // Settings because it is about *this* list, and a reader who wants it
             // off is looking at the list when they decide that.
-            Text(
-                text = "Flag new",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Switch(
-                checked = flagNew,
-                onCheckedChange = onFlagNewChange,
-                modifier = Modifier.testTag("message_flag_new_switch")
-            )
+            ViewOptionPill(
+                onClick = { onFlagNewChange(!flagNew) },
+                onClickLabel = if (flagNew) "Stop flagging new messages" else "Flag new messages",
+                testTag = "message_flag_new_pill",
+                // The pill is the larger target for an on/off option, so it carries
+                // the switch semantics; the `Switch` inside still reports its own
+                // state, and consumes its own tap.
+                role = Role.Switch
+            ) {
+                Text(
+                    text = "Flag new",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                // Still interactive: the pill is the larger target and this is the
+                // control the tag and the switch semantics belong to. The child
+                // consumes its own tap, so the two do not toggle twice.
+                Switch(
+                    checked = flagNew,
+                    onCheckedChange = onFlagNewChange,
+                    modifier = Modifier.testTag("message_flag_new_switch")
+                )
+            }
         }
+    }
+}
+
+/**
+ * One of the Messages view options: a capsule that matches the filter chips above it.
+ *
+ * The two controls are the same job - a choice about how this list is drawn - and
+ * used to be drawn as two different widgets at two different sizes, which is why the
+ * row read as clutter rather than as a set.
+ */
+@Composable
+private fun ViewOptionPill(
+    onClick: () -> Unit,
+    onClickLabel: String,
+    testTag: String,
+    role: Role = Role.Button,
+    content: @Composable RowScope.() -> Unit
+) {
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .defaultMinSize(minHeight = 44.dp)
+            .clickable(role = role, onClickLabel = onClickLabel, onClick = onClick)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            content = content
+        )
     }
 }
 

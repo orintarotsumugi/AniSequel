@@ -419,17 +419,28 @@ class UserMessagesViewModel(
      * to open a second sheet for the body - bubbles, a reply box under a scroll -
      * and the reader could not quote or answer one line of it. One sheet draws both,
      * which is the only way "the comment UI" can also be the message UI.
+     *
+     * Opening it also stamps the inbox as read, and this is the line that makes the
+     * "New" badge mean anything. The stamp's only other writer was [openMessage],
+     * which lost its UI hook when every row moved to this sheet - so
+     * `lastReceivedSeenAt` stayed at its default of zero, every received row was
+     * permanently new with the switch on, and the switch appeared to do nothing at
+     * all with it off. The reader is looking at this message and everything older
+     * than it, which is exactly what the stamp records.
      */
     fun openComments(
         message: MessageNode,
         knownReplyCount: Int = message.replyCount ?: 0,
         chatView: Boolean = true
-    ) = comments.open(
-        activityId = message.id,
-        knownReplyCount = knownReplyCount,
-        chatView = chatView,
-        head = message.asThreadHead()
-    )
+    ) {
+        comments.open(
+            activityId = message.id,
+            knownReplyCount = knownReplyCount,
+            chatView = chatView,
+            head = message.asThreadHead()
+        )
+        markInboxSeen(System.currentTimeMillis() / 1000L)
+    }
 
     /**
      * Sends [text] to the other party of the message the sheet has open.
