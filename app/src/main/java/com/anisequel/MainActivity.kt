@@ -13,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -323,55 +324,67 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalImmersiveMode provides themeSettings.immersive
                 ) {
+                    // Full-bleed, and the breathing room applied to what is inside
+                    // it rather than to the surface itself.
+                    //
+                    // The insets used to sit on this Surface, which shrank the
+                    // painted area as well as the content: with the bars hidden the
+                    // band above the page was left to the platform window
+                    // background, so full-screen mode opened on an unpainted strip
+                    // across the top. The same reason `LoginScreen` paints its
+                    // gradient before it consumes the insets.
                     Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(Modifier.immersiveDisplayInsets(themeSettings.immersive))
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        // Held on the themed background until the stored theme and
-                        // lock state are in. This used to return an empty Surface,
-                        // which was the right colour but a blank first frame - the
-                        // window had nothing to show and the app looked stopped.
-                        // The same branded placeholder the session read uses is
-                        // drawn instead, so both pre-screen waits look deliberate.
-                        if (!themeSettings.isLoaded || !appLockReady) {
-                            RestoringPlaceholder(message = "Restoring your settings\u2026")
-                            return@Surface
-                        }
-
-                        AppLockGate(
-                            locked = isLocked,
-                            onUnlock = { requestUnlock() }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .immersiveDisplayInsets(themeSettings.immersive)
                         ) {
-                            val updateController = rememberUpdateController()
-                            updateControllerRef = WeakReference(updateController)
+                            // Held on the themed background until the stored theme and
+                            // lock state are in. This used to return an empty Surface,
+                            // which was the right colour but a blank first frame - the
+                            // window had nothing to show and the app looked stopped.
+                            // The same branded placeholder the session read uses is
+                            // drawn instead, so both pre-screen waits look deliberate.
+                            if (!themeSettings.isLoaded || !appLockReady) {
+                                RestoringPlaceholder(message = "Restoring your settings\u2026")
+                            } else {
+                                AppLockGate(
+                                    locked = isLocked,
+                                    onUnlock = { requestUnlock() }
+                                ) {
+                                    val updateController = rememberUpdateController()
+                                    updateControllerRef = WeakReference(updateController)
 
-                            // One check per launch, after the first frame.
-                            //
-                            // Keyed on a constant so it runs exactly once rather than on
-                            // every recomposition, and deliberately *after* the app is
-                            // usable: a dialog that blocks the first screen while
-                            // GitHub is slow is a worse experience than one that
-                            // arrives a moment later.
-                            LaunchedEffect(Unit) {
-                                updateController.check()
-                            }
+                                    // One check per launch, after the first frame.
+                                    //
+                                    // Keyed on a constant so it runs exactly once rather
+                                    // than on every recomposition, and deliberately
+                                    // *after* the app is usable: a dialog that blocks the
+                                    // first screen while GitHub is slow is a worse
+                                    // experience than one that arrives a moment later.
+                                    LaunchedEffect(Unit) {
+                                        updateController.check()
+                                    }
 
-                            AppNavigation(
-                                authRepository = authRepository,
-                                authViewModel = authViewModel,
-                                themePreferences = themePreferences,
-                                appLockPreferences = appLockPreferences,
-                                openProfileActivityOnLaunch = openProfileActivityRequest,
-                                onProfileActivityOpened = { openProfileActivityRequest = false }
-                            )
+                                    AppNavigation(
+                                        authRepository = authRepository,
+                                        authViewModel = authViewModel,
+                                        themePreferences = themePreferences,
+                                        appLockPreferences = appLockPreferences,
+                                        openProfileActivityOnLaunch = openProfileActivityRequest,
+                                        onProfileActivityOpened = { openProfileActivityRequest = false }
+                                    )
 
-                            // A dialog is its own window, so it would draw *over*
-                            // the lock overlay rather than under it. The check can
-                            // still run while locked; the prompt waits until the
-                            // reader has unlocked.
-                            if (!isLocked) {
-                                UpdatePromptHost(controller = updateController)
+                                    // A dialog is its own window, so it would draw *over*
+                                    // the lock overlay rather than under it. The check can
+                                    // still run while locked; the prompt waits until the
+                                    // reader has unlocked.
+                                    if (!isLocked) {
+                                        UpdatePromptHost(controller = updateController)
+                                    }
+                                }
                             }
                         }
                     }
