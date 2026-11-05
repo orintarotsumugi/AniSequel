@@ -2,18 +2,18 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.usecase.MediaAttachment
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
@@ -109,6 +110,15 @@ internal fun AttachmentEmbedRows(
      * it.
      */
     thumbnailUrl: String? = null,
+    /**
+     * The file is on its way to AniList right now.
+     *
+     * [thumbnailUrl] is null for exactly this stretch - the URL the thumbnail needs
+     * is the thing the upload has not answered with yet - so without this the row
+     * said "Uploading a photo…" in the same voice it uses for everything else and
+     * the reader had no way to tell a working composer from a stopped one.
+     */
+    isBusy: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -138,6 +148,10 @@ internal fun AttachmentEmbedRows(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.testTag("${tagPrefix}_caption")
             )
+            if (isBusy) {
+                Spacer(modifier = Modifier.width(8.dp))
+                ExpressiveLoadingIndicator(modifier = Modifier.size(18.dp))
+            }
         }
         EmbedChipRow(
             // "Original" first, as it always was: some files *are* their size, and a
@@ -181,6 +195,7 @@ private fun framingLabel(framing: MediaAttachment.EmbedFraming): String = when (
  * "Normal" is the label for `Plain`. Comparing the label instead of the value is how
  * picking Original once left every chip in the row looking unchosen.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EmbedChipRow(
     options: List<Pair<String, String>>,
@@ -189,13 +204,17 @@ private fun EmbedChipRow(
     tagPrefix: String,
     onSelect: (String) -> Unit
 ) {
-    Row(
+    // A wrapping row rather than a horizontally scrolling one, for the reason
+    // `MotionSection` gives for the same change: the scrolling row put "100%" off
+    // the right edge on a phone, which reads as "there is no full-width option" to
+    // anyone who did not think to swipe a control that looks static. All five widths
+    // are visible at once, two rows at worst.
+    FlowRow(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         options.forEach { (label, value) ->
             // One source for the press spring and the click, shared between them:
