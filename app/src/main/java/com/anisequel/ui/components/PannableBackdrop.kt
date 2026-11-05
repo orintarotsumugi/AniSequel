@@ -1,5 +1,11 @@
 package com.anisequel.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -92,6 +98,22 @@ fun PannableBackdrop(
     modifier: Modifier = Modifier,
     colorFilter: ColorFilter? = null,
     fit: BackdropFit = BackdropFit.COVER,
+    /**
+     * Sweep the picture sideways while it sits at its cover fit.
+     *
+     * A 1920x1080 banner in a 300dp-tall hero is cropped by definition: the cover
+     * scale is the *larger* ratio, so the left and right thirds are off-screen and
+     * nothing the reader does at rest can reach them - panning is deliberately shut
+     * at zoom 1 (see [hasOverflow]) because opening it there ate the page's own
+     * vertical scroll. Drifting is the other answer: the artwork reaches its own
+     * edges on its own, slowly, and the drag stays with the scroll.
+     *
+     * Off by default. It is an animation that never stops, so a caller asks for it
+     * for the one picture on its screen - and the transition below is not composed
+     * at all unless there is sideways slack to move across, nor while the reader
+     * holds a zoom of their own.
+     */
+    drift: Boolean = false,
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
     var containerWidth by remember { mutableFloatStateOf(0f) }
@@ -105,6 +127,35 @@ fun PannableBackdrop(
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
 
+    // The three conditions are the whole cost of this. `drift` is the caller's
+    // choice; the zoom check stops the sweep the moment the reader takes over; and
+    // the slack check is what keeps a square banner from running an infinite
+    // transition whose answer is always zero - the one thing AGENTS.md §3 says an
+    // indefinite animation may not be.
+    val drifting = drift &&
+        zoom <= BACKDROP_MIN_ZOOM &&
+        backdropHorizontalLimit(
+            containerWidth, containerHeight, imageSize.width, imageSize.height, zoom, fit
+        ) > 0f
+
+    val driftPhase: Float
+    if (drifting) {
+        val transition = rememberInfiniteTransition(label = "backdrop_drift")
+        driftPhase = transition.animateFloat(
+            initialValue = -1f,
+            targetValue = 1f,
+            // Reverse rather than Restart: a restart snaps the picture back to the
+            // left edge every period, which reads as a stutter rather than a sweep.
+            animationSpec = infiniteRepeatable(
+                animation = tween(DRIFT_PERIOD_MILLIS, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "backdrop_drift_phase"
+        ).value
+    } else {
+        driftPhase = 0f
+    }
+
     // Re-clamped every recomposition, and *written* rather than assigned: the
     // previous version did `translation = clamped` during composition, which is a
     // state write in the composition phase. Here the clamp only ever runs when a
@@ -117,6 +168,7 @@ fun PannableBackdrop(
         zoom = zoom,
         offsetX = offsetX,
         offsetY = offsetY,
+        drift = driftPhase,
         fit = fit
     )
 
@@ -227,6 +279,15 @@ private const val BACKDROP_MIN_ZOOM = 1f
 
 /** Far enough in to read a face, near enough that nothing is a memory test. */
 private const val BACKDROP_MAX_ZOOM = 4f
+
+/**
+ * One edge-to-edge sweep, in milliseconds: 24s there, 24s back.
+ *
+ * Slow on purpose. AniList banners are wide and mostly scenery, and a sweep fast
+ * enough to notice is fast enough to pull the eye away from the name printed over
+ * it - the drift should be discovered rather than announced.
+ */
+private const val DRIFT_PERIOD_MILLIS = 24_000
 
 /** Where the picture sits once the container, the image and the gesture are known. */
 internal data class BackdropTransform(
@@ -371,6 +432,7 @@ internal fun backdropTransform(
     zoom: Float,
     offsetX: Float,
     offsetY: Float,
+    drift: Float = 0f,
     fit: BackdropFit = BackdropFit.COVER
 ): BackdropTransform {
     // Nothing measured, nothing to place. Without this the cover scale reads 1 and
@@ -393,9 +455,38 @@ internal fun backdropTransform(
     val limitX = if (overflowX > 0f) overflowX / 2f else 0f
     val limitY = if (overflowY > 0f) overflowY / 2f else 0f
 
+    // The drift is added *before* the clamp, not after: a sweep that could push the
+    // picture past its own limit would show bare background at one edge, which is
+    // the one failure this component was written to make impossible. A drift of
+    // plus or minus one reaches the extremes of the reachable range, and anything
+    // beyond that is a caller's arithmetic error rather than a bigger picture.
     return BackdropTransform(
         scale = scale,
-        offsetX = offsetX.coerceIn(-limitX, limitX),
+        offsetX = (offsetX + limitX * drift.coerceIn(-1f, 1f)).coerceIn(-limitX, limitX),
         offsetY = offsetY.coerceIn(-limitY, limitY)
     )
+}
+
+/**
+ * How far the picture may travel sideways: half the horizontal overflow, or zero.
+ *
+ * Split out because the caller has to ask this question *before* composing the
+ * infinite transition, not after - a sweep with nothing to sweep across is an
+ * animation that runs forever and changes nothing, which is exactly what
+ * AGENTS.md §3 caps.
+ */
+internal fun backdropHorizontalLimit(
+    containerWidth: Float,
+    containerHeight: Float,
+    imageWidth: Float,
+    imageHeight: Float,
+    zoom: Float = BACKDROP_MIN_ZOOM,
+    fit: BackdropFit = BackdropFit.COVER
+): Float {
+    if (containerWidth <= 0f || containerHeight <= 0f) return 0f
+    if (imageWidth <= 0f || imageHeight <= 0f) return 0f
+    val scale = backdropBaseScale(fit, containerWidth, containerHeight, imageWidth, imageHeight) *
+        zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
+    val overflowX = imageWidth * scale - containerWidth
+    return if (overflowX > 0f) overflowX / 2f else 0f
 }
