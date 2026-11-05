@@ -73,8 +73,13 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
         "Seasonal effects",
         "Snow, petals and leaves - and how hard the sky may work on this phone"
     ),
-    LIBRARY("Library & dashboard", "Refresh, arriving rows, quick add and the bar"),
-    ACCOUNT("AniList account", "Client ID, session and app lock"),
+    LIBRARY("Library & dashboard", "Refresh, arriving rows and the bar"),
+    // The four device-shaped choices were in four different pages because each was
+    // written beside the feature that first needed it - the frame-rate ceiling under
+    // the sky, full screen under the theme, the app lock under the session, the hold
+    // duration under the cards it acts on. Asked together, they are one question.
+    DEVICE("Device Manager", "What this phone reports, and how hard the app may work"),
+    ACCOUNT("AniList account", "Client ID and session"),
     // Updates is its own page rather than the top of About: the update check and
     // the release notes are the two cards a reader comes back to, and they were
     // sharing a scroll with the crash report and the privacy policy.
@@ -153,7 +158,8 @@ fun SettingsScreen(
      */
     seasonalPreferences: SeasonalPreferences,
     /**
-     * The Device management card's ceiling choice. See [SeasonalSettingsTab].
+     * The cover-cache ceiling the Device Manager's card reads and writes. See
+     * [DeviceManagerTab].
      */
     devicePreferences: DevicePreferences,
     /**
@@ -347,6 +353,16 @@ private fun SettingsRoot(
                 )
             }
 
+            SettingsSectionLabel("This device")
+            SettingsRows {
+                SettingsRow(
+                    page = SettingsPage.DEVICE,
+                    icon = AppVectorIcons.Refresh,
+                    testTag = "settings_row_device",
+                    onOpen = onOpen
+                )
+            }
+
             // The connection check used to sit under a "Network" label of its own,
             // which is a whole section heading for one row - and a heading that
             // names the transport rather than the thing being checked. It is the
@@ -472,19 +488,23 @@ private fun SettingsPageContent(
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.SEASONAL -> SeasonalSettingsTab(
-            seasonalPreferences = seasonalPreferences,
-            devicePreferences = devicePreferences
+            seasonalPreferences = seasonalPreferences
         )
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,
-            quickAddPreferences = quickAddPreferences,
             libraryPreferences = libraryPreferences,
             mainTabPreferences = mainTabPreferences
         )
+        SettingsPage.DEVICE -> DeviceManagerTab(
+            seasonalPreferences = seasonalPreferences,
+            devicePreferences = devicePreferences,
+            themePreferences = themePreferences,
+            appLockPreferences = appLockPreferences,
+            quickAddPreferences = quickAddPreferences
+        )
         SettingsPage.ACCOUNT -> EditSettingsTab(
             authViewModel = authViewModel,
-            appLockPreferences = appLockPreferences,
             onNavigateToLogin = onNavigateToLogin,
             viewer = viewer,
             totalWatchedCount = totalWatchedCount,

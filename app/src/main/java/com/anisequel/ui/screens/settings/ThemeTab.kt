@@ -88,9 +88,9 @@ fun ThemeTab(
 
         AppearanceSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
-        // Full screen, next to the appearance choices it belongs with - the window
-        // reads the same preference this switch writes.
-        DisplaySection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+        // Full screen moved to Device Manager: the switch does not change how the
+        // app looks, it changes how much of the screen this phone hands over, and
+        // it is stored in the theme preferences only because the window reads them.
 
         BackgroundSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 

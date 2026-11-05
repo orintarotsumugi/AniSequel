@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
-import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshInterval
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.ui.components.AppVectorIcons
@@ -63,7 +62,6 @@ import kotlinx.coroutines.launch
 fun LibrarySettingsTab(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
-    quickAddPreferences: QuickAddPreferences,
     libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
     modifier: Modifier = Modifier
@@ -72,7 +70,8 @@ fun LibrarySettingsTab(
         ListRefreshCard(refreshIntervalPreferences)
         LibraryViewCard(libraryPreferences)
         ArrivingSectionCard(arrivingPreferences)
-        QuickAddSectionCard(quickAddPreferences)
+        // The hold-and-swipe card moved to Device Manager, which is where the rest
+        // of the "what this phone does with a gesture" choices live.
         BottomBarSectionCard(mainTabPreferences)
         Spacer(modifier = Modifier.height(24.dp))
     }
