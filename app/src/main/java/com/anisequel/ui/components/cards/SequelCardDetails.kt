@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,7 +36,6 @@ fun SequelCardDetails(
     sequel: MissedSequel,
     modifier: Modifier = Modifier
 ) {
-    val statusColors = AniSequelTheme.statusColors
     val style = LocalMediaCardStyle.current
     val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
     // The rating the chip row shows today, as the number the banner needs.
@@ -67,68 +67,7 @@ fun SequelCardDetails(
         }
 
         // Romaji and English title tiles
-        val romaji = sequel.romajiTitle
-        val english = sequel.englishTitle
-
-        if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                if (!romaji.isNullOrBlank() && romaji != sequel.sequelTitle) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.padding(end = 6.dp)
-                        ) {
-                            Text(
-                                text = "Romaji",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                        Text(
-                            text = romaji,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                if (!english.isNullOrBlank() && english != sequel.sequelTitle) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier.padding(end = 6.dp)
-                        ) {
-                            Text(
-                                text = "English",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                        Text(
-                            text = english,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
+        AliasTiles(sequel)
 
         Spacer(modifier = Modifier.height(6.dp))
 
@@ -168,48 +107,10 @@ fun SequelCardDetails(
         }
 
         // Airing Countdown ticker
-        val countdown = sequel.nextAiringCountdown()
-        if (sequel.isAiring && countdown != null) {
-            Spacer(modifier = Modifier.height(5.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppVectorIcons.CalendarClock,
-                    contentDescription = null,
-                    tint = statusColors.success,
-                    modifier = Modifier.size(13.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = sequel.nextEpisodeNumber?.let { "Next: Ep $it · $countdown" }
-                        ?: "Airing · $countdown",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statusColors.success,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
+        AiringCountdownRow(sequel)
 
         // Watch Progress Meter
-        val progressLabel = sequel.watchProgressLabel()
-        val progress = sequel.watchProgress()
-        if (progressLabel != null && progress != null) {
-            Spacer(modifier = Modifier.height(5.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WavyProgressBar(
-                    progress = { progress },
-                    color = statusColors.info,
-                    modifier = Modifier
-                        .width(54.dp)
-                        .height(6.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = progressLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        WatchProgressRow(sequel)
 
         if (sequel.genres.isNotEmpty()) {
             Spacer(modifier = Modifier.height(5.dp))
@@ -221,5 +122,115 @@ fun SequelCardDetails(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/**
+ * The Romaji and English title tiles.
+ *
+ * Private rather than inlined because the calling function is the details column -
+ * one Column, three chips, two rows - and the aliated tiles are three nested rows
+ * of their own. Keeping them together here keeps the column's own branches down
+ * to "is there art for this".
+ */
+@Composable
+private fun AliasTiles(sequel: MissedSequel) {
+    val romaji = sequel.romajiTitle
+    val english = sequel.englishTitle
+
+    if (romaji.isNullOrBlank() && english.isNullOrBlank()) return
+    Spacer(modifier = Modifier.height(4.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (!romaji.isNullOrBlank() && romaji != sequel.sequelTitle) {
+            AliasRow(label = "Romaji", text = romaji, container = MaterialTheme.colorScheme.primaryContainer, content = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+        if (!english.isNullOrBlank() && english != sequel.sequelTitle) {
+            AliasRow(label = "English", text = english, container = MaterialTheme.colorScheme.secondaryContainer, content = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+    }
+}
+
+/** One alias line: the small language tile, and the name beside it. */
+@Composable
+private fun AliasRow(
+    label: String,
+    text: String,
+    container: Color,
+    content: Color
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            color = container,
+            modifier = Modifier.padding(end = 6.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = content,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/** The airing countdown line, when the sequel is airing and has one. */
+@Composable
+private fun AiringCountdownRow(sequel: MissedSequel) {
+    val statusColors = AniSequelTheme.statusColors
+    val countdown = sequel.nextAiringCountdown()
+    if (!sequel.isAiring || countdown == null) return
+    Spacer(modifier = Modifier.height(5.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = AppVectorIcons.CalendarClock,
+            contentDescription = null,
+            tint = statusColors.success,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = sequel.nextEpisodeNumber?.let { "Next: Ep $it · $countdown" }
+                ?: "Airing · $countdown",
+            style = MaterialTheme.typography.labelSmall,
+            color = statusColors.success,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/** The progress bar and its "3 / 12" label, when the entry carries both. */
+@Composable
+private fun WatchProgressRow(sequel: MissedSequel) {
+    val statusColors = AniSequelTheme.statusColors
+    val progressLabel = sequel.watchProgressLabel()
+    val progress = sequel.watchProgress()
+    if (progressLabel == null || progress == null) return
+    Spacer(modifier = Modifier.height(5.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        WavyProgressBar(
+            progress = { progress },
+            color = statusColors.info,
+            modifier = Modifier
+                .width(54.dp)
+                .height(6.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = progressLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

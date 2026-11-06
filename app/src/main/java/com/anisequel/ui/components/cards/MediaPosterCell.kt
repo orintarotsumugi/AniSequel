@@ -122,103 +122,20 @@ fun MediaPosterCell(
     val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
 
     Column(modifier = modifier) {
-        Box(
-            modifier = posterModifier
-                .fillMaxWidth()
-                .aspectRatio(aspect)
-                .then(
-                    if (style.glowing) {
-                        Modifier.shadow(
-                            elevation = 10.dp,
-                            shape = MaterialTheme.shapes.small,
-                            ambientColor = coverColor ?: Color.Black,
-                            spotColor = coverColor ?: Color.Black
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
-                .clip(MaterialTheme.shapes.small)
-                .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh)
-                .then(
-                    if (style.bordered) {
-                        Modifier.border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant,
-                            MaterialTheme.shapes.small
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
-        ) {
-            if (coverUrl != null) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = contentDescription,
-                    // One percent of overdraw from the top edge, so `Crop`'s whole-pixel
-                    // rounding cannot leave a row of the box's own tint showing across
-                    // the artwork - see [unseamedCover]. Every cover in the app had this
-                    // fix; a shared cell is where it stops being something each caller has
-                    // to remember to ask for.
-                    modifier = Modifier
-                        .matchParentSize()
-                        .unseamedCover(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            // The scrim under an overlaid title. Weighted to the foot of the poster
-            // only, because the artwork is the thing the reader came to look at and a
-            // full-height wash is how a cover stops being a cover.
-            if (titleOverlaid) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(64.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
-                            )
-                        )
-                )
-            }
-
-            if (scoreOnTop) {
-                PosterScoreBadge(
-                    score = score,
-                    modifier = Modifier
-                        .align(PosterCorner.TOP_START.toAlignment())
-                        .padding(5.dp)
-                )
-            }
-            if (scoreOnBottom) {
-                PosterScoreBadge(
-                    score = score,
-                    modifier = Modifier
-                        .align(PosterCorner.BOTTOM_END.toAlignment())
-                        .padding(5.dp)
-                )
-            }
-
-            if (titleOverlaid) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                )
-            }
-
-            overlay()
-        }
+        PosterArtwork(
+            coverUrl = coverUrl,
+            coverColor = coverColor,
+            title = title,
+            score = score,
+            scoreOnTop = scoreOnTop,
+            scoreOnBottom = scoreOnBottom,
+            titleOverlaid = titleOverlaid,
+            style = style,
+            contentDescription = contentDescription,
+            posterModifier = posterModifier,
+            aspect = aspect,
+            overlay = overlay
+        )
 
         if (!titleOverlaid) {
             Spacer(modifier = Modifier.height(5.dp))
@@ -322,5 +239,128 @@ fun ScoreBanner(score: Int, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             color = if (strong) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
         )
+    }
+}
+
+/**
+ * Just the artwork: the image, its tint, and whatever the caller lays over it.
+ *
+ * Split from `MediaPosterCell` because the cell is two responsibilities - the
+ * artwork block and the words under it - and only one of them knows anything
+ * about the overlay, the scrim and the corner badges. The call sites hand in a
+ * poster, sometimes a rating, sometimes an extra overlay layer; this is the one
+ * function that draws any of it.
+ */
+@Composable
+private fun PosterArtwork(
+    coverUrl: String?,
+    coverColor: Color?,
+    title: String,
+    score: Int?,
+    scoreOnTop: Boolean,
+    scoreOnBottom: Boolean,
+    titleOverlaid: Boolean,
+    style: MediaCardStyle,
+    contentDescription: String?,
+    posterModifier: Modifier,
+    aspect: Float,
+    overlay: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = posterModifier
+            .fillMaxWidth()
+            .aspectRatio(aspect)
+            .then(
+                if (style.glowing) {
+                    Modifier.shadow(
+                        elevation = 10.dp,
+                        shape = MaterialTheme.shapes.small,
+                        ambientColor = coverColor ?: Color.Black,
+                        spotColor = coverColor ?: Color.Black
+                    )
+                } else {
+                    Modifier
+                }
+            )
+            .clip(MaterialTheme.shapes.small)
+            .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(
+                if (style.bordered) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        MaterialTheme.shapes.small
+                    )
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        if (coverUrl != null) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = contentDescription,
+                // One percent of overdraw from the top edge, so `Crop`'s whole-pixel
+                // rounding cannot leave a row of the box's own tint showing across
+                // the artwork - see [unseamedCover]. Every cover in the app had this
+                // fix; a shared cell is where it stops being something each caller has
+                // to remember to ask for.
+                modifier = Modifier
+                    .matchParentSize()
+                    .unseamedCover(),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        // The scrim under an overlaid title. Weighted to the foot of the poster
+        // only, because the artwork is the thing the reader came to look at and a
+        // full-height wash is how a cover stops being a cover.
+        if (titleOverlaid) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
+                        )
+                    )
+            )
+        }
+
+        if (scoreOnTop) {
+            PosterScoreBadge(
+                score = score,
+                modifier = Modifier
+                    .align(PosterCorner.TOP_START.toAlignment())
+                    .padding(5.dp)
+            )
+        }
+        if (scoreOnBottom) {
+            PosterScoreBadge(
+                score = score,
+                modifier = Modifier
+                    .align(PosterCorner.BOTTOM_END.toAlignment())
+                    .padding(5.dp)
+            )
+        }
+
+        if (titleOverlaid) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+        }
+
+        overlay()
     }
 }

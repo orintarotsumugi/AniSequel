@@ -202,48 +202,30 @@ fun FullScreenCoverViewer(
         if (!closing) closing = true
     }
 
-    LaunchedEffect(Unit) {
-        if (origin == null) {
-            // Nothing to grow out of: fade the artwork in over the scrim, the
-            // way this used to enter.
-            launch { reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial) }
-        }
-        presence.animateTo(1f, ExpressiveMotion.FastEffects)
-    }
-    LaunchedEffect(artworkFrame) {
-        if (closing) return@LaunchedEffect
-        val target = artworkFrame ?: return@LaunchedEffect
-        if (origin == null || target.width <= 0f || target.height <= 0f) return@LaunchedEffect
-        if (reveal.value < 1f) {
-            reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial)
-            // Landed. The pager has been drawing underneath the whole time; it is
-            // now exactly where the overlay is, so removing the overlay is a no-op
-            // on screen and stops a second full-size image being kept around.
-            overlayVisible = false
-        }
-    }
-    LaunchedEffect(closing) {
-        if (!closing) return@LaunchedEffect
-        coroutineScope {
-            if (origin != null && artworkFrame != null) {
-                overlayVisible = true
-            }
-            // Both halves run together: the scrim leaving while the artwork is
-            // still shrinking would show the page through a moving picture.
-            // `FastSpatial` on the way out, `DefaultSpatial` on the way in - the
-            // exit has to read as a return, not as a second performance.
-            launch { reveal.animateTo(0f, ExpressiveMotion.FastSpatial) }
-            presence.animateTo(0f, ExpressiveMotion.FastEffects)
-        }
-        onDismiss()
-    }
+    // The reveal's choreography lives in two private composables below
+    // (`CoverRevealEffects` and `CoverCloseEffects`) so the decision points for
+    // entrance and exit sit next to the springs they drive, rather than inside a
+    // composable that is already carrying the sources, the pager and the dialog.
+    CoverRevealEffects(
+        origin = origin,
+        artworkFrame = artworkFrame,
+        closing = closing,
+        presence = presence,
+        reveal = reveal,
+        onOverlayVisible = { overlayVisible = it }
+    )
+    CoverCloseEffects(
+        closing = closing,
+        origin = origin,
+        artworkFrame = artworkFrame,
+        presence = presence,
+        reveal = reveal,
+        onOverlayVisible = { overlayVisible = it },
+        onDismiss = onDismiss
+    )
     // Saved and failed are acknowledgements, not modes: they return to the idle
     // glyph after the same window the Extras card's "Link copied" uses.
-    LaunchedEffect(saveState) {
-        if (saveState != CoverSaveState.SAVED && saveState != CoverSaveState.FAILED) {
-            return@LaunchedEffect
-        }
-        delay(COPY_CONFIRMATION_MILLIS)
+    CoverSaveAcknowledgement(saveState = saveState) {
         saveState = CoverSaveState.IDLE
     }
 
@@ -567,3 +549,94 @@ internal data class CoverSource(
 
 /** AniList's banner shape (about 1900x400), used until the image reports its own. */
 private const val DEFAULT_BANNER_ASPECT = 1900f / 400f
+
+/**
+ * The reveal's entrance, and the first half of its landing.
+ *
+ * Separate from the close in [CoverCloseEffects] because the two run at different
+ * times and are driven by different state - the entrance waits for the artwork
+ * frame to exist, the exit waits for the reader to ask - so keeping them together
+ * only made one composable with two sets of launch conditions.
+ */
+@Composable
+private fun CoverRevealEffects(
+    origin: Rect?,
+    artworkFrame: Rect?,
+    closing: Boolean,
+    presence: Animatable<Float, *>,
+    reveal: Animatable<Float, *>,
+    onOverlayVisible: (Boolean) -> Unit
+) {
+    LaunchedEffect(Unit) {
+        if (origin == null) {
+            // Nothing to grow out of: fade the artwork in over the scrim, the
+            // way this used to enter.
+            launch { reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial) }
+        }
+        presence.animateTo(1f, ExpressiveMotion.FastEffects)
+    }
+    LaunchedEffect(artworkFrame) {
+        if (closing) return@LaunchedEffect
+        val target = artworkFrame ?: return@LaunchedEffect
+        if (origin == null || target.width <= 0f || target.height <= 0f) return@LaunchedEffect
+        if (reveal.value < 1f) {
+            reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+            // Landed. The pager has been drawing underneath the whole time; it is
+            // now exactly where the overlay is, so removing the overlay is a no-op
+            // on screen and stops a second full-size image being kept around.
+            onOverlayVisible(false)
+        }
+    }
+}
+
+/**
+ * The reveal's exit, and the dialog's teardown.
+ *
+ * The scrim and the artwork run together: the exit has to read as a return, not
+ * as a second performance. Tearing the dialog down happens only once both have
+ * settled, which is why this is a `suspend`-driven coroutine and not a timer.
+ */
+@Composable
+private fun CoverCloseEffects(
+    closing: Boolean,
+    origin: Rect?,
+    artworkFrame: Rect?,
+    presence: Animatable<Float, *>,
+    reveal: Animatable<Float, *>,
+    onOverlayVisible: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(closing) {
+        if (!closing) return@LaunchedEffect
+        coroutineScope {
+            if (origin != null && artworkFrame != null) {
+                onOverlayVisible(true)
+            }
+            // Both halves run together: the scrim leaving while the artwork is
+            // still shrinking would show the page through a moving picture.
+            launch { reveal.animateTo(0f, ExpressiveMotion.FastSpatial) }
+            presence.animateTo(0f, ExpressiveMotion.FastEffects)
+        }
+        onDismiss()
+    }
+}
+
+/**
+ * Clears a saved/failed acknowledgement back to the idle glyph.
+ *
+ * The same window the Extras card's "Link copied" uses - long enough to be read,
+ * short enough that the next tap on the download glyph is not ambiguous.
+ */
+@Composable
+private fun CoverSaveAcknowledgement(
+    saveState: CoverSaveState,
+    onReset: () -> Unit
+) {
+    LaunchedEffect(saveState) {
+        if (saveState != CoverSaveState.SAVED && saveState != CoverSaveState.FAILED) {
+            return@LaunchedEffect
+        }
+        delay(COPY_CONFIRMATION_MILLIS)
+        onReset()
+    }
+}
