@@ -17,8 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -51,12 +54,17 @@ fun SequelPoster(
 ) {
     val coverColor = sequel.coverColor.toCoverColorOrNull()
     var showFullScreen by remember { mutableStateOf(false) }
+    // Where the cell's artwork is on screen, so the viewer can grow out of the
+    // picture the reader tapped instead of fading in over it. Keyed on the media
+    // because a recycled lazy slot must not carry the previous title's rectangle.
+    var posterBounds by remember(sequel.sequelMedia.id) { mutableStateOf<Rect?>(null) }
     val style = LocalMediaCardStyle.current
     val score = sequel.sequelMedia.averageScore?.takeIf { it >= 75 }
 
     if (showFullScreen) {
         FullScreenCoverViewer(
             media = sequel.sequelMedia,
+            origin = posterBounds,
             onDismiss = { showFullScreen = false }
         )
     }
@@ -69,6 +77,7 @@ fun SequelPoster(
         modifier = modifier.width(POSTER_WIDTH),
         style = style,
         posterModifier = Modifier
+            .onGloballyPositioned { posterBounds = it.boundsInWindow() }
             .expressiveHoldGesture(
                 onHold = { showFullScreen = true },
                 onClick = { showFullScreen = true }

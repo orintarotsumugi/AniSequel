@@ -3,6 +3,8 @@ package com.anisequel
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
+import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
@@ -130,6 +132,83 @@ class ThemePreferencesTest {
         assertTrue(RetainedTint.SUBTLE.strength < RetainedTint.BALANCED.strength)
         assertTrue(RetainedTint.BALANCED.strength < RetainedTint.FULL.strength)
         assertEquals(RetainedTint.FULL, RetainedTint.fromStorage("sepia"))
+    }
+
+    /**
+     * The Info page backdrop defaults to the banner, soft.
+     *
+     * Both halves are asserted together because the pair is what the reader sees
+     * on first open: a default that picked the cover would make the banner - the
+     * one image the page could not otherwise show at size - unreachable until a
+     * Settings visit, and a crisp default would put the artwork's lettering
+     * behind every card caption.
+     */
+    @Test
+    fun `the info backdrop defaults to a soft banner`() = runTest {
+        val settings = preferences().settings.first()
+
+        assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
+        assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
+    }
+
+    @Test
+    fun `every info backdrop source and blur round-trips through storage`() = runTest {
+        val preferences = preferences()
+
+        InfoBackdropSource.entries.forEach { source ->
+            preferences.setInfoBackdropSource(source)
+            assertEquals(
+                "$source must survive a round trip",
+                source,
+                preferences.settings.first().infoBackdropSource
+            )
+        }
+
+        InfoBackdropBlur.entries.forEach { blur ->
+            preferences.setInfoBackdropBlur(blur)
+            assertEquals(
+                "$blur must survive a round trip",
+                blur,
+                preferences.settings.first().infoBackdropBlur
+            )
+        }
+    }
+
+    @Test
+    fun `reset appearance restores the info backdrop defaults`() = runTest {
+        val preferences = preferences()
+        preferences.setInfoBackdropSource(InfoBackdropSource.OFF)
+        preferences.setInfoBackdropBlur(InfoBackdropBlur.HEAVY)
+
+        preferences.reset()
+
+        val settings = preferences.settings.first()
+        assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
+        assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
+    }
+
+    /**
+     * The stored words and the radii are part of the file's contract.
+     *
+     * A rename would silently turn a reader's "off" back into the banner on the
+     * next launch, and the radii have to stay ordered for the labels to mean
+     * anything - Crisp must actually be sharper than Soft, not merely earlier in
+     * the enum.
+     */
+    @Test
+    fun `info backdrop storage values are stable and unknown values fall back`() {
+        assertEquals("banner", InfoBackdropSource.BANNER.storageValue)
+        assertEquals("cover", InfoBackdropSource.COVER.storageValue)
+        assertEquals("off", InfoBackdropSource.OFF.storageValue)
+        assertEquals(InfoBackdropSource.BANNER, InfoBackdropSource.fromStorage("sepia"))
+        assertEquals(InfoBackdropSource.BANNER, InfoBackdropSource.fromStorage(null))
+
+        assertEquals("crisp", InfoBackdropBlur.CRISP.storageValue)
+        assertEquals("soft", InfoBackdropBlur.SOFT.storageValue)
+        assertEquals("heavy", InfoBackdropBlur.HEAVY.storageValue)
+        assertEquals(InfoBackdropBlur.SOFT, InfoBackdropBlur.fromStorage("sepia"))
+        assertTrue(InfoBackdropBlur.CRISP.radiusDp < InfoBackdropBlur.SOFT.radiusDp)
+        assertTrue(InfoBackdropBlur.SOFT.radiusDp < InfoBackdropBlur.HEAVY.radiusDp)
     }
 
     @Test

@@ -379,7 +379,9 @@ fun SequelDetailSheet(
                         onOpenStaff = onOpenStaff,
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
-                        bottomContentPadding = navClearance
+                        bottomContentPadding = navClearance,
+                        infoBackdropSource = themeSettings.infoBackdropSource,
+                        infoBackdropBlur = themeSettings.infoBackdropBlur
                     )
                 }
             }

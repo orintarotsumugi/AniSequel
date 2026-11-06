@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -32,6 +33,8 @@ import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.pageUrl
 import com.anisequel.data.repository.AniThemes
+import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.viewmodel.QuickAddStatus
@@ -145,7 +148,10 @@ fun AnimeInfoPage(
      * page every time they came back from the entry editor.
      */
     listState: LazyListState = rememberLazyListState(),
-    bottomContentPadding: Dp = 24.dp
+    bottomContentPadding: Dp = 24.dp,
+    /** The artwork behind the cards; see [InfoPageBackdrop]. */
+    infoBackdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
+    infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT
 ) {
     val media = subject.media
     val context = LocalContext.current
@@ -177,11 +183,30 @@ fun AnimeInfoPage(
     }
 
     var showCover by remember(media.id, media.type) { mutableStateOf(false) }
+    // The poster's window bounds at the moment it was tapped. The viewer expands
+    // its artwork out of this rectangle and shrinks back into it on the way out;
+    // null (the Extras card, a host that opens the viewer without a poster) keeps
+    // the plain fade.
+    var coverOrigin by remember(media.id, media.type) { mutableStateOf<Rect?>(null) }
     if (showCover) {
-        FullScreenCoverViewer(media = media, onDismiss = { showCover = false })
+        FullScreenCoverViewer(
+            media = media,
+            origin = coverOrigin,
+            onDismiss = { showCover = false }
+        )
     }
 
     Box(modifier = modifier.fillMaxSize()) {
+        // Behind the list, not inside it: the artwork stays put while the cards
+        // scroll over it, which is what makes it read as a page backdrop rather
+        // than as a very tall hero.
+        InfoPageBackdrop(
+            media = media,
+            source = infoBackdropSource,
+            blur = infoBackdropBlur,
+            collapse = { collapse.value }
+        )
+
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -198,9 +223,13 @@ fun AnimeInfoPage(
                     media = media,
                     relationLabel = subject.sequel?.relationLabel,
                     collapse = { collapse.value },
-                    onOpenCover = { showCover = true },
+                    onOpenCover = { origin ->
+                        coverOrigin = origin
+                        showCover = true
+                    },
                     onClose = onClose,
-                    onOpenStudio = onOpenStudio
+                    onOpenStudio = onOpenStudio,
+                    backdropSource = infoBackdropSource
                 )
             }
 
@@ -223,7 +252,14 @@ fun AnimeInfoPage(
                 onOpenStudio = onOpenStudio,
                 onOpenCharacter = onOpenCharacter,
                 onOpenStaff = onOpenStaff,
-                onOpenCover = { showCover = true }
+                onOpenCover = {
+                    // The Extras card is not the poster, so there is no rectangle
+                    // to grow out of. Clearing the last one matters: following a
+                    // relation and opening the artwork from the card underneath
+                    // must not expand from where the previous title's poster was.
+                    coverOrigin = null
+                    showCover = true
+                }
             )
         }
 

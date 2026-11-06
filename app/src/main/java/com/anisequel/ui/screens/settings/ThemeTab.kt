@@ -39,6 +39,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemeMode
@@ -100,6 +102,12 @@ fun ThemeTab(
         SettingsSectionLabel("Poster colour")
         AnimeColourSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
+        // An opened title's page is an appearance surface too, and it is the one
+        // this page can change without a title being open. Kept beside the anime
+        // colour section because both are about borrowing a title's artwork.
+        SettingsSectionLabel("Anime pages")
+        InfoBackdropSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+
         Spacer(modifier = Modifier.height(14.dp))
 
         val appearanceChanged = themeSettings.themeMode != ThemeMode.DEFAULT ||
@@ -125,6 +133,11 @@ fun ThemeTab(
             themeSettings.retainedTint != RetainedTint.DEFAULT ||
             themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
             themeSettings.appBackgroundColor != null ||
+            // Both are Reset appearance's to clear: the backdrop is part of the
+            // app's look, not a per-title choice, and leaving it behind would make
+            // the button restore everything but the page a title opens on.
+            themeSettings.infoBackdropSource != InfoBackdropSource.DEFAULT ||
+            themeSettings.infoBackdropBlur != InfoBackdropBlur.DEFAULT ||
             // Full screen is off by default; turning it on is a change, so the
             // reset row has to offer itself for exactly that case.
             themeSettings.immersive
