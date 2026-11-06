@@ -74,7 +74,7 @@ internal fun AnimeColourSection(
     }
 
     SectionCard(
-        title = "Anime colour match",
+        title = "Use poster colour",
         icon = AppVectorIcons.AnimeSparkle,
         subtitle = "Borrow the cover art's colour for the whole app",
         iconContainer = MaterialTheme.colorScheme.primaryContainer,
