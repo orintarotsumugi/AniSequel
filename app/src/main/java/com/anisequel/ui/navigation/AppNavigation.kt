@@ -36,6 +36,7 @@ import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences

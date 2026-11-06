@@ -266,10 +266,8 @@ fun FullScreenCoverViewer(
         }
         DialogImmersiveEffect(immersive)
 
-        val coverBg = remember(media.posterColor) {
-            media.posterColor.toCoverColorOrNull()
-                ?: MaterialTheme.colorScheme.surfaceContainerHighest
-        }
+        val coverBg = media.posterColor.toCoverColorOrNull()
+            ?: MaterialTheme.colorScheme.surfaceContainerHighest
         // The picture that grows out of the poster: the first source at its first
         // image, which is exactly what the pager opens on.
         val overlayUrl = sources.firstOrNull()?.urls?.firstOrNull()

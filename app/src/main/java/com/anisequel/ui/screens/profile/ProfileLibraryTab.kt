@@ -58,7 +58,8 @@ import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.MediaPosterCell
-import com.anisequel.ui.components.cards.metaCornerFor
+import com.anisequel.domain.card.metaCornerFor
+import com.anisequel.ui.components.cards.toAlignment
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
