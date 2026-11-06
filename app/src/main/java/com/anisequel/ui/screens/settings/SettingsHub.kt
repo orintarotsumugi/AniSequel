@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,7 +33,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -172,83 +173,135 @@ fun SettingsSectionLabel(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * One destination in the hub.
+ * One row on the shelf: what it is named, what it says under the name, and where
+ * tapping it goes.
  *
- * The chevron is `KeyboardArrowRight` rather than a custom vector because it is
- * the platform's own "there is another page this way", which is exactly the
- * promise the row makes. The icon tile uses `secondaryContainer` like
- * [SectionCard]; a saturated primary tile on five rows at once turns the shelf
- * into a colour chart.
+ * A value rather than a composable because the group needs to know how many rows it
+ * holds in order to put a divider *between* them. Passing a `content` lambda instead
+ * meant either counting them at the call site or drawing a rule after the last one,
+ * which is a line under nothing.
+ */
+data class SettingsHubEntry(
+    val icon: ImageVector,
+    val title: String,
+    val subtitle: String,
+    val testTag: String,
+    val onClick: () -> Unit
+)
+
+/**
+ * A group of shelf rows inside one surface, separated by hairlines.
+ *
+ * ## Why one card and not a card per row
+ *
+ * Each row used to be its own raised surface with a 10dp gap, on the reasoning that
+ * a mis-tap between two rows should land on background rather than on a neighbour.
+ * That is true of a *list*, and this is not a list - it is five groups of two to
+ * four destinations, and drawn as separate cards the grouping was carried by the
+ * label alone. The reader scanning for "Device Manager" had no visual answer to
+ * which section a row belonged to; the gap between two rows in a group was the same
+ * size as the gap between two groups.
+ *
+ * One surface per group, with a rule between the rows, is what makes the label
+ * structural: the rows inside the card are the ones under that heading, and the
+ * white space between cards is the only separation that means "different subject".
+ * The mis-tap argument survives as the divider's inset - the rule stops where the
+ * icon tile ends, so the touch target of a row is the whole width including the
+ * gutter beside its icon, and the boundary between two rows is a line, not a hole.
  */
 @Composable
-fun SettingsHubRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    testTag: String? = null
+fun SettingsHubGroup(
+    entries: List<SettingsHubEntry>,
+    modifier: Modifier = Modifier
 ) {
+    if (entries.isEmpty()) return
+    Surface(
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column {
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        // Inset past the icon tile (16dp padding + 44dp tile + 14dp
+                        // gap) so the rule reads as the boundary between two rows of
+                        // *text*, not as a cut through the whole card.
+                        modifier = Modifier.padding(start = 74.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                    )
+                }
+                SettingsHubEntryRow(entry)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
     val haptics = LocalHapticFeedback.current
     // Shared with `bouncyPress` so the press comes from the row's own clickable,
     // which cancels when the gesture is claimed as a scroll. The fallback pointer
     // loop would spring every row the thumb passes while scrolling the shelf.
     val interactionSource = remember { MutableInteractionSource() }
-    Surface(
-        onClick = {
-            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onClick()
-        },
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
-        interactionSource = interactionSource,
-        modifier = modifier
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
-            .then(testTag?.let { Modifier.testTag(it) } ?: Modifier)
-            .semantics { role = Role.Button }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Open ${entry.title}"
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(22.dp)
-                )
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                entry.onClick()
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.size(2.dp))
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            .testTag(entry.testTag)
+            .padding(horizontal = 16.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // The chevron is `KeyboardArrowRight` rather than a custom vector because it
+        // is the platform's own "there is another page this way", which is exactly the
+        // promise the row makes. The icon tile uses `secondaryContainer` like
+        // [SectionCard]; a saturated primary tile on five rows at once turns the shelf
+        // into a colour chart.
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = entry.icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(22.dp)
             )
         }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.size(2.dp))
+            Text(
+                text = entry.subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(22.dp)
+        )
     }
 }
 
