@@ -14,6 +14,7 @@ import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.screens.settings.SettingsScreen
@@ -40,6 +41,12 @@ fun NavGraphBuilder.settingsDestinations(
     changelogRepository: ChangelogRepository,
     seasonalPreferences: SeasonalPreferences,
     devicePreferences: DevicePreferences,
+    /**
+     * The card style the Interface page writes and the rest of the app reads.
+     * The same instance the app root collects, so the picker cannot describe a style
+     * the cards are not drawing.
+     */
+    interfacePreferences: InterfacePreferences,
     aniListRepository: AniListRepository,
     /**
      * The two dashboard counts the Settings header shows.
@@ -66,6 +73,7 @@ fun NavGraphBuilder.settingsDestinations(
             changelogRepository = changelogRepository,
             seasonalPreferences = seasonalPreferences,
             devicePreferences = devicePreferences,
+            interfacePreferences = interfacePreferences,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
             totalWatchedCount = totalWatchedCount,

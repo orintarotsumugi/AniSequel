@@ -1,18 +1,12 @@
 package com.anisequel.ui.components.cards
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,28 +17,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.displayName
-import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
-import com.anisequel.ui.theme.AniSequelTheme
 
 /**
- * Modern poster component with dynamic background hue, format badge, and score indicator.
- * Supports holding (long press) to expand into an immersive full-screen artwork viewer.
+ * The sequel card's artwork, drawn by the same cell the Library grid and the
+ * settings preview use, so a card style is one definition rather than three.
+ *
+ * The hold and the tap still belong to the poster alone: they open the cover
+ * viewer, and the title and the chips beside the artwork are not covers. That is
+ * why the gesture goes on [MediaPosterCell.posterModifier] rather than on the
+ * cell's own modifier, which would also cover the text under it.
+ *
+ * The rating is only handed to the cell when the chosen style puts it *on* the
+ * artwork. Otherwise [SequelCardDetails] keeps drawing it in its chip row, exactly
+ * as it always has, and the poster shows nothing - which is the difference between
+ * a style and a duplicate.
  */
 @Composable
 fun SequelPoster(
@@ -53,30 +54,30 @@ fun SequelPoster(
 ) {
     val coverColor = sequel.coverColor.toCoverColorOrNull()
     var showFullScreen by remember { mutableStateOf(false) }
+    // Where the cell's artwork is on screen, so the viewer can grow out of the
+    // picture the reader tapped instead of fading in over it. Keyed on the media
+    // because a recycled lazy slot must not carry the previous title's rectangle.
+    var posterBounds by remember(sequel.sequelMedia.id) { mutableStateOf<Rect?>(null) }
+    val style = LocalMediaCardStyle.current
+    val score = sequel.sequelMedia.averageScore?.takeIf { it >= 75 }
 
     if (showFullScreen) {
         FullScreenCoverViewer(
             media = sequel.sequelMedia,
+            origin = posterBounds,
             onDismiss = { showFullScreen = false }
         )
     }
 
-    Box(
-        modifier = modifier
-            .width(104.dp)
-            .height(152.dp)
-            .shadow(
-                elevation = 8.dp,
-                shape = MaterialTheme.shapes.medium,
-                ambientColor = coverColor ?: Color.Black
-            )
-            .clip(MaterialTheme.shapes.medium)
-            .border(
-                1.dp,
-                Color.White.copy(alpha = 0.15f),
-                MaterialTheme.shapes.medium
-            )
-            .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
+    MediaPosterCell(
+        coverUrl = sequel.sequelCoverUrl,
+        coverColor = coverColor,
+        title = sequel.sequelTitle,
+        score = if (style.scoreOnPoster) score else null,
+        modifier = modifier.width(POSTER_WIDTH),
+        style = style,
+        posterModifier = Modifier
+            .onGloballyPositioned { posterBounds = it.boundsInWindow() }
             .expressiveHoldGesture(
                 onHold = { showFullScreen = true },
                 onClick = { showFullScreen = true }
@@ -88,100 +89,43 @@ fun SequelPoster(
             .semantics {
                 role = Role.Button
                 contentDescription = "Open the cover for ${sequel.sequelMedia.displayName}"
-            }
-    ) {
-        // Placeholder artwork, shown only until the real cover arrives.
-        //
-        // This used to be a full-bleed `verticalGradient` painted on *every*
-        // poster whether or not a cover loaded - and since `AsyncImage` draws
-        // the cover over the whole box, the gradient was then completely
-        // overdrawn. Every poster in the list was therefore drawn twice, the
-        // second pass entirely hidden: exactly the kind of per-pixel waste a
-        // scrolling wall of 96dp covers notices. A single solid colour, tinted
-        // from AniList's dominant cover colour when it is known, is one draw and
-        // reads the same behind a not-yet-loaded poster.
-        //
-        // No glyph on top. A movie icon on every unloaded tile turned a grid of
-        // eight posters into a grid of eight identical icons for as long as the
-        // network took, which is louder than the artwork it was standing in for.
-        // The poster's own background colour already says "art is coming", and
-        // with the image cache now living in `noBackupFilesDir` (see
-        // `NetworkClient.createImageLoader`) this state is rare rather than the
-        // first thing every cold start shows.
-
-        // Cover artwork
-        if (sequel.sequelCoverUrl != null) {
-            AsyncImage(
-                model = sequel.sequelCoverUrl,
-                contentDescription = null,
+            },
+        overlay = {
+            // The top scrim exists so the format pill under it stays readable over
+            // whichever cover is behind it.
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
-                    .unseamedCover(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        // Top gradient scrim for readable badge
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .fillMaxWidth(0.6f)
-                .height(32.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                    .align(Alignment.TopEnd)
+                    .fillMaxWidth(0.6f)
+                    .height(32.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                        )
                     )
-                )
-        )
-
-        // Format pill tag
-        Surface(
-            shape = RoundedCornerShape(bottomStart = 10.dp),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            Text(
-                text = sequel.format,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onPrimary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
             )
-        }
-
-        // High score badge
-        val score = sequel.sequelMedia.averageScore
-        if (score != null && score >= 75) {
             Surface(
-                shape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 6.dp),
-                color = if (score >= 80) AniSequelTheme.statusColors.success else MaterialTheme.colorScheme.secondary,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 4.dp, bottom = 4.dp)
+                shape = RoundedCornerShape(bottomStart = 10.dp),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.TopEnd)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.AnimeSparkle,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = "$score%",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    text = sequel.format,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                )
             }
         }
-    }
+    )
 }
+
+/**
+ * The poster's width. The height is the 2:3 ratio the cell enforces, rather than the
+ * 104x152 the box used to state twice - two numbers for one shape is how they drift.
+ */
+private val POSTER_WIDTH = 104.dp
 
 /**
  * Parses an AniList `#RRGGBB` cover colour, or null if it is missing or junk.

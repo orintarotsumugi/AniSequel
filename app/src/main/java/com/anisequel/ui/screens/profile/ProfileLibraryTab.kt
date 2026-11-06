@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,7 +24,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,12 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.withListStatus
@@ -60,7 +56,11 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.MarqueeText
+import com.anisequel.ui.components.cards.LocalMediaCardStyle
+import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.domain.card.metaCornerFor
+import com.anisequel.ui.components.cards.toAlignment
+import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -960,12 +960,17 @@ private fun LibrarySearchField(
 }
 
 /**
- * One poster, with the progress badge and the title beneath it.
+ * One poster, placed by the reader's chosen card style.
  *
- * The badge is the only thing drawn on top of the cover. It sits top-start in a
- * translucent container so it stays readable over a pale cover without needing
- * the scrim a title would, and it is skipped entirely for an entry with no
- * progress rather than being drawn with a placeholder number.
+ * The layout lives in [MediaPosterCell], shared with the dashboard's sequel rows and
+ * with the picker's own preview, so the three cannot each draw a different idea of
+ * the same style. What stays here is what only the Library has: the progress count,
+ * the favourite mark, and the format line a card falls back to when there is no
+ * rating to show.
+ *
+ * The progress pill moves corner when the style puts the rating where it used to
+ * sit - see [metaCornerFor]. Two capsules stacked in one corner is not a layout, and
+ * the one that disappears is the number the reader was scanning for.
  */
 @Composable
 private fun LibraryPoster(
@@ -976,6 +981,9 @@ private fun LibraryPoster(
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
+    val style = LocalMediaCardStyle.current
+    val title = media.displayName
+    val score = media.averageScore?.takeIf { it > 0 }
 
     Column(
         modifier = modifier
@@ -983,104 +991,73 @@ private fun LibraryPoster(
             .clickable(interactionSource = interactionSource, onClick = onClick)
             .testTag("library_poster")
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(POSTER_ASPECT)
-                .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            AsyncImage(
-                model = media.coverImage?.bestUrl,
-                // The title is printed directly beneath this poster, so describing
-                // the image with it announced the same name twice in a row as the
-                // reader moved through the grid. Null here: the `Text` below is the
-                // one accessible name for this cell.
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+        MediaPosterCell(
+            coverUrl = media.coverImage?.bestUrl,
+            coverColor = media.coverImage?.color.toCoverColorOrNull(),
+            title = title,
+            score = score,
+            style = style,
+            modifier = Modifier.fillMaxWidth(),
+            overlay = {
+                libraryProgressLabel(entry)?.let { label ->
+                    Row(
+                        modifier = Modifier
+                            .align(metaCornerFor(style).toAlignment())
+                            .padding(5.dp)
+                            .clip(ExpressiveShapes.pill)
+                            // Opaque enough to read a number over a pale cover, and
+                            // translucent enough that the artwork still shows through.
+                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Play,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(9.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            maxLines = 1
+                        )
+                    }
+                }
 
-            libraryProgressLabel(entry)?.let { label ->
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(5.dp)
-                        .clip(ExpressiveShapes.pill)
-                        // Opaque enough to read a number over a pale cover, and
-                        // translucent enough that the artwork still shows through.
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                if (isFavourite) {
                     Icon(
-                        imageVector = AppVectorIcons.Play,
+                        imageVector = AppVectorIcons.FavouriteAnime,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(9.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        maxLines = 1
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(5.dp)
+                            .size(16.dp)
                     )
                 }
             }
-
-            if (isFavourite) {
-                Icon(
-                    imageVector = AppVectorIcons.FavouriteAnime,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(5.dp)
-                        .size(16.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(5.dp))
-
-        // The title, and then one line of context - which is what makes this grid
-        // readable rather than just a wall of posters. Three columns at labelMedium
-        // leaves room for roughly eighteen characters a line, so a title that wraps
-        // to two lines is consuming the row that the context line needs; it is
-        // capped at one and given the full width instead.
-        //
-        // The context line is only drawn when it says something the title does not.
-        // A second title-shaped string under a poster in a grid is the poster
-        // repeated, not information.
-        // `media.displayName`, not `media.title?.displayName`. The extension is on
-        // [MediaNode] and falls back to "Unknown Title"; there is no `displayName`
-        // on `MediaTitle`, so the safe-call version was a receiver mismatch - a
-        // compile error, which is why this line has never run.
-        val title = media.displayName
-        val score = media.averageScore?.takeIf { it > 0 }?.let { "$it%" }
-        val context = score ?: media.formatLabel.takeIf { it.isNotBlank() }
-        val contextIsDistinct = !context.isNullOrBlank() && !title.contains(context, ignoreCase = true)
-
-        MarqueeText(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.fillMaxWidth()
         )
 
-        if (contextIsDistinct) {
-            Spacer(modifier = Modifier.height(1.dp))
-            Text(
-                text = context,
-                style = MaterialTheme.typography.labelSmall,
-                // A shade quieter than the title, so the eye reads the title first
-                // and the score second - the same order the two were worth being in.
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
+        // The format line, which is what this card drew under a poster when there was
+        // no rating to put there. Only when it says something the title does not: a
+        // second title-shaped string under a poster in a grid is the poster repeated,
+        // not information.
+        if (score == null) {
+            val format = media.formatLabel.takeIf { it.isNotBlank() }
+            if (format != null && !title.contains(format, ignoreCase = true)) {
+                Spacer(modifier = Modifier.height(1.dp))
+                Text(
+                    text = format,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -1140,6 +1117,3 @@ private fun LibraryEmpty(
         )
     }
 }
-
-/** AniList covers are 2:3. */
-private const val POSTER_ASPECT = 2f / 3f

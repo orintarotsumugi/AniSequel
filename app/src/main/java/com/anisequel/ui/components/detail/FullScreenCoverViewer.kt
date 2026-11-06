@@ -2,11 +2,9 @@ package com.anisequel.ui.components.detail
 
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -14,23 +12,15 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,37 +32,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import coil.compose.rememberAsyncImagePainter
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.network.LiveChartArtwork
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.englishName
-import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.romajiName
-import com.anisequel.data.model.statusLabel
 import com.anisequel.data.repository.LiveChartCovers
-import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.liveChartUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -108,9 +94,20 @@ import kotlinx.coroutines.launch
 @Composable
 fun FullScreenCoverViewer(
     media: MediaNode,
+    /**
+     * The tapped poster's window bounds, or null when the viewer was opened from
+     * something that is not a poster.
+     *
+     * The viewer is a separate dialog window, so Compose's shared-element APIs -
+     * which work within one `Composition` - cannot move the artwork between them.
+     * This rectangle is the hand-off instead: the first frame of the dialog draws
+     * the artwork at exactly the poster's position and size, then springs it to
+     * the frame the pager measured. Dismissing runs the same spring backwards.
+     * Null keeps the old fade, because there is nothing to grow out of.
+     */
+    origin: Rect? = null,
     onDismiss: () -> Unit
 ) {
-    var isVisible by remember { mutableStateOf(false) }
     // Scale, pan and the measured frame live in one holder: the double-tap, the
     // pinch and the background tap all move the same three values, and keeping
     // them together is what lets each gesture be a method rather than another
@@ -180,38 +177,56 @@ fun FullScreenCoverViewer(
         saveState = CoverSaveState.IDLE
     }
 
-    // The way out, and the only one: fade and shrink first, then tell the host.
+    // The two values the window is drawn from, both `Animatable` so the closing
+    // coroutine can *await the spring* rather than guess its settle time.
     //
-    // `AnimatedVisibility`'s exit branch was dead code before this: every control
-    // called the host's `onDismiss` directly, which removed the `Dialog` in the
-    // same frame, so the artwork that fades in never faded out. The delay is the
-    // exit spring's settle time; it is a fixed wait rather than a measured one
-    // because a dialog dismissal that waits on an animation callback can outlive
-    // the host's state and never fire.
-    var closing by remember { mutableStateOf(false) }
+    // `presence` is the scrim and the chrome; `reveal` is the artwork's journey
+    // between the poster and the pager frame. They are separate because the scrim
+    // is a fade and the artwork is a spring, and the fixed 220ms teardown this
+    // replaced was the compromise that made one of them cut off early. A dialog
+    // teardown that waits on a callback used to be the risk; here the wait is
+    // inside the dialog's own composition, which cannot be disposed until it
+    // calls `onDismiss`.
+    val presence = remember(media.id) { Animatable(0f) }
+    val reveal = remember(media.id) { Animatable(0f) }
+    // The pager's measured frame, in this window's coordinates. It arrives after
+    // the first layout pass, so the entrance starts from that effect rather than
+    // from composition.
+    var artworkFrame by remember(media.id) { mutableStateOf<Rect?>(null) }
+    // The travelling copy of the artwork. It is only meaningful during the
+    // entrance and the exit; once it has landed, the pager underneath is the
+    // same picture at the same place, so this goes away instead of covering it.
+    var overlayVisible by remember(media.id) { mutableStateOf(origin != null) }
+    var closing by remember(media.id) { mutableStateOf(false) }
     val requestDismiss: () -> Unit = {
-        if (!closing) {
-            closing = true
-            isVisible = false
-        }
-    }
-    LaunchedEffect(closing) {
-        if (!closing) return@LaunchedEffect
-        delay(COVER_VIEWER_EXIT_MILLIS)
-        onDismiss()
-    }
-    // Saved and failed are acknowledgements, not modes: they return to the idle
-    // glyph after the same window the Extras card's "Link copied" uses.
-    LaunchedEffect(saveState) {
-        if (saveState != CoverSaveState.SAVED && saveState != CoverSaveState.FAILED) {
-            return@LaunchedEffect
-        }
-        delay(COPY_CONFIRMATION_MILLIS)
-        saveState = CoverSaveState.IDLE
+        if (!closing) closing = true
     }
 
-    LaunchedEffect(Unit) {
-        isVisible = true
+    // The reveal's choreography lives in two private composables below
+    // (`CoverRevealEffects` and `CoverCloseEffects`) so the decision points for
+    // entrance and exit sit next to the springs they drive, rather than inside a
+    // composable that is already carrying the sources, the pager and the dialog.
+    CoverRevealEffects(
+        origin = origin,
+        artworkFrame = artworkFrame,
+        closing = closing,
+        presence = presence,
+        reveal = reveal,
+        onOverlayVisible = { overlayVisible = it }
+    )
+    CoverCloseEffects(
+        closing = closing,
+        origin = origin,
+        artworkFrame = artworkFrame,
+        presence = presence,
+        reveal = reveal,
+        onOverlayVisible = { overlayVisible = it },
+        onDismiss = onDismiss
+    )
+    // Saved and failed are acknowledgements, not modes: they return to the idle
+    // glyph after the same window the Extras card's "Link copied" uses.
+    CoverSaveAcknowledgement(saveState = saveState) {
+        saveState = CoverSaveState.IDLE
     }
 
     Dialog(
@@ -222,11 +237,26 @@ fun FullScreenCoverViewer(
             dismissOnClickOutside = true
         )
     ) {
+        val dialogView = LocalView.current
+        LaunchedEffect(Unit) {
+            // The platform draws a hard, undimmable scrim behind a dialog, which
+            // used to cut to 60% black on the frame the viewer opened while the
+            // app's own scrim faded in behind it. Zeroing the window's dim lets
+            // the animated scrim below be the only one, and lets the exit fade
+            // back to the page instead of being unmasked in one frame.
+            (dialogView.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
+        }
         DialogImmersiveEffect(immersive)
+
+        val coverBg = media.posterColor.toCoverColorOrNull()
+            ?: MaterialTheme.colorScheme.surfaceContainerHighest
+        // The picture that grows out of the poster: the first source at its first
+        // image, which is exactly what the pager opens on.
+        val overlayUrl = sources.firstOrNull()?.urls?.firstOrNull()
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -236,126 +266,92 @@ fun FullScreenCoverViewer(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            AnimatedVisibility(
-                visible = isVisible,
-                enter = fadeIn(ExpressiveMotion.DefaultEffects) +
-                    scaleIn(
-                        initialScale = 0.82f,
-                        animationSpec = ExpressiveMotion.DefaultSpatial
-                    ),
-                exit = fadeOut(ExpressiveMotion.FastEffects) +
-                    scaleOut(
-                        targetScale = 0.85f,
-                        // `FastSpatial`, not the slow `DefaultSpatial` the entrance
-                        // uses: the dialog is torn down after a fixed
-                        // [COVER_VIEWER_EXIT_MILLIS], and the first overshoot of the
-                        // slower spring lands about there - so the artwork was being
-                        // deleted mid-bounce. The exit has to settle inside its own
-                        // window; the entrance does not.
-                        animationSpec = ExpressiveMotion.FastSpatial
-                    ),
-                modifier = Modifier.fillMaxSize()
+            // The scrim is its own layer, read in the draw phase: `presence` is an
+            // `Animatable`, and reading it in composition would recompose this
+            // whole dialog on every fade frame for one alpha value.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer { alpha = presence.value }
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.92f))
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // With the bars hidden this window's own status-bar
+                    // padding is zero, so the header would sit on the glass
+                    // and under a cutout - the shared helper restores both,
+                    // exactly as it does for the Activity's root.
+                    .then(Modifier.immersiveDisplayInsets(immersive))
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
+                    .graphicsLayer { alpha = presence.value },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // With the bars hidden this window's own status-bar
-                        // padding is zero, so the header would sit on the glass
-                        // and under a cutout - the shared helper restores both,
-                        // exactly as it does for the Activity's root.
-                        .then(Modifier.immersiveDisplayInsets(immersive))
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    CoverViewerHeader(
-                        media = media,
-                        saveState = saveState,
-                        source = source,
-                        currentPage = currentPage,
-                        onDismiss = requestDismiss,
-                        startSave = {
-                            saveState = CoverSaveState.SAVING
-                            scope.launch {
-                                saveState = saveCover(
-                                    context = context,
-                                    media = media,
-                                    source = source,
-                                    imageIndex = currentPage
-                                )
-                            }
+                CoverViewerHeader(
+                    media = media,
+                    saveState = saveState,
+                    source = source,
+                    currentPage = currentPage,
+                    onDismiss = requestDismiss,
+                    startSave = {
+                        saveState = CoverSaveState.SAVING
+                        scope.launch {
+                            saveState = saveCover(
+                                context = context,
+                                media = media,
+                                source = source,
+                                imageIndex = currentPage
+                            )
                         }
-                    )
+                    }
+                )
 
-                    // Center Anime Cover Artwork with interactive Zoom & Pan.
-                    CoverViewerPager(
-                        source = source,
-                        pagerState = pagerState,
-                        currentPage = currentPage,
-                        zoom = zoom,
-                        media = media,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    )
+                // Center Anime Cover Artwork with interactive Zoom & Pan.
+                CoverViewerPager(
+                    source = source,
+                    pagerState = pagerState,
+                    currentPage = currentPage,
+                    zoom = zoom,
+                    media = media,
+                    onFrameBounds = { frame -> artworkFrame = frame },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        // Hidden until the travelling copy arrives. On the way
+                        // out this reverses, so the pager recedes with the
+                        // shrinking artwork instead of snapping in behind it.
+                        .graphicsLayer { alpha = reveal.value }
+                )
 
-                    // Bottom Details Card: Titles & Dismiss Hint
-                    ViewerDetailsCard(
-                        media = media,
-                        sources = sources,
-                        sourceIndex = selectedIndex,
-                        imageIndex = currentPage,
-                        imageCount = source?.urls?.size ?: 0,
-                        onSelectSource = { sourceIndex = it },
-                        zoom = zoom
-                    )
-                }
+                // Bottom Details Card: Titles & Dismiss Hint
+                ViewerDetailsCard(
+                    media = media,
+                    sources = sources,
+                    sourceIndex = selectedIndex,
+                    imageIndex = currentPage,
+                    imageCount = source?.urls?.size ?: 0,
+                    onSelectSource = { sourceIndex = it },
+                    zoom = zoom
+                )
+            }
+
+            val start = origin
+            val target = artworkFrame
+            if (overlayVisible && start != null && target != null && overlayUrl != null) {
+                CoverRevealOverlay(
+                    url = overlayUrl,
+                    coverBg = coverBg,
+                    origin = start,
+                    target = target,
+                    progress = { reveal.value }
+                )
             }
         }
     }
-}
-
-/**
- * The viewer's header: what the artwork is, and the two ways out of it.
- *
- * The counter and the save guard belong to the header rather than to the viewer
- * because both are answers to "what is on screen", and that is one question with
- * one answer: a label like `2 / 4` and a save button that refuses to run against
- * a page that does not exist are the same fact read twice. Keeping them here
- * also keeps the guard where the button it guards is.
- *
- * The save button copies the CDN's own bytes rather than re-encoding what is on
- * screen, so what lands in the gallery is the highest-quality copy AniList
- * serves - and whichever source is displayed, so a banner saves a banner rather
- * than the poster it was switched from.
- */
-@Composable
-private fun CoverViewerHeader(
-    media: MediaNode,
-    saveState: CoverSaveState,
-    source: CoverSource?,
-    currentPage: Int,
-    onDismiss: () -> Unit,
-    startSave: () -> Unit
-) {
-    val imageCount = source?.urls?.size ?: 0
-    val onScreen = source?.urls?.getOrNull(currentPage) != null
-    CoverViewerTopBar(
-        media = media,
-        canSave = onScreen,
-        saveState = saveState,
-        pageLabel = if (imageCount > 1) {
-            "${currentPage + 1} / $imageCount"
-        } else {
-            null
-        },
-        onSave = {
-            if (onScreen && saveState != CoverSaveState.SAVING) startSave()
-        },
-        onDismiss = onDismiss
-    )
 }
 
 /**
@@ -380,6 +376,8 @@ private fun CoverViewerPager(
     currentPage: Int,
     zoom: CoverZoomState,
     media: MediaNode,
+    /** The measured frame of the image on screen, for the dialog's reveal. */
+    onFrameBounds: (Rect) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coverBg = media.posterColor.toCoverColorOrNull()
@@ -425,6 +423,7 @@ private fun CoverViewerPager(
                 // overflow of one frame - so only the image on
                 // screen may publish its size.
                 reportsFrame = page == currentPage && activeUrl == url,
+                onFrameBounds = onFrameBounds,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(vertical = 12.dp)
@@ -509,149 +508,6 @@ private fun rememberLiveChartArtwork(media: MediaNode): LiveChartArtwork? {
     }.value
 }
 
-/**
- * The header's own row: the format chip, the counter, save and close.
- *
- * Presentation only - [CoverViewerHeader] above it decides *what* the counter says
- * and *whether* a save may run, so this file's rule holds: the row draws what it
- * is handed. The save button copies the CDN's own bytes rather than re-encoding
- * what is on screen, so a banner saves a banner rather than the poster it was
- * switched from.
- */
-@Composable
-private fun CoverViewerTopBar(
-    media: MediaNode,
-    canSave: Boolean,
-    saveState: CoverSaveState,
-    /** "2 / 4" while a multi-image gallery is selected, null for a single image. */
-    pageLabel: String?,
-    onSave: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    // One centred row with three anchored groups rather than a `SpaceBetween`
-    // row: the counter is the only thing in the header whose position carries
-    // meaning, and in a two-child row it drifted with the width of the format
-    // chip - which is exactly the off-centre pill that was reported.
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.align(Alignment.CenterStart),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
-                tonalElevation = 4.dp
-            ) {
-                Text(
-                    text = "${media.formatLabel} · ${media.statusLabel}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-                )
-            }
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.92f),
-                tonalElevation = 2.dp
-            ) {
-                Text(
-                    text = "HD",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                )
-            }
-        }
-
-        if (pageLabel != null) {
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .testTag("cover_page_counter")
-            ) {
-                Text(
-                    text = pageLabel,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
-        }
-
-        Row(
-            modifier = Modifier.align(Alignment.CenterEnd),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (canSave) {
-                IconButton(
-                    onClick = onSave,
-                    enabled = saveState != CoverSaveState.SAVING,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.18f))
-                        .testTag("cover_save_button")
-                ) {
-                    SaveButtonIcon(saveState)
-                }
-            }
-
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.18f))
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Close,
-                    contentDescription = "Close full screen",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-        }
-    }
-}
-
-/** The save button's glyph: the whole acknowledgement for one save. */
-@Composable
-private fun SaveButtonIcon(state: CoverSaveState) {
-    when (state) {
-        CoverSaveState.SAVING -> ExpressiveLoadingIndicator(
-            modifier = Modifier.size(18.dp),
-            color = Color.White
-        )
-        CoverSaveState.SAVED -> Icon(
-            imageVector = AppVectorIcons.CheckCircle,
-            contentDescription = "Cover saved to your gallery",
-            tint = Color.White,
-            modifier = Modifier.size(22.dp)
-        )
-        CoverSaveState.FAILED -> Icon(
-            imageVector = AppVectorIcons.Warning,
-            contentDescription = "Couldn't save the cover",
-            tint = Color.White,
-            modifier = Modifier.size(22.dp)
-        )
-        CoverSaveState.IDLE -> Icon(
-            imageVector = AppVectorIcons.Download,
-            contentDescription = "Save cover to your gallery",
-            tint = Color.White,
-            modifier = Modifier.size(22.dp)
-        )
-    }
-}
-
 /** One save, from the CDN to the gallery. */
 private suspend fun saveCover(
     context: Context,
@@ -691,17 +547,96 @@ internal data class CoverSource(
     val fallbackAspect: Float
 )
 
-/** One save's lifecycle: the button's glyph is the whole acknowledgement. */
-private enum class CoverSaveState { IDLE, SAVING, SAVED, FAILED }
-
-/**
- * How long the close animation is given before the dialog is torn down.
- *
- * The fade and scale are springs, so this is a settle time rather than a duration;
- * 220ms is long enough for the exit to read and short enough that the back gesture
- * still feels immediate.
- */
-private const val COVER_VIEWER_EXIT_MILLIS = 220L
-
 /** AniList's banner shape (about 1900x400), used until the image reports its own. */
 private const val DEFAULT_BANNER_ASPECT = 1900f / 400f
+
+/**
+ * The reveal's entrance, and the first half of its landing.
+ *
+ * Separate from the close in [CoverCloseEffects] because the two run at different
+ * times and are driven by different state - the entrance waits for the artwork
+ * frame to exist, the exit waits for the reader to ask - so keeping them together
+ * only made one composable with two sets of launch conditions.
+ */
+@Composable
+private fun CoverRevealEffects(
+    origin: Rect?,
+    artworkFrame: Rect?,
+    closing: Boolean,
+    presence: Animatable<Float, *>,
+    reveal: Animatable<Float, *>,
+    onOverlayVisible: (Boolean) -> Unit
+) {
+    LaunchedEffect(Unit) {
+        if (origin == null) {
+            // Nothing to grow out of: fade the artwork in over the scrim, the
+            // way this used to enter.
+            launch { reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial) }
+        }
+        presence.animateTo(1f, ExpressiveMotion.FastEffects)
+    }
+    LaunchedEffect(artworkFrame) {
+        if (closing) return@LaunchedEffect
+        val target = artworkFrame ?: return@LaunchedEffect
+        if (origin == null || target.width <= 0f || target.height <= 0f) return@LaunchedEffect
+        if (reveal.value < 1f) {
+            reveal.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+            // Landed. The pager has been drawing underneath the whole time; it is
+            // now exactly where the overlay is, so removing the overlay is a no-op
+            // on screen and stops a second full-size image being kept around.
+            onOverlayVisible(false)
+        }
+    }
+}
+
+/**
+ * The reveal's exit, and the dialog's teardown.
+ *
+ * The scrim and the artwork run together: the exit has to read as a return, not
+ * as a second performance. Tearing the dialog down happens only once both have
+ * settled, which is why this is a `suspend`-driven coroutine and not a timer.
+ */
+@Composable
+private fun CoverCloseEffects(
+    closing: Boolean,
+    origin: Rect?,
+    artworkFrame: Rect?,
+    presence: Animatable<Float, *>,
+    reveal: Animatable<Float, *>,
+    onOverlayVisible: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(closing) {
+        if (!closing) return@LaunchedEffect
+        coroutineScope {
+            if (origin != null && artworkFrame != null) {
+                onOverlayVisible(true)
+            }
+            // Both halves run together: the scrim leaving while the artwork is
+            // still shrinking would show the page through a moving picture.
+            launch { reveal.animateTo(0f, ExpressiveMotion.FastSpatial) }
+            presence.animateTo(0f, ExpressiveMotion.FastEffects)
+        }
+        onDismiss()
+    }
+}
+
+/**
+ * Clears a saved/failed acknowledgement back to the idle glyph.
+ *
+ * The same window the Extras card's "Link copied" uses - long enough to be read,
+ * short enough that the next tap on the download glyph is not ambiguous.
+ */
+@Composable
+private fun CoverSaveAcknowledgement(
+    saveState: CoverSaveState,
+    onReset: () -> Unit
+) {
+    LaunchedEffect(saveState) {
+        if (saveState != CoverSaveState.SAVED && saveState != CoverSaveState.FAILED) {
+            return@LaunchedEffect
+        }
+        delay(COPY_CONFIRMATION_MILLIS)
+        onReset()
+    }
+}

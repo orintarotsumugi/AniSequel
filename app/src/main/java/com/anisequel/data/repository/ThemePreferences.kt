@@ -30,115 +30,6 @@ internal val Context.themeDataStore: DataStore<Preferences> by preferencesDataSt
 )
 
 /**
- * How the app picks between light and dark.
- *
- * [SYSTEM] follows the device's own setting, which is also what happens when
- * nothing has been chosen. [LIGHT] and [DARK] pin it, for the people who want
- * one regardless of what their phone is set to.
- */
-enum class ThemeMode(val storageValue: String, val displayName: String) {
-    SYSTEM("system", "System"),
-    LIGHT("light", "Light"),
-    DARK("dark", "Dark");
-
-    companion object {
-        val DEFAULT = SYSTEM
-
-        /**
-         * Reads a stored value, falling back to [DEFAULT].
-         *
-         * Falls back rather than throwing: a preference file written by a newer
-         * build (or hand-edited) can hold a value this build has never heard of,
-         * and a theme preference is not worth refusing to start over.
-         */
-        fun fromStorage(value: String?): ThemeMode =
-            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
-    }
-}
-
-/**
- * How far a retained cover colour reaches into the background.
- *
- * Retention used to be all-or-nothing: the show's hue either repainted every
- * surface or stopped at the accent. Both are honest answers to different readers -
- * a night-sky show at full tint is a very dark app, while its accent alone is a
- * navy app with one blue button - so the choice is a setting rather than a guess.
- *
- * The strength only applies after the sheet closes. While a title is open the
- * immersive layer is the point, and dialling it down would make the preview
- * disagree with the page the reader is looking at.
- */
-enum class RetainedTint(
-    val storageValue: String,
-    val displayName: String,
-    /** 0 = the palette's own surfaces, 1 = the cover's tinted scheme. */
-    val strength: Float
-) {
-    SUBTLE("subtle", "Subtle", 0.35f),
-    BALANCED("balanced", "Balanced", 0.7f),
-    FULL("full", "Full", 1f);
-
-    companion object {
-        val DEFAULT = FULL
-
-        fun fromStorage(value: String?): RetainedTint =
-            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
-    }
-}
-
-/**
- * How much motion the app renders with.
- *
- * Maps to the two compiled Material MotionSchemes the app knows about - but
- * also records the user's preference for *this app's* hand-tuned tokens in
- * [com.anisequel.ui.components.expressive.ExpressiveMotion], so the fades and
- * springs written against those tokens can honour it too.
- *
- *  - **Instant** - no fade, no bounce, no morph. The user has their data; a
- *    transition there just states that.
- *  - **Smooth** - a standard fade, no overshoot. Quieter than the expressive
- *    scheme.
- *  - **Chill** - the full expressive springs. The default: it is what the rest
- *    of the app is designed around.
- */
-/**
- * How the app animates, as one of five characters.
- *
- * [SNAPPY] and [FLOATY] were added beside the original three so the choice spans a
- * real range rather than "off / plain / expressive": Snappy is for readers who want
- * the app to feel instant without losing its transitions, Floaty for the opposite -
- * slow, soft movement on everything. The token mappings in `ExpressiveMotion` give
- * each one its own physics; the Appearance tab previews them on the spot, because a
- * name is not a feel.
- *
- * Order is the order the picker draws, so a style added at the end stays where the
- * reader expects it rather than reshuffling the row.
- */
-enum class MotionStyle(val storageValue: String, val displayName: String) {
-    INSTANT("instant", "Instant"),
-    SMOOTH("smooth", "Smooth"),
-    SNAPPY("snappy", "Snappy"),
-    CHILL("chill", "Chill"),
-    FLOATY("floaty", "Floaty");
-
-    companion object {
-        val DEFAULT = CHILL
-
-        fun fromStorage(value: String?): MotionStyle =
-            entries.firstOrNull { it.storageValue == value }
-                // Storage values written before the rename: "expressive" and
-                // "standard" both existed in the old two-way toggle. Map them rather
-                // than resetting silently - the old labels meant "a bit more bounce"
-                // and "a bit more calm", which is Chill and Smooth respectively.
-                ?: when (value) {
-                    "expressive" -> CHILL
-                    "standard" -> SMOOTH
-                    else -> DEFAULT
-                }
-    }
-}
-
-/**
  * The user's appearance choices, persisted.
  *
  * Read once at startup as a plain value rather than a Flow at every call site:
@@ -225,6 +116,10 @@ class ThemePreferences(context: Context) {
 
         /** How fast a title too long for its row scrolls, in dp per second. */
         val TITLE_SCROLL_VELOCITY = floatPreferencesKey("title_scroll_velocity_dp")
+
+        /** Which artwork sits behind the Info page, and how soft it is. */
+        val INFO_BACKDROP_SOURCE = stringPreferencesKey("info_backdrop_source")
+        val INFO_BACKDROP_BLUR = stringPreferencesKey("info_backdrop_blur")
     }
 
     /**
@@ -294,6 +189,16 @@ class ThemePreferences(context: Context) {
         val customFontName: String? = null,
         /** Scroll speed for titles that outgrow their row, in dp per second. */
         val titleScrollDpPerSecond: Float = DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+        /**
+         * The artwork behind the Info page, and how soft it is.
+         *
+         * Defaults are "banner, soft": the wide key visual is what makes the page
+         * feel like the title it belongs to, and the blur keeps the card text
+         * legible without removing the colour. Both are appearance choices, so
+         * Reset appearance clears them with the rest of this class.
+         */
+        val infoBackdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
+        val infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     ) {
@@ -354,6 +259,12 @@ class ThemePreferences(context: Context) {
             customFontName = preferences[Keys.CUSTOM_FONT_NAME],
             titleScrollDpPerSecond = preferences[Keys.TITLE_SCROLL_VELOCITY]
                 ?: DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+            infoBackdropSource = InfoBackdropSource.fromStorage(
+                preferences[Keys.INFO_BACKDROP_SOURCE]
+            ),
+            infoBackdropBlur = InfoBackdropBlur.fromStorage(
+                preferences[Keys.INFO_BACKDROP_BLUR]
+            ),
             isLoaded = true
         )
     }
@@ -443,6 +354,25 @@ class ThemePreferences(context: Context) {
         appContext.themeDataStore.edit { preferences ->
             preferences[Keys.TITLE_SCROLL_VELOCITY] =
                 dpPerSecond.coerceIn(MIN_TITLE_SCROLL_DP_PER_SECOND, MAX_TITLE_SCROLL_DP_PER_SECOND)
+        }
+    }
+
+    /**
+     * Which artwork the Info page draws behind its cards.
+     *
+     * Written even for [InfoBackdropSource.OFF]: "off" is a choice, not the
+     * absence of one, and a removed key would be read back as the default banner
+     * after a downgrade and upgrade.
+     */
+    suspend fun setInfoBackdropSource(source: InfoBackdropSource) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.INFO_BACKDROP_SOURCE] = source.storageValue
+        }
+    }
+
+    suspend fun setInfoBackdropBlur(blur: InfoBackdropBlur) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.INFO_BACKDROP_BLUR] = blur.storageValue
         }
     }
 
@@ -675,6 +605,8 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.ANIME_THEME_RETAINED_TINT)
             preferences.remove(Keys.ANIME_THEME_REVERT_DURATION)
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
+            preferences.remove(Keys.INFO_BACKDROP_SOURCE)
+            preferences.remove(Keys.INFO_BACKDROP_BLUR)
             // Back to the bars, which is the default this app ships with.
             // The reading font, size and title scroll are their own page's choices
             // and are reset there, not by "Reset appearance".

@@ -1,9 +1,5 @@
 package com.anisequel.ui.components.detail.info
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -29,7 +25,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,14 +41,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -76,11 +72,11 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.statusLabel
 import com.anisequel.data.model.studioCredits
+import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
@@ -150,7 +146,15 @@ fun InfoHero(
     media: MediaNode,
     relationLabel: String?,
     collapse: () -> Float,
-    onOpenCover: () -> Unit,
+    /**
+     * Opens the full-screen artwork, carrying the poster's window bounds.
+     *
+     * The rectangle is what lets the viewer grow out of the picture the reader
+     * actually tapped. It is nullable because the poster can be measured before
+     * its first layout pass - a tap cannot land before that, but the callback is
+     * also reachable from semantics, which can.
+     */
+    onOpenCover: (Rect?) -> Unit,
     onClose: () -> Unit,
     /**
      * Opens the page for one of this title's studios.
@@ -160,9 +164,16 @@ fun InfoHero(
      * and this is the first place it is drawn.
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /** Which artwork the hero draws: the banner, the cover, or the cover as a fallback. */
+    backdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // The poster's bounds at the last layout pass. Captured here rather than in
+    // the page because this is where the rectangle exists; the page only needs it
+    // long enough to hand to the viewer.
+    var posterBounds by remember(media.id, media.type) { mutableStateOf<Rect?>(null) }
+    val openCover: () -> Unit = { onOpenCover(posterBounds) }
     // Long-pressing the title is the shortcut to the one thing people do with a
     // title on this page: take it somewhere else. The full name sheet with its
     // four copy buttons is still the discoverable path; this is the one gesture
@@ -221,7 +232,13 @@ fun InfoHero(
     // dissolve instead, and both images are drawn full-bleed from their top edge -
     // see that file for the sizing bug that used to keep either from drawing at
     // all.
-    val banner = media.bannerImage?.takeIf { it.isNotBlank() }
+    //
+    // The backdrop setting owns this choice too: a reader who asked the page to
+    // draw the cover should not still meet the banner at the top of it. `OFF`
+    // deliberately falls back to the cover rather than leaving the hero empty -
+    // it switches off the *page* wash, not the title's artwork.
+    val banner = media.bannerImage
+        ?.takeIf { backdropSource == InfoBackdropSource.BANNER && it.isNotBlank() }
 
     Box(
         modifier = modifier
@@ -258,7 +275,7 @@ fun InfoHero(
                     indication = null,
                     role = Role.Button,
                     onClickLabel = "Open the full-screen artwork",
-                    onClick = onOpenCover
+                    onClick = openCover
                 )
         )
 
@@ -399,7 +416,13 @@ fun InfoHero(
                     .clip(MaterialTheme.shapes.medium)
                     .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
                     .background(coverColor)
-                    .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
+                    // The rectangle the viewer expands out of. `boundsInWindow`
+                    // rather than `boundsInRoot` because the Info page lives in
+                    // the sheet's own window, and the viewer is a dialog in
+                    // another one; window coordinates are the closest shared
+                    // frame the two have.
+                    .onGloballyPositioned { posterBounds = it.boundsInWindow() }
+                    .expressiveHoldGesture(onHold = openCover, onClick = openCover)
                     // The hold gesture is a raw `pointerInput`, which TalkBack
                     // cannot reach at all: the poster was the only way to open the
                     // full artwork and it was invisible to a screen reader. The
@@ -410,7 +433,7 @@ fun InfoHero(
                         role = Role.Button
                         contentDescription = media.displayName
                         onClick(label = "View full artwork") {
-                            onOpenCover()
+                            openCover()
                             true
                         }
                     }
@@ -567,116 +590,6 @@ fun InfoHero(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * The acknowledgement for a copied title, over the artwork.
- *
- * Same pill vocabulary as the hero's action bar - black glass, white glyph - so
- * it reads as part of this surface rather than as a system toast that happened to
- * land on it.
- */
-@Composable
-private fun TitleCopiedPill() {
-    Surface(
-        shape = ExpressiveShapes.pill,
-        color = Color.Black.copy(alpha = 0.62f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.CheckCircle,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "Title copied",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-/**
- * Puts [title] on the clipboard.
- *
- * The platform clipboard rather than Compose's, for the reason `CopyLinkRow`
- * records: it is the contract that cannot break under a Compose upgrade, and
- * plain text is all this needs. `as?` because a device that does not publish a
- * clipboard must not turn a hold on the title into a crash.
- */
-private fun copyTitle(context: Context, title: String) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    clipboard?.setPrimaryClip(ClipData.newPlainText("AniList title", title))
-}
-
-/** A translucent chip over artwork, so it stays legible on any still. */
-@Composable
-private fun HeroChip(
-    icon: ImageVector,
-    label: String,
-    accent: Boolean = false,
-    /** Non-null makes the chip a button, with a press spring and a brighter rim. */
-    onClick: (() -> Unit)? = null
-) {
-    val container = if (accent) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
-    } else {
-        Color.Black.copy(alpha = 0.38f)
-    }
-    val content = if (accent) MaterialTheme.colorScheme.onPrimary else Color.White
-
-    Surface(
-        shape = ExpressiveShapes.pill,
-        color = container,
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (onClick != null) {
-                Color.White.copy(alpha = 0.34f)
-            } else {
-                Color.White.copy(alpha = 0.14f)
-            }
-        ),
-        modifier = if (onClick != null) {
-            // The border is brighter and the whole chip springs: over artwork, a
-            // tappable capsule has nothing else to distinguish it from the four
-            // facts beside it.
-            Modifier
-                .bouncyPress(pressedScale = 0.94f)
-                .clickable(role = Role.Button, onClick = onClick)
-        } else {
-            Modifier
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = content.copy(alpha = 0.85f),
-                modifier = Modifier.size(13.dp)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = content,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 190.dp)
-            )
         }
     }
 }

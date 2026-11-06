@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -28,6 +29,8 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -140,6 +143,14 @@ internal fun CoverArtwork(
     zoom: CoverZoomState,
     /** False for the copy that is only on screen to fade out. See the call site. */
     reportsFrame: Boolean = true,
+    /**
+     * The measured frame's window bounds, for the entrance reveal.
+     *
+     * Only the copy that reports its size calls this, for the same reason: the
+     * fading-out copy is not where the artwork will settle, and an entrance that
+     * aimed at it would land in the wrong place for one frame.
+     */
+    onFrameBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(
@@ -161,6 +172,9 @@ internal fun CoverArtwork(
                 .clip(MaterialTheme.shapes.large)
                 .background(coverBg)
                 .onSizeChanged { if (reportsFrame) zoom.frameSize = it }
+                .onGloballyPositioned {
+                    if (reportsFrame) onFrameBounds?.invoke(it.boundsInWindow())
+                }
                 .pointerInput(zoom) {
                     detectTapGestures(onDoubleTap = { zoom.toggleDoubleTap() })
                 }

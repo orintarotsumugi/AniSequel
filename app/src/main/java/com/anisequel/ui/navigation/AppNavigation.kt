@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -23,6 +24,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.domain.jokes.JokeSettings
+import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.markdown.ProvideMediaCovers
 import com.anisequel.data.network.NetworkClient
@@ -33,6 +36,7 @@ import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
@@ -179,6 +183,18 @@ fun AppNavigation(
     }
     val tierListTab by mainTabPreferences.tierListTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
+    )
+
+    // How the media cards are drawn. Read here and handed down as a composition
+    // local rather than as another parameter on every destination, because the
+    // Library grid, the dashboard's sequel rows and the picker's own preview are
+    // three readers of one fact - and a style passed to two of them would let the
+    // preview describe a card the app does not build.
+    val interfacePreferences = remember(context) {
+        InterfacePreferences(context.applicationContext)
+    }
+    val cardStyle by interfacePreferences.cardStyle.collectAsState(
+        initial = MediaCardStyle.DEFAULT
     )
     // Derived from the enum, filtered by the setting - see [enabledMainTabs].
     // Remembered on the flag so the bar's list is the same instance across
@@ -476,170 +492,173 @@ fun AppNavigation(
     val seasonalAmbient = rememberSeasonalAmbientModifier()
 
     ProvideMediaCovers(aniListRepository) {
-        // Opaque, and that is the point.
-        //
-        // A page arrives scaled to 94% and fading up while the page it covers
-        // fades out and settles to 98%: for a few frames neither of them is
-        // full-size and neither is solid, so what shows through is whatever this
-        // Box is painted. With no background here it was the Activity window - and
-        // the platform default is black, so a fast double tap on the Settings icon
-        // (or any chained navigation) flashed the whole screen black between two
-        // screens that were both perfectly themed. The fade is the app's motion
-        // language and stays; the surface behind it is what was missing.
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .then(seasonalAmbient)
-        ) {
-            NavHost(
-                navController = navController,
-                startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
-                modifier = Modifier.fillMaxSize(),
-                enterTransition = {
-                    enterPage(
-                        from = initialState.destination.route,
-                        to = targetState.destination.route
+        CompositionLocalProvider(LocalMediaCardStyle provides cardStyle) {
+            // Opaque, and that is the point.
+            //
+            // A page arrives scaled to 94% and fading up while the page it covers
+            // fades out and settles to 98%: for a few frames neither of them is
+            // full-size and neither is solid, so what shows through is whatever this
+            // Box is painted. With no background here it was the Activity window - and
+            // the platform default is black, so a fast double tap on the Settings icon
+            // (or any chained navigation) flashed the whole screen black between two
+            // screens that were both perfectly themed. The fade is the app's motion
+            // language and stays; the surface behind it is what was missing.
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .then(seasonalAmbient)
+            ) {
+                NavHost(
+                    navController = navController,
+                    startDestination = if (authState is AuthUiState.Authenticated) AppRoutes.DASHBOARD else AppRoutes.LOGIN,
+                    modifier = Modifier.fillMaxSize(),
+                    enterTransition = {
+                        enterPage(
+                            from = initialState.destination.route,
+                            to = targetState.destination.route
+                        )
+                    },
+                    exitTransition = {
+                        exitPage(
+                            from = initialState.destination.route,
+                            to = targetState.destination.route,
+                            popped = false
+                        )
+                    },
+                    popEnterTransition = {
+                        popEnterPage(
+                            from = initialState.destination.route,
+                            to = targetState.destination.route
+                        )
+                    },
+                    popExitTransition = {
+                        exitPage(
+                            from = initialState.destination.route,
+                            to = targetState.destination.route,
+                            popped = true
+                        )
+                    }
+                ) {
+                    authDestinations(
+                        navController = navController,
+                        authViewModel = authViewModel,
+                        authState = authState
                     )
-                },
-                exitTransition = {
-                    exitPage(
-                        from = initialState.destination.route,
-                        to = targetState.destination.route,
-                        popped = false
+
+                    dashboardDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        mainDashboardViewModel = mainDashboardViewModel,
+                        quickAddPreferences = quickAddPreferences,
+                        hiddenSequelsPreferences = hiddenSequelsPreferences,
+                        refreshIntervalPreferences = refreshIntervalPreferences,
+                        arrivingPreferences = arrivingPreferences,
+                        onSignInAgain = authViewModel::logout
                     )
-                },
-                popEnterTransition = {
-                    popEnterPage(
-                        from = initialState.destination.route,
-                        to = targetState.destination.route
+
+                    profileDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        detailHost = detailHost,
+                        signedInViewer = signedInViewer,
+                        onSignInAgain = authViewModel::logout
                     )
-                },
-                popExitTransition = {
-                    exitPage(
-                        from = initialState.destination.route,
-                        to = targetState.destination.route,
-                        popped = true
+
+                    tierListDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        tierListPreferences = tierListPreferences,
+                        signedInViewer = signedInViewer,
+                        authenticated = authenticated,
+                        dashboardError = dashboardError,
+                        mainDashboardViewModel = mainDashboardViewModel,
+                        onBoardOpenChange = { tierBoardOpen = it },
+                        onSignInAgain = authViewModel::logout
+                    )
+
+                    libraryDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        detailHost = detailHost,
+                        sharedEntryEditor = sharedEntryEditor,
+                        mainDashboardViewModel = mainDashboardViewModel,
+                        dashboardError = dashboardError,
+                        signedInViewer = signedInViewer,
+                        authenticated = authenticated,
+                        librarySelection = librarySelection,
+                        libraryGridState = libraryGridState,
+                        onSignInAgain = authViewModel::logout
+                    )
+
+                    studioDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        detailHost = detailHost,
+                        sharedEntryEditor = sharedEntryEditor
+                    )
+
+                    settingsDestinations(
+                        navController = navController,
+                        authViewModel = authViewModel,
+                        themePreferences = themePreferences,
+                        appLockPreferences = appLockPreferences,
+                        refreshIntervalPreferences = refreshIntervalPreferences,
+                        arrivingPreferences = arrivingPreferences,
+                        quickAddPreferences = quickAddPreferences,
+                        libraryPreferences = libraryPreferences,
+                        mainTabPreferences = mainTabPreferences,
+                        jokePreferences = jokePreferences,
+                        changelogRepository = changelogRepository,
+                        seasonalPreferences = seasonalPreferences,
+                        devicePreferences = devicePreferences,
+                        interfacePreferences = interfacePreferences,
+                        aniListRepository = aniListRepository,
+                        totalWatchedCount = totalWatchedCount,
+                        totalMissedCount = totalMissedCount,
+                        signedInViewer = signedInViewer
                     )
                 }
-            ) {
-                authDestinations(
+
+                // The seasonal sky is painted between the page and the chrome: over
+                // every screen, under the bar and the joke toast. It draws no pointer
+                // input, so every tap falls through to the page it covers - the one
+                // property a full-screen decoration must have.
+                //
+                // Mounted here rather than inside a route because a screen cannot draw
+                // something that outlives it, and the effect is meant to be one sky
+                // over the whole app rather than a different one per page.
+                SeasonalParticleHost(preferences = seasonalPreferences)
+
+                // The bar and the joke toast float over whichever page is on screen
+                // rather than living inside a route: a screen cannot draw chrome that
+                // outlives it, and the pages the bar switches between should not each
+                // have to remember to draw it.
+                //
+                // Both hosts read the current route themselves instead of being handed
+                // it from here. Reading it in this scope - the same one that calls
+                // `NavHost` - meant every push, pop and tab switch invalidated the call
+                // site of the graph and re-ran its destination table, to move two
+                // overlays that were the only things on screen which actually changed.
+                // The reads now live one scope down, in `MainChrome.kt`.
+                MainBarHost(
                     navController = navController,
-                    authViewModel = authViewModel,
-                    authState = authState
+                    tabs = mainTabs,
+                    // The largest the viewer's avatar has; the bar falls back to a glyph
+                    // while it is still unknown.
+                    profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
+                    signedIn = authenticated != null,
+                    tierBoardOpen = tierBoardOpen,
+                    onTierBoardOpenChange = { tierBoardOpen = it }
                 )
 
-                dashboardDestinations(
+                JokeHost(
                     navController = navController,
-                    aniListRepository = aniListRepository,
-                    mainDashboardViewModel = mainDashboardViewModel,
-                    quickAddPreferences = quickAddPreferences,
-                    hiddenSequelsPreferences = hiddenSequelsPreferences,
-                    refreshIntervalPreferences = refreshIntervalPreferences,
-                    arrivingPreferences = arrivingPreferences,
-                    onSignInAgain = authViewModel::logout
-                )
-
-                profileDestinations(
-                    navController = navController,
-                    aniListRepository = aniListRepository,
-                    detailHost = detailHost,
-                    signedInViewer = signedInViewer,
-                    onSignInAgain = authViewModel::logout
-                )
-
-                tierListDestinations(
-                    navController = navController,
-                    aniListRepository = aniListRepository,
-                    tierListPreferences = tierListPreferences,
-                    signedInViewer = signedInViewer,
-                    authenticated = authenticated,
-                    dashboardError = dashboardError,
-                    mainDashboardViewModel = mainDashboardViewModel,
-                    onBoardOpenChange = { tierBoardOpen = it },
-                    onSignInAgain = authViewModel::logout
-                )
-
-                libraryDestinations(
-                    navController = navController,
-                    aniListRepository = aniListRepository,
-                    detailHost = detailHost,
-                    sharedEntryEditor = sharedEntryEditor,
-                    mainDashboardViewModel = mainDashboardViewModel,
-                    dashboardError = dashboardError,
-                    signedInViewer = signedInViewer,
-                    authenticated = authenticated,
-                    librarySelection = librarySelection,
-                    libraryGridState = libraryGridState,
-                    onSignInAgain = authViewModel::logout
-                )
-
-                studioDestinations(
-                    navController = navController,
-                    aniListRepository = aniListRepository,
-                    detailHost = detailHost,
-                    sharedEntryEditor = sharedEntryEditor
-                )
-
-                settingsDestinations(
-                    navController = navController,
-                    authViewModel = authViewModel,
-                    themePreferences = themePreferences,
-                    appLockPreferences = appLockPreferences,
-                    refreshIntervalPreferences = refreshIntervalPreferences,
-                    arrivingPreferences = arrivingPreferences,
-                    quickAddPreferences = quickAddPreferences,
-                    libraryPreferences = libraryPreferences,
-                    mainTabPreferences = mainTabPreferences,
-                    jokePreferences = jokePreferences,
-                    changelogRepository = changelogRepository,
-                    seasonalPreferences = seasonalPreferences,
-                    devicePreferences = devicePreferences,
-                    aniListRepository = aniListRepository,
-                    totalWatchedCount = totalWatchedCount,
-                    totalMissedCount = totalMissedCount,
-                    signedInViewer = signedInViewer
+                    preferences = jokePreferences,
+                    settings = jokeSettings,
+                    favourites = jokeFavourites
                 )
             }
-
-            // The seasonal sky is painted between the page and the chrome: over
-            // every screen, under the bar and the joke toast. It draws no pointer
-            // input, so every tap falls through to the page it covers - the one
-            // property a full-screen decoration must have.
-            //
-            // Mounted here rather than inside a route because a screen cannot draw
-            // something that outlives it, and the effect is meant to be one sky
-            // over the whole app rather than a different one per page.
-            SeasonalParticleHost(preferences = seasonalPreferences)
-
-            // The bar and the joke toast float over whichever page is on screen
-            // rather than living inside a route: a screen cannot draw chrome that
-            // outlives it, and the pages the bar switches between should not each
-            // have to remember to draw it.
-            //
-            // Both hosts read the current route themselves instead of being handed
-            // it from here. Reading it in this scope - the same one that calls
-            // `NavHost` - meant every push, pop and tab switch invalidated the call
-            // site of the graph and re-ran its destination table, to move two
-            // overlays that were the only things on screen which actually changed.
-            // The reads now live one scope down, in `MainChrome.kt`.
-            MainBarHost(
-                navController = navController,
-                tabs = mainTabs,
-                // The largest the viewer's avatar has; the bar falls back to a glyph
-                // while it is still unknown.
-                profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
-                signedIn = authenticated != null,
-                tierBoardOpen = tierBoardOpen,
-                onTierBoardOpenChange = { tierBoardOpen = it }
-            )
-
-            JokeHost(
-                navController = navController,
-                preferences = jokePreferences,
-                settings = jokeSettings,
-                favourites = jokeFavourites
-            )
         }
     }
 }

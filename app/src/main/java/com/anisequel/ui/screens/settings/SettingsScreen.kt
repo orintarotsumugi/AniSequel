@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +36,7 @@ import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.DevicePreferences
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
@@ -61,6 +61,10 @@ private const val HUB_SAVEABLE_KEY = "settings_hub"
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
     APPEARANCE("Appearance", "Theme, background, accent and motion"),
+    // How the app is laid out, kept apart from what colour it is: the card style
+    // changes the shape of every grid in the app, and a reader choosing it wants a
+    // preview of the card, not a palette.
+    UI("Interface", "Card style, layout and motion"),
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
@@ -162,6 +166,12 @@ fun SettingsScreen(
      * [DeviceManagerTab].
      */
     devicePreferences: DevicePreferences,
+    /**
+     * The card style the Interface page writes. The same instance the app root
+     * collects and hands to every card, so the picker cannot describe a layout the
+     * Library grid is not drawing. See [InterfaceTab].
+     */
+    interfacePreferences: InterfacePreferences,
     /**
      * The repository's reachability probe, passed as a function so Settings does
      * not need the whole repository to ask one question.
@@ -266,6 +276,7 @@ fun SettingsScreen(
                                     changelogRepository = changelogRepository,
                                     seasonalPreferences = seasonalPreferences,
                                     devicePreferences = devicePreferences,
+                                    interfacePreferences = interfacePreferences,
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
@@ -316,97 +327,108 @@ private fun SettingsRoot(
             SettingsHubHeader(onClose = onClose)
 
             SettingsSectionLabel("Personalisation")
-            SettingsRows {
-                SettingsRow(
-                    page = SettingsPage.APPEARANCE,
-                    icon = AppVectorIcons.SectionAppearance,
-                    testTag = "settings_row_appearance",
-                    onOpen = onOpen
-                )
-                SettingsRow(
-                    page = SettingsPage.TYPE,
-                    icon = AppVectorIcons.TextBold,
-                    testTag = "settings_row_type",
-                    onOpen = onOpen
-                )
-                SettingsRow(
-                    page = SettingsPage.JOKES,
-                    icon = AppVectorIcons.AnimeSparkle,
-                    testTag = "settings_row_jokes",
-                    onOpen = onOpen
-                )
-                SettingsRow(
-                    page = SettingsPage.SEASONAL,
-                    icon = AppVectorIcons.Seasonal,
-                    testTag = "settings_row_seasonal",
-                    onOpen = onOpen
-                )
-            }
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.APPEARANCE.entry(
+                        AppVectorIcons.SectionAppearance,
+                        "settings_row_appearance",
+                        onOpen
+                    ),
+                    SettingsPage.UI.entry(
+                        AppVectorIcons.ViewGrid,
+                        "settings_row_ui",
+                        onOpen
+                    ),
+                    SettingsPage.TYPE.entry(
+                        AppVectorIcons.TextBold,
+                        "settings_row_type",
+                        onOpen
+                    ),
+                    SettingsPage.SEASONAL.entry(
+                        AppVectorIcons.Seasonal,
+                        "settings_row_seasonal",
+                        onOpen
+                    ),
+                    SettingsPage.JOKES.entry(
+                        AppVectorIcons.AnimeSparkle,
+                        "settings_row_jokes",
+                        onOpen
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
 
-            SettingsSectionLabel("Library")
-            SettingsRows {
-                SettingsRow(
-                    page = SettingsPage.LIBRARY,
-                    icon = AppVectorIcons.Tune,
-                    testTag = "settings_row_library",
-                    onOpen = onOpen
-                )
-            }
+            SettingsSectionLabel("Library & dashboard")
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.LIBRARY.entry(
+                        AppVectorIcons.Tune,
+                        "settings_row_library",
+                        onOpen
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
 
             SettingsSectionLabel("This device")
-            SettingsRows {
-                SettingsRow(
-                    page = SettingsPage.DEVICE,
-                    icon = AppVectorIcons.Refresh,
-                    testTag = "settings_row_device",
-                    onOpen = onOpen
-                )
-            }
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.DEVICE.entry(
+                        AppVectorIcons.Refresh,
+                        "settings_row_device",
+                        onOpen
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
 
             // The connection check used to sit under a "Network" label of its own,
             // which is a whole section heading for one row - and a heading that
             // names the transport rather than the thing being checked. It is the
             // same AniList the account row is about, so it lives here, second.
             SettingsSectionLabel("AniList")
-            SettingsRows {
-                SettingsRow(
-                    page = SettingsPage.ACCOUNT,
-                    icon = AppVectorIcons.SectionAniList,
-                    testTag = "settings_row_account",
-                    // The one live fact on the shelf: whether this session is a
-                    // real AniList account or the built-in demo list. Everything
-                    // else the row could say is already on the page it opens.
-                    subtitle = viewer?.let { "Signed in as ${it.name}" }
-                        ?: "Not signed in - browsing the demo list",
-                    onOpen = onOpen
-                )
-                SettingsHubRow(
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.ACCOUNT.entry(
+                        AppVectorIcons.SectionAniList,
+                        "settings_row_account",
+                        onOpen,
+                        // The one live fact on the shelf: whether this session is a
+                        // real AniList account or the built-in demo list. Everything
+                        // else the row could say is already on the page it opens.
+                        subtitle = viewer?.let { "Signed in as ${it.name}" }
+                            ?: "Not signed in - browsing the demo list"
+                    ),
                     // `SignalOn`, not `BrokenHeart`: this row asks a question. A
                     // broken heart beside "connection" claims the answer before the
                     // check has run, on a screen where the answer is usually fine.
-                    icon = AppVectorIcons.SignalOn,
-                    title = "Connection check",
-                    subtitle = "Ask AniList whether it is reachable",
-                    onClick = onCheckConnection,
-                    testTag = "settings_row_connection"
-                )
-            }
+                    SettingsHubEntry(
+                        icon = AppVectorIcons.SignalOn,
+                        title = "Connection check",
+                        subtitle = "Ask AniList whether it is reachable",
+                        onClick = onCheckConnection,
+                        testTag = "settings_row_connection"
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
 
             SettingsSectionLabel("About")
-            SettingsRows {
-                SettingsRow(
-                    page = SettingsPage.UPDATES,
-                    icon = AppVectorIcons.SystemUpdate,
-                    testTag = "settings_row_updates",
-                    onOpen = onOpen
-                )
-                SettingsRow(
-                    page = SettingsPage.ABOUT,
-                    icon = AppVectorIcons.SectionAbout,
-                    testTag = "settings_row_about",
-                    onOpen = onOpen
-                )
-            }
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.UPDATES.entry(
+                        AppVectorIcons.SystemUpdate,
+                        "settings_row_updates",
+                        onOpen
+                    ),
+                    SettingsPage.ABOUT.entry(
+                        AppVectorIcons.SectionAbout,
+                        "settings_row_about",
+                        onOpen
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
 
             Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                 SettingsVersionFooter(
@@ -418,21 +440,8 @@ private fun SettingsRoot(
     }
 }
 
-/** The 20dp gutter and 10dp gaps every group of rows shares. */
-@Composable
-private fun SettingsRows(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        content()
-    }
-}
-
 /**
- * A shelf row built from the [SettingsPage] it opens.
+ * The shelf row for this page.
  *
  * The row and the page header used to spell the title and the subtitle out twice,
  * and they had already drifted: the Jokes row promised "timing and placement"
@@ -440,27 +449,27 @@ private fun SettingsRows(content: @Composable () -> Unit) {
  * describes a different page than the one it opens is a small lie on the way in.
  * Deriving both from the enum makes the drift impossible rather than unlikely.
  *
+ * An entry rather than a composable, because a group has to know how many rows it
+ * holds before it draws them: the divider goes *between* them, and a lambda per row
+ * cannot tell the group where the last one is.
+ *
  * The one exception is [subtitle], used only by the account row to state who is
  * signed in. That is not a second description of the page - it is a fact about
  * the session that changes while the page itself does not, and the shelf is
  * where a reader glances to ask whether they are signed in at all.
  */
-@Composable
-private fun SettingsRow(
-    page: SettingsPage,
+private fun SettingsPage.entry(
     icon: ImageVector,
     testTag: String,
     onOpen: (SettingsPage) -> Unit,
     subtitle: String? = null
-) {
-    SettingsHubRow(
-        icon = icon,
-        title = page.title,
-        subtitle = subtitle ?: page.subtitle,
-        onClick = { onOpen(page) },
-        testTag = testTag
-    )
-}
+): SettingsHubEntry = SettingsHubEntry(
+    icon = icon,
+    title = title,
+    subtitle = subtitle ?: this.subtitle,
+    testTag = testTag,
+    onClick = { onOpen(this) }
+)
 
 /** The body of a hub page, with every control the old tabs had. */
 @Composable
@@ -478,6 +487,7 @@ private fun SettingsPageContent(
     changelogRepository: ChangelogRepository,
     seasonalPreferences: SeasonalPreferences,
     devicePreferences: DevicePreferences,
+    interfacePreferences: InterfacePreferences,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -485,6 +495,10 @@ private fun SettingsPageContent(
 ) {
     when (page) {
         SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
+        SettingsPage.UI -> InterfaceTab(
+            themePreferences = themePreferences,
+            interfacePreferences = interfacePreferences
+        )
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.SEASONAL -> SeasonalSettingsTab(

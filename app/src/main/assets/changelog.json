@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.8.5",
+      "entries": [
+        {
+          "title": "The cover grows out of the poster you tapped, and shrinks back into it",
+          "detail": "Opening a cover used to fade a full-screen dialog in and scale its artwork up in place, and closing it waited a fixed 220ms and then deleted the dialog - so the picture could vanish halfway through its own bounce. The viewer now keeps the rectangle the poster occupied in the window, draws one travelling copy of the artwork at the pager's measured frame, and animates that copy from the tapped rectangle to 1:1 on a spring; dismissing runs the same spring backwards and only then tears the dialog down. The platform's dim is switched off as well, because a black cut under the app's own fading scrim is what made the entrance read as a flash rather than a reveal. The saved rectangle is the sheet's window frame, the same full-screen frame the dialog uses, so the hand-off needs no shared-element API."
+        },
+        {
+          "title": "A title's page is backed by its own blurred artwork",
+          "detail": "The Info page below the hero was a flat surface, so the artwork stopped at the fold and everything under it looked like a different screen. The page can now be backed by the title's banner or its cover, blurred in place and scrimmed with the theme's surface colour, so the cards stay readable in both light and dark. It is a Theme setting under Anime pages, with a source choice and two blur levels, and Off keeps the plain surface. The backdrop is drawn behind the LazyColumn rather than inside it, so it stays under the page while the list scrolls and drifts a little with it."
+        },
+        {
+          "title": "The viewer's controls and counters use the theme's colours",
+          "detail": "The full-screen viewer's format pills, page counter and round save and close buttons were black glass with white text, which disappeared over a pale banner and did not follow the light theme. They now read their container and content from the Material 3 scheme - primary, tertiary and surface-container roles with matching on-colours - so the header is legible over any artwork and follows the app's accent, including a retained poster tint."
+        },
+        {
+          "title": "The shelf groups its rows into one card per section",
+          "detail": "Each Settings row used to be its own raised surface with a gap, on the reasoning that a mis-tap between two rows should land on background rather than on a neighbour. That is true of a list, and the shelf is not a list: it is five groups of destinations, and drawn as separate cards the grouping was carried by the section label alone - the gap between two rows in a group was the same size as the gap between two groups. Rows now share one surface with a hairline between them, inset past the icon tile so the boundary is a line and not a hole, and the white space between cards finally means only one thing: different subject."
+        },
+        {
+          "title": "Five card styles, chosen from a preview that is the real card",
+          "detail": "The Library grid and the dashboard's sequel rows can now be drawn five ways, which differ in where the title sits - under the artwork or laid over its foot - and where the rating lands: under everything, on a corner of the cover, or stretched across the card as a band. The picker shows three sample cards, and those cards are the same composable the grids use, called with a made-up title and score. A preview written separately is an advert: it can be tuned, it can be left behind when the real card changes, and nothing fails, because nobody taps a preview. One rule the table had to get right: the Library's progress count has always lived in the cover's top corner, and one style puts the rating there too, so the count moves to the other end of that edge rather than being drawn underneath it."
+        },
+        {
+          "title": "The Theme page is labelled, and the appearance modes show you which is which",
+          "detail": "The page is grouped into Appearance, Themes, Wallpaper and Poster colour, so a long run of same-sized cards became four things you can aim at - and the labels are headings, which a screen reader can jump between and a scroll cannot. Light, dark and system are now three small windows drawn in their own schemes rather than a segmented bar of three words, because the choice is visual and a word makes you guess which answer is yours; the system tile is painted half in each, since follow-the-phone has no single scheme to show. Motion moved to the new Interface page, which is where the card style lives: neither is about what colour the app is. True black is called OLED mode, the name it has in the phone's own settings, and the anime cover adaptation is called Use poster colour."
+        }
+      ]
+    },
+    {
       "version": "1.8.4",
       "entries": [
         {
