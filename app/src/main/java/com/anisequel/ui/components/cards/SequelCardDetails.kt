@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.domain.card.CardScorePlacement
+import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.WavyProgressBar
@@ -34,17 +36,35 @@ fun SequelCardDetails(
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
+    val style = LocalMediaCardStyle.current
+    val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
+    // The rating the chip row shows today, as the number the banner needs.
+    val scoreValue = sequel.sequelMedia.averageScore
 
     Column(modifier = modifier) {
         // A marquee rather than a two-line ellipsis: the sequel's name is the one
         // fact the card exists for, and "…" on the second line was cutting the part
         // that distinguishes it from the show the reader already finished.
-        MarqueeText(
-            text = sequel.sequelTitle,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth()
-        )
+        //
+        // Skipped when the style lays the name over the artwork instead: the poster
+        // already draws it, and a card that says its own title twice is not showing
+        // the reader a style, it is showing a bug.
+        if (!titleOverlaid) {
+            MarqueeText(
+                text = sequel.sequelTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // The rating as a band is the one placement that belongs to this column
+        // rather than to the chip row: it is the width of the card, not one of its
+        // facts, and it is drawn where the title used to leave off.
+        if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE && scoreValue != null) {
+            Spacer(modifier = Modifier.height(if (titleOverlaid) 0.dp else 6.dp))
+            ScoreBanner(score = scoreValue)
+        }
 
         // Romaji and English title tiles
         val romaji = sequel.romajiTitle
@@ -121,7 +141,13 @@ fun SequelCardDetails(
                 icon = AppVectorIcons.List,
                 label = sequel.episodes
             )
-            if (sequel.score != "N/A") {
+            // The rating is drawn once. Two of the five styles put it on the artwork
+            // and one stretches it across the card as a band, and in all three the
+            // chip would be the same number a second time.
+            if (sequel.score != "N/A" &&
+                !style.scoreOnPoster &&
+                style.scorePlacement != CardScorePlacement.BANNER_BELOW_TITLE
+            ) {
                 SequelInfoChip(
                     icon = AppVectorIcons.AnimeSparkle,
                     label = sequel.score
