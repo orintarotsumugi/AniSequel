@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import android.animation.ValueAnimator
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -297,11 +298,19 @@ private fun PreviewCard(
 
         // The instant motion style freezes every animation in the app, and this
         // one too. Saying so here is the difference between "the preview is
-        // broken" and "this is the setting you chose".
+        // broken" and "this is the setting you chose". The phone's own animation
+        // switch also arrives as INSTANT (the Activity overrides the stored style),
+        // so the sentence has to name the actual reason: it used to tell a reader
+        // with system animations off that they had chosen Instant.
+        val systemAnimationsEnabled = remember(resumed) { ValueAnimator.areAnimatorsEnabled() }
         if (ExpressiveMotion.speed == MotionStyle.INSTANT) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Motion style is Instant, so the particles hold still.",
+                text = if (systemAnimationsEnabled) {
+                    "Motion style is Instant, so the particles hold still."
+                } else {
+                    "Your phone's animations are off, so the particles hold still."
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

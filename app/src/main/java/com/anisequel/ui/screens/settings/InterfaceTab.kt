@@ -13,13 +13,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.model.MediaListEntryItem
+import com.anisequel.data.model.displayName
+import com.anisequel.data.model.posterColor
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
@@ -27,6 +33,7 @@ import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.MediaPosterCell
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
+import com.anisequel.ui.theme.DynamicThemeBuilder
 import kotlinx.coroutines.launch
 
 /**
@@ -49,7 +56,18 @@ import kotlinx.coroutines.launch
 fun InterfaceTab(
     themePreferences: ThemePreferences,
     interfacePreferences: InterfacePreferences,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Up to three of the reader's own entries, for the preview to draw.
+     *
+     * Passed in rather than fetched here. The dashboard has already downloaded the
+     * list this screen is previewing, so asking the repository again would either
+     * be a cache hit that still walks the whole collection or - on a cold Settings
+     * visit - an entire list download to draw three thumbnails. Empty is a real
+     * answer (demo mode, or Settings opened before Home finishes) and falls back
+     * to the sample titles the preview has always used.
+     */
+    previewEntries: List<MediaListEntryItem> = emptyList()
 ) {
     val scope = rememberCoroutineScope()
     val themeSettings by themePreferences.settings.collectAsState(
@@ -68,9 +86,9 @@ fun InterfaceTab(
             icon = AppVectorIcons.ViewGrid,
             subtitle = style.blurb
         ) {
-            CardStylePreview(style = style)
+            CardStylePreview(style = style, libraryEntries = previewEntries)
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             SettingsFieldLabel(text = "Style")
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -94,6 +112,16 @@ fun InterfaceTab(
                                 scope.launch { interfacePreferences.setCardStyle(option) }
                             }
                         },
+                        // This picker is the primary control of the page, not a
+                        // filter beside a grid: a 30dp chip is a fingertip target
+                        // found by aiming, and the five options are the whole
+                        // decision. Give it the platform's 48dp minimum.
+                        minTouchTargetHeight = 48.dp,
+                        // One style is active at a time, so this is a radio
+                        // choice, not a filter. The chip defaults to Checkbox
+                        // because that is what the filter rows elsewhere are.
+                        role = Role.RadioButton,
+                        onClickLabel = "Use the ${option.displayName} card style",
                         modifier = Modifier.testTag("card_style_${option.storageValue}")
                     )
                 }
@@ -111,36 +139,80 @@ fun InterfaceTab(
 }
 
 /**
- * Three sample cards drawn by [MediaPosterCell] - the same composable the Library
- * grid and the dashboard's rows use, with the same style value.
+ * Three cards drawn by [MediaPosterCell] - the same composable, and the same
+ * three-column width, the Library grid uses.
+ *
+ * ## Why the cards come from the reader's library
+ *
+ * A preview of a card style should show the cards being styled. The old sample was
+ * three fixed titles on flat tints, so the one thing the reader was actually
+ * choosing - whether *their* posters read well under this layout - was the one thing
+ * the preview could not answer. Real titles also expose the layout honestly: a long
+ * name ellipsizes where the grid will ellipsize it, and a title with no community
+ * score shows the empty-rating card the reader will get.
+ *
+ * The covers are only drawn from entries the dashboard already holds, so this costs
+ * no request of its own; Coil serves them from the cache the Library grid filled.
+ * When there is no library yet (demo mode, or Settings opened before Home has
+ * answered) the original three sample titles are used, so the page never shows an
+ * empty preview.
  *
  * ## Why it shares the renderer rather than drawing its own idea of the style
  *
  * A preview written separately is an advert. It can be tuned to look good, it can be
  * left behind when the real card changes, and nothing fails when it does, because
- * nobody taps a preview. This one cannot drift: it calls the cell with a made-up
- * title and score, and the cell decides where the title and the rating go from the
- * style - so a style that is wrong in the preview is wrong in the grid, visibly,
- * while the reader is picking it.
- *
- * ## Why the artwork is a flat tint
- *
- * No cover URL. The preview's job is to show where the name and the number land, and
- * a real cover would take a request per style change, arrive late, and be the loudest
- * thing on a card whose artwork is not what is being judged. The tint stands in for
- * art, and the cell's own placeholder path is what draws it.
+ * nobody taps a preview. This one cannot drift: it calls the cell, and the cell
+ * decides where the title and the rating go from the style - so a style that is
+ * wrong in the preview is wrong in the grid, visibly, while the reader is picking
+ * it.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CardStylePreview(style: MediaCardStyle, modifier: Modifier = Modifier) {
-    val samples = listOf(
+private fun CardStylePreview(
+    style: MediaCardStyle,
+    libraryEntries: List<MediaListEntryItem>,
+    modifier: Modifier = Modifier
+) {
+    // Parsed once per list, not once per frame: the preview repaints on every
+    // style tap and every colour crossfade in the card above it.
+    val fromLibrary = remember(libraryEntries) {
+        libraryEntries.take(PreviewCardCount).map { entry ->
+            CardStyleSample(
+                title = entry.media.displayName,
+                coverUrl = entry.media.posterUrl,
+                coverColor = DynamicThemeBuilder.parseHexColor(entry.media.posterColor),
+                // The same threshold the Library grid uses: a zero average is an
+                // unrated title, and the grid draws no badge for it.
+                score = entry.media.averageScore?.takeIf { it > 0 }
+            )
+        }
+    }
+    // The scheme's containers, so the fallback on a light theme is not three dark
+    // slabs and vice versa.
+    val placeholderTints = listOf(
+        MaterialTheme.colorScheme.primaryContainer,
+        MaterialTheme.colorScheme.tertiaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer
+    )
+    val placeholderTitles = listOf(
         "Dandadan" to 84,
         "Frieren: Beyond Journey's End S2" to 91,
         "Kaiju No. 8" to 76
     )
+    val samples = fromLibrary + placeholderTitles
+        .drop(fromLibrary.size)
+        .mapIndexed { index, (title, score) ->
+            CardStyleSample(
+                title = title,
+                coverUrl = null,
+                coverColor = placeholderTints[(fromLibrary.size + index) % placeholderTints.size],
+                score = score
+            )
+        }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Preview",
+            text = if (fromLibrary.isNotEmpty()) "Preview \u00b7 from your library" else "Preview",
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -153,12 +225,14 @@ private fun CardStylePreview(style: MediaCardStyle, modifier: Modifier = Modifie
                 .fillMaxWidth()
                 .testTag("card_style_preview")
         ) {
-            samples.forEachIndexed { index, (title, score) ->
+            samples.forEach { sample ->
                 MediaPosterCell(
-                    coverUrl = null,
-                    coverColor = previewTint(index),
-                    title = title,
-                    score = score,
+                    coverUrl = sample.coverUrl,
+                    coverColor = sample.coverColor,
+                    title = sample.title,
+                    // Null draws no badge in any style, which is the honest card
+                    // for a title the community has not rated yet.
+                    score = sample.score,
                     style = style,
                     modifier = Modifier.weight(1f)
                 )
@@ -167,13 +241,13 @@ private fun CardStylePreview(style: MediaCardStyle, modifier: Modifier = Modifie
     }
 }
 
-/**
- * The three placeholder covers, taken from the scheme so a preview on a light theme
- * is not three dark slabs and vice versa.
- */
-@Composable
-private fun previewTint(index: Int): Color = when (index) {
-    0 -> MaterialTheme.colorScheme.primaryContainer
-    1 -> MaterialTheme.colorScheme.tertiaryContainer
-    else -> MaterialTheme.colorScheme.secondaryContainer
-}
+/** How many cards the preview draws; the Library grid is three columns wide. */
+private const val PreviewCardCount = 3
+
+/** One card the preview can draw, already flattened out of a list entry. */
+private data class CardStyleSample(
+    val title: String,
+    val coverUrl: String?,
+    val coverColor: Color?,
+    val score: Int?
+)

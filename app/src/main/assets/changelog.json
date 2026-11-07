@@ -4,6 +4,18 @@
       "version": "1.8.5",
       "entries": [
         {
+          "title": "The seasonal sky now keeps the frame rate you chose",
+          "detail": "The layer asked for 120 Hz and then threw away part of every frame's time: it cleared its accumulator after each step instead of subtracting the budget, so a 120 Hz panel produced about 40 steps a second and the 45 Hz tier fell to 30. The overshoot is carried into the next frame now, and a long stall is dropped rather than replayed. The draw path was also paying per particle for things that belong to the frame: a palette lookup, two volatile wind reads, and a square root for every shape while a tap pulse was alive. Those are resolved once per frame or compared squared first, the shape rotation is inlined, and a Settings preview that has scrolled out of the page stops its clock instead of redrawing a card nobody can see. The Android 15-only frame-rate category call is also guarded at API 35 rather than 34, which removes a NoSuchMethodError on Android 14."
+        },
+        {
+          "title": "A retained poster colour is a scheme, not a colour wash",
+          "detail": "Retained anime colour used to generate the fully tinted scheme and then mix its surfaces toward the app's palette in RGB. That produced a background that was neither the cover's nor the palette's, and a cover opposite the brand's blue was dragged through an unrelated hue on the way. Subtle, Balanced and Full now move the neutral palette's hue and chroma before the Material tonal ladder samples it, so every surface comes from one coherent, contrast-checked ramp while the accent stays exactly the cover's. The Settings copy now describes what the three strengths actually do."
+        },
+        {
+          "title": "Settings targets the whole row, and previews the real cards",
+          "detail": "A switch row is one toggleable node rather than a clickable row beside a second switch, so TalkBack reads one setting, a tap on the label works, and the thumb no longer fires the tick twice. Card-style chips and Motion chips are 48dp targets, the card preview draws three covers from the reader's own library when it has them, and a disabled tint or revert picker now says it is disabled instead of offering a choice that does nothing. Selected borders on palette, hue, theme-mode and canvas controls keep one width and animate their colour, so marking a choice no longer nudges the controls beside it."
+        },
+        {
           "title": "The cover grows out of the poster you tapped, and shrinks back into it",
           "detail": "Opening a cover used to fade a full-screen dialog in and scale its artwork up in place, and closing it waited a fixed 220ms and then deleted the dialog - so the picture could vanish halfway through its own bounce. The viewer now keeps the rectangle the poster occupied in the window, draws one travelling copy of the artwork at the pager's measured frame, and animates that copy from the tapped rectangle to 1:1 on a spring; dismissing runs the same spring backwards and only then tears the dialog down. The platform's dim is switched off as well, because a black cut under the app's own fading scrim is what made the entrance read as a flash rather than a reveal. The saved rectangle is the sheet's window frame, the same full-screen frame the dialog uses, so the hand-off needs no shared-element API."
         },

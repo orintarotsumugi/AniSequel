@@ -248,12 +248,13 @@ class SeasonalParticleHostTest {
             "the high category is never requested",
             host.contains("REQUESTED_FRAME_RATE_CATEGORY_HIGH")
         )
-        // Android 14 owns this API. `lintRelease` is advisory here, so nothing but
-        // this guard stands between the call and a NoSuchMethodError on Android 12
-        // and 13 - the two releases this app still installs on.
+        // API 35 owns this method, not 34. The guard used to name
+        // UPSIDE_DOWN_CAKE, which compiled but let the call through on Android 14
+        // and threw NoSuchMethodError; `lintRelease` is advisory, so this is the
+        // assertion that has to keep the correct level attached to it.
         assertTrue(
-            "the category call is not guarded by an SDK check",
-            host.contains("SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE")
+            "the category call is not guarded by an API 35 check",
+            host.contains("SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM")
         )
         assertTrue(
             "the category is never released when the sky is off or capped",

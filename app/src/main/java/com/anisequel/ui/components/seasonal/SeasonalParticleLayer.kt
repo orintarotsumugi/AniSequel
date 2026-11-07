@@ -15,7 +15,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
@@ -99,11 +102,13 @@ private const val GUST_HEIGHT = 0.06f
  *
  * ## Why it stops
  *
- * Two gates, both required. [rememberIsResumed] is false while the Activity is
- * paused or covered, so the loop does not keep drawing (or waking the display)
- * behind another app. [MotionStyle.INSTANT] is the reader asking the app to stop
- * animating - the clock freezes and the particles hold exactly where they are,
- * which is a still picture rather than a feature that ignores the setting.
+ * Three gates. [rememberIsResumed] is false while the Activity is paused or
+ * covered, so the loop does not keep drawing (or waking the display) behind
+ * another app. The layer's window bounds stop a Settings preview that has
+ * scrolled out of the page, and [MotionStyle.INSTANT] is the reader asking the
+ * app to stop animating - the clock freezes and the particles hold exactly where
+ * they are, which is a still picture rather than a feature that ignores the
+ * setting.
  *
  * ## Why there is no pointer input anywhere in this file
  *
@@ -161,7 +166,13 @@ fun SeasonalParticleLayer(
     seed: Int = SEASONAL_SEED
 ) {
     val resumed = rememberIsResumed()
-    val animating = resumed && ExpressiveMotion.speed != MotionStyle.INSTANT
+    // A Settings preview scrolls out of the page while its composition stays
+    // alive. Without this the Canvas keeps asking the frame loop for work and
+    // redrawing a card nobody can see, which is most of the point of the effect
+    // being cheap at rest. The overlay is always on screen, so this is true there.
+    val hostView = LocalView.current
+    var onScreen by remember { mutableStateOf(true) }
+    val animating = resumed && onScreen && ExpressiveMotion.speed != MotionStyle.INSTANT
 
     // Regenerated only when the shape, the count or the tier changes, and never on
     // a frame. The seed is fixed, so raising the density adds flakes instead of
@@ -172,6 +183,10 @@ fun SeasonalParticleLayer(
         seasonalParticles(effect = effect, density = density, seed = seed, quality = quality)
     }
     val baseDp = remember(sizeScale) { particleSizeDp(sizeScale) }
+    // One palette lookup per effect, not one branch and modulo per particle per
+    // frame. The shape code keeps the per-variant default for the pile and the
+    // Settings glyph; the sky passes the resolved one in.
+    val palettes = remember(effect) { particlePalettes(effect) }
     val speed = remember(speedScale) { particleSpeedScale(speedScale) }
     val depth = remember(pileDepth) { pileDepthScale(pileDepth) }
     val strongWind = remember(windStrength) { windStrengthScale(windStrength) }
@@ -242,6 +257,15 @@ fun SeasonalParticleLayer(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { viewport = it }
+            .onGloballyPositioned { coordinates ->
+                // Window coordinates, not parent-relative: the preview is inside a
+                // scrolling Column, so it is off screen when its bounds have left
+                // the window even though it is still composed and measured.
+                if (hostView.height <= 0) return@onGloballyPositioned
+                val bounds = coordinates.boundsInWindow()
+                val visible = bounds.bottom > 0f && bounds.top < hostView.height
+                if (visible != onScreen) onScreen = visible
+            }
     ) {
         // `clock` is read here, in the draw phase, and nowhere above it: the whole
         // point of the layer is that a frame costs a repaint rather than a
@@ -250,6 +274,7 @@ fun SeasonalParticleLayer(
             effect = effect,
             particles = particles,
             pile = pile,
+            palettes = palettes,
             baseDp = baseDp,
             seconds = clock,
             speedScale = speed,
@@ -359,6 +384,7 @@ private fun DrawScope.drawSeasonalSky(
     effect: SeasonalEffect,
     particles: List<SeasonalParticle>,
     pile: SeasonalPile?,
+    palettes: List<ParticlePalette>,
     baseDp: Float,
     seconds: Float,
     speedScale: Float,
@@ -376,6 +402,12 @@ private fun DrawScope.drawSeasonalSky(
     val height = size.height
     if (width <= 0f || height <= 0f) return
     val basePx = baseDp.dp.toPx()
+    // Volatile fields, read once per frame instead of twice per particle. The
+    // pulse coordinates only matter while a pulse is alive, so a still sky costs
+    // no reads at all.
+    val pulseActive = wind.pulse > 0.01f
+    val pulseX = if (pulseActive) SeasonalWind.pulseX else 0.5f
+    val pulseY = if (pulseActive) SeasonalWind.pulseY else 0.5f
 
     if (settleVisible && pile != null) {
         drawSeasonalPile(
@@ -404,8 +436,8 @@ private fun DrawScope.drawSeasonalSky(
             lift = wind.lift,
             windStrength = windStrength,
             pulse = wind.pulse,
-            pulseX = SeasonalWind.pulseX,
-            pulseY = SeasonalWind.pulseY,
+            pulseX = pulseX,
+            pulseY = pulseY,
             into = placement
         ) ?: return@forEach
         drawSeasonalParticle(
@@ -415,18 +447,19 @@ private fun DrawScope.drawSeasonalSky(
             rotationDegrees = placement.rotationDegrees,
             alpha = placement.alpha,
             variant = particle.variant,
+            palette = paletteAt(palettes, particle.variant),
             path = path,
             flatten = placement.flatten,
             highDetail = quality.detailedDrawing
         )
     }
 
-    if (showTapRipple && wind.pulse > 0.01f) {
+    if (showTapRipple && pulseActive) {
         drawTapRipple(
             effect = effect,
             pulse = wind.pulse,
-            xFraction = SeasonalWind.pulseX,
-            yFraction = SeasonalWind.pulseY
+            xFraction = pulseX,
+            yFraction = pulseY
         )
     }
 }
@@ -486,8 +519,14 @@ private suspend fun seasonalClock(
         lastFrame = frame
         accumulated += elapsed / 1_000_000_000f
         if (accumulated < budget) continue
-        onStep(accumulated.coerceAtMost(MAX_STEP_SECONDS), frame)
-        accumulated = 0f
+        val step = accumulated.coerceAtMost(MAX_STEP_SECONDS)
+        onStep(step, frame)
+        // Subtract the budget rather than clearing the accumulator. Resetting it
+        // threw away the overshoot on every step: a 120 Hz panel stepping on a
+        // 60 Hz budget produced a step every third frame (~40 Hz), and the 45 Hz
+        // tier on a 60 Hz panel fell to 30. Keeping the remainder lets the next
+        // frame decide immediately, which is what makes the requested rate real.
+        accumulated = if (accumulated > MAX_STEP_SECONDS) 0f else accumulated - budget
     }
 }
 
@@ -580,9 +619,12 @@ private fun particlePlacement(
         val originY = pulseY * height
         val dx = x - originX
         val dy = y - originY
-        val distance = sqrt(dx * dx + dy * dy)
+        val distanceSquared = dx * dx + dy * dy
         val reach = width * 0.42f
-        if (distance < reach) {
+        // Compare squares first: the pulse is alive for about a second, and most
+        // particles are outside its reach, so their square root was pure waste.
+        if (distanceSquared < reach * reach) {
+            val distance = sqrt(distanceSquared)
             val falloff = 1f - distance / reach
             val push = falloff * falloff * pulse * windStrength * width * 0.085f
             val safeDistance = distance.coerceAtLeast(1f)

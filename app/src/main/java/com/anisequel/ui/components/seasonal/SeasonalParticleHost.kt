@@ -9,7 +9,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -17,6 +19,7 @@ import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_FRAME_HZ
 import com.anisequel.domain.seasonal.SeasonalSettings
 import com.anisequel.domain.seasonal.seasonalFrameHz
+import com.anisequel.ui.components.rememberIsResumed
 
 /**
  * The seasonal sky, floated over every page.
@@ -56,11 +59,15 @@ fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
     val settings by preferences.settings.collectAsState(initial = SeasonalSettings())
     val context = LocalContext.current
     val detected = remember { detectSeasonalQualityTier(context) }
-    // Re-read every time the sky's settings change rather than once for the
-    // process: the active rate is a system setting, and a reader who switches the
-    // panel from 60 to 120 while AniSequel is open should get the frames they just
-    // unlocked without a restart.
-    val screen = detectSeasonalScreen(context)
+    // Re-read when the app comes back, not on every settings emission. The active
+    // rate is a system setting: a reader who switches the panel from 60 to 120
+    // while AniSequel is open should get the frames they just unlocked, and the
+    // panel is re-detected on resume the same way the Seasonal page does it.
+    val resumed = rememberIsResumed()
+    var screen by remember { mutableStateOf(detectSeasonalScreen(context)) }
+    LaunchedEffect(resumed) {
+        screen = detectSeasonalScreen(context)
+    }
     val quality = remember(settings.quality, detected) { settings.quality.resolve(detected) }
     val frameHz = seasonalFrameHz(
         rate = settings.frameRate,
@@ -80,15 +87,15 @@ fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
     // capped - the battery cost of a high-rate window is the app's to accept only
     // while the reader has a sky on screen that needs it.
     //
-    // The category API is Android 14. On Android 12 and 13 this is a no-op rather
-    // than a wrong answer: the sky still steps at the rate the reader chose, it just
-    // cannot lift the window out of the bucket the platform left it in. Calling it
-    // without the guard is a `NoSuchMethodError` on those releases, and `lintRelease`
-    // does not fail the build, so the check is the only thing standing between this
-    // line and a crash on the two releases before the current one.
+    // The category API is Android 15 (API 35), not Android 14. This guard used
+    // `UPSIDE_DOWN_CAKE` (34) and the test pinned it, so on an Android 14 phone the
+    // check passed and the call threw `NoSuchMethodError` - `lintRelease` is
+    // advisory, so nothing else in the build noticed. Below 35 this is a no-op
+    // rather than a wrong answer: the sky still steps at the rate the reader chose,
+    // it just cannot lift the window out of the bucket the platform left it in.
     val root = LocalView.current
     SideEffect {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             root.setRequestedFrameRate(
                 if (settings.enabled && frameHz > DEFAULT_SEASONAL_FRAME_HZ) {
                     View.REQUESTED_FRAME_RATE_CATEGORY_HIGH

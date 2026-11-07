@@ -1,5 +1,10 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.CustomFontStore
 import com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND
@@ -39,6 +46,7 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.LocalTitleMotion
 import com.anisequel.ui.components.MarqueeText
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.rememberBoundSliderState
@@ -234,7 +242,21 @@ private fun TextSizeSection(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-            if (draft != 1f) {
+            // Appearing and disappearing on a threshold, so it animates rather
+            // than popping a button into a row the reader is already dragging.
+            AnimatedVisibility(
+                visible = draft != 1f,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            ) {
                 TextButton(onClick = {
                     draft = 1f
                     scope.launch { themePreferences.setFontScale(1f) }
@@ -282,7 +304,14 @@ private fun TextSizeSection(
             // pixel nudge. The range widened from 85-130 because a reader who
             // needs large text was stopping at the top of a slider, not at the
             // size that worked.
-            modifier = Modifier.testTag("text_size_slider")
+            //
+            // `stateDescription` because the platform reads the raw 0.8-1.4
+            // fraction, and "0.95" is not a text size a person can judge.
+            modifier = Modifier
+                .semantics {
+                    stateDescription = "${(draft * 100).roundToInt()} percent"
+                }
+                .testTag("text_size_slider")
         )
     }
 }
@@ -356,7 +385,19 @@ private fun TitleMotionSection(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
-            if (draft != DEFAULT_TITLE_SCROLL_DP_PER_SECOND) {
+            AnimatedVisibility(
+                visible = draft != DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            ) {
                 TextButton(onClick = {
                     draft = DEFAULT_TITLE_SCROLL_DP_PER_SECOND
                     scope.launch {
@@ -380,7 +421,13 @@ private fun TitleMotionSection(
                 val target = draft
                 scope.launch { themePreferences.setTitleScrollSpeed(target) }
             },
-            modifier = Modifier.testTag("title_scroll_slider")
+            // Same reason as the text-size slider: the raw value is dp/s, which
+            // the platform would not read out at all helpfully.
+            modifier = Modifier
+                .semantics {
+                    stateDescription = "${draft.roundToInt()} dp per second"
+                }
+                .testTag("title_scroll_slider")
         )
     }
 }

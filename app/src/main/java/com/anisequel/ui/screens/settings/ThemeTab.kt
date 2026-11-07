@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.InfoBackdropBlur
@@ -82,34 +84,31 @@ fun ThemeTab(
 
     SettingsScrollColumn(modifier) {
         ThemePreviewCard(themeSettings = themeSettings)
-        Spacer(modifier = Modifier.height(14.dp))
 
         // The page is grouped the way the reference it was redrawn from groups it:
         // the light-or-dark choice first, then where the colour comes from, then what
         // the surfaces are painted on, then the per-title adaptation. Each label is a
         // heading a screen reader can jump between, which the previous order - one
         // long run of same-sized cards - gave no way to do.
-        SettingsSectionLabel("Appearance")
+        SettingsSectionLabel("Appearance", compact = true)
         AppearanceSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
-        SettingsSectionLabel("Themes")
+        SettingsSectionLabel("Themes", compact = true)
         AccentColourSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
         // Full screen moved to Device Manager, and motion to the Interface page:
         // neither is about what colour the app is, and this page is only about that.
-        SettingsSectionLabel("Wallpaper")
+        SettingsSectionLabel("Wallpaper", compact = true)
         BackgroundSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
-        SettingsSectionLabel("Poster colour")
+        SettingsSectionLabel("Poster colour", compact = true)
         AnimeColourSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
 
         // An opened title's page is an appearance surface too, and it is the one
         // this page can change without a title being open. Kept beside the anime
         // colour section because both are about borrowing a title's artwork.
-        SettingsSectionLabel("Anime pages")
+        SettingsSectionLabel("Anime pages", compact = true)
         InfoBackdropSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
-
-        Spacer(modifier = Modifier.height(14.dp))
 
         val appearanceChanged = themeSettings.themeMode != ThemeMode.DEFAULT ||
             themeSettings.useDynamicColor ||
@@ -246,15 +245,25 @@ private fun ThemeModeTile(
         ThemeMode.SYSTEM -> DarkColorScheme
     }
 
+    // A constant 1.5dp outline whose *colour* animates, rather than 1dp growing
+    // to 2dp on selection. The old pair changed the layout by half a dp as well
+    // as the colour, so the tile under the finger nudged its neighbours and the
+    // border could not crossfade. The selected colour still does all the talking.
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outlineVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "theme_mode_border_${mode.name}"
+    )
+
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
             shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            border = if (selected) {
-                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-            } else {
-                BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            },
+            border = BorderStroke(1.5.dp, borderColor),
             modifier = Modifier
                 .fillMaxWidth()
                 .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
@@ -265,6 +274,11 @@ private fun ThemeModeTile(
                     onClickLabel = "Use the ${mode.displayName.lowercase()} appearance"
                 ) { onClick() }
                 .testTag("theme_mode_${mode.name.lowercase()}")
+                // `Role.RadioButton` alone says "a choice"; it does not say which
+                // one is chosen. Without this the three tiles were announced
+                // identically and the only evidence of the current mode was the
+                // border a screen reader cannot see.
+                .semantics { this.selected = selected }
         ) {
             Column(
                 modifier = Modifier
@@ -422,18 +436,30 @@ private fun CanvasChip(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "canvas_chip_content"
     )
+    // One width, animated colour: see `ThemeModeTile` for why the selected state
+    // must not resize the control it is marking.
+    val outline by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "canvas_chip_outline"
+    )
 
     Surface(
         shape = ExpressiveShapes.pill,
         color = container,
-        border = BorderStroke(
-            width = if (isSelected) 1.5.dp else 1.dp,
-            color = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.outlineVariant
-        ),
+        border = BorderStroke(1.dp, outline),
         modifier = Modifier
             .bouncyPress(pressedScale = 0.92f)
-            .clickable(onClick = onClick)
+            .clickable(
+                role = Role.RadioButton,
+                onClickLabel = "Use the $name canvas colour",
+                onClick = onClick
+            )
+            // The dot carries no text of its own, so without this the chip was a
+            // pure-text control with no state: a reader could hear "Mist White"
+            // but not whether the app was already wearing it.
+            .semantics { this.selected = isSelected }
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),

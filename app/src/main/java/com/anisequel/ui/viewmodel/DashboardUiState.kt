@@ -1,6 +1,7 @@
 package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.ArrivingEntry
+import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListErrorKind
@@ -65,7 +66,20 @@ sealed interface DashboardUiState {
          * mode and when scanning someone else's public profile: both look
          * identical to a signed-in user until the mutation is rejected.
          */
-        val canWriteToAniList: Boolean = true
+        val canWriteToAniList: Boolean = true,
+        /**
+         * Up to three of the viewer's own entries, for Settings' card-style
+         * preview.
+         *
+         * Carried in the state rather than fetched by Settings for a performance
+         * reason: the dashboard has already downloaded this collection, and the
+         * preview is three thumbnails. A second read from the repository would
+         * either walk the cached list again or, on a cold Settings visit, download
+         * the whole list to draw them. Empty is an answer - the demo dashboard and
+         * the public-profile scan have no viewer list - and the preview falls back
+         * to sample titles in that case.
+         */
+        val cardPreview: List<MediaListEntryItem> = emptyList()
     ) : DashboardUiState
 
     data class Error(

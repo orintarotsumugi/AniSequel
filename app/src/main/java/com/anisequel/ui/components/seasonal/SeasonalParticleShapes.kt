@@ -65,10 +65,17 @@ internal fun DrawScope.drawSeasonalParticle(
     path: Path,
     highDetail: Boolean = true,
     flatten: Float = 1f,
-    strokeFloor: Float = 0f
+    strokeFloor: Float = 0f,
+    /**
+     * Pre-resolved ink for [variant].
+     *
+     * The sky already knows the palette list and passes the entry in; the pile
+     * and the Settings glyph use the default lookup. Resolving it here per draw
+     * cost every falling particle a `when` and a modulo on every frame.
+     */
+    palette: ParticlePalette = particlePalette(effect, variant)
 ) {
     if (radius <= 0.2f || alpha <= 0.001f) return
-    val palette = particlePalette(effect, variant)
     // Six percent of the radius, because the filaments of a seed and the ribs of a
     // ginkgo are spaced in radii: a floor that outran their spacing would fuse the
     // crown into one pale fan, which is the smudge this is here to remove, not add.
@@ -111,11 +118,11 @@ internal fun DrawScope.drawSeasonalParticle(
  * a scale rather than a re-parameterised path costs one matrix and no allocations,
  * which matters because this runs for every particle on every frame.
  */
-private fun DrawScope.tumble(
+private inline fun DrawScope.tumble(
     rotationDegrees: Float,
     center: Offset,
     flatten: Float,
-    block: DrawScope.() -> Unit
+    crossinline block: DrawScope.() -> Unit
 ) {
     withTransform({
         rotate(rotationDegrees, center)
