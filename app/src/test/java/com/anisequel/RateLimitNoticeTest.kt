@@ -43,13 +43,13 @@ class RateLimitNoticeTest {
     }
 
     /**
-     * Subscribes to the notices for the rest of this test, before any report.
+     * Subscribes to the notices for the rest of this test.
      *
-     * The subscription has to happen first: the flow has no replay -
-     * deliberately, because replaying the last notice after a rotation would
-     * toast it a second time - so a value emitted with nobody listening is
-     * gone. `UnconfinedTestDispatcher` makes the collector active the moment
-     * it is launched rather than one dispatch later.
+     * The bus is backed by a channel: a report that lands before `MainActivity`
+     * has subscribed waits in the queue instead of being dropped, and the
+     * receive-as-flow has no replay, so a later collector does not see the same
+     * notice twice after a rotation. `UnconfinedTestDispatcher` makes the
+     * collector active the moment it is launched rather than one dispatch later.
      */
     private fun TestScope.collectNotices(): MutableList<Int?> {
         val seen = mutableListOf<Int?>()
@@ -91,6 +91,23 @@ class RateLimitNoticeTest {
         testScheduler.advanceUntilIdle()
 
         assertEquals("a new episode must be heard", listOf(30, 45), seen)
+    }
+
+    @Test
+    fun `a report before a collector starts is delivered when one does`() = runTest {
+        // The startup race: the dashboard's first requests can be refused before
+        // the composition's effect has subscribed. The accepted report has to
+        // wait for the collector rather than disappear into a replay-less flow.
+        RateLimitNotice.report(retryAfterSeconds = 42, now = 1_000L)
+
+        val seen = collectNotices()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(
+            "the first 429 of a session is the one notice that must not be lost",
+            listOf(42),
+            seen
+        )
     }
 
     @Test

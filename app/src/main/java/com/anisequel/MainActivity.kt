@@ -239,11 +239,25 @@ class MainActivity : ComponentActivity() {
             // context to show a notice in stays silent.
             LaunchedEffect(Unit) {
                 RateLimitNotice.events.collect { retryAfterSeconds ->
-                    val wait = retryAfterSeconds?.let { " (about ${it}s)" }.orEmpty()
+                    // Use the server's wait when there is one. The old wording
+                    // always said "give it a minute" and then appended "(about
+                    // 5s)" when `Retry-After` was short, so the one actionable
+                    // number in the message contradicted the sentence around it.
+                    val message = when {
+                        retryAfterSeconds == null ->
+                            "AniList is busy — you're rate limited. Give it a minute and try again."
+                        retryAfterSeconds != null && retryAfterSeconds <= 1 ->
+                            "AniList is rate limiting. Try again now."
+                        else ->
+                            "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
+                    }
                     Toast.makeText(
                         this@MainActivity,
-                        "AniList is busy — you're rate limited. Give it a minute and try again.$wait",
-                        Toast.LENGTH_SHORT
+                        message,
+                        // Long rather than short: this is the only place the
+                        // reader is told that retrying immediately will fail,
+                        // and two seconds is not enough to read the wait.
+                        Toast.LENGTH_LONG
                     ).show()
                 }
             }

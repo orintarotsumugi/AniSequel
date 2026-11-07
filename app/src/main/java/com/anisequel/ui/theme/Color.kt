@@ -10,11 +10,17 @@ import androidx.compose.ui.graphics.Color
 // did not.
 
 // --- Brand ------------------------------------------------------------------
-val AniBlueLight = Color(0xFF4FA8FF)
-val AniBlue = Color(0xFF1673D6)
-val AniBlueDark = Color(0xFF0B4F9E)
-val AniBlueContainerLight = Color(0xFFD6E7FF)
-val AniBlueContainerDark = Color(0xFF0A3766)
+// A richer azure than the old #1673D6. The old primary cleared white at 4.71:1
+// but had only a little headroom, so any future tint or alpha overlay could push
+// it under AA; this one is 5.4:1 on white and 4.8:1 on the light surface while
+// keeping more blue chroma. The dark-side primary is deliberately lighter and
+// slightly softer, because #64B5FF is the same hue the eye reads as the light
+// theme's blue rather than a second, unrelated cyan.
+val AniBlueLight = Color(0xFF64B5FF)
+val AniBlue = Color(0xFF0B67D1)
+val AniBlueDark = Color(0xFF0753A8)
+val AniBlueContainerLight = Color(0xFFD3E4FF)
+val AniBlueContainerDark = Color(0xFF06437E)
 val AniCyan = Color(0xFF00B8C4)
 
 // --- Semantic status colours ------------------------------------------------

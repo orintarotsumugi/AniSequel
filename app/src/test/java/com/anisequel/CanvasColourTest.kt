@@ -6,6 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
+import com.anisequel.domain.color.Hct
 import com.anisequel.ui.theme.applyCanvasColour
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -43,6 +44,11 @@ class CanvasColourTest {
     private val dark = darkColorScheme()
 
     /** The Settings presets plus tones no preset reaches but a picker can. */
+    private fun angularDistance(a: Double, b: Double): Double {
+        val raw = kotlin.math.abs(a - b) % 360.0
+        return if (raw > 180.0) 360.0 - raw else raw
+    }
+
     private val canvases = listOf(
         "pure black" to Color(0xFF000000),
         "midnight navy" to Color(0xFF080C14),
@@ -143,6 +149,37 @@ class CanvasColourTest {
                 secondary >= 3.0
             )
         }
+    }
+
+    /**
+     * The ramp is the canvas's colour, not a grey wash toward white or black.
+     *
+     * RGB interpolation was the older implementation: it could keep a red canvas
+     * red while desaturating a cyan one unevenly, and its borders stayed on the
+     * brand's navy. The ramp is sampled in HCT now, and the borders move with it.
+     */
+    @Test
+    fun `the canvas ramp keeps its hue and re-derives the borders`() {
+        val canvas = Color(0xFF8C1D18)
+        val painted = applyCanvasColour(dark, canvas)
+        val canvasHue = Hct.fromInt(canvas.toArgb()).hue
+        val containerHue = Hct.fromInt(painted.surfaceContainer.toArgb()).hue
+
+        assertTrue(
+            "the cards sit ${angularDistance(canvasHue, containerHue)} degrees from " +
+                "the picked canvas, so the ramp is not following it",
+            angularDistance(canvasHue, containerHue) < 25.0
+        )
+        assertNotEquals(
+            "a border from the brand navy is invisible on a red canvas",
+            dark.outline,
+            painted.outline
+        )
+        assertNotEquals(
+            "and the subtle border has to move too",
+            dark.outlineVariant,
+            painted.outlineVariant
+        )
     }
 
     /**

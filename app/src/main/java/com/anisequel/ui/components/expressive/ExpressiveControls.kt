@@ -218,6 +218,7 @@ fun ExpressivePolygonSegmentedBar(
     ) {
         options.forEachIndexed { index, option ->
             val selected = index == selectedIndex
+            val interactionSource = remember { MutableInteractionSource() }
 
             val container by animateColorAsState(
                 targetValue = if (selected) {
@@ -247,13 +248,18 @@ fun ExpressivePolygonSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(44.dp)
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }
                     .clip(ExpressiveShapes.pillSoft)
                     .background(container)
-                    .clickable(enabled = enabled) {
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled
+                    ) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     }
@@ -325,6 +331,7 @@ fun ExpressiveSegmentedBar(
     ) {
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
+            val interactionSource = remember { MutableInteractionSource() }
             val scale by animateFloatAsState(
                 targetValue = if (selected) 1f else 0.96f,
                 animationSpec = ExpressiveMotion.SelectionScale,
@@ -367,13 +374,17 @@ fun ExpressiveSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(38.dp)
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }
                     .clip(shape)
                     .background(containerColor)
-                    .clickable {
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     }
@@ -451,8 +462,11 @@ fun ExpressiveStateChip(
         label = "chip_corner_radius"
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier = modifier
+            .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -462,7 +476,13 @@ fun ExpressiveStateChip(
             .defaultMinSize(minHeight = minTouchTargetHeight)
             .clip(RoundedCornerShape(cornerRadius))
             .background(background)
-            .clickable(onClickLabel = onClickLabel, role = role, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = onClickLabel,
+                role = role,
+                onClick = onClick
+            )
             .semantics {
                 // Without this a screen reader heard the filter's name but not
                 // whether it was on, so the only way to tell the active filters

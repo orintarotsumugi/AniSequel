@@ -19,10 +19,14 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemeMode
+import com.anisequel.domain.color.Hct
+import com.anisequel.domain.color.TonalPalette
+import kotlin.math.roundToInt
 
 internal val DarkColorScheme = darkColorScheme(
     primary = AniBlueLight,
@@ -103,6 +107,20 @@ internal val LightColorScheme = lightColorScheme(
 )
 
 /**
+ * How much of a canvas colour's own chroma survives into its neutral ramp.
+ *
+ * A picked canvas is not wallpaper colour: it is one field the reader chose,
+ * and the cards around it should look like shades of that field rather than
+ * like a different palette laid on top. A fraction is enough to carry the hue
+ * without turning every elevated container into a pastel copy of the canvas.
+ */
+private const val CANVAS_NEUTRAL_FRACTION = 0.35
+private const val MIN_CANVAS_CHROMA = 2.0
+private const val MIN_CANVAS_NEUTRAL_CHROMA = 4.0
+private const val MAX_CANVAS_NEUTRAL_CHROMA = 12.0
+private const val CANVAS_VARIANT_CHROMA = 4.0
+
+/**
  * The picked canvas colour as a whole surface ramp, not just `background`.
  *
  * Overriding only `background`/`surface` left most of the app on the old ramp:
@@ -112,48 +130,101 @@ internal val LightColorScheme = lightColorScheme(
  * the `on` roles are derived too, which is what lets a canvas apply in light
  * mode without putting dark-on-dark text on screen.
  *
- * The ramp is built by blending toward the contrast colour (lifts) or toward
- * the further-out extreme (drops), so elevation steps stay visible on any
- * canvas and text keeps the contrast the blend was chosen for.
+ * ## Why HCT tones rather than RGB lifts
+ *
+ * This used to interpolate each channel toward white or black. RGB has no idea
+ * which direction is perceptually lighter, so a saturated canvas desaturated
+ * unevenly and a mid-tone could put two adjacent containers on nearly the same
+ * luminance while a third jumped. HCT tone is CIELAB L*: sampling the canvas's
+ * own hue at neighbouring tones gives an evenly spaced elevation ramp and lets
+ * the foreground be picked by measured contrast instead of a 0.18 threshold.
  */
 internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
     if (canvas == null) return base
 
-    // The 0.18 crossover is where pure white and pure black text have equal
-    // contrast on the canvas, and it is chosen so neither candidate dips below
-    // WCAG AA anywhere: a mid-tone canvas would otherwise read 4.1:1 with a
-    // fixed light/dark boolean at 0.5 and Material's toned text colours.
-    val canvasIsDark = canvas.luminance() < 0.18f
-    val onCanvas = if (canvasIsDark) Color.White else Color.Black
-    val drop = if (canvasIsDark) Color.Black else Color.White
+    fun contrast(a: Color, b: Color): Float {
+        val first = a.luminance()
+        val second = b.luminance()
+        return (maxOf(first, second) + 0.05f) / (minOf(first, second) + 0.05f)
+    }
 
-    fun mix(from: Color, to: Color, fraction: Float): Color {
-        fun leg(a: Float, b: Float) = a + (b - a) * fraction
-        return Color(
-            red = leg(from.red, to.red),
-            green = leg(from.green, to.green),
-            blue = leg(from.blue, to.blue),
-            alpha = leg(from.alpha, to.alpha)
+    val hct = Hct.fromInt(canvas.toArgb())
+    // Which side of the canvas the text belongs on is a contrast question, not
+    // a tone threshold: a mid-tone canvas can be closer to white than to black
+    // in luminance while still having more room on the dark side.
+    val canvasIsDark = contrast(Color.White, canvas) >= contrast(Color.Black, canvas)
+    val onCanvas = if (canvasIsDark) Color.White else Color.Black
+
+    // A genuinely neutral canvas stays neutral; a coloured one keeps a small,
+    // bounded amount of its chroma rather than becoming a saturated card wall.
+    val neutralChroma = if (hct.chroma < MIN_CANVAS_CHROMA) {
+        0.0
+    } else {
+        (hct.chroma * CANVAS_NEUTRAL_FRACTION).coerceIn(
+            MIN_CANVAS_NEUTRAL_CHROMA,
+            MAX_CANVAS_NEUTRAL_CHROMA
         )
     }
-    fun lift(fraction: Float) = mix(canvas, onCanvas, fraction)
+    val neutral = TonalPalette(hct.hue, neutralChroma)
+    val variant = TonalPalette(hct.hue, neutralChroma + CANVAS_VARIANT_CHROMA)
+
+    // Positive offsets travel toward the lighter end on a dark canvas and the
+    // darker end on a light one, which is the same direction as Material's
+    // elevation ramp in each mode. The offsets are in tone, so the steps stay
+    // perceptually even whatever the canvas's hue or saturation.
+    val direction = if (canvasIsDark) 1.0 else -1.0
+    fun step(offset: Double): Color = Color(
+        neutral.tone((hct.tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+    fun variantStep(offset: Double): Color = Color(
+        variant.tone((hct.tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+
+    /**
+     * Picks a foreground from [palette] that actually holds [minimum] against
+     * the canvas. The preferred tone is Material's usual answer, but a canvas
+     * can move the target underneath it; the full ladder is only consulted when
+     * that tone fails.
+     */
+    fun readable(palette: TonalPalette, preferredTone: Int, minimum: Float): Color {
+        val preferred = Color(palette.tone(preferredTone))
+        if (contrast(preferred, canvas) >= minimum) return preferred
+        return CANVAS_TEXT_TONES
+            .map { Color(palette.tone(it)) }
+            .maxByOrNull { contrast(it, canvas) } ?: preferred
+    }
 
     return base.copy(
         background = canvas,
         onBackground = onCanvas,
         surface = canvas,
         onSurface = onCanvas,
-        surfaceContainerLowest = mix(canvas, drop, 0.20f),
-        surfaceContainerLow = lift(0.05f),
-        surfaceContainer = lift(0.10f),
-        surfaceContainerHigh = lift(0.16f),
-        surfaceContainerHighest = lift(0.22f),
-        surfaceDim = mix(canvas, drop, 0.10f),
-        surfaceBright = lift(0.12f),
-        surfaceVariant = lift(0.10f),
-        onSurfaceVariant = mix(onCanvas, canvas, 0.35f)
+        surfaceContainerLowest = if (canvasIsDark) step(-2.0) else step(-3.0),
+        surfaceContainerLow = step(4.0),
+        surfaceContainer = step(8.0),
+        surfaceContainerHigh = step(13.0),
+        surfaceContainerHighest = step(18.0),
+        surfaceDim = if (canvasIsDark) step(-2.0) else step(4.0),
+        surfaceBright = if (canvasIsDark) step(8.0) else step(-3.0),
+        surfaceVariant = variantStep(8.0),
+        onSurfaceVariant = readable(
+            variant,
+            preferredTone = if (canvasIsDark) 80 else 30,
+            minimum = 4.5f
+        ),
+        outline = readable(
+            variant,
+            preferredTone = if (canvasIsDark) 60 else 50,
+            minimum = 3.0f
+        ),
+        outlineVariant = variantStep(if (canvasIsDark) 30.0 else 20.0),
+        inverseSurface = Color(neutral.tone(if (canvasIsDark) 90 else 20)),
+        inverseOnSurface = Color(neutral.tone(if (canvasIsDark) 10 else 90))
     )
 }
+
+/** Foreground tones tried when the preferred one does not clear the contrast floor. */
+private val CANVAS_TEXT_TONES = listOf(0, 10, 20, 30, 40, 60, 70, 80, 90, 100)
 
 /**
  * Status colours Material 3 has no role for.
