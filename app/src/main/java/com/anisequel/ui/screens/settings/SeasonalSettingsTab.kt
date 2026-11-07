@@ -302,6 +302,9 @@ private fun PreviewCard(
         // switch also arrives as INSTANT (the Activity overrides the stored style),
         // so the sentence has to name the actual reason: it used to tell a reader
         // with system animations off that they had chosen Instant.
+        // Read here rather than in the page: `PreviewCard` is a separate
+        // composable, and the page's `resumed` is not in scope on this side.
+        val resumed = rememberIsResumed()
         val systemAnimationsEnabled = remember(resumed) { ValueAnimator.areAnimatorsEnabled() }
         if (ExpressiveMotion.speed == MotionStyle.INSTANT) {
             Spacer(modifier = Modifier.height(8.dp))

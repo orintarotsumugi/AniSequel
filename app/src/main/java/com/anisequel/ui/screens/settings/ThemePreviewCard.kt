@@ -55,6 +55,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.StatusColors
 import com.anisequel.ui.theme.ThemePalette
 
 /**
@@ -278,146 +279,29 @@ fun ThemePreviewCard(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // The two buttons used to cut between four colours and two
-                        // labels on one frame. They now crossfade their containers
-                        // and morph their labels on the same tokens as the rest of
-                        // the app, which is the point of a preview: the reader is
-                        // judging the motion as well as the palette.
-                        val planContainer by animateColorAsState(
-                            targetValue = if (isPlanned) statusColors.successContainer else primary,
-                            animationSpec = ExpressiveMotion.FastColorEffects,
-                            label = "preview_plan_container"
-                        )
-                        val planContent by animateColorAsState(
-                            targetValue = if (isPlanned) statusColors.success
-                            else MaterialTheme.colorScheme.onPrimary,
-                            animationSpec = ExpressiveMotion.FastColorEffects,
-                            label = "preview_plan_content"
-                        )
-                        val watchContainer by animateColorAsState(
-                            targetValue = if (isWatching) statusColors.infoContainer else Color.Transparent,
-                            animationSpec = ExpressiveMotion.FastColorEffects,
-                            label = "preview_watch_container"
-                        )
-                        val watchContent by animateColorAsState(
-                            targetValue = if (isWatching) statusColors.info
-                            else MaterialTheme.colorScheme.onSurface,
-                            animationSpec = ExpressiveMotion.FastColorEffects,
-                            label = "preview_watch_content"
-                        )
-
+                        // Extracted so the hero stays below the cyclomatic
+                        // threshold; each button owns its colour pair and its
+                        // label transition. The two used to cut between four
+                        // colours and two labels on one frame; they now crossfade
+                        // their containers and morph their labels on the same
+                        // tokens as the rest of the app, which is the point of a
+                        // preview: the reader is judging motion as well as colour.
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
+                            PreviewPlanButton(
+                                isPlanned = isPlanned,
+                                primary = primary,
+                                statusColors = statusColors,
                                 onClick = { isPlanned = !isPlanned },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                                    .bouncyPress(pressedScale = 0.94f)
-                                    .testTag("preview_plan_button"),
-                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = planContainer,
-                                    contentColor = planContent
-                                )
-                            ) {
-                                // The label crosses rather than swapping: a filled
-                                // check arriving as the word changes is what makes
-                                // the tap read as one action instead of two edits.
-                                AnimatedContent(
-                                    targetState = isPlanned,
-                                    transitionSpec = {
-                                        (
-                                            fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                                                scaleIn(
-                                                    initialScale = 0.9f,
-                                                    animationSpec = ExpressiveMotion.FastSpatial
-                                                )
-                                            ) togetherWith (
-                                            fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                                                scaleOut(
-                                                    targetScale = 0.9f,
-                                                    animationSpec = ExpressiveMotion.FastSpatial
-                                                )
-                                            )
-                                    },
-                                    // Centred, not the default TopStart: the two
-                                    // labels are slightly different widths, and
-                                    // left-aligning the transition box would nudge
-                                    // the whole icon-and-word pair as it swaps.
-                                    contentAlignment = Alignment.Center,
-                                    label = "preview_plan_label"
-                                ) { planned ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = if (planned) {
-                                                AppVectorIcons.BookmarkDone
-                                            } else {
-                                                AppVectorIcons.BookmarkAdd
-                                            },
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (planned) "Planned" else "+ Plan",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-
-                            OutlinedButton(
+                                modifier = Modifier.weight(1f)
+                            )
+                            PreviewWatchButton(
+                                isWatching = isWatching,
                                 onClick = { isWatching = !isWatching },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                                    .bouncyPress(pressedScale = 0.94f)
-                                    .testTag("preview_watch_button"),
-                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    containerColor = watchContainer,
-                                    contentColor = watchContent
-                                )
-                            ) {
-                                AnimatedContent(
-                                    targetState = isWatching,
-                                    transitionSpec = {
-                                        (
-                                            fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                                                scaleIn(
-                                                    initialScale = 0.9f,
-                                                    animationSpec = ExpressiveMotion.FastSpatial
-                                                )
-                                            ) togetherWith (
-                                            fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                                                scaleOut(
-                                                    targetScale = 0.9f,
-                                                    animationSpec = ExpressiveMotion.FastSpatial
-                                                )
-                                            )
-                                    },
-                                    contentAlignment = Alignment.Center,
-                                    label = "preview_watch_label"
-                                ) { watching ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = AppVectorIcons.Play,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = if (watching) "Watching" else "Watch",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
@@ -439,6 +323,147 @@ fun ThemePreviewCard(
                     RoleSwatchDot("Container", MaterialTheme.colorScheme.primaryContainer)
                     RoleSwatchDot("Surface", MaterialTheme.colorScheme.surface)
                 }
+            }
+        }
+    }
+}
+
+/** The Plan half of the mock card: its own container/content pair and label morph. */
+@Composable
+private fun PreviewPlanButton(
+    isPlanned: Boolean,
+    primary: Color,
+    statusColors: StatusColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val container by animateColorAsState(
+        targetValue = if (isPlanned) statusColors.successContainer else primary,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_plan_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (isPlanned) statusColors.success
+        else MaterialTheme.colorScheme.onPrimary,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_plan_content"
+    )
+
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .height(38.dp)
+            .bouncyPress(pressedScale = 0.94f)
+            .testTag("preview_plan_button"),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = container,
+            contentColor = content
+        )
+    ) {
+        // The label crosses rather than swapping: a filled check arriving as the
+        // word changes is what makes the tap read as one action instead of two.
+        AnimatedContent(
+            targetState = isPlanned,
+            transitionSpec = {
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) togetherWith
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            },
+            // Centred, not the default TopStart: the two labels are slightly
+            // different widths, and left-aligning the box nudged the whole pair.
+            contentAlignment = Alignment.Center,
+            label = "preview_plan_label"
+        ) { planned ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (planned) {
+                        AppVectorIcons.BookmarkDone
+                    } else {
+                        AppVectorIcons.BookmarkAdd
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (planned) "Planned" else "+ Plan",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/** The Watch half of the mock card: outlined until it is active, then filled. */
+@Composable
+private fun PreviewWatchButton(
+    isWatching: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val statusColors = AniSequelTheme.statusColors
+    val container by animateColorAsState(
+        targetValue = if (isWatching) statusColors.infoContainer else Color.Transparent,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_watch_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (isWatching) statusColors.info
+        else MaterialTheme.colorScheme.onSurface,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_watch_content"
+    )
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(38.dp)
+            .bouncyPress(pressedScale = 0.94f)
+            .testTag("preview_watch_button"),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = container,
+            contentColor = content
+        )
+    ) {
+        AnimatedContent(
+            targetState = isWatching,
+            transitionSpec = {
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) togetherWith
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            },
+            contentAlignment = Alignment.Center,
+            label = "preview_watch_label"
+        ) { watching ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = AppVectorIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (watching) "Watching" else "Watch",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

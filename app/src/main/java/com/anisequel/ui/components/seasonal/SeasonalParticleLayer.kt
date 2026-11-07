@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.seasonal
 
+import android.view.View
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -170,6 +171,8 @@ fun SeasonalParticleLayer(
     // alive. Without this the Canvas keeps asking the frame loop for work and
     // redrawing a card nobody can see, which is most of the point of the effect
     // being cheap at rest. The overlay is always on screen, so this is true there.
+    // The modifier is a helper rather than an inline callback so this composable's
+    // cyclomatic count stays a description of the layer, not of window maths.
     val hostView = LocalView.current
     var onScreen by remember { mutableStateOf(true) }
     val animating = resumed && onScreen && ExpressiveMotion.speed != MotionStyle.INSTANT
@@ -207,11 +210,7 @@ fun SeasonalParticleLayer(
     // normalised field, and the field is normalised so a rotation or a keyboard
     // resize has no reason to throw away what has already piled up.
     val pile = remember(effect, settle, seed) {
-        if (!settle || !effect.settles) {
-            null
-        } else {
-            SeasonalPile(seed = seed + effect.ordinal * 97 + 17)
-        }
+        seasonalPileFor(effect = effect, settle = settle, seed = seed)
     }
 
     LaunchedEffect(
@@ -257,15 +256,11 @@ fun SeasonalParticleLayer(
         modifier = modifier
             .fillMaxSize()
             .onSizeChanged { viewport = it }
-            .onGloballyPositioned { coordinates ->
-                // Window coordinates, not parent-relative: the preview is inside a
-                // scrolling Column, so it is off screen when its bounds have left
-                // the window even though it is still composed and measured.
-                if (hostView.height <= 0) return@onGloballyPositioned
-                val bounds = coordinates.boundsInWindow()
-                val visible = bounds.bottom > 0f && bounds.top < hostView.height
-                if (visible != onScreen) onScreen = visible
-            }
+            .then(
+                Modifier.trackWindowVisibility(hostView) { visible ->
+                    onScreen = visible
+                }
+            )
     ) {
         // `clock` is read here, in the draw phase, and nowhere above it: the whole
         // point of the layer is that a frame costs a repaint rather than a
@@ -289,6 +284,35 @@ fun SeasonalParticleLayer(
             placement = placement
         )
     }
+}
+
+/**
+ * True while any part of a layer's bounds is in the window.
+ *
+ * Window coordinates, not parent-relative: a Settings preview sits inside a
+ * scrolling Column, so it is off screen when its bounds have left the window even
+ * though it is still composed and measured. The overlay's bounds fill the window
+ * and stay visible. Reporting the same value repeatedly is harmless - snapshot
+ * state only invalidates on a real change.
+ */
+private fun Modifier.trackWindowVisibility(
+    hostView: View,
+    onVisibilityChange: (Boolean) -> Unit
+): Modifier = onGloballyPositioned { coordinates ->
+    if (hostView.height <= 0) return@onGloballyPositioned
+    val bounds = coordinates.boundsInWindow()
+    onVisibilityChange(bounds.bottom > 0f && bounds.top < hostView.height)
+}
+
+/** The drift for one layer, or null when settling is off or the shape cannot rest. */
+private fun seasonalPileFor(
+    effect: SeasonalEffect,
+    settle: Boolean,
+    seed: Int
+): SeasonalPile? = if (!settle || !effect.settles) {
+    null
+} else {
+    SeasonalPile(seed = seed + effect.ordinal * 97 + 17)
 }
 
 /** The wind's contribution to one frame, or nothing when interaction is off. */
