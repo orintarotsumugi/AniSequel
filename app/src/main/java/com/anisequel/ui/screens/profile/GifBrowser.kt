@@ -104,21 +104,20 @@ internal fun ColumnScope.GifBrowser(
     // a delegated property, so the compiler will not promise it stays non-null
     // between the check and the use.
     val errorMessage = state.error
-    // The strip is what an empty search shows, so a reader who comes back to the
-    // picker is looking at their last picks, not at a blinking "type to search".
-    // Collected rather than read once: a pick has to land in the strip while the
-    // pane is still open, and a plain function call here only refreshed when
-    // something else happened to recompose this composition.
     val recent by store.recent.collectAsStateWithLifecycle()
 
-    fun onPickSuggestion(tag: String) {
-        // `setQuery` alone would schedule the debounce and leave the reader
-        // looking at the chips for another 450ms; this is a deliberate tap, not
-        // typing, so it goes straight to the search the keyboard's Enter runs.
-        store.setQuery(tag)
-        store.searchNow()
+    GifSearchField(state = state, store = store)
+    if (state.query.isBlank()) {
+        GifBlankQueryChips(provider = provider) { tag ->
+            store.setQuery(tag)
+            store.searchNow()
+        }
     }
+    GifBrowserBody(state = state, errorMessage = errorMessage, recent = recent, store = store, onUse = onUse)
+}
 
+@Composable
+private fun GifSearchField(state: GifSearchStore.State, store: GifSearchStore) {
     OutlinedTextField(
         // The `String` overload, not a rebuilt `TextFieldValue`. Wrapping the store's
         // query in `TextFieldValue(state.query)` puts the caret at index 0 on every
@@ -129,10 +128,6 @@ internal fun ColumnScope.GifBrowser(
         value = state.query,
         onValueChange = { store.setQuery(it) },
         placeholder = {
-            // Names the index whose answer this is, so the grid's results - and
-            // its misses - are visibly the provider's, not the app's. A reader
-            // who has saved a Tenor key sees the switch happen here, which is the
-            // cheapest place to learn the setting took effect.
             Text(
                 store.substitutionNote
                     ?: if (store.providerName.isBlank()) "Search GIFs"
@@ -175,66 +170,54 @@ internal fun ColumnScope.GifBrowser(
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .testTag("comment_gif_field")
     )
+}
 
-    // The chips are provider-aware, because "what can this index answer" is the
-    // one fact about a picker that changes with the provider: Gifukai answers
-    // reactions and nothing else, Safebooru is the only index that answers booru
-    // tags, Klipy answers whatever a reader typed. Every chip still checked
-    // against the live index with the app's own request shape before it went in:
-    // a chip that searches into an empty grid reads as the picker being broken
-    // rather than as a gap in the index.
-    if (state.query.isBlank()) {
+@Composable
+private fun GifBlankQueryChips(provider: GifProvider, onPick: (String) -> Unit) {
+    GifSuggestionRow(
+        caption = "Reactions",
+        suggestions = reactionsFor(provider),
+        tagTestPrefix = "comment_gif_suggestion",
+        onPick = onPick
+    )
+    // Series tags are booru tags; only Safebooru carries them.
+    if (provider == GifProvider.SAFEBOORU) {
         GifSuggestionRow(
-            caption = "Reactions",
-            suggestions = reactionsFor(provider),
-            tagTestPrefix = "comment_gif_suggestion",
-            onPick = { tag -> onPickSuggestion(tag) }
+            caption = "Series",
+            suggestions = GIF_SERIES,
+            tagTestPrefix = "comment_gif_series",
+            onPick = onPick
         )
-        // Series tags are booru tags - `sousou_no_frieren`, which only a tag index
-        // carries - so they are offered on Safebooru alone. On a general index
-        // "kaguya*" is a search for a literal asterisk, and on Gifukai a title is
-        // not an action at all.
-        if (provider == GifProvider.SAFEBOORU) {
-            GifSuggestionRow(
-                caption = "Series",
-                suggestions = GIF_SERIES,
-                tagTestPrefix = "comment_gif_series",
-                onPick = { tag -> onPickSuggestion(tag) }
-            )
-        }
     }
+}
 
+@Composable
+private fun ColumnScope.GifBrowserBody(
+    state: GifSearchStore.State,
+    errorMessage: String?,
+    recent: List<GifResult>,
+    store: GifSearchStore,
+    onUse: (String) -> Unit
+) {
     when {
         errorMessage != null && state.results.isEmpty() -> GifMessage(
             icon = AppVectorIcons.Warning,
             text = errorMessage,
-            action = if (state.query.isNotBlank()) {
-                { store.searchNow() }
-            } else {
-                null
-            }
+            action = if (state.query.isNotBlank()) ({ store.searchNow() }) else null
         )
 
         state.isSearching && state.results.isEmpty() -> GifSkeleton(Modifier.weight(1f))
 
         state.query.isBlank() && recent.isNotEmpty() -> Column(modifier = Modifier.weight(1f)) {
             Text(
-                // The strip used to be twelve tiles with no caption, and the
-                // reader looking at them had to remember what they were: a
-                // sentence costs one line and answers "where did these come from,
-                // and are they mine".
                 text = "Picked this session",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 4.dp)
+                modifier = Modifier.padding(horizontal = 20.dp).padding(top = 4.dp)
             )
             RecentGifGrid(
                 gifs = recent,
                 onPick = { gif ->
-                    // Re-picking from the strip moves it to the front, exactly as a pick
-                    // out of a search does.
                     store.rememberUsed(gif)
                     onUse(gif.embedUrl)
                 }
@@ -243,32 +226,17 @@ internal fun ColumnScope.GifBrowser(
 
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
-            // A blank box is not a search that found nothing: it is a box nobody
-            // has typed in yet, and "Nothing found." under it read as a provider
-            // failure on the pane's first frame.
             text = emptyStateNote(state, errorMessage),
-            action = if (errorMessage != null) {
-                { store.searchNow() }
-            } else {
-                null
-            },
+            action = if (errorMessage != null) ({ store.searchNow() }) else null,
             modifier = Modifier.weight(1f)
         )
 
         else -> {
-            // One tile and no cursor is Gifukai's answer shape: a random draw of
-            // one scene, `next` always null. Without this row, that state reads
-            // as "there is exactly one hug" instead of "here is one of many hugs"
-            // - and the reader's only way to another scene is retyping the same
-            // word, which the store's cache answers with the same tile every
-            // time. The shuffle is `reroll`, and it belongs to any provider whose
-            // answer meets this shape, not just the one that usually does.
             if (state.results.size == 1 && state.next == null) {
                 GifShuffleRow(onShuffle = { store.reroll() })
             }
             GifResultsGrid(store = store, state = state, onUse = onUse)
         }
-    }
     }
 }
 
