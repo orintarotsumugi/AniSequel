@@ -66,7 +66,7 @@ class GifukaiGifs(
                 // draw would pretend to page a catalogue that does not.
                 return@withContext Result.success(GifPage(emptyList()))
             }
-            val resolved = resolve(term)
+            val (action, type) = resolve(term)
                 ?: return@withContext Result.failure(
                     GifSearchFailure(
                         "Gifukai answers reaction scenes by action - " +
@@ -78,10 +78,10 @@ class GifukaiGifs(
             val built = runCatching {
                 ENDPOINT.toHttpUrl().newBuilder()
                     // A path segment, so a query cannot reach another endpoint.
-                    .addPathSegment(resolved.action)
+                    .addPathSegment(action)
                     .apply {
-                        if (resolved.type != null) {
-                            addQueryParameter("type", resolved.type)
+                        if (type != null) {
+                            addQueryParameter("type", type)
                         }
                     }
                     .build()
