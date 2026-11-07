@@ -57,10 +57,11 @@ class MediaPreferencesTest {
         assertTrue(settings.pollForNewComments)
         assertNull("no third-party key is stored unless the reader pasted one", settings.tenorApiKey)
         assertEquals(
-            "the anonymous booru is the index that asks for nothing",
-            GifProvider.SAFEBOORU,
+            "the default index answers on the app's own key, so it is chosen",
+            GifProvider.DEFAULT,
             settings.gifProvider
         )
+        assertEquals("the default is Klipy, a general catalogue", GifProvider.KLIPY, GifProvider.DEFAULT)
     }
 
     @Test
@@ -101,8 +102,7 @@ class MediaPreferencesTest {
     }
 
     @Test
-    fun `unreadable ciphertext reads as no key rather than as a crash`() = runTest {
-        val store = preferences()
+    fun `unreadable ciphertext reads as no key rather than as a crash`() = runTest {        val store = preferences()
         store.setTenorApiKey("a-key")
         val afterReset = MediaPreferences(
             ApplicationProvider.getApplicationContext(),
@@ -112,6 +112,29 @@ class MediaPreferencesTest {
         // then opens Settings must not be shown a credential, and the GIF search
         // must fall back to the anonymous provider rather than throw.
         assertNull(afterReset.settings.first().tenorApiKey)
+    }
+
+    @Test
+    fun `decryption happens off the collecting thread`() = runTest {
+        val decryptThreads = mutableSetOf<String>()
+        val cipher = object : TokenCipher {
+            override fun encrypt(plaintext: String): String = "enc:$plaintext"
+            override fun decrypt(payload: String): String? {
+                decryptThreads.add(Thread.currentThread().name)
+                return payload.removePrefix("enc:").takeIf { payload.startsWith("enc:") }
+            }
+        }
+        val store = preferences(cipher)
+        store.setKlipyApiKey("k-key")
+        store.settings.first()
+
+        assertTrue(
+            "DataStore reads on IO, but this map body runs wherever the collector " +
+                "collects - the composition, i.e. main. Three keystore decryptions " +
+                "per snapshot on the frame thread are the cold-start stutter, paid " +
+                "by every collector and by every settings toggle that re-emits.",
+            decryptThreads.isNotEmpty() && decryptThreads.none { it == "main" }
+        )
     }
 
     @Test
@@ -149,21 +172,34 @@ class MediaPreferencesTest {
     }
 
     @Test
-    fun `a keyed provider with no key resolves to the anonymous index`() = runTest {
+    fun `a keyed provider with no key resolves to the default index that can answer`() = runTest {
         val store = preferences()
-        store.setGifProvider(GifProvider.KLIPY)
+        store.setGifProvider(GifProvider.GIPHY)
         val settings = store.settings.first()
         assertEquals(
             "the choice is kept so pasting the key later resumes it",
-            GifProvider.KLIPY,
+            GifProvider.GIPHY,
             settings.gifProvider
         )
         assertEquals(
-            "but a search has to go somewhere that can answer",
-            GifProvider.SAFEBOORU,
+            "but a search has to go somewhere that answers - the default (Klipy) " +
+                "carries the app's own key, so the fallback is itself a working search",
+            GifProvider.DEFAULT,
             settings.resolvedGifProvider
         )
         assertNull(settings.activeGifKey)
+    }
+
+    @Test
+    fun `klipy without a reader key is still klipy`() = runTest {
+        val store = preferences()
+        store.setGifProvider(GifProvider.KLIPY)
+        val settings = store.settings.first()
+        // The app carries a key for Klipy (data/network/BundledGifKeys.kt), so the
+        // choice stands on its own where every other keyed provider falls back.
+        // `needsKey` is false for exactly that reason; this pins the boundary.
+        assertEquals(GifProvider.KLIPY, settings.resolvedGifProvider)
+        assertNull("no reader credential was pasted", settings.klipyApiKey)
     }
 
     @Test

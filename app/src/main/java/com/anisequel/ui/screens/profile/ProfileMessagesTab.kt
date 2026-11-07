@@ -136,14 +136,24 @@ fun ProfileMessagesTab(
 ) {
     LaunchedEffect(Unit) { onLoadFirstPage() }
 
-    val messages = visibleMessages(state)
+    // The merge and its sort are remembered, not re-run: this body calls the merge
+    // five times over (the rows plus the three error derivations, each of which
+    // re-merged for itself), so every state emission and every minute of the clock
+    // tick paid four O(n log n) re-sorts of the same two lists to learn nothing
+    // new. Keyed on the exact inputs the merge reads, in the spirit of
+    // MessageDetailSheet's remember around its own conversation merge.
+    val messages = remember(state.filter, state.received.messages, state.sent.messages, state.visibility) {
+        visibleMessages(state)
+    }
     val loading = visibleLoading(state)
     val loaded = visibleLoaded(state)
     val loadingMore = visibleLoadingMore(state)
     val hasMore = visibleHasMore(state)
-    val error = visibleError(state)
-    val sourceError = visibleSourceError(state)
-    val loadMoreError = visibleLoadMoreError(state)
+    // With the rows already merged, the three error derivations only read their
+    // own flags - the re-merge each used to pay was the whole cost.
+    val error = visibleError(state, messages)
+    val sourceError = visibleSourceError(state, messages)
+    val loadMoreError = visibleLoadMoreError(state, messages)
     val hasHidden = hasHiddenMessages(state)
 
     // The same six-rows-from-the-end trigger the activity feed uses: far enough

@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.8.7",
+      "entries": [
+        {
+          "title": "Klipy ships with the app's key and is the default GIF index",
+          "detail": "The default search used to be Safebooru, a tag index that cannot answer a sentence-typed reaction, and general indexes had to be unlocked with a key each reader registered for - after Tenor's public API retired in 2026 that choice kept failing the same way. Klipy is the default now, and the app carries a working key for it, so GIF search answers out of the box. A key of your own pasted in Settings still replaces the bundled one for as long as it is saved, and clearing the field returns to the bundled key rather than to a refusal."
+        },
+        {
+          "title": "Comment keystore work left the frame thread",
+          "detail": "Reading the three saved GIF keys - and the session token's own store - decrypted on the screen's dispatcher: DataStore reads on a worker, but the map that turns a snapshot into settings runs wherever the collector collects, and every collector is a composition. Three keystore round trips per snapshot, multiplied by every collector on screen and repeated each time a toggle re-wrote the file, were paid on the main thread. The decrypt side now runs on IO, and the token's repository decrypts each distinct ciphertext once per session instead of twice per read, with the migration scan latched to one pass."
+        },
+        {
+          "title": "The dashboard stops doing its heavy walks between frames",
+          "detail": "The recompute pipeline moved its filter chain off the main thread months ago, and the comment describing the fix covered four derivations that did not follow. The watched count, the arriving rows, the recent-activity summary and the card-preview walk - each a full pass over a large account's list, every one of which misses its memo on exactly the refresh that produced new data - plus the per-entry copy fold all stayed on the caller's thread. One Default-dispatcher block now carries the whole pipeline, so a refresh pays its walks in one background switch."
+        },
+        {
+          "title": "The inbox merges in one pass per change",
+          "detail": "Drawing the messages tab re-merged, re-sorted and re-filtered both inbox halves five times per recomposition: once for the rows and once inside each error derivation re-running the merge for itself. Under the ALL filter each pass sorted the union of two paged sources, on every state emission and every minute tick. The merge is remembered now and the error lines read the rows it produced."
+        },
+        {
+          "title": "A burst of expired snapshots rewrites its file once",
+          "detail": "Reading a cached value whose snapshot had expired deleted the entry and then rewrote the whole kind's file - re-serialising megabytes under the lock every other snapshot read waits on - once per expired read. A bio screen arriving the morning after twelve covers expired paid twelve whole-file rewrites back to back. A removal now lands in memory and the rewrite waits out a quarter-second window, so a burst pays one rewrite and whatever the kind was due for anyway."
+        }
+      ]
+    },
+    {
       "version": "1.8.6",
       "entries": [
         {

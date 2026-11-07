@@ -161,7 +161,12 @@ internal fun ActivityEngagementSheets(
             onRefresh = { atBottom -> activityViewModel.refreshComments(atBottom) },
             pollIntervalMillis = activityViewModel.commentPollIntervalMillis,
             polling = mediaSettings.pollForNewComments,
-            gifProvider = mediaSettings.gifProvider,
+            // Resolved, not raw: a keyed choice without its key must not be handed
+            // to `gifSearchApiFor` directly, whose Safebooru ladder is reserved for
+            // direct requests. The picker's search and the Settings page's promise
+            // disagree otherwise - resolution is decided once on the settings
+            // object itself.
+            gifProvider = mediaSettings.resolvedGifProvider,
             tenorApiKey = mediaSettings.tenorApiKey,
             klipyApiKey = mediaSettings.klipyApiKey,
             giphyApiKey = mediaSettings.giphyApiKey,
@@ -245,7 +250,7 @@ internal fun MessagesCommentsSheetHost(
             onRefresh = { atBottom -> thread.refreshNow(atBottom) },
             pollIntervalMillis = thread.pollIntervalMillis,
             polling = mediaSettings.pollForNewComments,
-            gifProvider = mediaSettings.gifProvider,
+            gifProvider = mediaSettings.resolvedGifProvider,
             tenorApiKey = mediaSettings.tenorApiKey,
             klipyApiKey = mediaSettings.klipyApiKey,
             giphyApiKey = mediaSettings.giphyApiKey,

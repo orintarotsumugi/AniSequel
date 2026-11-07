@@ -15,24 +15,38 @@ import okhttp3.Request
  *
  * ## The provider set, and why it is this one (November 2026)
  *
- * - **Safebooru** is the anonymous default. It is asked for `animated_gif` at
- *   `rating:safe`, its catalogue is anime, and it needs no account. See
- *   [SafebooruGifs] and [booruTiers] for how a sentence becomes three tag
- *   spellings one search is asked as.
+ * - **Safebooru** is the tag index and the substitution fallback. It is asked for
+ *   `animated_gif` at `rating:safe`, its catalogue is anime, and it needs no
+ *   account. See [SafebooruGifs] and [booruTiers] for how a sentence becomes three
+ *   tag spellings one search is asked as.
  * - **nekos.best** is the second keyless index. It is small and reaction-shaped
  *   (`hug`, `pat`, `wave`), and it needs a User-Agent that names the app. See
  *   [NekosBestGifs].
- * - **Klipy** is the closest drop-in replacement for Tenor: a key in the path,
- *   page-numbered results, and `file.hd` / `file.sm` copies. See [KlipyGifs].
+ * - **Klipy** is the default: a key in the path, page-numbered results, and
+ *   `file.hd` / `file.sm` copies. It answers on the app's own key - see below - and
+ *   a reader's pasted key replaces that one. See [KlipyGifs].
  * - **GIPHY** is the name everyone expects. Every new key is a beta key capped at
  *   100 calls an hour, its dimensions are JSON **strings**, and its terms forbid
  *   mixing its results into a grid with another provider's. See [GiphyGifs].
  * - **Tenor** is kept for an install that already saved a key, but its public API
  *   was retired in 2026, so it is no longer the default and its failures say so.
  *
- * A key is never bundled. The anonymous default is what lets somebody use the app
- * without handing over a credential, and a committed key would be one rate limit
- * shared by every install plus a secret in a public repository.
+ * ## One key is bundled, and that is a decision with a cost
+ *
+ * When Tenor's API retired, a key was deliberately *not* bundled: the anonymous
+ * default (Safebooru) was what let somebody search without handing over a
+ * credential, and a committed key is one rate limit shared by every install plus a
+ * secret in a public repository. It stayed that way while Safebooru was the default.
+ *
+ * Klipy becoming the default is what changed the balance. A default that cannot
+ * answer is a trap the app fell into exactly once, with a retired Tenor - so either
+ * the default asks the reader for a credential or the app carries one. Klipy's key
+ * is free, the bundled one is a search quota and nothing else (nothing can be
+ * charged to it, no reader data travels with a request), and the reader's own key
+ * still wins when one is saved. The tradeoff stands and is recorded in
+ * [BundledGifKeys]: decompiled, the key is readable; slow, the shared quota spends
+ * faster than a private one would. Both symptoms surface as Klipy's own failure
+ * sentences, never as a silent empty grid.
  *
  * ## What was measured and rejected
  *

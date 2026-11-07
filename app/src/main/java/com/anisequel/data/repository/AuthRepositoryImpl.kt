@@ -63,6 +63,56 @@ class AuthRepositoryImpl(
     private var cachedToken: String? = null
 
     /**
+     * Whether this instance has already run the migration scan.
+     *
+     * `prepareStoredToken` is idempotent by construction - the equality guard
+     * inside its transaction makes the write safe however often it happens - but
+     * it is also a full DataStore read *plus* a keystore decrypt on every cold
+     * [accessTokenFlow] collection, and [getAccessToken] collects the cold flow
+     * with `first()`. Anything that asks for the token twice paid the scan
+     * twice, once inside an OkHttp worker's `runBlocking`. One scan per instance
+     * is enough: a legacy plaintext token only ever exists at the start of a
+     * session, and nothing the app does afterwards writes one. A keystore
+     * failure on the first scan is permanent-looking rather than transient (the
+     * invalidation path - dropping an undecryptable cipher - is the deliberate
+     * recovery for exactly that), so skipping the retries does not strand a
+     * session the retry could have saved.
+     */
+    private val migrationScanned = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * One decrypt per distinct ciphertext, not one per read.
+     *
+     * Both [prepareStoredToken] (is the cipher still readable?) and [readToken]
+     * (what is the token?) decrypt the same ciphertext within a single flow
+     * collection, and the ciphertext does not change from call to call. Memoise
+     * the pair; a `null` plaintext is a real value here (the invalidation case),
+     * so the marker is checked before the plaintext. The fields are `@Volatile`
+     * because [AuthInterceptor] reads the flow from an OkHttp worker while the
+     * composition collects it; a benign double decrypt is the worst outcome of
+     * a race, since the underlying ciphertext has not changed underneath.
+     */
+    @Volatile
+    private var memoCiphertext: String? = null
+
+    @Volatile
+    private var memoDecrypted: String? = null
+    @Volatile
+    private var memoIsPopulated = false
+
+    /**
+     * The decrypted form of [ciphertext], remembered this session.
+     */
+    private fun decryptRemembering(ciphertext: String): String? {
+        if (memoIsPopulated && memoCiphertext == ciphertext) return memoDecrypted
+        return tokenCipher.decrypt(ciphertext).also {
+            memoCiphertext = ciphertext
+            memoDecrypted = it
+            memoIsPopulated = true
+        }
+    }
+
+    /**
      * The stored token, mirrored into [cachedToken] as it is read.
      *
      * The `onEach` is what keeps the in-memory copy warm without a blocking
@@ -83,7 +133,9 @@ class AuthRepositoryImpl(
      * writes, and DataStore cannot be written from inside its own `map`.
      */
     override val accessTokenFlow: Flow<String?> = flow {
-        prepareStoredToken()
+        if (migrationScanned.compareAndSet(false, true)) {
+            prepareStoredToken()
+        }
         emitAll(
             context.dataStore.data.map { preferences -> readToken(preferences) }
         )
@@ -173,7 +225,7 @@ class AuthRepositoryImpl(
         }
 
         val encrypted = preferences[KEY_ENCRYPTED_ACCESS_TOKEN] ?: return
-        if (tokenCipher.decrypt(encrypted) != null) return
+        if (decryptRemembering(encrypted) != null) return
 
         context.dataStore.edit {
             if (it[KEY_ENCRYPTED_ACCESS_TOKEN] == encrypted) {
@@ -191,7 +243,7 @@ class AuthRepositoryImpl(
      */
     private fun readToken(preferences: Preferences): String? {
         preferences[KEY_ENCRYPTED_ACCESS_TOKEN]
-            ?.let { tokenCipher.decrypt(it) }
+            ?.let { decryptRemembering(it) }
             ?.takeIf { it.isNotBlank() }
             ?.let { return it }
         return preferences[KEY_ACCESS_TOKEN]?.takeIf { it.isNotBlank() }

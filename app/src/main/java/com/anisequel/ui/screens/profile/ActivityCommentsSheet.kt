@@ -174,7 +174,7 @@ fun ActivityCommentsSheet(
     pollIntervalMillis: Long,
     /** Whether the sheet may ask at all - the reader's Settings switch. */
     polling: Boolean = true,
-    /** The index the reader chose. A keyed one without a key falls back to Safebooru. */
+    /** The index the reader chose, resolved - a keyed one without its key falls back to the default. */
     gifProvider: GifProvider = GifProvider.DEFAULT,
     /** The reader's Tenor key, when they saved one. Blank means the anonymous index. */
     tenorApiKey: String? = null,
@@ -296,11 +296,11 @@ fun ActivityCommentsSheet(
     }
 
     val scope = rememberCoroutineScope()
-    // The provider the reader chose, or Safebooru when it needs a key they have not
-    // saved yet: the booru answers anime tags and asks for nothing, so a missing
-    // credential never leaves the picker without a search. Tenor is no longer
-    // special-cased - its public API was retired in 2026, and a saved key now goes
-    // through the same factory as the other keyed providers.
+    // The resolved provider the reader chose. Resolution itself lives in
+    // [CommentMediaSettings.resolvedGifProvider]; Klipy, the default, answers on the
+    // app's own key, so a missing *reader* credential only matters to GIPHY and
+    // Tenor, whose fallback is decided in `gifSearchApiFor` and stated in the
+    // substitution note the picker shows.
     val gifApi = remember(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey) {
         gifSearchApiFor(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey)
     }

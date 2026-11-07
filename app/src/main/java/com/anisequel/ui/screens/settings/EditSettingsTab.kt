@@ -396,8 +396,11 @@ private fun CommentMediaCard(context: android.content.Context) {
                 "All three are public: anybody with the link can view the file, and " +
                 "none can delete it without an account. GIF search runs against the " +
                 "index chosen below. Safebooru and nekos.best need no key and ask for " +
-                "safe anime GIFs only; Klipy, GIPHY and Tenor take a key you supply, " +
-                "and each key is stored on this device under its own encrypted entry.",
+                "safe anime GIFs only; Klipy is the default and the app carries a key " +
+                "for it, so it answers without one from you (paste a key of your own " +
+                "to use your own quota instead of the shared one). GIPHY and Tenor " +
+                "take a key you supply, and each key is stored on this device under " +
+                "its own encrypted entry.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -437,11 +440,12 @@ private fun CommentMediaCard(context: android.content.Context) {
         Text(
             text = when {
                 !settings.gifProvider.needsKey ->
-                    "${settings.gifProvider.displayName} needs no account, so searches " +
-                        "start as soon as you open the picker."
+                    "${settings.gifProvider.displayName} answers without a key from " +
+                        "you, so searches start as soon as you open the picker."
                 currentKey.isNullOrBlank() ->
                     "${settings.gifProvider.displayName} needs a key. Searches fall " +
-                        "back to Safebooru until one is saved below."
+                        "back to Klipy - the app's own key works there - until one is " +
+                        "saved below."
                 else -> "Searches go to ${settings.gifProvider.displayName}."
             },
             style = MaterialTheme.typography.bodySmall,
@@ -452,7 +456,13 @@ private fun CommentMediaCard(context: android.content.Context) {
             }
         )
 
-        if (settings.gifProvider.needsKey) {
+        // The editor shows whenever the provider has a key slot in Settings, which
+        // [GifProvider.keyLabel] encodes rather than [GifProvider.needsKey]: Klipy
+        // carries the app's own key and works without one, but a reader with a key
+        // of their own still needs somewhere to paste it. Which credential wins is
+        // decided once, in `gifSearchApiFor` - a saved reader key replaces the
+        // bundled one for as long as it is on this device.
+        if (settings.gifProvider.keyLabel.isNotEmpty()) {
             Spacer(modifier = Modifier.height(14.dp))
             GifKeyEditor(
                 provider = settings.gifProvider,

@@ -8,6 +8,7 @@ import com.anisequel.data.network.gifSearchApiFor
 import com.anisequel.data.network.toGifPage
 import com.anisequel.domain.gif.GifProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -110,9 +111,13 @@ class GifProviderParseTest {
     }
 
     @Test
-    fun `a chosen provider without its key searches the anonymous index`() {
+    fun `a chosen provider without its key falls back or answers on the bundled one`() {
+        // Klipy carries the app's key, so the default never needs a credential from
+        // the reader - this is the pin that keeps [`GifProvider.DEFAULT`] = Klipy
+        // honest: a default that only worked after registration is the trap a
+        // retired Tenor set.
         assertEquals(
-            "Safebooru",
+            "Klipy",
             gifSearchApiFor(GifProvider.KLIPY, null, null, null).providerName
         )
         assertEquals(
@@ -140,7 +145,12 @@ class GifProviderParseTest {
         assertEquals("g", GifProvider.GIPHY.keyFrom("t", "k", "g"))
         assertNull("a keyless index has no credential to look for", GifProvider.SAFEBOORU.keyFrom("t", "k", "g"))
         assertTrue(GifProvider.selectable.first().needsKey.not())
-        assertEquals(GifProvider.SAFEBOORU, GifProvider.DEFAULT)
+        // The default must be an index that answers on its own: a shipped choice
+        // that refuses until the reader registers somewhere is the trap a retired
+        // Tenor set, and it is why Klipy (bundled key, general catalogue) is the
+        // default rather than Safebooru (tag index) or GIPHY (reader's key only).
+        assertEquals(GifProvider.KLIPY, GifProvider.DEFAULT)
+        assertFalse("a reader key is optional while the app carries one", GifProvider.KLIPY.needsKey)
         assertEquals(GifProvider.KLIPY, GifProvider.fromStorage("klipy"))
         assertNull(GifProvider.fromStorage("not-a-provider"))
     }

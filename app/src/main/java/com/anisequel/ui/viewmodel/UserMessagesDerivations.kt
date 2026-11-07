@@ -113,8 +113,12 @@ internal fun visibleHasMore(state: UserMessagesViewModel.UiState): Boolean =
  * one half failing while the other arrived must not throw away the rows that did
  * load - that is what [visibleSourceError] is for.
  */
-internal fun visibleError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isNotEmpty()) return null
+internal fun visibleError(
+    state: UserMessagesViewModel.UiState,
+    /** The rows to test, as [visibleMessages] computed them. */
+    rows: List<MessageNode> = visibleMessages(state)
+): String? {
+    if (rows.isNotEmpty()) return null
     return when (state.filter) {
         MessageFilter.ALL -> state.received.error ?: state.sent.error
         MessageFilter.RECEIVED -> state.received.error
@@ -135,8 +139,12 @@ internal fun visibleError(state: UserMessagesViewModel.UiState): String? {
  * things: this one asks for the source that never arrived, while a paging retry
  * appends the page after the rows on screen.
  */
-internal fun visibleSourceError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isEmpty()) return null
+internal fun visibleSourceError(
+    state: UserMessagesViewModel.UiState,
+    /** The rows to test, as [visibleMessages] computed them. */
+    rows: List<MessageNode> = visibleMessages(state)
+): String? {
+    if (rows.isEmpty()) return null
     return when (state.filter) {
         MessageFilter.ALL -> if (state.received.error != null || state.sent.error != null) {
             "Some messages couldn't load."
@@ -154,8 +162,12 @@ internal fun visibleSourceError(state: UserMessagesViewModel.UiState): String? {
  * Only when rows are on screen: a failure with nothing above it is
  * [visibleError]'s page, not a footer notice under nothing.
  */
-internal fun visibleLoadMoreError(state: UserMessagesViewModel.UiState): String? {
-    if (visibleMessages(state).isEmpty()) return null
+internal fun visibleLoadMoreError(
+    state: UserMessagesViewModel.UiState,
+    /** The rows to test, as [visibleMessages] computed them. */
+    rows: List<MessageNode> = visibleMessages(state)
+): String? {
+    if (rows.isEmpty()) return null
     return when (state.filter) {
         MessageFilter.ALL -> state.received.loadMoreError ?: state.sent.loadMoreError
         MessageFilter.RECEIVED -> state.received.loadMoreError
