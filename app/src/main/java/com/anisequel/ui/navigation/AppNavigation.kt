@@ -347,6 +347,15 @@ fun AppNavigation(
         derivedStateOf { (dashboardState as? DashboardUiState.Success)?.totalMissedCount }
     }
 
+    // The three entries Settings' card preview draws. Derived for the same reason
+    // as the counts above: `uiState` is replaced on every recompute, and a plain
+    // read here would subscribe the app root to all of them to discover that the
+    // same three covers are still on screen. `cardPreviewEntries` is memoised on
+    // the collection, so this only changes when the library actually changes.
+    val cardPreview by remember(dashboardFlow) {
+        derivedStateOf { (dashboardState as? DashboardUiState.Success)?.cardPreview.orEmpty() }
+    }
+
     // The Library page's remembered filters and grid position, resolved beside the
     // other app-scoped stores rather than inside the route: the route is disposed
     // when the reader switches tabs, and re-asking DataStore - or re-remembering the
@@ -616,6 +625,7 @@ fun AppNavigation(
                         aniListRepository = aniListRepository,
                         totalWatchedCount = totalWatchedCount,
                         totalMissedCount = totalMissedCount,
+                        cardPreview = cardPreview,
                         signedInViewer = signedInViewer
                     )
                 }

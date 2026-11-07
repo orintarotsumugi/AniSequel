@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -94,7 +93,7 @@ fun SectionCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = CardDefaults.outlinedCardBorder()
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Box(
@@ -138,7 +137,7 @@ fun SectionCard(
                     badge()
                 }
             }
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             content()
         }
     }
@@ -178,14 +177,28 @@ fun SwitchRow(
     // The whole row is the target, not just the 52dp switch: a settings row whose
     // label does nothing when tapped is the most common way a screen like this
     // feels broken, and Android has trained people to expect the label to work.
+    //
+    // `toggleable` rather than `clickable` + a separate switch callback. The old
+    // pair made two focus targets out of one setting - TalkBack read the label,
+    // then the switch as an unrelated control - and fired the tick twice when the
+    // thumb itself was tapped. With the switch inert (`onCheckedChange = null`)
+    // there is one node, one state and one tick, and the row still answers the
+    // whole width. `mergeDescendants` is what makes the label part of that node
+    // rather than a sibling read before it.
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled) {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onCheckedChange(!checked)
-            }
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = { next ->
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onCheckedChange(next)
+                }
+            )
+            .semantics(mergeDescendants = true) {}
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -211,14 +224,10 @@ fun SwitchRow(
         Spacer(modifier = Modifier.width(12.dp))
         Switch(
             checked = checked,
-            // Tapping the thumb never passes through the row's `clickable`, so the
-            // tick is repeated here rather than being the label's private reward.
-            onCheckedChange = { next ->
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onCheckedChange(next)
-            },
-            enabled = enabled,
-            modifier = Modifier.semantics { role = Role.Switch }
+            // Inert: the row owns the action. A second callback here would be a
+            // second focus target and a second haptic for one tap.
+            onCheckedChange = null,
+            enabled = enabled
         )
     }
 }

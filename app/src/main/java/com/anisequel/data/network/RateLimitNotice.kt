@@ -1,8 +1,8 @@
 package com.anisequel.data.network
 
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 
 /**
  * The one place a rate limit becomes something the reader can see.
@@ -54,13 +54,24 @@ object RateLimitNotice {
     /** When the last notice was accepted, or null before the first one. */
     private var lastReportedAtMillis: Long? = null
 
-    private val _events = MutableSharedFlow<Int?>(extraBufferCapacity = 1)
+    /**
+     * A queue, not a `SharedFlow` with no replay.
+     *
+     * The collector is composed in `MainActivity`, and the first burst of
+     * requests starts before effects can subscribe. With a replay-less flow the
+     * first report - the one accepted report of the whole episode - was emitted
+     * into nothing and every report behind it was deduped, so the reader got no
+     * notice at all during the exact startup case this bus exists for. A channel
+     * keeps that first value until somebody collects it, and `receiveAsFlow`
+     * consumes it once, so a rotation does not replay an old toast.
+     */
+    private val _events = Channel<Int?>(capacity = Channel.BUFFERED)
 
     /**
      * Accepted reports, as the server's `Retry-After` seconds - or null when
      * the rate limit arrived without a usable one.
      */
-    val events: SharedFlow<Int?> = _events.asSharedFlow()
+    val events: Flow<Int?> = _events.receiveAsFlow()
 
     /**
      * Raises a notice, unless one was raised within [DEDUPE_WINDOW_MILLIS].
@@ -84,7 +95,7 @@ object RateLimitNotice {
                 true
             }
         }
-        if (accepted) _events.tryEmit(retryAfterSeconds)
+        if (accepted) _events.trySend(retryAfterSeconds)
     }
 
     /**
@@ -96,5 +107,10 @@ object RateLimitNotice {
      */
     internal fun reset() {
         synchronized(lock) { lastReportedAtMillis = null }
+        // A queued notice belongs to the test that emitted it. Without this, the
+        // next test starts with a value already waiting and sees it as its own.
+        while (_events.tryReceive().isSuccess) {
+            // Drain synchronously; there is no collector in a reset fixture.
+        }
     }
 }

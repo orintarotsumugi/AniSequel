@@ -125,8 +125,11 @@ fun SettingsSubHeader(
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onBack()
             },
+            // 48dp, not 44: the platform's minimum touch target is 48, and this
+            // is the one control every settings page is left through. The 4dp
+            // came off the header's own padding budget rather than the target.
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .bouncyPress(pressedScale = 0.9f)
                 .testTag("settings_sub_back")
         ) {
@@ -155,16 +158,35 @@ fun SettingsSubHeader(
     }
 }
 
-/** The quiet label above a group of rows. */
+/**
+ * The quiet label above a group of rows.
+ *
+ * [compact] is for a label that is already inside a page using
+ * [SettingsScrollColumn]: that column supplies the 20dp gutter and a 16dp gap
+ * between every child, so a label there must not also indent itself by 28dp and
+ * add 26dp above and 10dp below. Doing both put the heading 48dp from the screen
+ * edge while its cards sat at 20dp, and left a 56dp hole above a heading that
+ * had 26dp below it - the uneven rhythm the Theme page showed most clearly.
+ * The shelf keeps the inset label because its rows are indented from the label,
+ * so there the extra padding is doing the grouping.
+ */
 @Composable
-fun SettingsSectionLabel(text: String, modifier: Modifier = Modifier) {
+fun SettingsSectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
-            .padding(start = 28.dp, top = 26.dp, bottom = 10.dp)
+            .padding(
+                start = if (compact) 0.dp else 28.dp,
+                top = if (compact) 6.dp else 26.dp,
+                bottom = if (compact) 0.dp else 10.dp
+            )
             // The labels are the only landmarks in a long shelf; without the
             // heading role a screen reader reads one undifferentiated list of
             // rows and cannot jump between Personalisation and About.

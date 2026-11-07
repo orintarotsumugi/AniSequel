@@ -77,10 +77,49 @@ object DynamicThemeBuilder {
      * Both schemes are returned and both are reachable now. The anime layer
      * respects Light/Dark/System rather than forcing dark.
      */
-    fun createDynamicSchemes(seed: Color, tintSurfaces: Boolean = false): Pair<ColorScheme, ColorScheme> {
+    fun createDynamicSchemes(seed: Color, tintSurfaces: Boolean = false): Pair<ColorScheme, ColorScheme> =
+        createSchemes(seed = seed, tintSurfaces = tintSurfaces, tintStrength = 1f)
+
+    /**
+     * The retained theme at a chosen surface strength.
+     *
+     * The difference from [createDynamicSchemes] is where the strength is applied.
+     * That function generates a full immersive scheme, and the theme used to blend
+     * its neutrals toward the brand afterwards. Blending two finished RGB ramps is
+     * not the same as sampling a ramp halfway between the two hues: the tonal
+     * steps can compress unevenly, and a cover whose hue sits opposite the brand's
+     * blue was being dragged through an unrelated colour on the way. Here the
+     * strength moves the neutral palette's **hue and chroma** before the tone
+     * ladder samples it, so every surface comes from one coherent, contrast-safe
+     * ramp - and the accents stay exactly the cover's.
+     */
+    fun createRetainedSchemes(
+        seed: Color,
+        tintStrength: Float
+    ): Pair<ColorScheme, ColorScheme> = createSchemes(
+        seed = seed,
+        tintSurfaces = true,
+        tintStrength = tintStrength
+    )
+
+    private fun createSchemes(
+        seed: Color,
+        tintSurfaces: Boolean,
+        tintStrength: Float
+    ): Pair<ColorScheme, ColorScheme> {
         val argb = seed.toArgb()
-        val light = MaterialColorSchemes.tonalSpot(argb, dark = false, tintSurfaces = tintSurfaces)
-        val dark = MaterialColorSchemes.tonalSpot(argb, dark = true, tintSurfaces = tintSurfaces)
+        val light = MaterialColorSchemes.tonalSpot(
+            argb,
+            dark = false,
+            tintSurfaces = tintSurfaces,
+            tintStrength = tintStrength
+        )
+        val dark = MaterialColorSchemes.tonalSpot(
+            argb,
+            dark = true,
+            tintSurfaces = tintSurfaces,
+            tintStrength = tintStrength
+        )
         return light.toColorScheme(LightColorScheme) to dark.toColorScheme(DarkColorScheme)
     }
 

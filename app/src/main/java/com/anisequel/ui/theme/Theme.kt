@@ -18,12 +18,15 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemeMode
+import com.anisequel.domain.color.Hct
+import com.anisequel.domain.color.TonalPalette
+import kotlin.math.roundToInt
 
 internal val DarkColorScheme = darkColorScheme(
     primary = AniBlueLight,
@@ -104,48 +107,18 @@ internal val LightColorScheme = lightColorScheme(
 )
 
 /**
- * A retained scheme with its neutral roles eased back toward [base].
+ * How much of a canvas colour's own chroma survives into its neutral ramp.
  *
- * [strength] 1 returns [retained] untouched. At lower values the *surfaces* move
- * toward the base scheme while every accent, container and `on` role stays the
- * cover's - which is the difference between "this show tints my app" and "this
- * show's colour is in my app but my background is still mine". The blend is a
- * plain per-channel lerp, which is enough because both schemes are generated for
- * the same dark/light mode and their brightness is already in the same band.
- *
- * The `on` roles are deliberately not blended with the surfaces: they were chosen
- * against the *retained* surfaces by the tonal ladder, and mixing them toward a
- * second set of `on` colours could only lower contrast.
+ * A picked canvas is not wallpaper colour: it is one field the reader chose,
+ * and the cards around it should look like shades of that field rather than
+ * like a different palette laid on top. A fraction is enough to carry the hue
+ * without turning every elevated container into a pastel copy of the canvas.
  */
-private fun blendRetainedTint(
-    retained: ColorScheme,
-    base: ColorScheme,
-    strength: Float
-): ColorScheme {
-    val fraction = strength.coerceIn(0f, 1f)
-    fun blend(from: Color, to: Color): Color = lerp(from, to, fraction)
-    return retained.copy(
-        background = blend(base.background, retained.background),
-        surface = blend(base.surface, retained.surface),
-        surfaceVariant = blend(base.surfaceVariant, retained.surfaceVariant),
-        surfaceTint = retained.surfaceTint,
-        surfaceBright = blend(base.surfaceBright, retained.surfaceBright),
-        surfaceDim = blend(base.surfaceDim, retained.surfaceDim),
-        surfaceContainer = blend(base.surfaceContainer, retained.surfaceContainer),
-        surfaceContainerHigh = blend(base.surfaceContainerHigh, retained.surfaceContainerHigh),
-        surfaceContainerHighest = blend(
-            base.surfaceContainerHighest,
-            retained.surfaceContainerHighest
-        ),
-        surfaceContainerLow = blend(base.surfaceContainerLow, retained.surfaceContainerLow),
-        surfaceContainerLowest = blend(
-            base.surfaceContainerLowest,
-            retained.surfaceContainerLowest
-        ),
-        outline = blend(base.outline, retained.outline),
-        outlineVariant = blend(base.outlineVariant, retained.outlineVariant)
-    )
-}
+private const val CANVAS_NEUTRAL_FRACTION = 0.35
+private const val MIN_CANVAS_CHROMA = 2.0
+private const val MIN_CANVAS_NEUTRAL_CHROMA = 4.0
+private const val MAX_CANVAS_NEUTRAL_CHROMA = 12.0
+private const val CANVAS_VARIANT_CHROMA = 4.0
 
 /**
  * The picked canvas colour as a whole surface ramp, not just `background`.
@@ -157,48 +130,145 @@ private fun blendRetainedTint(
  * the `on` roles are derived too, which is what lets a canvas apply in light
  * mode without putting dark-on-dark text on screen.
  *
- * The ramp is built by blending toward the contrast colour (lifts) or toward
- * the further-out extreme (drops), so elevation steps stay visible on any
- * canvas and text keeps the contrast the blend was chosen for.
+ * ## Why HCT tones rather than RGB lifts
+ *
+ * This used to interpolate each channel toward white or black. RGB has no idea
+ * which direction is perceptually lighter, so a saturated canvas desaturated
+ * unevenly and a mid-tone could put two adjacent containers on nearly the same
+ * luminance while a third jumped. HCT tone is CIELAB L*: sampling the canvas's
+ * own hue at neighbouring tones gives an evenly spaced elevation ramp and lets
+ * the foreground be picked by measured contrast instead of a 0.18 threshold.
  */
 internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
     if (canvas == null) return base
 
-    // The 0.18 crossover is where pure white and pure black text have equal
-    // contrast on the canvas, and it is chosen so neither candidate dips below
-    // WCAG AA anywhere: a mid-tone canvas would otherwise read 4.1:1 with a
-    // fixed light/dark boolean at 0.5 and Material's toned text colours.
-    val canvasIsDark = canvas.luminance() < 0.18f
+    val hct = Hct.fromInt(canvas.toArgb())
+    // Which side of the canvas the text belongs on is a contrast question, not
+    // a tone threshold: a mid-tone canvas can be closer to white than to black
+    // in luminance while still having more room on the dark side.
+    val canvasIsDark = canvasContrast(Color.White, canvas) >=
+        canvasContrast(Color.Black, canvas)
     val onCanvas = if (canvasIsDark) Color.White else Color.Black
-    val drop = if (canvasIsDark) Color.Black else Color.White
-
-    fun mix(from: Color, to: Color, fraction: Float): Color {
-        fun leg(a: Float, b: Float) = a + (b - a) * fraction
-        return Color(
-            red = leg(from.red, to.red),
-            green = leg(from.green, to.green),
-            blue = leg(from.blue, to.blue),
-            alpha = leg(from.alpha, to.alpha)
-        )
-    }
-    fun lift(fraction: Float) = mix(canvas, onCanvas, fraction)
+    val ramp = CanvasRamp(canvas = canvas, hct = hct, isDark = canvasIsDark)
 
     return base.copy(
         background = canvas,
         onBackground = onCanvas,
         surface = canvas,
         onSurface = onCanvas,
-        surfaceContainerLowest = mix(canvas, drop, 0.20f),
-        surfaceContainerLow = lift(0.05f),
-        surfaceContainer = lift(0.10f),
-        surfaceContainerHigh = lift(0.16f),
-        surfaceContainerHighest = lift(0.22f),
-        surfaceDim = mix(canvas, drop, 0.10f),
-        surfaceBright = lift(0.12f),
-        surfaceVariant = lift(0.10f),
-        onSurfaceVariant = mix(onCanvas, canvas, 0.35f)
+        surfaceContainerLowest = ramp.lowest(),
+        surfaceContainerLow = ramp.surface(4.0),
+        surfaceContainer = ramp.surface(8.0),
+        surfaceContainerHigh = ramp.surface(13.0),
+        surfaceContainerHighest = ramp.surface(18.0),
+        surfaceDim = ramp.dim(),
+        surfaceBright = ramp.bright(),
+        surfaceVariant = ramp.variantSurface(),
+        onSurfaceVariant = ramp.onSurfaceVariant(),
+        outline = ramp.outline(),
+        outlineVariant = ramp.outlineVariant(),
+        inverseSurface = ramp.inverseSurface(),
+        inverseOnSurface = ramp.inverseOnSurface()
     )
 }
+
+/**
+ * The surface ladder for one picked canvas.
+ *
+ * A class rather than four local helpers because every role is sampled from the
+ * same two palettes at the same tone origin. Keeping that origin in one object
+ * is what stops the container ramp, the borders and the inverse pair drifting
+ * onto different hues; it also keeps [applyCanvasColour] itself small enough to
+ * read as a role map rather than a colour-science routine.
+ */
+private class CanvasRamp(
+    private val canvas: Color,
+    hct: Hct,
+    private val isDark: Boolean
+) {
+    private val neutralChroma = canvasNeutralChroma(hct)
+    private val neutral = TonalPalette(hct.hue, neutralChroma)
+    private val variant = TonalPalette(hct.hue, neutralChroma + CANVAS_VARIANT_CHROMA)
+    private val tone = hct.tone
+
+    // Positive offsets travel toward the lighter end on a dark canvas and the
+    // darker end on a light one, which is Material's elevation direction in
+    // each mode. The offsets are in HCT tone, so they stay perceptually even
+    // whatever the canvas's hue or saturation.
+    private val direction = if (isDark) 1.0 else -1.0
+
+    fun surface(offset: Double): Color = Color(
+        neutral.tone((tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+
+    private fun variantAt(offset: Double): Color = Color(
+        variant.tone((tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+
+    fun lowest(): Color = surface(if (isDark) -2.0 else -3.0)
+
+    fun dim(): Color = surface(if (isDark) -2.0 else 4.0)
+
+    fun bright(): Color = surface(if (isDark) 8.0 else -3.0)
+
+    fun variantSurface(): Color = variantAt(8.0)
+
+    fun onSurfaceVariant(): Color = canvasTextColor(
+        variant,
+        canvas,
+        preferredTone = if (isDark) 80 else 30,
+        minimum = 4.5f
+    )
+
+    fun outline(): Color = canvasTextColor(
+        variant,
+        canvas,
+        preferredTone = if (isDark) 60 else 50,
+        minimum = 3.0f
+    )
+
+    fun outlineVariant(): Color = variantAt(if (isDark) 30.0 else 20.0)
+
+    fun inverseSurface(): Color = Color(neutral.tone(if (isDark) 90 else 20))
+
+    fun inverseOnSurface(): Color = Color(neutral.tone(if (isDark) 10 else 90))
+}
+
+/**
+ * A genuinely neutral canvas stays neutral; a coloured one keeps a small,
+ * bounded amount of its chroma rather than becoming a saturated card wall.
+ */
+private fun canvasNeutralChroma(hct: Hct): Double = if (hct.chroma < MIN_CANVAS_CHROMA) {
+    0.0
+} else {
+    (hct.chroma * CANVAS_NEUTRAL_FRACTION).coerceIn(
+        MIN_CANVAS_NEUTRAL_CHROMA,
+        MAX_CANVAS_NEUTRAL_CHROMA
+    )
+}
+
+/** Picks a foreground from [palette] that actually holds [minimum] against [canvas]. */
+private fun canvasTextColor(
+    palette: TonalPalette,
+    canvas: Color,
+    preferredTone: Int,
+    minimum: Float
+): Color {
+    val preferred = Color(palette.tone(preferredTone))
+    if (canvasContrast(preferred, canvas) >= minimum) return preferred
+    return CANVAS_TEXT_TONES
+        .map { Color(palette.tone(it)) }
+        .maxByOrNull { canvasContrast(it, canvas) } ?: preferred
+}
+
+private fun canvasContrast(a: Color, b: Color): Float {
+    val first = a.luminance()
+    val second = b.luminance()
+    return (maxOf(first, second) + 0.05f) / (minOf(first, second) + 0.05f)
+}
+
+/** Foreground tones tried when the preferred one does not clear the contrast floor. */
+private val CANVAS_TEXT_TONES = listOf(0, 10, 20, 30, 40, 60, 70, 80, 90, 100)
 
 /**
  * Status colours Material 3 has no role for.
@@ -402,18 +472,31 @@ fun AniSequelTheme(
     // even when nothing about the colour had changed. The heavy half now runs
     // once per colour, keyed on the parsed value.
     //
-    // The anime layer generates both light and dark. `tintSurfaces = true`
-    // because it is the immersive half: a sheet is open for one show, so the
-    // cover's hue reaches the neutral palettes and the backdrop behind a Chainsaw
-    // Man page is not the brand navy it was behind a Frieren one.
+    // The anime layer generates both light and dark. While a sheet is open it uses
+    // the full tint: the cover's hue reaches the neutral palettes, so the backdrop
+    // behind a Chainsaw Man page is not the brand navy it was behind a Frieren one.
     //
-    // What *outlives* the sheet does not come through here. Retention writes the
-    // cover colour as the custom accent below, which is the same colour on the
-    // app's usual surfaces - the distinction `DynamicThemeBuilder` documents, and
-    // the one this file used to get wrong by keeping the tinted layer switched on
-    // after the reader had closed the title.
-    val animeSchemes = androidx.compose.runtime.remember(animeColor) {
-        animeColor?.let { DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true) }
+    // A retained theme keeps that backdrop at the reader's chosen strength. It is
+    // generated at that strength rather than generated fully tinted and blended
+    // toward the palette afterwards: the strength moves the neutral palette's hue
+    // and chroma *before* the tonal ladder samples it, so Subtle and Balanced keep
+    // one coherent, contrast-checked surface ramp instead of an RGB average of two
+    // ramps. The live sheet still uses the full tint, because it is the preview of
+    // what retention will keep.
+    val retainedOnly = animeThemeColorHex?.takeIf { animeThemeActive } == null &&
+        animeThemeRetainedColorHex != null
+    val animeSchemes = androidx.compose.runtime.remember(
+        animeColor,
+        retainedOnly,
+        animeTintStrength
+    ) {
+        animeColor?.let {
+            if (retainedOnly) {
+                DynamicThemeBuilder.createRetainedSchemes(it, animeTintStrength)
+            } else {
+                DynamicThemeBuilder.createDynamicSchemes(it, tintSurfaces = true)
+            }
+        }
     }
     val customDynamicSchemes = androidx.compose.runtime.remember(customColor) {
         // A custom accent is a standing preference, not a title. Its surfaces
@@ -428,36 +511,13 @@ fun AniSequelTheme(
         } else null
     }
 
-    // The neutral scheme the retained tint eases back toward. It is the custom
-    // accent's own surfaces (which are brand-neutral by construction) when the
-    // retained colour wrote that accent, and the chosen palette otherwise. The
-    // accent roles are never blended: "Subtle" is about how far the background
-    // moves, not about desaturating the show's colour.
-    val neutralBaseScheme = when {
-        customColor != null -> {
-            val (lightDynamic, darkDynamic) = requireNotNull(customDynamicSchemes)
-            if (darkTheme) darkDynamic else lightDynamic
-        }
-        darkTheme -> palette.dark
-        else -> palette.light
-    }
-    // True only when the scheme is built from the stored marker rather than the
-    // live layer. While a sheet is open the immersive scheme is the whole point.
-    val retainedOnly = animeThemeColorHex?.takeIf { animeThemeActive } == null &&
-        animeThemeRetainedColorHex != null
-
     val colorScheme = when {
         // Both asserts are gated by the same condition in the branch above, and
         // `remember` guarantees the same value a read would give - a kotlin
         // nullable here would only re-check what the branch already proved.
         animeColor != null -> {
             val schemes = requireNotNull(animeSchemes)
-            val selected = if (darkTheme) schemes.second else schemes.first
-            if (retainedOnly && animeTintStrength < 1f) {
-                blendRetainedTint(selected, neutralBaseScheme, animeTintStrength)
-            } else {
-                selected
-            }
+            if (darkTheme) schemes.second else schemes.first
         }
         dynamicColor -> requireNotNull(wallpaperScheme)
         customColor != null -> {

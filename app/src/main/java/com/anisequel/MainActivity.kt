@@ -1,5 +1,6 @@
 package com.anisequel
 
+import android.animation.ValueAnimator
 import android.app.KeyguardManager
 import android.content.Intent
 import android.hardware.biometrics.BiometricManager
@@ -33,6 +34,7 @@ import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepository
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.update.UpdateController
@@ -96,6 +98,24 @@ class MainActivity : ComponentActivity() {
      * frame the system snapshots for the recents switcher.
      */
     private var appLockReady by mutableStateOf(false)
+
+    /**
+     * Whether the platform's own animation scale is non-zero.
+     *
+     * The app's Motion style is a preference inside the app; this is the phone's
+     * accessibility switch, and it outranks it. Developer Options' "Animation
+     * off" and the accessibility "Remove animations" setting both land here, and
+     * a reader who asked the system for no motion did not mean "no motion except
+     * AniSequel's". Read in [onResume] rather than once at launch because the
+     * switch is changed in another app's Settings screen, which does not restart
+     * this Activity.
+     */
+    private var systemAnimationsEnabled by mutableStateOf(
+        // Read at construction as well as in `onResume`, so the first composed
+        // frame already honours the switch instead of playing one entrance and
+        // then snapping the rest of the session.
+        ValueAnimator.areAnimatorsEnabled()
+    )
 
     /** True while the lock gate is drawn over the app. */
     private var _isLocked by mutableStateOf(false)
@@ -219,11 +239,13 @@ class MainActivity : ComponentActivity() {
             // context to show a notice in stays silent.
             LaunchedEffect(Unit) {
                 RateLimitNotice.events.collect { retryAfterSeconds ->
-                    val wait = retryAfterSeconds?.let { " (about ${it}s)" }.orEmpty()
                     Toast.makeText(
                         this@MainActivity,
-                        "AniList is busy — you're rate limited. Give it a minute and try again.$wait",
-                        Toast.LENGTH_SHORT
+                        rateLimitMessage(retryAfterSeconds),
+                        // Long rather than short: this is the only place the
+                        // reader is told that retrying immediately will fail,
+                        // and two seconds is not enough to read the wait.
+                        Toast.LENGTH_LONG
                     ).show()
                 }
             }
@@ -305,7 +327,15 @@ class MainActivity : ComponentActivity() {
                 themeMode = themeSettings.themeMode,
                 dynamicColor = themeSettings.useDynamicColor,
                 palette = ThemePalette.fromStorage(themeSettings.paletteId),
-                motionStyle = themeSettings.motionStyle,
+                // The phone's animation switch wins over the in-app preference:
+                // it is an accessibility choice, not a taste. The Motion page
+                // still stores the reader's own style for when they turn it back
+                // on, so this override is deliberately not written to DataStore.
+                motionStyle = if (systemAnimationsEnabled) {
+                    themeSettings.motionStyle
+                } else {
+                    MotionStyle.INSTANT
+                },
                 trueBlack = themeSettings.trueBlack,
                 customColorHex = themeSettings.customColorHex,
                 animeThemeActive = themeSettings.animeThemeActive,
@@ -424,6 +454,10 @@ class MainActivity : ComponentActivity() {
         // moment to re-assert a window flag.
         immersiveEnabled?.let { window.applyImmersiveMode(it) }
         updateControllerRef?.get()?.onAppResumed()
+        // The platform's animation scale is the one motion setting this app does
+        // not own, and it can change while the app is in the background. Reading
+        // it here is what lets the theme honour it without a restart.
+        systemAnimationsEnabled = ValueAnimator.areAnimatorsEnabled()
     }
 
     /**
@@ -567,6 +601,24 @@ class MainActivity : ComponentActivity() {
             authViewModel.handleAuthRedirect(uri)
         }
     }
+}
+
+/**
+ * The wording for an app-wide rate-limit notice.
+ *
+ * Uses the server's wait when there is one: the old copy always said "give it a
+ * minute" and then appended "(about 5s)" when `Retry-After` was short, so the
+ * one actionable number in the message contradicted the sentence around it.
+ * Extracted from `onCreate` so that composable's collector stays a one-line
+ * hand-off rather than another branch in an already busy Activity method.
+ */
+private fun rateLimitMessage(retryAfterSeconds: Int?): String = when {
+    retryAfterSeconds == null ->
+        "AniList is busy — you're rate limited. Give it a minute and try again."
+    retryAfterSeconds != null && retryAfterSeconds <= 1 ->
+        "AniList is rate limiting. Try again now."
+    else ->
+        "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
 }
 
 /**

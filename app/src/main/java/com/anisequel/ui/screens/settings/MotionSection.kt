@@ -1,5 +1,7 @@
 package com.anisequel.ui.screens.settings
 
+import android.animation.ValueAnimator
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -47,6 +50,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.expressiveShape
+import com.anisequel.ui.components.rememberIsResumed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -140,11 +144,40 @@ internal fun MotionSection(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = motionDescription(settings.motionStyle),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Crossfaded rather than swapped: changing the style retitles the sample
+        // and replaces this sentence, and a hard cut on both is the one frame in
+        // this card that does not move on the token it is describing.
+        Crossfade(
+            targetState = settings.motionStyle,
+            animationSpec = ExpressiveMotion.FastEffects,
+            label = "motion_description"
+        ) { style ->
+            Text(
+                text = motionDescription(style),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // The picker and the phone disagree whenever the platform's animation
+        // scale is zero: the choice below is still stored, but the app is
+        // drawing every token as `snap()`. Saying so is the difference between
+        // "this setting is broken" and "this phone asked for no motion".
+        //
+        // `areAnimatorsEnabled` is a plain static read, not snapshot state, so it
+        // has to sit behind the resumed state to be re-read when the reader comes
+        // back from the system's Developer Options screen. Without that the notice
+        // could stay on screen after they turned animations back on.
+        val resumed = rememberIsResumed()
+        val systemAnimationsEnabled = remember(resumed) { ValueAnimator.areAnimatorsEnabled() }
+        if (!systemAnimationsEnabled) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Your phone's animations are turned off, so AniSequel is " +
+                    "staying still. Your style is kept for when they are back on.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -178,11 +211,19 @@ private fun MotionChip(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)
+            // 48dp rather than the 38dp the padding alone gives: five chips in a
+            // wrapping row are the page's whole motion decision, so they are a
+            // primary target and not a tag cluster.
+            .defaultMinSize(minHeight = 48.dp)
             // Same press physics as every other control in the app; the chips are
             // not inside a scroll, so the fallback pointer loop cannot spring under
             // a scrolling thumb.
             .bouncyPress(pressedScale = 0.94f)
-            .clickable(onClick = onClick)
+            .clickable(
+                onClickLabel = "Use the $label motion style",
+                role = Role.RadioButton,
+                onClick = onClick
+            )
             .semantics {
                 this.selected = selected
                 role = Role.RadioButton
@@ -242,7 +283,12 @@ private fun MotionSample(style: MotionStyle) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable { replay++ }
+            // A tap target with no role is announced as "text" on some readers
+            // and skipped on others. It is a replay button, so it says so.
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Replay the ${style.displayName} motion sample"
+            ) { replay++ }
             .testTag("motion_preview")
     ) {
         BoxWithConstraints(

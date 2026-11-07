@@ -83,7 +83,7 @@ data class ThemePalette(
                 outline = DarkBorder,
                 outlineVariant = Color(0xFF24333F),
                 scrim = Color(0xFF000000)
-            )
+            ).withBrandDarkNeutralLadder()
         )
 
         val MATCHA: ThemePalette = ThemePalette(
@@ -131,7 +131,7 @@ data class ThemePalette(
                 outline = DarkBorder,
                 outlineVariant = Color(0xFF24333F),
                 scrim = Color(0xFF000000)
-            )
+            ).withBrandDarkNeutralLadder()
         )
 
         val JUBITER: ThemePalette = ThemePalette(
@@ -179,7 +179,7 @@ data class ThemePalette(
                 outline = DarkBorder,
                 outlineVariant = Color(0xFF24333F),
                 scrim = Color(0xFF000000)
-            )
+            ).withBrandDarkNeutralLadder()
         )
 
         val AMBER: ThemePalette = ThemePalette(
@@ -227,7 +227,7 @@ data class ThemePalette(
                 outline = DarkBorder,
                 outlineVariant = Color(0xFF24333F),
                 scrim = Color(0xFF000000)
-            )
+            ).withBrandDarkNeutralLadder()
         )
 
         val CYBER_JADE: ThemePalette by lazy {
@@ -311,6 +311,42 @@ data class ThemePalettePreview(
     val primary: Color,
     val primaryContainer: Color,
     val secondary: Color
+)
+
+/**
+ * Completes a hand-authored dark scheme's neutral roles.
+ *
+ * The four static palettes spell out their accents and the handful of surfaces
+ * they were written with, and leave the rest to `darkColorScheme`. Those defaults
+ * are not "unset": they are Material's purple-grey baseline, so `surfaceVariant`,
+ * `onSurfaceVariant`, `surfaceDim`, `surfaceBright`, `inverseSurface` and the
+ * lowest container kept a visible purple cast under Sakura, Matcha, Jupiter and
+ * Sunset. Filling the whole neutral ladder from the brand scheme is the dark
+ * counterpart of [paletteLight], and it means a future palette cannot forget a
+ * role either.
+ *
+ * Accent roles are deliberately not touched here: each palette owns those, and
+ * this only decides what the cards, borders and sheets around them look like.
+ */
+private fun ColorScheme.withBrandDarkNeutralLadder(): ColorScheme = copy(
+    background = DarkColorScheme.background,
+    onBackground = DarkColorScheme.onBackground,
+    surface = DarkColorScheme.surface,
+    onSurface = DarkColorScheme.onSurface,
+    surfaceVariant = DarkColorScheme.surfaceVariant,
+    onSurfaceVariant = DarkColorScheme.onSurfaceVariant,
+    surfaceContainerLowest = DarkColorScheme.surfaceContainerLowest,
+    surfaceContainerLow = DarkColorScheme.surfaceContainerLow,
+    surfaceContainer = DarkColorScheme.surfaceContainer,
+    surfaceContainerHigh = DarkColorScheme.surfaceContainerHigh,
+    surfaceContainerHighest = DarkColorScheme.surfaceContainerHighest,
+    surfaceDim = DarkColorScheme.surfaceDim,
+    surfaceBright = DarkColorScheme.surfaceBright,
+    inverseSurface = DarkColorScheme.inverseSurface,
+    inverseOnSurface = DarkColorScheme.inverseOnSurface,
+    outline = DarkColorScheme.outline,
+    outlineVariant = DarkColorScheme.outlineVariant,
+    scrim = DarkColorScheme.scrim
 )
 
 /**

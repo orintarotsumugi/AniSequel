@@ -276,8 +276,11 @@ private fun PaletteCard(
                         listOf(palette.dark.primary, palette.light.primary, palette.dark.secondary)
                     )
                 )
+                // One width, animated colour. The selected state is fully carried
+                // by [borderColor]; growing the stroke resized the card by a pixel
+                // and could not crossfade.
                 .border(
-                    width = if (selected) 2.dp else 1.dp,
+                    width = 1.5.dp,
                     color = borderColor,
                     shape = swatchShape
                 ),
@@ -331,16 +334,20 @@ private fun HueChip(
     } else {
         Color.White
     }
+    // Constant ring, animated colour: a selected hue used to thicken the border,
+    // which made a 44dp control 46dp and moved the chips beside it.
+    val ring by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.outlineVariant,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "hue_chip_ring"
+    )
 
     Surface(
         shape = CircleShape,
         color = color,
         tonalElevation = if (isSelected) 6.dp else 1.dp,
-        border = BorderStroke(
-            width = if (isSelected) 2.dp else 1.dp,
-            color = if (isSelected) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.outlineVariant
-        ),
+        border = BorderStroke(width = 1.5.dp, color = ring),
         modifier = Modifier
             .size(44.dp)
             .bouncyPress(pressedScale = 0.88f)

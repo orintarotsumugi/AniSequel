@@ -8,6 +8,7 @@ import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
+import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.RelationKind
@@ -15,6 +16,7 @@ import com.anisequel.data.model.SequelSortOption
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StatusFilter
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
 import com.anisequel.data.repository.AniListRepository
@@ -398,6 +400,19 @@ class DashboardViewModel(
     private var recentActivitySource: MediaListCollection? = null
 
     /**
+     * The three library entries Settings' card preview draws, and the collection
+     * they were taken from.
+     *
+     * The same memo shape as the counters above, and for the same reason:
+     * [recompute] runs on every keystroke in the search box, and walking a
+     * thousand-entry list to pick three cards on each one would be work done for a
+     * screen that is not even open. Identity, not equality: a refresh replaces the
+     * collection, and that is exactly when the preview should change.
+     */
+    private var cardPreviewCache: List<MediaListEntryItem> = emptyList()
+    private var cardPreviewSource: MediaListCollection? = null
+
+    /**
      * Ids whose one-off detail query is in flight.
      *
      * Kept out of [DashboardUiState.Success] deliberately: a detail arriving
@@ -720,6 +735,7 @@ class DashboardViewModel(
         // poster loads - from being composed at all, not by skipping this.
         val arriving = arrivingEntries(collection)
         val recentActivity = recentActivity(collection)
+        val cardPreview = cardPreviewEntries(collection)
 
         val updated = filteredVisible.map { found ->
             val entry = withCachedDetail(found)
@@ -759,7 +775,8 @@ class DashboardViewModel(
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
-            canWriteToAniList = canWriteToAniList
+            canWriteToAniList = canWriteToAniList,
+            cardPreview = cardPreview
         )
     }
 
@@ -875,6 +892,35 @@ class DashboardViewModel(
         )
         recentActivitySource = collection
         recentActivityCache = computed
+        return computed
+    }
+
+    /**
+     * Three of the viewer's own entries for the card-style preview in Settings.
+     *
+     * Scored entries come first because the preview exists to show where a rating
+     * lands: three unscored titles would make four of the five styles look the
+     * same. Artwork is required for the same reason - a tint cannot show whether a
+     * style's title overlay is legible over a real cover. Recency is the tie-break,
+     * so the cards are ones the reader has touched rather than an arbitrary head of
+     * the list.
+     */
+    private fun cardPreviewEntries(collection: MediaListCollection): List<MediaListEntryItem> {
+        if (cardPreviewSource === collection) return cardPreviewCache
+        val computed = collection.lists.orEmpty()
+            .flatMap { group -> group.entries.orEmpty() }
+            .filter { entry -> entry.media.posterUrl != null }
+            .distinctBy { entry -> entry.media.id }
+            .sortedWith(
+                compareByDescending<MediaListEntryItem> { entry ->
+                    // `> 0`, matching the badge the Library grid draws: an
+                    // average of zero is an unrated title, not a scored one.
+                    (entry.media.averageScore ?: 0) > 0
+                }.thenByDescending { entry -> entry.updatedAt ?: 0 }
+            )
+            .take(3)
+        cardPreviewSource = collection
+        cardPreviewCache = computed
         return computed
     }
 

@@ -34,6 +34,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -188,7 +189,16 @@ fun ExpressivePolygonSegmentedBar(
     options: List<SegmentedOption>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * False for a picker the current state makes irrelevant.
+     *
+     * The caller already dims the control with `alpha`; this is the other half.
+     * A dimmed segment still had a click action and a radio role, so TalkBack
+     * offered a choice whose callback did nothing. `clickable(enabled = false)`
+     * removes the action and [disabled] tells the reader why it is unavailable.
+     */
+    enabled: Boolean = true
 ) {
     // A segmented choice moves a filled pill across the bar; without a tick the
     // only evidence of the tap is an animation already in progress. This is the
@@ -208,6 +218,7 @@ fun ExpressivePolygonSegmentedBar(
     ) {
         options.forEachIndexed { index, option ->
             val selected = index == selectedIndex
+            val interactionSource = remember { MutableInteractionSource() }
 
             val container by animateColorAsState(
                 targetValue = if (selected) {
@@ -237,19 +248,25 @@ fun ExpressivePolygonSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(44.dp)
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }
                     .clip(ExpressiveShapes.pillSoft)
                     .background(container)
-                    .clickable {
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        enabled = enabled
+                    ) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     }
                     .semantics {
                         this.selected = selected
                         role = Role.RadioButton
+                        if (!enabled) disabled()
                     }
                     .testTag("${EXPRESSIVE_TAG}polygon_segment_${option.label}"),
                 horizontalArrangement = Arrangement.Center,
@@ -314,6 +331,7 @@ fun ExpressiveSegmentedBar(
     ) {
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
+            val interactionSource = remember { MutableInteractionSource() }
             val scale by animateFloatAsState(
                 targetValue = if (selected) 1f else 0.96f,
                 animationSpec = ExpressiveMotion.SelectionScale,
@@ -356,13 +374,17 @@ fun ExpressiveSegmentedBar(
                 modifier = Modifier
                     .weight(1f)
                     .height(38.dp)
+                    .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
                     }
                     .clip(shape)
                     .background(containerColor)
-                    .clickable {
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
                     }
@@ -406,7 +428,18 @@ fun ExpressiveStateChip(
     selectedContainerColor: Color = MaterialTheme.colorScheme.primaryContainer,
     contentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     selectedContentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer,
-    minTouchTargetHeight: Dp = 0.dp
+    minTouchTargetHeight: Dp = 0.dp,
+    /**
+     * The choice model the screen reader announces.
+     *
+     * `Checkbox` is the default because most callers are filters, where several
+     * chips can be on at once. A picker where exactly one chip is active (the
+     * card-style picker in Settings) passes `RadioButton`, or the reader hears
+     * "checked" about a choice that cannot be unchecked.
+     */
+    role: Role = Role.Checkbox,
+    /** What the tap will do, for a chip whose label is only a name. */
+    onClickLabel: String? = null
 ) {
     val background by animateColorAsState(
         targetValue = if (selected) selectedContainerColor else containerColor,
@@ -429,8 +462,11 @@ fun ExpressiveStateChip(
         label = "chip_corner_radius"
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
+
     Box(
         modifier = modifier
+            .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -440,13 +476,19 @@ fun ExpressiveStateChip(
             .defaultMinSize(minHeight = minTouchTargetHeight)
             .clip(RoundedCornerShape(cornerRadius))
             .background(background)
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClickLabel = onClickLabel,
+                role = role,
+                onClick = onClick
+            )
             .semantics {
                 // Without this a screen reader heard the filter's name but not
                 // whether it was on, so the only way to tell the active filters
                 // was the colour that changed.
                 this.selected = selected
-                role = Role.Checkbox
+                this.role = role
             }
             .padding(horizontal = 14.dp, vertical = 7.dp)
             .testTag("${EXPRESSIVE_TAG}chip_$label"),

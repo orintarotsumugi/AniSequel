@@ -93,19 +93,33 @@ private val GINKGO_PALETTES = listOf(
     ParticlePalette(Color(0xFFE3BC3B), Color(0xFFF8EA9B), Color(0xFFB28A1E))
 )
 
-/** The palette one variant of one shape is drawn from. */
-internal fun particlePalette(effect: SeasonalEffect, variant: Int): ParticlePalette {
-    val palettes = when (effect) {
-        SeasonalEffect.SNOW -> SNOW_PALETTES
-        SeasonalEffect.POWDER -> POWDER_PALETTES
-        SeasonalEffect.CRYSTAL -> CRYSTAL_PALETTES
-        SeasonalEffect.NEEDLE -> NEEDLE_PALETTES
-        SeasonalEffect.SAKURA -> SAKURA_PALETTES
-        SeasonalEffect.CLOVER -> CLOVER_PALETTES
-        SeasonalEffect.DANDELION -> DANDELION_PALETTES
-        SeasonalEffect.MAPLE -> MAPLE_PALETTES
-        SeasonalEffect.OAK -> OAK_PALETTES
-        SeasonalEffect.GINKGO -> GINKGO_PALETTES
-    }
-    return palettes[((variant % palettes.size) + palettes.size) % palettes.size]
+/**
+ * The palette list for one effect.
+ *
+ * Resolved once per layer and passed through the draw loop: the per-particle
+ * function below is still the right call for the pile and the Settings glyph, but
+ * the sky was paying for its `when` and modulo once per particle per frame for a
+ * list that depends only on the chosen shape.
+ */
+internal fun particlePalettes(effect: SeasonalEffect): List<ParticlePalette> = when (effect) {
+    SeasonalEffect.SNOW -> SNOW_PALETTES
+    SeasonalEffect.POWDER -> POWDER_PALETTES
+    SeasonalEffect.CRYSTAL -> CRYSTAL_PALETTES
+    SeasonalEffect.NEEDLE -> NEEDLE_PALETTES
+    SeasonalEffect.SAKURA -> SAKURA_PALETTES
+    SeasonalEffect.CLOVER -> CLOVER_PALETTES
+    SeasonalEffect.DANDELION -> DANDELION_PALETTES
+    SeasonalEffect.MAPLE -> MAPLE_PALETTES
+    SeasonalEffect.OAK -> OAK_PALETTES
+    SeasonalEffect.GINKGO -> GINKGO_PALETTES
 }
+
+/** The palette at [variant]'s index, folded for negative values. */
+internal fun paletteAt(palettes: List<ParticlePalette>, variant: Int): ParticlePalette {
+    val index = variant % palettes.size
+    return palettes[if (index < 0) index + palettes.size else index]
+}
+
+/** The palette one variant of one shape is drawn from. */
+internal fun particlePalette(effect: SeasonalEffect, variant: Int): ParticlePalette =
+    paletteAt(particlePalettes(effect), variant)

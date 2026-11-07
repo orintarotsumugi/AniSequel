@@ -189,13 +189,15 @@ internal fun AnimeColourSection(
             },
             modifier = Modifier
                 .alpha(if (tintEnabled) 1f else 0.4f)
-                .testTag("anime_retained_tint_row")
+                .testTag("anime_retained_tint_row"),
+            enabled = tintEnabled
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Full keeps the sheet's whole background. Subtle keeps the " +
-                "show's colour in the accent and buttons while your palette keeps " +
-                "the surface. The sheet itself always uses the full tint.",
+            text = "Full keeps the sheet's whole background. Balanced moves the " +
+                "surface ramp halfway toward the show's colour; Subtle keeps it " +
+                "mostly in the accent and buttons with only a hint in the " +
+                "background. The sheet itself always uses the full tint.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -228,7 +230,8 @@ internal fun AnimeColourSection(
             },
             modifier = Modifier
                 .alpha(if (revertEnabled) 1f else 0.4f)
-                .testTag("anime_theme_revert_duration_row")
+                .testTag("anime_theme_revert_duration_row"),
+            enabled = revertEnabled
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(

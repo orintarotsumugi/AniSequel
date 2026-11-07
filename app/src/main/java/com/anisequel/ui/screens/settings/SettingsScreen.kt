@@ -4,8 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.ApiReachability
 import com.anisequel.data.network.ApiStatusSnapshot
@@ -121,10 +124,19 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
  * The motion is a short horizontal push instead of a scale. A page that opens is
  * a level deeper, and a scale says "nearer" about both a page and its backdrop;
  * a push says which way the stack goes, so the back arrow and the animation now
- * tell the same story. Only two levels exist, so the direction is simply "into a
- * page" (new content from the end, hub leaving towards the start) or "out of
- * one" (the reverse), and the reversal is immediate rather than another flag to
- * keep in sync.
+ * tell the same story.
+ *
+ * Going back is deliberately *not* that push reversed. A pop drops the page off
+ * the bottom edge as it fades while the shelf returns in place: the page is a
+ * sheet being lifted away, not a second card sliding in from the opposite side.
+ * Reversing the horizontal pair made Back look like another push that happened
+ * to be going the other way, which is the one thing a back gesture must never
+ * look like. The shelf still draws its own hover-free surface underneath, so
+ * there is never a blank frame between the two.
+ *
+ * Both halves read the shared motion tokens, so the drop becomes `snap()` under
+ * `MotionStyle.INSTANT` and loses its scale under `SMOOTH` without this file
+ * needing a second switch.
  */
 @Composable
 fun SettingsScreen(
@@ -188,7 +200,13 @@ fun SettingsScreen(
     onNavigateToLogin: () -> Unit = {},
     totalWatchedCount: Int? = null,
     totalMissedCount: Int? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Up to three of the reader's entries for the Interface page's card preview.
+     * Empty is honest: demo mode has no list, and Settings can be opened before
+     * Home's first load has answered. The preview falls back to its sample titles.
+     */
+    cardPreviewEntries: List<MediaListEntryItem> = emptyList()
 ) {
     var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
@@ -223,17 +241,36 @@ fun SettingsScreen(
             AnimatedContent(
                 targetState = page,
                 transitionSpec = {
+                    // Branched on direction rather than by negating one pair: a
+                    // push travels sideways, a pop drops away. The old single
+                    // pair made Back a second push that happened to run the other
+                    // way, which is not what the gesture means.
                     val opening = targetState != null
-                    (
-                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    if (opening) {
+                        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
                             slideInHorizontally(
                                 animationSpec = ExpressiveMotion.FastSpatialOffset
-                            ) { width -> if (opening) width / 4 else -width / 4 } togetherWith
-                            fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                            ) { width -> width / 4 }
+                        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
                             slideOutHorizontally(
                                 animationSpec = ExpressiveMotion.FastSpatialOffset
-                            ) { width -> if (opening) -width / 4 else width / 4 }
-                        ) using null
+                            ) { width -> -width / 4 }
+                        (enter togetherWith exit) using null
+                    } else {
+                        // The outgoing page falls a tenth of its height and fades;
+                        // the shelf does not slide at all, so only one surface is
+                        // moving and the eye knows which one left.
+                        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                            scaleIn(
+                                initialScale = 0.98f,
+                                animationSpec = ExpressiveMotion.FastSpatial
+                            )
+                        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                            slideOutVertically(
+                                animationSpec = ExpressiveMotion.FastSpatialOffset
+                            ) { height -> height / 10 }
+                        (enter togetherWith exit) using null
+                    }
                 },
                 label = "settings_page_transition",
                 modifier = Modifier
@@ -280,7 +317,8 @@ fun SettingsScreen(
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
-                                    totalMissedCount = totalMissedCount
+                                    totalMissedCount = totalMissedCount,
+                                    cardPreviewEntries = cardPreviewEntries
                                 )
                             }
                         }
@@ -302,9 +340,9 @@ fun SettingsScreen(
  * The shelf.
  *
  * The sections are the reader's questions in order: how it looks, how it behaves,
- * who it is signed in as, whether the network is awake, and what changed. Each
- * row is its own card with a 10dp gap, so a tap that lands between two rows hits
- * the background instead of the wrong setting.
+ * who it is signed in as, whether the network is awake, and what changed. Rows in
+ * one subject share a card and are separated by a hairline, so the gap between two
+ * cards means "different subject" rather than "next row" - see `SettingsHubGroup`.
  */
 @Composable
 private fun SettingsRoot(
@@ -491,13 +529,15 @@ private fun SettingsPageContent(
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
-    totalMissedCount: Int?
+    totalMissedCount: Int?,
+    cardPreviewEntries: List<MediaListEntryItem>
 ) {
     when (page) {
         SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
         SettingsPage.UI -> InterfaceTab(
             themePreferences = themePreferences,
-            interfacePreferences = interfacePreferences
+            interfacePreferences = interfacePreferences,
+            previewEntries = cardPreviewEntries
         )
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)

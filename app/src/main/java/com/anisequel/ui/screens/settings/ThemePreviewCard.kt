@@ -1,18 +1,29 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -33,13 +44,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.StatusColors
 import com.anisequel.ui.theme.ThemePalette
 
 /**
@@ -51,6 +67,7 @@ import com.anisequel.ui.theme.ThemePalette
  * named in a pill. Below the band is the same interactive mockup as before, so
  * the spring physics can be felt before leaving the screen.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThemePreviewCard(
     themeSettings: ThemePreferences.ThemeSettings,
@@ -111,7 +128,10 @@ fun ThemePreviewCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(96.dp)
+                    // A minimum, not a fixed height: two lines of title at the
+                    // reader's largest type size need more than the 96dp the band
+                    // was pinned to, and a pinned band clipped the second line.
+                    .heightIn(min = 96.dp)
                     .background(
                         Brush.linearGradient(listOf(primary, secondary, tertiary))
                     )
@@ -124,7 +144,7 @@ fun ThemePreviewCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -150,26 +170,46 @@ fun ThemePreviewCard(
                             color = Color.White.copy(alpha = 0.92f)
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         shape = RoundedCornerShape(percent = 50),
                         color = Color.White.copy(alpha = 0.22f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f))
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                        // Capped so a long source name cannot leave the title
+                        // column beside it with no width; the label ellipsizes
+                        // instead, and the title still gets the row.
+                        modifier = Modifier.widthIn(max = 148.dp)
                     ) {
                         Text(
                             text = activePaletteName,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
+                            // A retained cover colour makes this label long
+                            // ("Anime, kept (#1A2B3C)"). Capped rather than
+                            // allowed to squeeze the title beside it off the row.
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
 
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 // Mockup card
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    // One node, not eight. This is a picture of a card, and its
+                    // two buttons only exist so the press springs can be felt: a
+                    // screen-reader user who found "+ Plan" here would be offered
+                    // an action that plans nothing. The description says what the
+                    // sample is instead.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clearAndSetSemantics {
+                            contentDescription =
+                                "Sample card in the current theme: Frieren, Airing, finished season one. This is a preview only."
+                        },
                     shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     border = BorderStroke(1.dp, primary.copy(alpha = 0.5f))
@@ -237,76 +277,31 @@ fun ThemePreviewCard(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
+                        // Extracted so the hero stays below the cyclomatic
+                        // threshold; each button owns its colour pair and its
+                        // label transition. The two used to cut between four
+                        // colours and two labels on one frame; they now crossfade
+                        // their containers and morph their labels on the same
+                        // tokens as the rest of the app, which is the point of a
+                        // preview: the reader is judging motion as well as colour.
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Button(
+                            PreviewPlanButton(
+                                isPlanned = isPlanned,
+                                primary = primary,
+                                statusColors = statusColors,
                                 onClick = { isPlanned = !isPlanned },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                                    .bouncyPress(pressedScale = 0.94f)
-                                    .testTag("preview_plan_button"),
-                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
-                                colors = if (isPlanned) {
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = statusColors.successContainer,
-                                        contentColor = statusColors.success
-                                    )
-                                } else {
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlanned) AppVectorIcons.BookmarkDone else AppVectorIcons.BookmarkAdd,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isPlanned) "Planned" else "+ Plan",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            OutlinedButton(
+                                modifier = Modifier.weight(1f)
+                            )
+                            PreviewWatchButton(
+                                isWatching = isWatching,
                                 onClick = { isWatching = !isWatching },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp)
-                                    .bouncyPress(pressedScale = 0.94f)
-                                    .testTag("preview_watch_button"),
-                                shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
-                                colors = if (isWatching) {
-                                    ButtonDefaults.outlinedButtonColors(
-                                        containerColor = statusColors.infoContainer,
-                                        contentColor = statusColors.info
-                                    )
-                                } else {
-                                    ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = AppVectorIcons.Play,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = if (isWatching) "Watching" else "Watch",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
@@ -314,11 +309,13 @@ fun ThemePreviewCard(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Role swatches: the five roles the eye reads first, in the
-                // current scheme.
-                Row(
+                // current scheme. A FlowRow, not a fixed Row: five labels at the
+                // reader's largest type size are wider than a phone, and the
+                // SpaceEvenly row this replaced let the last two run off the card.
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     RoleSwatchDot("Primary", primary)
                     RoleSwatchDot("Secondary", secondary)
@@ -326,6 +323,147 @@ fun ThemePreviewCard(
                     RoleSwatchDot("Container", MaterialTheme.colorScheme.primaryContainer)
                     RoleSwatchDot("Surface", MaterialTheme.colorScheme.surface)
                 }
+            }
+        }
+    }
+}
+
+/** The Plan half of the mock card: its own container/content pair and label morph. */
+@Composable
+private fun PreviewPlanButton(
+    isPlanned: Boolean,
+    primary: Color,
+    statusColors: StatusColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val container by animateColorAsState(
+        targetValue = if (isPlanned) statusColors.successContainer else primary,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_plan_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (isPlanned) statusColors.success
+        else MaterialTheme.colorScheme.onPrimary,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_plan_content"
+    )
+
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .height(38.dp)
+            .bouncyPress(pressedScale = 0.94f)
+            .testTag("preview_plan_button"),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = container,
+            contentColor = content
+        )
+    ) {
+        // The label crosses rather than swapping: a filled check arriving as the
+        // word changes is what makes the tap read as one action instead of two.
+        AnimatedContent(
+            targetState = isPlanned,
+            transitionSpec = {
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) togetherWith
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            },
+            // Centred, not the default TopStart: the two labels are slightly
+            // different widths, and left-aligning the box nudged the whole pair.
+            contentAlignment = Alignment.Center,
+            label = "preview_plan_label"
+        ) { planned ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (planned) {
+                        AppVectorIcons.BookmarkDone
+                    } else {
+                        AppVectorIcons.BookmarkAdd
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (planned) "Planned" else "+ Plan",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/** The Watch half of the mock card: outlined until it is active, then filled. */
+@Composable
+private fun PreviewWatchButton(
+    isWatching: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val statusColors = AniSequelTheme.statusColors
+    val container by animateColorAsState(
+        targetValue = if (isWatching) statusColors.infoContainer else Color.Transparent,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_watch_container"
+    )
+    val content by animateColorAsState(
+        targetValue = if (isWatching) statusColors.info
+        else MaterialTheme.colorScheme.onSurface,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "preview_watch_content"
+    )
+
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier
+            .height(38.dp)
+            .bouncyPress(pressedScale = 0.94f)
+            .testTag("preview_watch_button"),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = container,
+            contentColor = content
+        )
+    ) {
+        AnimatedContent(
+            targetState = isWatching,
+            transitionSpec = {
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) togetherWith
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(
+                        targetScale = 0.9f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    )
+            },
+            contentAlignment = Alignment.Center,
+            label = "preview_watch_label"
+        ) { watching ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = AppVectorIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (watching) "Watching" else "Watch",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

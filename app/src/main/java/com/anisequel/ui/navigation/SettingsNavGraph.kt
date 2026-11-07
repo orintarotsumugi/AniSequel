@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.AppLockPreferences
@@ -57,6 +58,14 @@ fun NavGraphBuilder.settingsDestinations(
      */
     totalWatchedCount: Int?,
     totalMissedCount: Int?,
+    /**
+     * Three of the viewer's own entries, for the Interface page's card preview.
+     *
+     * Values rather than the dashboard state, for the same reason as the two
+     * counts above: this graph should not be subscribed to every recompute just
+     * to find out that the same three covers are still there.
+     */
+    cardPreview: List<MediaListEntryItem>,
     signedInViewer: ViewerProfile?
 ) {
     composable(AppRoutes.SETTINGS) {
@@ -78,6 +87,7 @@ fun NavGraphBuilder.settingsDestinations(
             viewer = signedInViewer,
             totalWatchedCount = totalWatchedCount,
             totalMissedCount = totalMissedCount,
+            cardPreviewEntries = cardPreview,
             onNavigateBack = { navController.popBackStack() },
             onNavigateToLogin = {
                 navController.navigate(AppRoutes.LOGIN) {

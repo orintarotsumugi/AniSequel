@@ -137,7 +137,9 @@ data class MaterialScheme(
  * 2. **`tintSurfaces`.** The anime layer wants its backdrop to be the show's
  *    colour; a standing custom accent must not repaint surfaces the user did not
  *    ask to change. When false, the neutral palettes sit on the brand's own
- *    blue-grey hue instead of the seed's.
+ *    blue-grey hue instead of the seed's. When true, `tintStrength` moves that
+ *    neutral ramp between the brand and the seed before the tone ladder samples
+ *    it - the retained theme's Subtle/Balanced/Full choice.
  */
 object MaterialColorSchemes {
 
@@ -210,8 +212,21 @@ object MaterialColorSchemes {
     fun tonalSpot(
         seedArgb: Int,
         dark: Boolean,
-        tintSurfaces: Boolean
+        tintSurfaces: Boolean,
+        /**
+         * How far the neutral palettes lean toward the seed's hue, 0..1.
+         *
+         * 1 is the immersive sheet's backdrop and the existing behaviour; 0 is
+         * the brand's neutral ramp. The retained theme used to generate at 1 and
+         * then lerp two finished schemes in RGB, which produced a surface ramp
+         * that was neither the cover's nor the brand's and could step unevenly
+         * because RGB has no idea that the tones were chosen on a ladder. This
+         * interpolates the *inputs* to the ladder instead, so Subtle and Balanced
+         * get a coherent ramp that is still recognisably from the cover.
+         */
+        tintStrength: Float = 1f
     ): MaterialScheme {
+        val strength = tintStrength.coerceIn(0f, 1f).toDouble()
         val seed = Hct.fromInt(seedArgb)
         val primary = primaryPalette(seed)
         val primaryChroma = primary.chroma
@@ -238,11 +253,26 @@ object MaterialColorSchemes {
             // but a vivid cover at chroma 100 would put the surfaces at 12.5 and
             // turn `surfaceContainerHighest` into a pastel card instead of a grey
             // one, so the tint is capped where it stops reading as a backdrop.
-            (primaryChroma / 8.0).coerceIn(MIN_TINTED_NEUTRAL_CHROMA, MAX_TINTED_NEUTRAL_CHROMA)
+            lerpDouble(
+                BRAND_NEUTRAL_CHROMA,
+                (primaryChroma / 8.0).coerceIn(
+                    MIN_TINTED_NEUTRAL_CHROMA,
+                    MAX_TINTED_NEUTRAL_CHROMA
+                ),
+                strength
+            )
         } else {
             BRAND_NEUTRAL_CHROMA
         }
-        val neutralHue = if (tintSurfaces) hue else BRAND_HUE
+        val neutralHue = if (tintSurfaces) {
+            // Shortest arc, not a raw difference: the seed at 350 degrees and the
+            // brand at 211 should meet around 280, not travel through green
+            // because 211 - 350 is negative.
+            val delta = ((BRAND_HUE - hue + 540.0) % 360.0) - 180.0
+            ColorMath.sanitizeDegrees(hue + delta * (1.0 - strength))
+        } else {
+            BRAND_HUE
+        }
         val neutral = TonalPalette(neutralHue, neutralChroma)
         val neutralVariant = TonalPalette(neutralHue, neutralChroma + 4.0)
 
@@ -252,6 +282,9 @@ object MaterialColorSchemes {
             lightScheme(primary, secondary, tertiary, error, neutral, neutralVariant)
         }
     }
+
+    private fun lerpDouble(from: Double, to: Double, fraction: Double): Double =
+        from + (to - from) * fraction
 
     private fun lightScheme(
         primary: TonalPalette,
