@@ -5,17 +5,27 @@ package com.anisequel.domain.gif
  *
  * ## Why more than one
  *
- * The default is Klipy: it is a *general* catalogue - reaction GIFs, spoken-word
- * phrases, the shapes an anime comment actually makes - and the app carries a key
- * for it, so it answers out of the box (see
- * `data/network/BundledGifKeys.kt` for why a shared key ships and what it costs).
- * Before 2026 the unkeyed default would have been Tenor, whose public API is gone.
- * Safebooru is the fallback tag index: it answers `holo crying` and nothing that a
- * reader typed as a sentence. GIPHY is the second general catalogue, and it is
- * keyed-only: a reader brings a beta key for it, because a general catalogue that
- * leaves the key to the reader is exactly what made the substitute Tenor became.
- * nekos.best is a second keyless index for the reaction categories anime comments
- * use most.
+ * The default is Gifukai: it is keyless, safe by construction (every GIF is
+ * hand-picked, anime-only, near-16:9), and shaped like the reactions an anime
+ * comment actually makes - one endpoint per reaction (`hug`, `pat`, `cry`, ...),
+ * each answering a random hand-picked scene that carries its anime's name. What
+ * it cannot do is answer free text the way Klipy or Safebooru can, so the picker
+ * spells what it *does* answer with suggestion chips specific to it, and its
+ * refusal says where to take a sentence instead. See `data/network/GifukaiGifs`.
+ *
+ * Klipy is the general catalogue: reaction GIFs, spoken-word phrases, whatever a
+ * reader types - and the app carries a key for it, so it answers out of the box
+ * too (see `data/network/BundledGifKeys.kt` for why a shared key ships and what
+ * it costs). Before Gifukai it was the default; before that, the unkeyed default
+ * would have been Tenor, whose public API is gone.
+ *
+ * Safebooru is the fallback tag index: it answers `holo crying` and nothing a
+ * reader typed as a sentence, and it is the last resort of the substitution
+ * ladder in `data/network/gifSearchApiFor`. GIPHY is the second general
+ * catalogue, and it is keyed-only: a reader brings a beta key for it, because a
+ * general catalogue that leaves the key to the reader is exactly what made the
+ * substitute Tenor became. nekos.best is a second keyless index for the reaction
+ * categories anime comments use most.
  *
  * ## Why the key is per-provider
  *
@@ -47,6 +57,17 @@ enum class GifProvider(
     NEKOS_BEST(
         storageValue = "nekos_best",
         displayName = "nekos.best",
+        needsKey = false,
+        keyLabel = "",
+        keyHint = ""
+    ),
+    GIFUKAI(
+        storageValue = "gifukai",
+        displayName = "Gifukai",
+        // Keyless: the whole point of the default. Its limit is not a credential
+        // but a vocabulary - it answers reactions, not sentences - and that limit
+        // is stated in the client's refusal and played around in the picker's
+        // chips, not asked to be registered away.
         needsKey = false,
         keyLabel = "",
         keyHint = ""
@@ -89,7 +110,7 @@ enum class GifProvider(
         klipyKey: String?,
         giphyKey: String?
     ): String? = when (this) {
-        SAFEBOORU, NEKOS_BEST -> null
+        SAFEBOORU, NEKOS_BEST, GIFUKAI -> null
         TENOR -> tenorKey
         KLIPY -> klipyKey
         GIPHY -> giphyKey
@@ -97,14 +118,18 @@ enum class GifProvider(
 
     companion object {
         /**
-         * Klipy is the default: it is a general catalogue and it answers on the
-         * app's own key, so no reader has to register anywhere before their first
-         * search. Safebooru used to be the default and remains the tag index and
-         * the last resort of the substitution ladder in
-         * [com.anisequel.data.network.gifSearchApiFor] - a general catalogue that
-         * leaves its reader to find a key was what the retired Tenor became.
+         * Gifukai is the default: keyless, safe by construction, and shaped like
+         * the reactions an anime comment makes - the one index whose answer set
+         * matched where the picker is actually opened from. Its free-text hole is
+         * its own UI problem (chips, a stated refusal), not a reader's
+         * registration problem. Klipy, the previous default, answers on the app's
+         * own key and remains the general catalogue behind it; Safebooru is the
+         * tag index and the substitution ladder's last resort in
+         * [com.anisequel.data.network.gifSearchApiFor]. The line every default
+         * has had to hold since a retired Tenor: one that answers without asking
+         * the reader for anything first.
          */
-        val DEFAULT = KLIPY
+        val DEFAULT = GIFUKAI
 
         /** The providers offered on the Settings page, keyless ones first. */
         val selectable: List<GifProvider> = entries.sortedBy { it.needsKey }

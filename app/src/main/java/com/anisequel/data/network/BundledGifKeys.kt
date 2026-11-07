@@ -3,13 +3,13 @@ package com.anisequel.data.network
 /**
  * The Klipy key AniSequel ships with.
  *
- * Klipy is the default GIF index because, of the general catalogues left after
- * Tenor's public API retired in 2026, it is the one whose key is free and whose
- * answers map onto the picker's needs (see the header of [GifProviders]). Carrying
- * one key in the app rather than asking every reader to register at
- * partner.klipy.com is what makes that default real: [GifProvider.DEFAULT] would
- * otherwise be a search that refuses until a credential is pasted, which is the
- * trap a retired Tenor already set once (see [GifProvider.TENOR]'s key hint).
+ * Klipy is no longer the default - that seat belongs to Gifukai, which is keyless
+ * by construction (see [GifProvider.DEFAULT]) - but it is the general catalogue
+ * the default sends readers to when they type a sentence, and it still answers on
+ * this key without asking the reader to register (see the factory in
+ * [gifSearchApiFor]). Carrying one key rather than asking every reader to register
+ * at partner.klipy.com is what makes that hand-off seamless; [GifProvider.KLIPY]'s
+ * own `needsKey` is false for exactly this reason.
  *
  * ## The tradeoff a reader should know about
  *

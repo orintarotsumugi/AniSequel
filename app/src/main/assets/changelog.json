@@ -4,8 +4,12 @@
       "version": "1.8.7",
       "entries": [
         {
-          "title": "Klipy ships with the app's key and is the default GIF index",
-          "detail": "The default search used to be Safebooru, a tag index that cannot answer a sentence-typed reaction, and general indexes had to be unlocked with a key each reader registered for - after Tenor's public API retired in 2026 that choice kept failing the same way. Klipy is the default now, and the app carries a working key for it, so GIF search answers out of the box. A key of your own pasted in Settings still replaces the bundled one for as long as it is saved, and clearing the field returns to the bundled key rather than to a refusal."
+          "title": "Gifukai is the default GIF index, and the picker knows what it can answer",
+          "detail": "GIF search now defaults to Gifukai (api.gifukai.com): keyless, anime-only, and safe by construction, with one hand-picked reaction scene per action - each carrying the anime's name - so the first search answers without a credential and without a tag vocabulary to learn. Its limit is the limit that matters: it answers reactions, not free text. The picker's suggestion chips now name that index's own vocabulary (Gifukai's reaction actions, or the measured tags the others carry), the booru \"Series\" chips appear only on Safebooru, and a single-scene answer gains a \"Shuffle for another one\" re-roll - Gifukai has no pages, so the same word drawing the same cached tile used to read as \"there is exactly one hug\"."
+        },
+        {
+          "title": "Klipy still answers on the app's key, and other providers stay",
+          "detail": "Klipy, GIPHY, Tenor, Safebooru and nekos.best remain exactly as they were. Klipy no longer sits in the default seat, but the app still carries its key so it answers a free-text search without registration, and a key of your own pasted in Settings still replaces the bundled one for as long as it is saved. The default's free-text hole hands a reader to Klipy or Safebooru by name rather than to an empty grid."
         },
         {
           "title": "Comment keystore work left the frame thread",

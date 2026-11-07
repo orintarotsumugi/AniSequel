@@ -57,11 +57,11 @@ class MediaPreferencesTest {
         assertTrue(settings.pollForNewComments)
         assertNull("no third-party key is stored unless the reader pasted one", settings.tenorApiKey)
         assertEquals(
-            "the default index answers on the app's own key, so it is chosen",
+            "the default index is keyless and safe by construction, so it answers on nothing",
             GifProvider.DEFAULT,
             settings.gifProvider
         )
-        assertEquals("the default is Klipy, a general catalogue", GifProvider.KLIPY, GifProvider.DEFAULT)
+        assertEquals("the default is Gifukai, a reaction index", GifProvider.GIFUKAI, GifProvider.DEFAULT)
     }
 
     @Test
@@ -182,8 +182,8 @@ class MediaPreferencesTest {
             settings.gifProvider
         )
         assertEquals(
-            "but a search has to go somewhere that answers - the default (Klipy) " +
-                "carries the app's own key, so the fallback is itself a working search",
+            "but a search has to go somewhere that answers - the default (Gifukai) " +
+                "is keyless, so the fallback is itself a working search",
             GifProvider.DEFAULT,
             settings.resolvedGifProvider
         )

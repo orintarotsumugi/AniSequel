@@ -91,10 +91,10 @@ data class CommentMediaSettings(
      *
      * A keyed provider with no key is a search that can only fail, so it falls back
      * to the shipped default rather than showing an error under the search field
-     * before the reader has typed anything. Since the bundled-key change
-     * ([GifProvider.DEFAULT] is Klipy and the app carries a key for it) the fallback
-     * is itself a search that answers. The stored choice is kept, so pasting the key
-     * later resumes the provider the reader picked.
+     * before the reader has typed anything. [GifProvider.DEFAULT] has always been
+     * an index that answers on nothing (Gifukai now, the bundled-key Klipy before
+     * it), so the fallback is itself a search that answers. The stored choice is
+     * kept, so pasting the key later resumes the provider the reader picked.
      */
     val resolvedGifProvider: GifProvider
         get() = if (gifProvider.needsKey && activeGifKey.isNullOrBlank()) {

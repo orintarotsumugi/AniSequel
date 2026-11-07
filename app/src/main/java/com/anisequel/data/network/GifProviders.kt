@@ -19,12 +19,16 @@ import okhttp3.Request
  * losing a credential silently is worse than a search that says why it failed - but
  * it is no longer the default answer, and the client says so when Google refuses.
  *
- * - **Klipy** is the closest thing to a drop-in replacement: a key in the URL path,
- *   page-numbered results, and `file.hd` / `file.sm` copies that map cleanly onto a
- *   grid tile and a comment embed. It is the default index: the app ships a key for
- *   it (see the class doc of [BundledGifKeys]) so [GifProvider.DEFAULT] answers
- *   without asking the reader to register anywhere, and a reader's pasted key
- *   replaces the bundled one.
+ * - **Gifukai** is the default: keyless, anime-only, hand-picked and safe by
+ *   construction. One random reaction scene per action endpoint (`/v1/hug`, ...) -
+ *   "search" is a word-to-action match, there is no paging, and a second ask
+ *   re-rolls the same reaction. See [GifukaiGifs].
+ * - **Klipy** is the closest thing to a drop-in general catalogue: a key in the URL
+ *   path, page-numbered results, and `file.hd` / `file.sm` copies that map cleanly
+ *   onto a grid tile and a comment embed. It is what the default hands a sentence
+ *   to: the app ships a key for it (see the class doc of [BundledGifKeys]) so it
+ *   answers without asking the reader to register anywhere, and a reader's pasted
+ *   key replaces the bundled one.
  * - **GIPHY** is the name everybody already knows. A new key is a beta key at 100
  *   calls an hour, and its `images.*.width` fields are **strings**, which is why the
  *   model keeps them as strings and parses on the way out. Its terms also require
@@ -560,6 +564,7 @@ fun gifSearchApiFor(
     return when (provider) {
         GifProvider.SAFEBOORU -> SafebooruGifs()
         GifProvider.NEKOS_BEST -> NekosBestGifs()
+        GifProvider.GIFUKAI -> GifukaiGifs()
         GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
             ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 

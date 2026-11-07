@@ -19,12 +19,18 @@ import okhttp3.Request
  *   `animated_gif` at `rating:safe`, its catalogue is anime, and it needs no
  *   account. See [SafebooruGifs] and [booruTiers] for how a sentence becomes three
  *   tag spellings one search is asked as.
- * - **nekos.best** is the second keyless index. It is small and reaction-shaped
+ * - **nekos.best** is a keyless index. It is small and reaction-shaped
  *   (`hug`, `pat`, `wave`), and it needs a User-Agent that names the app. See
  *   [NekosBestGifs].
- * - **Klipy** is the default: a key in the path, page-numbered results, and
- *   `file.hd` / `file.sm` copies. It answers on the app's own key - see below - and
- *   a reader's pasted key replaces that one. See [KlipyGifs].
+ * - **Gifukai** is the default: keyless, anime-only, hand-picked and safe by
+ *   construction, one random reaction scene per action endpoint. "Search" here is
+ *   a word→action match, its one-result answer re-rolls rather than pages, and
+ *   its free-text hole is stated in the refusal and played around in the picker's
+ *   chips. See [GifukaiGifs].
+ * - **Klipy** is the general catalogue behind it: a key in the path,
+ *   page-numbered results, and `file.hd` / `file.sm` copies. It answers on the
+ *   app's own key - see below - and a reader's pasted key replaces that one. See
+ *   [KlipyGifs].
  * - **GIPHY** is the name everyone expects. Every new key is a beta key capped at
  *   100 calls an hour, its dimensions are JSON **strings**, and its terms forbid
  *   mixing its results into a grid with another provider's. See [GiphyGifs].
@@ -33,20 +39,25 @@ import okhttp3.Request
  *
  * ## One key is bundled, and that is a decision with a cost
  *
- * When Tenor's API retired, a key was deliberately *not* bundled: the anonymous
- * default (Safebooru) was what let somebody search without handing over a
- * credential, and a committed key is one rate limit shared by every install plus a
- * secret in a public repository. It stayed that way while Safebooru was the default.
+ * When Tenor's API retired, no key was bundled: the anonymous default (Safebooru)
+ * was what let somebody search without handing over a credential, and a committed
+ * key is one rate limit shared by every install plus a secret in a public
+ * repository.
  *
- * Klipy becoming the default is what changed the balance. A default that cannot
- * answer is a trap the app fell into exactly once, with a retired Tenor - so either
- * the default asks the reader for a credential or the app carries one. Klipy's key
- * is free, the bundled one is a search quota and nothing else (nothing can be
- * charged to it, no reader data travels with a request), and the reader's own key
- * still wins when one is saved. The tradeoff stands and is recorded in
- * [BundledGifKeys]: decompiled, the key is readable; slow, the shared quota spends
- * faster than a private one would. Both symptoms surface as Klipy's own failure
- * sentences, never as a silent empty grid.
+ * Klipy becoming the default changed that balance: a default that cannot answer
+ * is a trap the app fell into exactly once, with a retired Tenor, and either the
+ * default asks the reader for a credential or the app carries one. Klipy's key is
+ * free, the bundled one is a search quota and nothing else, and the reader's own
+ * key still wins when one is saved. The tradeoff stands and is recorded in
+ * [BundledGifKeys].
+ *
+ * Gifukai taking over as the default dissolved the tradeoff rather than adding to
+ * it: the default is now keyless by construction (like Safebooru and nekos.best),
+ * and the bundled Klipy key is no longer load-bearing for it - it is what keeps
+ * Klipy, still the general catalogue the default's refusal sends readers to,
+ * answering without a credential. Both symptoms of the shared key - a decompiled
+ * key, a faster-spending quota - surface as Klipy's own failure sentences, never
+ * as a silent empty grid.
  *
  * ## What was measured and rejected
  *

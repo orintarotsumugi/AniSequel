@@ -395,12 +395,15 @@ private fun CommentMediaCard(context: android.content.Context) {
                 "there looks fine in this app and shows as a broken image on the site. " +
                 "All three are public: anybody with the link can view the file, and " +
                 "none can delete it without an account. GIF search runs against the " +
-                "index chosen below. Safebooru and nekos.best need no key and ask for " +
-                "safe anime GIFs only; Klipy is the default and the app carries a key " +
-                "for it, so it answers without one from you (paste a key of your own " +
-                "to use your own quota instead of the shared one). GIPHY and Tenor " +
-                "take a key you supply, and each key is stored on this device under " +
-                "its own encrypted entry.",
+                "index chosen below. Gifukai is the default: it needs no key and " +
+                "carries hand-picked anime reactions only, one per reaction word - " +
+                "the picker's suggestion chips name them all. Safebooru and " +
+                "nekos.best need no key either and ask for safe anime GIFs only; " +
+                "Klipy is the general catalogue and the app carries a key for it, " +
+                "so it answers without one from you (paste a key of your own to use " +
+                "your own quota instead of the shared one). GIPHY and Tenor take a " +
+                "key you supply, and each key is stored on this device under its " +
+                "own encrypted entry.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -444,8 +447,7 @@ private fun CommentMediaCard(context: android.content.Context) {
                         "you, so searches start as soon as you open the picker."
                 currentKey.isNullOrBlank() ->
                     "${settings.gifProvider.displayName} needs a key. Searches fall " +
-                        "back to Klipy - the app's own key works there - until one is " +
-                        "saved below."
+                        "back to Safebooru until one is saved below."
                 else -> "Searches go to ${settings.gifProvider.displayName}."
             },
             style = MaterialTheme.typography.bodySmall,
@@ -473,7 +475,7 @@ private fun CommentMediaCard(context: android.content.Context) {
                             GifProvider.TENOR -> preferences.setTenorApiKey(key)
                             GifProvider.KLIPY -> preferences.setKlipyApiKey(key)
                             GifProvider.GIPHY -> preferences.setGiphyApiKey(key)
-                            GifProvider.SAFEBOORU, GifProvider.NEKOS_BEST -> Unit
+                            GifProvider.SAFEBOORU, GifProvider.NEKOS_BEST, GifProvider.GIFUKAI -> Unit
                         }
                     }
                 }

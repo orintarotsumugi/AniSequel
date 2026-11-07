@@ -41,7 +41,7 @@ class GifKeyFallbackTest {
     @Test
     fun `klipy answers on the bundled key when the reader has none`() {
         val api = gifSearchApiFor(GifProvider.KLIPY, null, null, null)
-        assertEquals("the default index must not ask the reader for a credential first", "Klipy", api.providerName)
+        assertEquals("the bundled key must flow through even though Klipy is not the default", "Klipy", api.providerName)
         assertEquals(
             "the bundled key is what the search would send",
             BUNDLED_KLIPY_KEY,
@@ -69,6 +69,11 @@ class GifKeyFallbackTest {
         assertNull(
             gifSearchApiFor(GifProvider.NEKOS_BEST, null, null, null).substitutionNote
         )
+        assertNull(
+            "Gifukai is keyless and answers for itself",
+            gifSearchApiFor(GifProvider.GIFUKAI, null, null, null).substitutionNote
+        )
+        assertEquals("Gifukai", gifSearchApiFor(GifProvider.GIFUKAI, null, null, null).providerName)
         // The key is there, so the chosen index answers and says nothing about it.
         assertNull(
             gifSearchApiFor(GifProvider.GIPHY, null, null, "secret").substitutionNote

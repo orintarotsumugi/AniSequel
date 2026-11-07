@@ -297,10 +297,12 @@ fun ActivityCommentsSheet(
 
     val scope = rememberCoroutineScope()
     // The resolved provider the reader chose. Resolution itself lives in
-    // [CommentMediaSettings.resolvedGifProvider]; Klipy, the default, answers on the
-    // app's own key, so a missing *reader* credential only matters to GIPHY and
-    // Tenor, whose fallback is decided in `gifSearchApiFor` and stated in the
-    // substitution note the picker shows.
+    // [CommentMediaSettings.resolvedGifProvider]; Gifukai, the default, answers on
+    // nothing and nekos.best on a User-Agent, so a missing *reader* credential only
+    // matters to GIPHY and Tenor, whose fallback is decided in `gifSearchApiFor`
+    // and stated in the substitution note the picker shows. The provider travels
+    // to the picker too: its suggestion chips are the vocabulary the answered
+    // index understands, not a generic list.
     val gifApi = remember(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey) {
         gifSearchApiFor(gifProvider, tenorApiKey, klipyApiKey, giphyApiKey)
     }
@@ -381,7 +383,7 @@ fun ActivityCommentsSheet(
                         editPhotoFramingName = next.framing.name
                     },
                     gifPane = { onUse ->
-                        GifBrowser(store = gifStore, onUse = onUse)
+                        GifBrowser(store = gifStore, provider = gifProvider, onUse = onUse)
                     },
                     onCancel = onDismissReplyAction,
                     onSubmit = onSubmitReplyEdit,
@@ -404,7 +406,7 @@ fun ActivityCommentsSheet(
                         photoFramingName = next.framing.name
                     },
                     gifPane = { onUse ->
-                        GifBrowser(store = gifStore, onUse = onUse)
+                        GifBrowser(store = gifStore, provider = gifProvider, onUse = onUse)
                     },
                     onCancel = { composing = false },
                     onSubmit = {
