@@ -1,13 +1,17 @@
 package com.anisequel
 
 import com.anisequel.data.network.GiphyResponse
+import com.anisequel.data.network.GifukaiGifs
+import com.anisequel.data.network.GifukaiResponse
 import com.anisequel.data.network.KlipyResponse
 import com.anisequel.data.network.NekosResponse
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.gifSearchApiFor
 import com.anisequel.data.network.toGifPage
+import com.anisequel.data.network.toGifResult
 import com.anisequel.domain.gif.GifProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -110,9 +114,17 @@ class GifProviderParseTest {
     }
 
     @Test
-    fun `a chosen provider without its key searches the anonymous index`() {
+    fun `a chosen provider without its key falls back or answers on the bundled one`() {
+        // Klipy still answers on the app's key when the reader has none: the
+        // default moved to Gifukai, but Klipy's bundled key and its replacement
+        // slot in Settings stayed. A keyed provider with no key (Tenor, GIPHY)
+        // falls to the neutral tag index, not to another general index.
         assertEquals(
-            "Safebooru",
+            "Gifukai",
+            gifSearchApiFor(GifProvider.GIFUKAI, null, null, null).providerName
+        )
+        assertEquals(
+            "Klipy",
             gifSearchApiFor(GifProvider.KLIPY, null, null, null).providerName
         )
         assertEquals(
@@ -139,9 +151,51 @@ class GifProviderParseTest {
         assertEquals("k", GifProvider.KLIPY.keyFrom("t", "k", "g"))
         assertEquals("g", GifProvider.GIPHY.keyFrom("t", "k", "g"))
         assertNull("a keyless index has no credential to look for", GifProvider.SAFEBOORU.keyFrom("t", "k", "g"))
+        assertNull("Gifukai is keyless", GifProvider.GIFUKAI.keyFrom("t", "k", "g"))
+        assertNull("nekos.best is keyless", GifProvider.NEKOS_BEST.keyFrom("t", "k", "g"))
         assertTrue(GifProvider.selectable.first().needsKey.not())
-        assertEquals(GifProvider.SAFEBOORU, GifProvider.DEFAULT)
+        // The default must be an index that answers on its own and asks the reader
+        // for nothing: a shipped choice that refused until registration is the trap
+        // a retired Tenor set. Gifukai is keyless and safe by construction; Klipy
+        // (bundled key, general catalogue) is still a keyless-feeling answer and
+        // still selectable beside it.
+        assertEquals(GifProvider.GIFUKAI, GifProvider.DEFAULT)
+        assertFalse(GifProvider.GIFUKAI.needsKey)
+        assertFalse("a reader key is optional while the app carries one", GifProvider.KLIPY.needsKey)
+        assertEquals(GifProvider.GIFUKAI, GifProvider.fromStorage("gifukai"))
         assertEquals(GifProvider.KLIPY, GifProvider.fromStorage("klipy"))
         assertNull(GifProvider.fromStorage("not-a-provider"))
+    }
+
+    @Test
+    fun `gifukai reads the anime and the action and exposes the file as both copies`() {
+        val json = """
+            {"action":"hug","pairing":"mf","anime":"Blue Spring Ride",
+             "url":"https://cdn.gifukai.com/hug/x.gif",
+             "filename":"x.gif","content_type":"image/gif","size_bytes":1393045}
+        """.trimIndent()
+        val parsed = NetworkClient.json.adapter(GifukaiResponse::class.java).fromJson(json)!!
+        val gif = parsed.toGifResult()!!
+
+        assertEquals("https://cdn.gifukai.com/hug/x.gif", gif.embedUrl)
+        assertEquals("the same file is the tile: there is no smaller copy", gif.gridUrl, gif.embedUrl)
+        assertEquals("gifukai names the anime, which Tenor's index never does", "Blue Spring Ride - Hug", gif.title)
+        assertNull("dimensions are not in the response; the tile crops to a square", gif.width)
+    }
+
+    @Test
+    fun `gifukai resolves reader words to actions and keeps a kiss type`() {
+        assertEquals("hug" to null, GifukaiGifs.resolve("hug"))
+        assertEquals("cry" to null, GifukaiGifs.resolve("crying"))
+        assertEquals("cry" to null, GifukaiGifs.resolve("sob"))
+        assertEquals("cry" to null, GifukaiGifs.resolve("sad crying"))
+        assertEquals("laugh" to null, GifukaiGifs.resolve("lmao"))
+        // "peck" is the API's alias for a cheek kiss; the resolver maps the action
+        // and only infers a kiss folder when the query names the folder word.
+        assertEquals("kiss" to null, GifukaiGifs.resolve("peck"))
+        assertEquals("kiss" to "forehead", GifukaiGifs.resolve("kiss forehead"))
+        assertEquals("kiss" to null, GifukaiGifs.resolve("kiss"))
+        assertNull("a sentence it cannot answer is refused, not answered with a wrong GIF", GifukaiGifs.resolve("naruto running"))
+        assertNull(GifukaiGifs.resolve("   "))
     }
 }

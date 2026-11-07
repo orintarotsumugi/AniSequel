@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.8.7",
+      "entries": [
+        {
+          "title": "Gifukai is the default GIF index, and the picker knows what it can answer",
+          "detail": "GIF search now defaults to Gifukai (api.gifukai.com): keyless, anime-only, and safe by construction, with one hand-picked reaction scene per action - each carrying the anime's name - so the first search answers without a credential and without a tag vocabulary to learn. Its limit is the limit that matters: it answers reactions, not free text. The picker's suggestion chips now name that index's own vocabulary (Gifukai's reaction actions, or the measured tags the others carry), the booru \"Series\" chips appear only on Safebooru, and a single-scene answer gains a \"Shuffle for another one\" re-roll - Gifukai has no pages, so the same word drawing the same cached tile used to read as \"there is exactly one hug\"."
+        },
+        {
+          "title": "Klipy still answers on the app's key, and other providers stay",
+          "detail": "Klipy, GIPHY, Tenor, Safebooru and nekos.best remain exactly as they were. Klipy no longer sits in the default seat, but the app still carries its key so it answers a free-text search without registration, and a key of your own pasted in Settings still replaces the bundled one for as long as it is saved. The default's free-text hole hands a reader to Klipy or Safebooru by name rather than to an empty grid."
+        },
+        {
+          "title": "Comment keystore work left the frame thread",
+          "detail": "Reading the three saved GIF keys - and the session token's own store - decrypted on the screen's dispatcher: DataStore reads on a worker, but the map that turns a snapshot into settings runs wherever the collector collects, and every collector is a composition. Three keystore round trips per snapshot, multiplied by every collector on screen and repeated each time a toggle re-wrote the file, were paid on the main thread. The decrypt side now runs on IO, and the token's repository decrypts each distinct ciphertext once per session instead of twice per read, with the migration scan latched to one pass."
+        },
+        {
+          "title": "The dashboard stops doing its heavy walks between frames",
+          "detail": "The recompute pipeline moved its filter chain off the main thread months ago, and the comment describing the fix covered four derivations that did not follow. The watched count, the arriving rows, the recent-activity summary and the card-preview walk - each a full pass over a large account's list, every one of which misses its memo on exactly the refresh that produced new data - plus the per-entry copy fold all stayed on the caller's thread. One Default-dispatcher block now carries the whole pipeline, so a refresh pays its walks in one background switch."
+        },
+        {
+          "title": "The inbox merges in one pass per change",
+          "detail": "Drawing the messages tab re-merged, re-sorted and re-filtered both inbox halves five times per recomposition: once for the rows and once inside each error derivation re-running the merge for itself. Under the ALL filter each pass sorted the union of two paged sources, on every state emission and every minute tick. The merge is remembered now and the error lines read the rows it produced."
+        },
+        {
+          "title": "A burst of expired snapshots rewrites its file once",
+          "detail": "Reading a cached value whose snapshot had expired deleted the entry and then rewrote the whole kind's file - re-serialising megabytes under the lock every other snapshot read waits on - once per expired read. A bio screen arriving the morning after twelve covers expired paid twelve whole-file rewrites back to back. A removal now lands in memory and the rewrite waits out a quarter-second window, so a burst pays one rewrite and whatever the kind was due for anyway."
+        }
+      ]
+    },
+    {
       "version": "1.8.6",
       "entries": [
         {

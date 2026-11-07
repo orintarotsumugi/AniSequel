@@ -19,10 +19,16 @@ import okhttp3.Request
  * losing a credential silently is worse than a search that says why it failed - but
  * it is no longer the default answer, and the client says so when Google refuses.
  *
- * - **Klipy** is the closest thing to a drop-in replacement: a key in the URL path,
- *   page-numbered results, and `file.hd` / `file.sm` copies that map cleanly onto a
- *   grid tile and a comment embed. A test key is free from partner.klipy.com and is
- *   limited to 100 calls an hour until it is approved.
+ * - **Gifukai** is the default: keyless, anime-only, hand-picked and safe by
+ *   construction. One random reaction scene per action endpoint (`/v1/hug`, ...) -
+ *   "search" is a word-to-action match, there is no paging, and a second ask
+ *   re-rolls the same reaction. See [GifukaiGifs].
+ * - **Klipy** is the closest thing to a drop-in general catalogue: a key in the URL
+ *   path, page-numbered results, and `file.hd` / `file.sm` copies that map cleanly
+ *   onto a grid tile and a comment embed. It is what the default hands a sentence
+ *   to: the app ships a key for it (see the class doc of [BundledGifKeys]) so it
+ *   answers without asking the reader to register anywhere, and a reader's pasted
+ *   key replaces the bundled one.
  * - **GIPHY** is the name everybody already knows. A new key is a beta key at 100
  *   calls an hour, and its `images.*.width` fields are **strings**, which is why the
  *   model keeps them as strings and parses on the way out. Its terms also require
@@ -50,6 +56,14 @@ class KlipyGifs(
 
     override val providerName: String get() = "Klipy"
 
+    /**
+     * The key the factory handed in. Pinned by [GifKeyFallbackTest] and
+     * `GifProviderParseTest`: an empty key here used to surface as an empty grid,
+     * so the test asserts the bundled key actually flows through rather than
+     * trusting the factory branch.
+     */
+    internal val keyInUse: String get() = apiKey
+
     private val adapter = moshi.adapter(KlipyResponse::class.java)
 
     override suspend fun search(query: String, cursor: String?): Result<GifPage> =
@@ -57,8 +71,12 @@ class KlipyGifs(
             val term = query.trim()
             if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
             if (apiKey.isBlank()) {
+                // Unreachable through [gifSearchApiFor], which always has the
+                // bundled key to fall back to - this branch is for a direct build
+                // with an empty credential, which must say so rather than ask
+                // Klipy for a request it will only 401.
                 return@withContext Result.failure(
-                    GifSearchFailure("No Klipy key is saved. Add one in Settings, or leave it blank to search Safebooru.")
+                    GifSearchFailure("That Klipy key is empty. Paste one in Settings, or pick Safebooru or nekos.best.")
                 )
             }
 
@@ -546,11 +564,18 @@ fun gifSearchApiFor(
     return when (provider) {
         GifProvider.SAFEBOORU -> SafebooruGifs()
         GifProvider.NEKOS_BEST -> NekosBestGifs()
+        GifProvider.GIFUKAI -> GifukaiGifs()
         GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
             ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 
-        GifProvider.KLIPY -> klipyKey?.takeIf { it.isNotBlank() }
-            ?.let { KlipyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.KLIPY.displayName))
+        // The app's own key is what makes Klipy the default ([GifProvider.DEFAULT]:
+        // a shipped choice must be able to answer without asking the reader for a
+        // credential first). A saved reader key replaces it for as long as it is
+        // there; clearing the field returns the search to the bundled key rather
+        // than to a refusal, so no branch here can produce a keyless Klipy client.
+        GifProvider.KLIPY -> KlipyGifs(
+            klipyKey?.takeIf { it.isNotBlank() } ?: BUNDLED_KLIPY_KEY
+        )
 
         GifProvider.GIPHY -> giphyKey?.takeIf { it.isNotBlank() }
             ?.let { GiphyGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.GIPHY.displayName))

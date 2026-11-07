@@ -703,9 +703,16 @@ class DashboardViewModel(
     /**
      * Recomputes what is on screen.
      *
-     * The list walk and the sort both run on [Dispatchers.Default]: for a large
-     * account this is thousands of comparisons over hundreds of objects, which
-     * used to run on the main thread and drop frames on every filter change.
+     * The whole derivation - the discovery walk, the filter, the four memoised
+     * summaries and the per-entry copy fold - runs inside one
+     * [Dispatchers.Default] block. It used to be split: the filter chain was
+     * moved off the main thread with comments recording that the main-thread
+     * version dropped frames, while the summary walks and the copy fold stayed
+     * behind on the caller's thread, running the exact pattern described as
+     * fixed. Every initial load and refresh hands a new collection object here,
+     * so every memo misses on the runs that matter most, and a large account
+     * paid four full walks plus a sort and an allocation per visible row,
+     * between frames. Now one switch carries all of it.
      */
     private suspend fun recompute() {
         val viewer = cachedViewer ?: return
@@ -715,45 +722,54 @@ class DashboardViewModel(
         // Claim a token for this run. See [recomputeGeneration].
         val generation = ++recomputeGeneration
 
-        val candidates = discoverOnce(collection, criteria)
+        val work = withContext(Dispatchers.Default) {
+            val candidates = discoverOnce(collection, criteria)
 
-        // Partition before filtering: the hidden half must be published even
-        // when a search or a status filter has emptied the visible one,
-        // otherwise the settings list of hidden anime would vanish the moment
-        // someone typed into the search box. Both halves of this are list work
-        // over immutable inputs, so they share one trip to the default
-        // dispatcher rather than paying a suspension each.
-        val (split, filteredVisible) = withContext(Dispatchers.Default) {
-            val splitResult = findMissedSequelsUseCase.splitHidden(candidates, criteria.hiddenMediaIds)
-            splitResult to findMissedSequelsUseCase.applyFilters(splitResult.visible, criteria)
-        }
+            // Partition before filtering: the hidden half must be published even
+            // when a search or a status filter has emptied the visible one,
+            // otherwise the settings list of hidden anime would vanish the moment
+            // someone typed into the search box.
+            val splitResult =
+                findMissedSequelsUseCase.splitHidden(candidates, criteria.hiddenMediaIds)
+            val filteredVisible =
+                findMissedSequelsUseCase.applyFilters(splitResult.visible, criteria)
 
-        val watchedCount = countWatched(collection)
-        // Derived unconditionally: the work is memoized (one walk per
-        // collection), and re-deriving on a toggle is more than it saves. The
-        // switches in Settings pay their way by stopping the section - and its
-        // poster loads - from being composed at all, not by skipping this.
-        val arriving = arrivingEntries(collection)
-        val recentActivity = recentActivity(collection)
-        val cardPreview = cardPreviewEntries(collection)
+            val watchedCount = countWatched(collection)
+            // Derived unconditionally: the work is memoized (one walk per
+            // collection), and re-deriving on a toggle is more than it saves. The
+            // switches in Settings pay their way by stopping the section - and its
+            // poster loads - from being composed at all, not by skipping this.
+            val arriving = arrivingEntries(collection)
+            val recentActivity = recentActivity(collection)
+            val cardPreview = cardPreviewEntries(collection)
 
-        val updated = filteredVisible.map { found ->
-            val entry = withCachedDetail(found)
-            // The server is authoritative. `addedToPlanningIds` records what
-            // *this session* added, and is cleared on every refresh, so a
-            // mutation that AniList accepted and a filter that hides the
-            // entry can both leave the optimistic flag behind. Re-checking
-            // against the loaded list keeps "Add to Planning" from showing
-            // as still-pending for something already saved.
-            val onList = entry.sequelMedia.mediaListEntry
-            val isWatching = addedToWatchingIds.contains(entry.sequelId) ||
-                    onList?.status.equals("CURRENT", ignoreCase = true)
-            val isPlanned = !isWatching && (addedToPlanningIds.contains(entry.sequelId) ||
-                    onList?.status != null)
+            val updated = filteredVisible.map { found ->
+                val entry = withCachedDetail(found)
+                // The server is authoritative. `addedToPlanningIds` records what
+                // *this session* added, and is cleared on every refresh, so a
+                // mutation that AniList accepted and a filter that hides the
+                // entry can both leave the optimistic flag behind. Re-checking
+                // against the loaded list keeps "Add to Planning" from showing
+                // as still-pending for something already saved.
+                val onList = entry.sequelMedia.mediaListEntry
+                val isWatching = addedToWatchingIds.contains(entry.sequelId) ||
+                        onList?.status.equals("CURRENT", ignoreCase = true)
+                val isPlanned = !isWatching && (addedToPlanningIds.contains(entry.sequelId) ||
+                        onList?.status != null)
 
-            entry.copy(
-                isAddedToWatching = isWatching,
-                isAddedToPlanning = isPlanned
+                entry.copy(
+                    isAddedToWatching = isWatching,
+                    isAddedToPlanning = isPlanned
+                )
+            }
+
+            RecomputedWork(
+                hidden = splitResult.hidden,
+                visible = updated,
+                watchedCount = watchedCount,
+                arriving = arriving,
+                recentActivity = recentActivity,
+                cardPreview = cardPreview
             )
         }
 
@@ -763,22 +779,32 @@ class DashboardViewModel(
         // with nothing on screen to explain it.
         if (generation != recomputeGeneration) return
 
-        _hiddenSequels.value = split.hidden
+        _hiddenSequels.value = work.hidden
 
         _uiState.value = DashboardUiState.Success(
             viewer = viewer,
-            missedSequels = updated,
-            arriving = arriving,
-            totalWatchedCount = watchedCount,
-            totalMissedCount = updated.size,
-            recentActivity = recentActivity,
+            missedSequels = work.visible,
+            arriving = work.arriving,
+            totalWatchedCount = work.watchedCount,
+            totalMissedCount = work.visible.size,
+            recentActivity = work.recentActivity,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
             canWriteToAniList = canWriteToAniList,
-            cardPreview = cardPreview
+            cardPreview = work.cardPreview
         )
     }
+
+    /** One run's outputs, carried out of the [Dispatchers.Default] block together. */
+    private data class RecomputedWork(
+        val hidden: List<MissedSequel>,
+        val visible: List<MissedSequel>,
+        val watchedCount: Int,
+        val arriving: List<ArrivingEntry>,
+        val recentActivity: RecentActivitySummary,
+        val cardPreview: List<MediaListEntryItem>
+    )
 
     /**
      * Recomputes on behalf of a filter change, cancelling any run already in

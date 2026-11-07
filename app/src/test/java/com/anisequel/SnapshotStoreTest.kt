@@ -40,7 +40,9 @@ import org.junit.rules.TemporaryFolder
  * - anything unreadable - a truncated file, a payload today's models cannot
  *   parse, a file from another release - is a miss and never an exception;
  * - the cache is bounded: past its budget the oldest entry goes first, and the
- *   newest is never the one dropped.
+ *   newest is never the one dropped;
+ * - a burst of expired entries removes them all and rewrites the file once, not
+ *   once per entry.
  *
  * A hit here is a request AniList's rate limit never sees, so a wrong hit (stale
  * past its window, or another release's shape read as today's) is worse than the
@@ -188,6 +190,38 @@ class SnapshotStoreTest {
     }
 
     @Test
+    fun `a burst of expired entries rewrites the file once, not per entry`() = runTest {
+        val store = store()
+        val keys = (1..5).map { "KEY:$it" }
+        keys.forEach { key -> store.write(KIND, key, MediaNode::class.java, mediaNode(id = key.hashCode())) }
+        val writesSetUp = store.persistCount
+
+        now += DAY + 1
+
+        // The bio-screen shape: one `read` per cover, all expired, back to back.
+        // Each drop still removes its entry; the rewrites are what must not
+        // follow the burst one for one.
+        keys.forEach { key -> assertNull(store.read(KIND, key, MediaNode::class.java, DAY)) }
+
+        assertEquals(
+            "each expired read used to rewrite the whole kind under the lock every " +
+                "other snapshot read waits on; the burst is why the rewrite waits out " +
+                "a coalescing window",
+            1,
+            store.persistCount - writesSetUp
+        )
+
+        // And the burst's removals are real, not session-only: walk the clock
+        // past the window and read once more to flush the rewrite the last drop
+        // queued, then prove the file a later process reads contains none of
+        // them.
+        now += DAY + COALESCE
+        assertNull(store.read(KIND, keys[0], MediaNode::class.java, DAY))
+        val reopened = store()
+        keys.forEach { key -> assertNull(reopened.read(KIND, key, MediaNode::class.java, Long.MAX_VALUE)) }
+    }
+
+    @Test
     fun `past its budget the oldest entry goes first, and never the newest`() = runTest {
         // Each cover below is a couple of hundred bytes, so three of them do not
         // fit in the budget and one does.
@@ -219,6 +253,9 @@ class SnapshotStoreTest {
         const val KEY = "ANIME:42"
         const val ONE_MEGABYTE = 1024L * 1024
         const val DAY = 24 * 60 * 60 * 1000L
+
+        /** Matches the shipped coalescing window the helper does not override. */
+        const val COALESCE = 250L
     }
 }
 

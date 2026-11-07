@@ -10,7 +10,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.data.security.KeystoreTokenCipher
 import com.anisequel.data.security.TokenCipher
 import com.anisequel.domain.gif.GifProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 /**
@@ -88,9 +90,11 @@ data class CommentMediaSettings(
      * The provider a picker can actually use.
      *
      * A keyed provider with no key is a search that can only fail, so it falls back
-     * to the anonymous default rather than showing an error under the search field
-     * before the reader has typed anything. The stored choice is kept, so pasting
-     * the key later resumes the provider the reader picked.
+     * to the shipped default rather than showing an error under the search field
+     * before the reader has typed anything. [GifProvider.DEFAULT] has always been
+     * an index that answers on nothing (Gifukai now, the bundled-key Klipy before
+     * it), so the fallback is itself a search that answers. The stored choice is
+     * kept, so pasting the key later resumes the provider the reader picked.
      */
     val resolvedGifProvider: GifProvider
         get() = if (gifProvider.needsKey && activeGifKey.isNullOrBlank()) {
@@ -139,6 +143,14 @@ class MediaPreferences(
                 ?.let { cipher.decrypt(it) }?.takeIf { it.isNotBlank() }
         )
     }
+        // DataStore runs its own reads on IO, but this `map` body - three
+        // keystore decryptions per snapshot - runs wherever the collector
+        // collects, and every collector is a composition. `AuthRepositoryImpl`
+        // wraps the same pattern for the same reason: a keystore round trip on
+        // the main thread is the stutter on cold start, only worse here because
+        // three keys and several simultaneous collectors pay it, and every
+        // settings toggle re-emits the file and re-pays them all.
+        .flowOn(Dispatchers.IO)
 
     suspend fun setChatView(enabled: Boolean) {
         context.commentMediaDataStore.edit { it[Keys.CHAT_VIEW] = enabled }

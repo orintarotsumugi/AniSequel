@@ -1,5 +1,9 @@
 package com.anisequel
 
+import com.anisequel.data.network.FlexibleStringAdapter
+import com.anisequel.data.network.GifPage
+import com.anisequel.data.network.GifResult
+import com.anisequel.data.network.GifSearchApi
 import com.anisequel.data.network.SafebooruPost
 import com.anisequel.data.network.TenorResponse
 import com.anisequel.data.network.booruNextCursor
@@ -10,9 +14,11 @@ import com.anisequel.data.network.fitsTileBudget
 import com.anisequel.data.network.isNoMatchesBody
 import com.anisequel.data.network.isSafeRating
 import com.anisequel.data.network.toGifPage
-import com.anisequel.data.network.FlexibleStringAdapter
-import com.anisequel.data.network.GifResult
+import com.anisequel.ui.viewmodel.GifSearchStore
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -299,6 +305,35 @@ class GifSearchParseTest {
         assertTrue(page.results.isEmpty())
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `reroll evicts the cached answer and asks for a fresh draw`() = runTest {
+        var draws = 0
+        val provider = object : GifSearchApi {
+            override val providerName: String = "Gifukai"
+            override suspend fun search(query: String, cursor: String?): Result<GifPage> {
+                draws += 1
+                return Result.success(
+                    GifPage(listOf(GifResult("$query-$draws", "https://x/$draws.gif", "https://x/$draws.gif", "draw $draws", null, null)))
+                )
+            }
+        }
+        val store = GifSearchStore(this, provider)
+
+        store.setQuery("hug")
+        advanceUntilIdle()
+        assertEquals("hug-1", store.state.value.results.single().id)
+
+        store.reroll()
+        advanceUntilIdle()
+        // A fresh ask with the same query: the cache entry for "hug" had to go, or
+        // reroll would be a no-op that hands the same tile back and the shuffle row
+        // would lie.
+        assertEquals(2, draws)
+        assertEquals("hug-2", store.state.value.results.single().id)
+        assertNull("a single-draw provider still has no cursor", store.state.value.next)
+    }
+
     @Test
     fun `the recent strip keeps one copy of a pick and drops the oldest`() {
         val store = com.anisequel.ui.viewmodel.GifSearchStore(
@@ -382,6 +417,8 @@ class GifSearchParseTest {
     @Test
     fun `each provider names itself`() {
         assertEquals("Safebooru", com.anisequel.data.network.SafebooruGifs().providerName)
+        assertEquals("Gifukai", com.anisequel.data.network.GifukaiGifs().providerName)
+        assertEquals("Klipy", com.anisequel.data.network.KlipyGifs("key").providerName)
         assertEquals("Tenor", com.anisequel.data.network.TenorGifs("key").providerName)
     }
 }

@@ -86,7 +86,15 @@ class SnapshotStore(
     private val formatTag: String = BuildConfig.VERSION_CODE.toString(),
     /** Injectable so a test can move the clock without sleeping. */
     private val nowMillis: () -> Long = System::currentTimeMillis,
-    private val maxBytesPerKind: Long = MAX_BYTES_PER_KIND
+    private val maxBytesPerKind: Long = MAX_BYTES_PER_KIND,
+    /**
+     * How long a kind's waited-for rewrite may ride before it is paid.
+     *
+     * Injectable so a test can walk the clock past it: a default of a quarter
+     * second is the natural width of the back-to-back read burst this guards,
+     * and longer would only delay a rewrite the reader is never charged for.
+     */
+    private val dropCoalesceMillis: Long = 250L
 ) {
 
     /** A value read back from disk, with the moment it was written. */
@@ -96,6 +104,23 @@ class SnapshotStore(
 
     /** One parsed file per kind, loaded on first touch and kept for the session. */
     private val kinds = mutableMapOf<String, MutableMap<String, SnapshotEntry>>()
+
+    /** Kinds whose file still describes entries the in-memory map has dropped. */
+    private val dirtyKinds = mutableSetOf<String>()
+
+    /** The clock reading [persist] last ran with, per kind. */
+    private val lastPersistAt = mutableMapOf<String, Long>()
+
+    /**
+     * Whole-file rewrites the store has performed.
+     *
+     * Internal on purpose: the drop-coalescing contract is invisible anywhere a
+     * caller can look, and a wrong coalescing is invisible too - each symptom is
+     * a disk churn nobody asked for. This counter is what the test pins.
+     */
+    internal val persistCount: Int get() = persistWrites
+
+    private var persistWrites = 0
 
     private val fileAdapter = moshi.adapter(SnapshotFile::class.java)
 
@@ -112,10 +137,25 @@ class SnapshotStore(
         type: Class<T>,
         ttlMillis: Long
     ): Stored<T>? = lock.withLock {
-        val entry = entries(kind)[key] ?: return@withLock null
+        try {
+            readLocked(kind, key, type, ttlMillis)
+        } finally {
+            // A read that dropped an entry must not pay for the rewrite unless
+            // the burst waited out the window - see [flushDrops].
+            flushDrops(kind)
+        }
+    }
+
+    private suspend fun <T : Any> readLocked(
+        kind: String,
+        key: String,
+        type: Class<T>,
+        ttlMillis: Long
+    ): Stored<T>? {
+        val entry = entries(kind)[key] ?: return null
         if (nowMillis() - entry.storedAtMillis > ttlMillis) {
             drop(kind, key)
-            return@withLock null
+            return null
         }
         // Parsed off the main thread. A completed list is multi-megabyte JSON,
         // and this read is on the cold-start path: decoding it inline showed up
@@ -128,9 +168,9 @@ class SnapshotStore(
             // Distinct from expiry: these bytes will never parse, so leaving
             // them would buy a file read on every open to answer the same "no".
             drop(kind, key)
-            return@withLock null
+            return null
         }
-        Stored(value, entry.storedAtMillis)
+        return Stored(value, entry.storedAtMillis)
     }
 
     /**
@@ -196,6 +236,10 @@ class SnapshotStore(
     suspend fun removeKind(kind: String) {
         lock.withLock {
             kinds.remove(kind)
+            // The kind is gone; a queued rewrite and its timestamp are bookkeeping
+            // for a file that no longer exists.
+            dirtyKinds.remove(kind)
+            lastPersistAt.remove(kind)
             withContext(Dispatchers.IO) { fileFor(kind).delete() }
         }
     }
@@ -204,12 +248,37 @@ class SnapshotStore(
     suspend fun clear() {
         lock.withLock {
             kinds.clear()
+            dirtyKinds.clear()
+            lastPersistAt.clear()
             withContext(Dispatchers.IO) { directory.listFiles()?.forEach { it.delete() } }
         }
     }
 
     private suspend fun drop(kind: String, key: String) {
         entries(kind).remove(key)
+        // The rewrite is the expensive half, and a bio screen dropping a dozen
+        // covers the morning after their expiry used to pay it a dozen times in
+        // a row - each rewrite re-serialising the whole kind under the lock that
+        // every other snapshot read waits on. The removal lands in memory now;
+        // the file when the burst has passed. See [flushDrops].
+        dirtyKinds.add(kind)
+        flushDrops(kind)
+    }
+
+    /**
+     * Rewrites [kind] if its drops have waited out [dropCoalesceMillis].
+     *
+     * The burst is the case this exists for: reads arrive back to back within
+     * milliseconds, so the first drop pays one rewrite and the rest ride on it or
+     * on a later [persist] that the kind was due for anyway. A drop that never
+     * flushes wastes nothing: the in-memory removal is what every read answers
+     * from, and an expired entry left on disk is re-checked against its TTL on
+     * the next open, which is the same test that dropped it.
+     */
+    private suspend fun flushDrops(kind: String) {
+        if (kind !in dirtyKinds) return
+        if (nowMillis() - (lastPersistAt[kind] ?: 0L) < dropCoalesceMillis) return
+        dirtyKinds.remove(kind)
         persist(kind)
     }
 
@@ -218,6 +287,11 @@ class SnapshotStore(
 
     private suspend fun persist(kind: String) {
         val stored = kinds[kind] ?: return
+        // Carried by anything that lands in the file, whatever called it: a drop
+        // waiting out [dropCoalesceMillis] rides on this write or a later one.
+        dirtyKinds.remove(kind)
+        lastPersistAt[kind] = nowMillis()
+        persistWrites++
         evictToFit(stored)
         val text = runCatching { fileAdapter.toJson(SnapshotFile(SCHEMA, formatTag, stored)) }
             .getOrNull() ?: return

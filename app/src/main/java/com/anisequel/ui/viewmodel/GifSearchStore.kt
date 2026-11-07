@@ -166,6 +166,33 @@ class GifSearchStore(
         searchJob = scope.launch { runFirstSearch(query) }
     }
 
+    /**
+     * Shuffles: throws away the cached answer for the current query and asks again.
+     *
+     * It exists for providers whose answer to one ask is one GIF - Gifukai answers a
+     * reaction with a single random scene and has no cursor, so the grid with one
+     * tile and no "more" affordance reads as *"there is exactly one hug"* when the
+     * API actually means *"here is one of many hugs"*. The shuffle is the second
+     * half of that sentence: without it, the reader's only way to another scene is
+     * retyping the same word, which the [firstPages] cache answers with the same
+     * tile every time. Evicting the cache entry is the whole mechanism - re-search
+     * with the same query returns the fresh draw without waiting out the debounce
+     * the reader's typing put in the field's way.
+     *
+     * Refused when a search or a page-load is in flight: a shuffle is a request,
+     * and a picker that fires one on a tapping loop is a rate-limit notice.
+     */
+    fun reroll() {
+        val query = _state.value.query
+        if (query.isBlank()) return
+        if (_state.value.isSearching || _state.value.isLoadingMore) return
+        searchJob?.cancel()
+        pageJob?.cancel()
+        synchronized(firstPages) { firstPages.remove(cacheKey(query)) }
+        _state.value = _state.value.copy(isLoadingMore = false)
+        searchJob = scope.launch { runFirstSearch(query) }
+    }
+
     private suspend fun runFirstSearch(query: String) {
         val key = cacheKey(query)
         val hit = synchronized(firstPages) { firstPages[key] }
