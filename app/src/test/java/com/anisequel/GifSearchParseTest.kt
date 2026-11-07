@@ -1,5 +1,9 @@
 package com.anisequel
 
+import com.anisequel.data.network.FlexibleStringAdapter
+import com.anisequel.data.network.GifPage
+import com.anisequel.data.network.GifResult
+import com.anisequel.data.network.GifSearchApi
 import com.anisequel.data.network.SafebooruPost
 import com.anisequel.data.network.TenorResponse
 import com.anisequel.data.network.booruNextCursor
@@ -10,18 +14,11 @@ import com.anisequel.data.network.fitsTileBudget
 import com.anisequel.data.network.isNoMatchesBody
 import com.anisequel.data.network.isSafeRating
 import com.anisequel.data.network.toGifPage
-import com.anisequel.data.network.FlexibleStringAdapter
-import com.anisequel.data.network.GifPage
-import com.anisequel.data.network.GifResult
-import com.anisequel.data.network.GifSearchApi
 import com.anisequel.ui.viewmodel.GifSearchStore
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import com.anisequel.data.network.FlexibleStringAdapter
-import com.anisequel.data.network.GifResult
-import com.squareup.moshi.Moshi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
