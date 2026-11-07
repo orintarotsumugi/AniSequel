@@ -190,7 +190,9 @@ class GifProviderParseTest {
         assertEquals("cry" to null, GifukaiGifs.resolve("sob"))
         assertEquals("cry" to null, GifukaiGifs.resolve("sad crying"))
         assertEquals("laugh" to null, GifukaiGifs.resolve("lmao"))
-        assertEquals("kiss" to "cheek", GifukaiGifs.resolve("peck"))
+        // "peck" is the API's alias for a cheek kiss; the resolver maps the action
+        // and only infers a kiss folder when the query names the folder word.
+        assertEquals("kiss" to null, GifukaiGifs.resolve("peck"))
         assertEquals("kiss" to "forehead", GifukaiGifs.resolve("kiss forehead"))
         assertEquals("kiss" to null, GifukaiGifs.resolve("kiss"))
         assertNull("a sentence it cannot answer is refused, not answered with a wrong GIF", GifukaiGifs.resolve("naruto running"))
