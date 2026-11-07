@@ -142,85 +142,129 @@ private const val CANVAS_VARIANT_CHROMA = 4.0
 internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
     if (canvas == null) return base
 
-    fun contrast(a: Color, b: Color): Float {
-        val first = a.luminance()
-        val second = b.luminance()
-        return (maxOf(first, second) + 0.05f) / (minOf(first, second) + 0.05f)
-    }
-
     val hct = Hct.fromInt(canvas.toArgb())
     // Which side of the canvas the text belongs on is a contrast question, not
     // a tone threshold: a mid-tone canvas can be closer to white than to black
     // in luminance while still having more room on the dark side.
-    val canvasIsDark = contrast(Color.White, canvas) >= contrast(Color.Black, canvas)
+    val canvasIsDark = canvasContrast(Color.White, canvas) >=
+        canvasContrast(Color.Black, canvas)
     val onCanvas = if (canvasIsDark) Color.White else Color.Black
-
-    // A genuinely neutral canvas stays neutral; a coloured one keeps a small,
-    // bounded amount of its chroma rather than becoming a saturated card wall.
-    val neutralChroma = if (hct.chroma < MIN_CANVAS_CHROMA) {
-        0.0
-    } else {
-        (hct.chroma * CANVAS_NEUTRAL_FRACTION).coerceIn(
-            MIN_CANVAS_NEUTRAL_CHROMA,
-            MAX_CANVAS_NEUTRAL_CHROMA
-        )
-    }
-    val neutral = TonalPalette(hct.hue, neutralChroma)
-    val variant = TonalPalette(hct.hue, neutralChroma + CANVAS_VARIANT_CHROMA)
-
-    // Positive offsets travel toward the lighter end on a dark canvas and the
-    // darker end on a light one, which is the same direction as Material's
-    // elevation ramp in each mode. The offsets are in tone, so the steps stay
-    // perceptually even whatever the canvas's hue or saturation.
-    val direction = if (canvasIsDark) 1.0 else -1.0
-    fun step(offset: Double): Color = Color(
-        neutral.tone((hct.tone + offset * direction).roundToInt().coerceIn(0, 100))
-    )
-    fun variantStep(offset: Double): Color = Color(
-        variant.tone((hct.tone + offset * direction).roundToInt().coerceIn(0, 100))
-    )
-
-    /**
-     * Picks a foreground from [palette] that actually holds [minimum] against
-     * the canvas. The preferred tone is Material's usual answer, but a canvas
-     * can move the target underneath it; the full ladder is only consulted when
-     * that tone fails.
-     */
-    fun readable(palette: TonalPalette, preferredTone: Int, minimum: Float): Color {
-        val preferred = Color(palette.tone(preferredTone))
-        if (contrast(preferred, canvas) >= minimum) return preferred
-        return CANVAS_TEXT_TONES
-            .map { Color(palette.tone(it)) }
-            .maxByOrNull { contrast(it, canvas) } ?: preferred
-    }
+    val ramp = CanvasRamp(canvas = canvas, hct = hct, isDark = canvasIsDark)
 
     return base.copy(
         background = canvas,
         onBackground = onCanvas,
         surface = canvas,
         onSurface = onCanvas,
-        surfaceContainerLowest = if (canvasIsDark) step(-2.0) else step(-3.0),
-        surfaceContainerLow = step(4.0),
-        surfaceContainer = step(8.0),
-        surfaceContainerHigh = step(13.0),
-        surfaceContainerHighest = step(18.0),
-        surfaceDim = if (canvasIsDark) step(-2.0) else step(4.0),
-        surfaceBright = if (canvasIsDark) step(8.0) else step(-3.0),
-        surfaceVariant = variantStep(8.0),
-        onSurfaceVariant = readable(
-            variant,
-            preferredTone = if (canvasIsDark) 80 else 30,
-            minimum = 4.5f
-        ),
-        outline = readable(
-            variant,
-            preferredTone = if (canvasIsDark) 60 else 50,
-            minimum = 3.0f
-        ),
-        outlineVariant = variantStep(if (canvasIsDark) 30.0 else 20.0),
-        inverseSurface = Color(neutral.tone(if (canvasIsDark) 90 else 20)),
-        inverseOnSurface = Color(neutral.tone(if (canvasIsDark) 10 else 90))
+        surfaceContainerLowest = ramp.lowest(),
+        surfaceContainerLow = ramp.surface(4.0),
+        surfaceContainer = ramp.surface(8.0),
+        surfaceContainerHigh = ramp.surface(13.0),
+        surfaceContainerHighest = ramp.surface(18.0),
+        surfaceDim = ramp.dim(),
+        surfaceBright = ramp.bright(),
+        surfaceVariant = ramp.variantSurface(),
+        onSurfaceVariant = ramp.onSurfaceVariant(),
+        outline = ramp.outline(),
+        outlineVariant = ramp.outlineVariant(),
+        inverseSurface = ramp.inverseSurface(),
+        inverseOnSurface = ramp.inverseOnSurface()
     )
+}
+
+/**
+ * The surface ladder for one picked canvas.
+ *
+ * A class rather than four local helpers because every role is sampled from the
+ * same two palettes at the same tone origin. Keeping that origin in one object
+ * is what stops the container ramp, the borders and the inverse pair drifting
+ * onto different hues; it also keeps [applyCanvasColour] itself small enough to
+ * read as a role map rather than a colour-science routine.
+ */
+private class CanvasRamp(
+    private val canvas: Color,
+    hct: Hct,
+    private val isDark: Boolean
+) {
+    private val neutralChroma = canvasNeutralChroma(hct)
+    private val neutral = TonalPalette(hct.hue, neutralChroma)
+    private val variant = TonalPalette(hct.hue, neutralChroma + CANVAS_VARIANT_CHROMA)
+    private val tone = hct.tone
+
+    // Positive offsets travel toward the lighter end on a dark canvas and the
+    // darker end on a light one, which is Material's elevation direction in
+    // each mode. The offsets are in HCT tone, so they stay perceptually even
+    // whatever the canvas's hue or saturation.
+    private val direction = if (isDark) 1.0 else -1.0
+
+    fun surface(offset: Double): Color = Color(
+        neutral.tone((tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+
+    private fun variantAt(offset: Double): Color = Color(
+        variant.tone((tone + offset * direction).roundToInt().coerceIn(0, 100))
+    )
+
+    fun lowest(): Color = surface(if (isDark) -2.0 else -3.0)
+
+    fun dim(): Color = surface(if (isDark) -2.0 else 4.0)
+
+    fun bright(): Color = surface(if (isDark) 8.0 else -3.0)
+
+    fun variantSurface(): Color = variantAt(8.0)
+
+    fun onSurfaceVariant(): Color = canvasTextColor(
+        variant,
+        canvas,
+        preferredTone = if (isDark) 80 else 30,
+        minimum = 4.5f
+    )
+
+    fun outline(): Color = canvasTextColor(
+        variant,
+        canvas,
+        preferredTone = if (isDark) 60 else 50,
+        minimum = 3.0f
+    )
+
+    fun outlineVariant(): Color = variantAt(if (isDark) 30.0 else 20.0)
+
+    fun inverseSurface(): Color = Color(neutral.tone(if (isDark) 90 else 20))
+
+    fun inverseOnSurface(): Color = Color(neutral.tone(if (isDark) 10 else 90))
+}
+
+/**
+ * A genuinely neutral canvas stays neutral; a coloured one keeps a small,
+ * bounded amount of its chroma rather than becoming a saturated card wall.
+ */
+private fun canvasNeutralChroma(hct: Hct): Double = if (hct.chroma < MIN_CANVAS_CHROMA) {
+    0.0
+} else {
+    (hct.chroma * CANVAS_NEUTRAL_FRACTION).coerceIn(
+        MIN_CANVAS_NEUTRAL_CHROMA,
+        MAX_CANVAS_NEUTRAL_CHROMA
+    )
+}
+
+/** Picks a foreground from [palette] that actually holds [minimum] against [canvas]. */
+private fun canvasTextColor(
+    palette: TonalPalette,
+    canvas: Color,
+    preferredTone: Int,
+    minimum: Float
+): Color {
+    val preferred = Color(palette.tone(preferredTone))
+    if (canvasContrast(preferred, canvas) >= minimum) return preferred
+    return CANVAS_TEXT_TONES
+        .map { Color(palette.tone(it)) }
+        .maxByOrNull { canvasContrast(it, canvas) } ?: preferred
+}
+
+private fun canvasContrast(a: Color, b: Color): Float {
+    val first = a.luminance()
+    val second = b.luminance()
+    return (maxOf(first, second) + 0.05f) / (minOf(first, second) + 0.05f)
 }
 
 /** Foreground tones tried when the preferred one does not clear the contrast floor. */

@@ -239,21 +239,9 @@ class MainActivity : ComponentActivity() {
             // context to show a notice in stays silent.
             LaunchedEffect(Unit) {
                 RateLimitNotice.events.collect { retryAfterSeconds ->
-                    // Use the server's wait when there is one. The old wording
-                    // always said "give it a minute" and then appended "(about
-                    // 5s)" when `Retry-After` was short, so the one actionable
-                    // number in the message contradicted the sentence around it.
-                    val message = when {
-                        retryAfterSeconds == null ->
-                            "AniList is busy — you're rate limited. Give it a minute and try again."
-                        retryAfterSeconds != null && retryAfterSeconds <= 1 ->
-                            "AniList is rate limiting. Try again now."
-                        else ->
-                            "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
-                    }
                     Toast.makeText(
                         this@MainActivity,
-                        message,
+                        rateLimitMessage(retryAfterSeconds),
                         // Long rather than short: this is the only place the
                         // reader is told that retrying immediately will fail,
                         // and two seconds is not enough to read the wait.
@@ -613,6 +601,24 @@ class MainActivity : ComponentActivity() {
             authViewModel.handleAuthRedirect(uri)
         }
     }
+}
+
+/**
+ * The wording for an app-wide rate-limit notice.
+ *
+ * Uses the server's wait when there is one: the old copy always said "give it a
+ * minute" and then appended "(about 5s)" when `Retry-After` was short, so the
+ * one actionable number in the message contradicted the sentence around it.
+ * Extracted from `onCreate` so that composable's collector stays a one-line
+ * hand-off rather than another branch in an already busy Activity method.
+ */
+private fun rateLimitMessage(retryAfterSeconds: Int?): String = when {
+    retryAfterSeconds == null ->
+        "AniList is busy — you're rate limited. Give it a minute and try again."
+    retryAfterSeconds != null && retryAfterSeconds <= 1 ->
+        "AniList is rate limiting. Try again now."
+    else ->
+        "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
 }
 
 /**
