@@ -203,7 +203,7 @@ private fun ColumnScope.GifBrowserBody(
         errorMessage != null && state.results.isEmpty() -> GifMessage(
             icon = AppVectorIcons.Warning,
             text = errorMessage,
-            action = if (state.query.isNotBlank()) { store.searchNow() } else null
+            action = if (state.query.isNotBlank()) store::searchNow else null
         )
 
         state.isSearching && state.results.isEmpty() -> GifSkeleton(Modifier.weight(1f))
@@ -227,13 +227,13 @@ private fun ColumnScope.GifBrowserBody(
         state.results.isEmpty() -> GifMessage(
             icon = if (state.query.isBlank()) AppVectorIcons.AnimatedGif else AppVectorIcons.Search,
             text = emptyStateNote(state, errorMessage),
-            action = if (errorMessage != null) { store.searchNow() } else null,
+            action = if (errorMessage != null) store::searchNow else null,
             modifier = Modifier.weight(1f)
         )
 
         else -> {
             if (state.results.size == 1 && state.next == null) {
-                GifShuffleRow(onShuffle = { store.reroll() })
+                GifShuffleRow(onShuffle = store::reroll)
             }
             GifResultsGrid(store = store, state = state, onUse = onUse)
         }
