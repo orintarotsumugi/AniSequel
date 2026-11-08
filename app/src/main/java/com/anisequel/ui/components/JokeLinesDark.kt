@@ -437,7 +437,7 @@ internal object JokeLinesDark {
         "The show explains the funeral in a spin-off and the spin-off runs twelve episodes.",
         "The character survives the arc, the movie and the sequel, and dies in the side story.",
         "The best-loved character dies in the episode with the lowest watch-through rate.",
-        "The sequel gives the dead character the biggest role in its marketing."
+        "The sequel gives the dead character the biggest role in its marketing.",
         // The industry's own afterlife - the hiatus that outlasts the account,
         // the resurrection that is a banner, the obituary that calls it ongoing.
         "The author's health improved, which is more than the release schedule did.",
