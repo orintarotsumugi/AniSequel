@@ -176,7 +176,7 @@ internal fun InstalledList(
     ) {
         item(key = "installed_hint") {
             Text(
-                text = "Extensions installed on this device."
+                text = "Extensions installed on this device.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)

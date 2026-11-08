@@ -457,8 +457,6 @@ fun SequelDetailSheet(
             }
         )
     }
-        }
-    }
 }
 
 /**

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,6 +59,7 @@ import com.anisequel.ui.viewmodel.WatchViewModel
  * rather than hidden; only the native source is selectable until the runtime
  * lands.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchScreen(
     viewModel: WatchViewModel,

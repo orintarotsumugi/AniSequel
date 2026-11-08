@@ -323,16 +323,6 @@ private fun DetailedEpisodeRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (!episode.description.isNullOrBlank()) {
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        episode.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
                 Spacer(Modifier.height(4.dp))
                 EpisodeMeta(episode, serverCount)
                 if (progress != null) {
