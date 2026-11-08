@@ -75,16 +75,15 @@ internal fun PlayerSurface(
             )
     )
 
-    if (buffering && errorMessage == null) {
-        CircularProgressIndicator(
-            color = Color.White,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(42.dp)
-        )
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
+        if (buffering && errorMessage == null) {
+            CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(42.dp)
+            )
+        }
         overlay()
     }
 }
