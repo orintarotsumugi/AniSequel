@@ -1,8 +1,9 @@
 # Anime Watch and Extensions — phased implementation
 
 This is the implementation trail for the `1.8.9` beta and the work that follows
-it. Phase 1 is in this pull request. Later phases are written so each one can be
-picked up on its own, with a deliverable and a test that says when it is done.
+it. Phase 1 is in pull request #121, labelled `beta`. Later phases are written so
+each one can be picked up on its own, with a deliverable and a test that says
+when it is done.
 
 The beta deliberately splits **what can be installed** from **what can be
 executed**. AniSequel can discover, download and record Aniyomi, CloudStream,
