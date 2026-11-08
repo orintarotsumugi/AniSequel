@@ -480,9 +480,9 @@ internal fun savePlayback(
 }
 
 private fun formatClock(milliseconds: Long): String {
-    val totalSeconds = (milliseconds.coerceAtLeast(0L) / 1000L)
+    val totalSeconds = milliseconds.coerceAtLeast(0L) / 1000L
     val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
+    val minutes = totalSeconds % 3600 / 60
     val seconds = totalSeconds % 60
     return if (hours > 0) {
         String.format(Locale.ENGLISH, "%d:%02d:%02d", hours, minutes, seconds)

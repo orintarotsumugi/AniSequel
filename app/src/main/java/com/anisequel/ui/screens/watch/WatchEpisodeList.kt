@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -415,5 +417,73 @@ internal fun formatRuntime(seconds: Long): String {
         hours > 0 -> String.format(Locale.ENGLISH, "%dh %02dm", hours, minutes % 60)
         minutes > 0 -> "${minutes}m"
         else -> "${seconds}s"
+    }
+}
+
+/**
+ * The episode half of the Watch page's single scroll.
+ *
+ * A `LazyListScope` extension rather than a nested `LazyColumn`: the hero, the
+ * source cards and the episodes are one scroll, and a second list inside the
+ * first would give the reader two scrollbars and a nested-height bug. Moving
+ * this out of `WatchScreen` keeps the screen's own body to wiring while the
+ * range/empty/loading choice stays next to the rows it draws.
+ */
+internal fun LazyListScope.watchEpisodeFeed(
+    downloaded: Boolean,
+    episodes: List<SourceEpisode>,
+    visibleEpisodes: List<SourceEpisode>,
+    ranges: List<EpisodeRangeOption>,
+    rangeIndex: Int,
+    layout: EpisodeLayout,
+    showArtwork: Boolean,
+    coverUrl: String?,
+    resume: WatchProgress?,
+    isBusy: Boolean,
+    error: String?,
+    onRange: (Int) -> Unit,
+    onEpisode: (SourceEpisode) -> Unit,
+    onOnline: () -> Unit,
+    onSearch: () -> Unit,
+    onRetry: () -> Unit
+) {
+    if (downloaded) {
+        item(key = "downloads_empty") { DownloadsEmpty(onOnline = onOnline) }
+        return
+    }
+
+    if (episodes.isEmpty()) {
+        if (isBusy) {
+            item(key = "loading") { WatchLoadingCard() }
+        } else {
+            item(key = "no_episodes") {
+                NoEpisodesCard(error = error, onRetry = onRetry, onSearch = onSearch)
+            }
+        }
+        return
+    }
+
+    item(key = "ranges") {
+        RangeChips(
+            options = ranges,
+            selectedIndex = rangeIndex,
+            onSelect = onRange
+        )
+    }
+    items(visibleEpisodes, key = { "${it.id}:${it.name}" }) { episode ->
+        WatchEpisodeRow(
+            episode = episode,
+            layout = layout,
+            showArtwork = showArtwork,
+            coverUrl = coverUrl,
+            progress = resume?.takeIf { it.episodeId == episode.id },
+            serverCount = episode.servers.size,
+            onClick = { onEpisode(episode) }
+        )
+    }
+    if (error != null) {
+        item(key = "error") {
+            InlineError(message = error, onRetry = onRetry)
+        }
     }
 }

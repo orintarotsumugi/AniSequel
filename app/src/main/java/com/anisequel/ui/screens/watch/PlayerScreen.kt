@@ -118,19 +118,7 @@ fun PlayerScreen(
             }
         }
     }
-    LaunchedEffect(fullscreen) {
-        if (activity == null) return@LaunchedEffect
-        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
-        if (fullscreen) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior =
-                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } else {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            controller.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
+    PlayerFullscreenEffect(activity = activity, fullscreen = fullscreen)
     BackHandler(enabled = fullscreen) { fullscreen = false }
 
     val mediaUrl = currentServer?.url
@@ -238,70 +226,33 @@ fun PlayerScreen(
         if (mediaUrl.isNullOrBlank()) {
             PlayerEmpty(onBack = onBack)
         } else {
-            AndroidView(
-                factory = { ctx ->
-                    val layout = if (useTexture) {
-                        R.layout.player_view_texture
-                    } else {
-                        R.layout.player_view_surface
-                    }
-                    (LayoutInflater.from(ctx).inflate(layout, null) as PlayerView).apply {
-                        player = exoPlayer
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                        setShutterBackgroundColor(android.graphics.Color.BLACK)
-                        applyEnhancement(this, settings)
-                    }
-                },
-                update = { view ->
-                    view.player = exoPlayer
-                    applyEnhancement(view, settings)
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { controlsVisible = !controlsVisible }
-            )
-
-            if (buffering && errorMessage == null) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(42.dp)
-                )
-            }
-
-            AnimatedVisibility(
-                visible = controlsVisible,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.fillMaxSize()
+            PlayerSurface(
+                useTexture = useTexture,
+                exoPlayer = exoPlayer,
+                settings = settings,
+                buffering = buffering,
+                errorMessage = errorMessage,
+                onToggleControls = { controlsVisible = !controlsVisible }
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.Black.copy(alpha = 0.72f),
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.8f)
-                                )
-                            )
-                        )
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    PlayerTopBar(
+                    PlayerControlsOverlay(
                         title = queueContext?.mediaTitle ?: "Episode",
                         episode = currentEpisode,
                         server = currentServer,
                         fullscreen = fullscreen,
+                        errorMessage = errorMessage,
+                        isPlaying = isPlaying,
+                        ended = ended,
+                        position = position,
+                        duration = duration,
+                        scrubFraction = scrubFraction,
+                        speed = speed,
+                        hasNext = hasNext,
                         onBack = onBack,
                         onServers = { showServers = true },
                         onSettings = {
@@ -310,52 +261,19 @@ fun PlayerScreen(
                             onOpenSettings()
                         },
                         onFullscreen = { fullscreen = !fullscreen },
-                        modifier = Modifier.align(Alignment.TopCenter)
-                    )
-
-                    if (errorMessage != null) {
-                        PlayerError(
-                            message = errorMessage.orEmpty(),
-                            onRetry = {
-                                errorMessage = null
-                                exoPlayer.prepare()
-                                exoPlayer.play()
-                            },
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    } else {
-                        PlayerCenterControls(
-                            isPlaying = isPlaying,
-                            ended = ended,
-                            onTogglePlay = {
-                                if (ended) {
-                                    ended = false
-                                    exoPlayer.seekTo(0L)
-                                    exoPlayer.play()
-                                } else if (isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                }
-                                controlsVisible = true
-                            },
-                            onRewind = {
-                                exoPlayer.seekTo((exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L))
-                                controlsVisible = true
-                            },
-                            onForward = {
-                                val max = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(max))
-                                controlsVisible = true
-                            },
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
-
-                    PlayerBottomBar(
-                        position = position,
-                        duration = duration,
-                        scrubFraction = scrubFraction,
+                        onTogglePlay = {
+                            togglePlayerPlayback(exoPlayer, isPlaying, ended) { ended = false }
+                            controlsVisible = true
+                        },
+                        onRewind = {
+                            exoPlayer.seekTo((exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L))
+                            controlsVisible = true
+                        },
+                        onForward = {
+                            val max = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                            exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(max))
+                            controlsVisible = true
+                        },
                         onScrub = { scrubFraction = it },
                         onScrubFinished = {
                             val target = ((scrubFraction ?: 0f) * duration).toLong()
@@ -363,16 +281,17 @@ fun PlayerScreen(
                             scrubFraction = null
                             controlsVisible = true
                         },
-                        speed = speed,
-                        hasNext = hasNext,
                         onSpeed = {
                             speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.size]
                             exoPlayer.playbackParameters = PlaybackParameters(speed)
                             controlsVisible = true
                         },
                         onNext = { playNext() },
-                        onServers = { showServers = true },
-                        modifier = Modifier.align(Alignment.BottomCenter)
+                        onRetry = {
+                            errorMessage = null
+                            exoPlayer.prepare()
+                            exoPlayer.play()
+                        }
                     )
                 }
             }

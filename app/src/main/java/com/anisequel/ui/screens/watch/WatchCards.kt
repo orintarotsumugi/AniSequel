@@ -4,11 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -291,5 +294,44 @@ internal fun WatchActionBar(
                 )
             }
         }
+    }
+}
+
+/**
+ * The pinned bottom strip: Continue Watching, then the one Watch action.
+ *
+ * Its own composable because it owns the navigation-bar inset as well as its
+ * two cards; leaving that arithmetic in `WatchScreen` made the page's body carry
+ * layout clearance that belongs to the strip.
+ */
+@Composable
+internal fun WatchPinnedBar(
+    resume: WatchProgress?,
+    enabled: Boolean,
+    label: String,
+    onResume: () -> Unit,
+    onWatch: () -> Unit,
+    onInfo: () -> Unit,
+    onComment: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        resume?.let { point ->
+            ContinueWatching(progress = point, onClick = onResume)
+        }
+        WatchActionBar(
+            enabled = enabled,
+            label = label,
+            onWatch = onWatch,
+            onInfo = onInfo,
+            onComment = onComment
+        )
     }
 }

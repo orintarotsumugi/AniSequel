@@ -35,8 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.anisequel.data.extensions.PlaybackContext
-import com.anisequel.data.extensions.PlaybackQueue
 import com.anisequel.data.extensions.SourceEpisode
 import com.anisequel.data.extensions.SourceServer
 import com.anisequel.ui.components.AppVectorIcons
@@ -103,39 +101,30 @@ fun WatchScreen(
     }
 
     val startPlayback: (SourceEpisode, SourceServer?, Long) -> Unit = { episode, server, startMs ->
-        val mapping = state.mapping
-        if (mapping != null) {
-            PlaybackQueue.prepare(
-                context = PlaybackContext(
-                    mediaId = media.id,
-                    mediaTitle = media.title,
-                    coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
-                    sourceId = mapping.sourceId,
-                    animeId = mapping.animeId,
-                    episodes = episodes
-                ),
-                index = episodes.indexOf(episode).coerceAtLeast(0),
-                server = server,
-                startPositionMs = startMs
-            )
-            onPlay()
-        }
+        launchWatchPlayback(
+            mapping = state.mapping,
+            media = media,
+            coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
+            episodes = episodes,
+            episode = episode,
+            server = server,
+            startMs = startMs,
+            onPlay = onPlay
+        )
     }
 
     val requestEpisode: (SourceEpisode, Long) -> Unit = { episode, startMs ->
-        if (episode.servers.isEmpty()) {
-            showInfo = true
-        } else {
-            val chosen = episode.servers.firstOrNull {
-                it.name.equals(preferredServer, ignoreCase = true)
-            }
-            if (chosen == null && episode.servers.size > 1 && preferredServer == null) {
-                serverEpisode = episode
-                serverStartMs = startMs
-            } else {
-                startPlayback(episode, chosen ?: episode.servers.first(), startMs)
-            }
-        }
+        requestWatchEpisode(
+            episode = episode,
+            startMs = startMs,
+            preferredServer = preferredServer,
+            onNoServers = { showInfo = true },
+            onNeedsServer = { needsServer, position ->
+                serverEpisode = needsServer
+                serverStartMs = position
+            },
+            onPlay = { server -> startPlayback(episode, server, startMs) }
+        )
     }
 
     val resumeEpisode = resume?.let { point -> episodes.firstOrNull { it.id == point.episodeId } }
@@ -227,86 +216,49 @@ fun WatchScreen(
                 )
             }
 
-            if (downloaded) {
-                item(key = "downloads_empty") {
-                    DownloadsEmpty(onOnline = { downloaded = false })
-                }
-            } else if (episodes.isNotEmpty()) {
-                item(key = "ranges") {
-                    RangeChips(
-                        options = ranges,
-                        selectedIndex = rangeIndex,
-                        onSelect = { rangeIndex = it }
-                    )
-                }
-                items(visibleEpisodes, key = { "${it.id}:${it.name}" }) { episode ->
-                    WatchEpisodeRow(
-                        episode = episode,
-                        layout = layout,
-                        showArtwork = artwork,
-                        coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
-                        progress = resume?.takeIf { it.episodeId == episode.id },
-                        serverCount = episode.servers.size,
-                        onClick = { requestEpisode(episode, 0L) }
-                    )
-                }
-            } else if (state.isBusy) {
-                item(key = "loading") { WatchLoadingCard() }
-            } else {
-                item(key = "no_episodes") {
-                    NoEpisodesCard(
-                        error = state.error,
-                        onRetry = viewModel::retry,
-                        onSearch = { showSearch = true }
-                    )
-                }
-            }
-
-            if (state.error != null && episodes.isNotEmpty()) {
-                item(key = "error") {
-                    InlineError(message = state.error.orEmpty(), onRetry = viewModel::retry)
-                }
-            }
+            watchEpisodeFeed(
+                downloaded = downloaded,
+                episodes = episodes,
+                visibleEpisodes = visibleEpisodes,
+                ranges = ranges,
+                rangeIndex = rangeIndex,
+                layout = layout,
+                showArtwork = artwork,
+                coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
+                resume = resume,
+                isBusy = state.isBusy,
+                error = state.error,
+                onRange = { rangeIndex = it },
+                onEpisode = { requestEpisode(it, 0L) },
+                onOnline = { downloaded = false },
+                onSearch = { showSearch = true },
+                onRetry = viewModel::retry
+            )
 
             item(key = "footer_space") { Spacer(Modifier.height(4.dp)) }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            resume?.let { point ->
-                ContinueWatching(
-                    progress = point,
-                    onClick = {
-                        val episode = episodes.firstOrNull { it.id == point.episodeId }
-                        if (episode != null) {
-                            requestEpisode(episode, point.positionMs)
-                        } else {
-                            showSearch = true
-                        }
-                    }
+        WatchPinnedBar(
+            resume = resume,
+            enabled = targetEpisode != null && !state.isBusy,
+            label = if (resumeEpisode != null && !resume?.isNearlyFinished.orFalse()) {
+                "Resume"
+            } else {
+                "Watch"
+            },
+            onResume = {
+                resumeWatchEpisode(
+                    progress = resume,
+                    episodes = episodes,
+                    onEpisode = requestEpisode,
+                    onMissing = { showSearch = true }
                 )
-            }
-            WatchActionBar(
-                enabled = targetEpisode != null && !state.isBusy,
-                label = if (resumeEpisode != null && !resume?.isNearlyFinished.orFalse()) {
-                    "Resume"
-                } else {
-                    "Watch"
-                },
-                onWatch = {
-                    targetEpisode?.let { requestEpisode(it, targetStart) }
-                },
-                onInfo = { showInfo = true },
-                onComment = { onOpenAniList(media.anilistUrl) }
-            )
-        }
+            },
+            onWatch = { targetEpisode?.let { requestEpisode(it, targetStart) } },
+            onInfo = { showInfo = true },
+            onComment = { onOpenAniList(media.anilistUrl) },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     if (showSources) {
