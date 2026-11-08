@@ -4,6 +4,7 @@ import com.anisequel.data.network.GiphyResponse
 import com.anisequel.data.network.GifukaiGifs
 import com.anisequel.data.network.GifukaiResponse
 import com.anisequel.data.network.KlipyResponse
+import com.anisequel.data.network.NekosBestGifs
 import com.anisequel.data.network.NekosResponse
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.gifSearchApiFor
@@ -197,5 +198,19 @@ class GifProviderParseTest {
         assertEquals("kiss" to null, GifukaiGifs.resolve("kiss"))
         assertNull("a sentence it cannot answer is refused, not answered with a wrong GIF", GifukaiGifs.resolve("naruto running"))
         assertNull(GifukaiGifs.resolve("   "))
+    }
+
+    @Test
+    fun `nekos best reads word forms and refuses what it cannot answer`() {
+        assertEquals("cry", NekosBestGifs.resolveCategory("crying"))
+        assertEquals("pat", NekosBestGifs.resolveCategory("headpat"))
+        assertEquals("hug", NekosBestGifs.resolveCategory("Hug please"))
+        assertEquals("nom", NekosBestGifs.resolveCategory("eating"))
+        assertEquals("blowkiss", NekosBestGifs.resolveCategory("mwah"))
+        // A category word wins over an alias elsewhere in the phrase - the same
+        // first-reaction-word rule Gifukai resolves by.
+        assertEquals("hug", NekosBestGifs.resolveCategory("sad hug"))
+        assertNull("a name is not a reaction", NekosBestGifs.resolveCategory("frieren"))
+        assertNull(NekosBestGifs.resolveCategory("   "))
     }
 }

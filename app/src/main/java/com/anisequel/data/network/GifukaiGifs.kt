@@ -4,13 +4,15 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /*
- * gifukai's reaction index (api.gifukai.com), the new default.
+ * gifukai's reaction index (api.gifukai.com), the default.
  *
  * ## The catalogue, and why it is default
  *
@@ -22,32 +24,52 @@ import okhttp3.Request
  * not "ask an index for a term". No key, no signup, and no published rate limit;
  * it is free to use (https://github.com/lucialv/gifukai-api).
  *
- * It cannot answer free text the way Klipy or a booru can. That limit is stated
- * on the refusal (see the search body) instead of being answered by an empty
- * grid, and the browser's suggestion chips spell the actions that do answer -
- * for this provider the chips *are* the documented endpoint list, so a chip can
- * no more miss than the endpoint behind it exists.
+ * ## Why a search is several draws, and still has no pages
  *
- * ## Why one GIF per ask, and no pages
+ * The endpoint answers one random scene per ask and has no cursor and no count
+ * parameter (its README documents neither; `/v1/library` can browse by anime but
+ * needs an X-Library-Key that is not publicly issued). One tile per search read
+ * as "there is exactly one hug", so a search fires [MAX_DRAWS] asks in parallel
+ * and keeps the first [BATCH_SIZE] distinct scenes - parallel, so the grid costs
+ * one request's latency, and deduplicated, because a small action folder repeats
+ * itself long before twelve draws. `next` is still always null: a second ask is
+ * a re-roll, not a page, and the picker's shuffle row (see GifSearchStore.reroll)
+ * evicts the cached batch and draws a fresh one.
  *
- * The endpoint has no cursor: a second identical request returns a different
- * random GIF, which is a re-roll, not a duplicate to de-duplicate into a wall.
- * `next` is therefore always null, and the picker's "shuffle for another one"
- * affordance (see GifSearchStore.reroll) is the natural way to move through the
- * same reaction.
+ * ## Why a name is handed to Klipy rather than refused
+ *
+ * The keyless API cannot search anime or character names at all. It used to
+ * refuse every non-action word with a sentence naming Klipy or Safebooru - which
+ * left the reader to find Settings and switch provider to finish the thought
+ * they started. The factory now wires [nameSearch] to Klipy on the app's bundled
+ * key, so a name is answered where it was typed, and the answer carries a
+ * [GifPage.note] saying which index gave it: a substitution that is not said out
+ * loud is the reader searching one catalogue and getting another's tiles. The
+ * refusal below survives only for a client built without a hand-off.
  */
 
 /**
  * gifukai's `/{action}` endpoints on api.gifukai.com, keyless.
+ *
+ * [nameSearch] is the index a query that names no action is handed to - the
+ * factory wires Klipy on the bundled key so anime and character names answer
+ * from the default provider. Null keeps the old refusal, which is what a direct
+ * construction (a test, a preview) gets.
  */
 class GifukaiGifs(
     private val client: OkHttpClient = SafebooruGifs.defaultClient(),
-    moshi: Moshi = NetworkClient.json
+    moshi: Moshi = NetworkClient.json,
+    private val nameSearch: GifSearchApi? = null
 ) : GifSearchApi {
 
     override val providerName: String get() = "Gifukai"
 
     override val catalogueIsNarrow: Boolean get() = true
+
+    override val rerollable: Boolean get() = true
+
+    /** The hand-off the factory wired, pinned by the factory test like Klipy's key. */
+    internal val nameSearchInUse: GifSearchApi? get() = nameSearch
 
     override fun emptyHint(query: String): String =
         "Gifukai carries hand-picked reaction scenes: \"$query\" matched none of " +
@@ -60,72 +82,123 @@ class GifukaiGifs(
         withContext(Dispatchers.IO) {
             val term = query.trim()
             if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
+            val resolved = resolve(term)
+            if (resolved == null) return@withContext searchNames(term, cursor)
+            val (action, type) = resolved
             if (cursor != null) {
-                // There is no page after the page; a cursor here means a caller
-                // ignored `next = null`, and answering it with the same random
-                // draw would pretend to page a catalogue that does not.
+                // There is no page after the page; a cursor on an action answer
+                // means a caller ignored `next = null`, and answering it with the
+                // same random draw would pretend to page a catalogue that does
+                // not. A hand-off answer's cursor is Klipy's own and passes through
+                // in searchNames instead.
                 return@withContext Result.success(GifPage(emptyList()))
             }
-            val (action, type) = resolve(term)
-                ?: return@withContext Result.failure(
-                    GifSearchFailure(
-                        "Gifukai answers reaction scenes by action - " +
-                            resolveGifukaiHint.joinToString(", ") +
-                            ". Pick Klipy or Safebooru to search a title or a sentence."
+            gatherGifukaiScenes(MAX_DRAWS, BATCH_SIZE) { fetchScene(action, type) }
+                .map { scenes -> GifPage(results = scenes, next = null, totalCount = scenes.size) }
+        }
+
+    /**
+     * The hand-off for a query that names no action: an anime title, a character
+     * name, a sentence. Every answer - tiles, a miss, a refusal - carries the
+     * sentence that says Gifukai did not give it, because the placeholder still
+     * names Gifukai and the reader deserves to know whose catalogue answered.
+     */
+    private suspend fun searchNames(term: String, cursor: String?): Result<GifPage> {
+        val fallback = nameSearch ?: return Result.failure(
+            GifSearchFailure(
+                "Gifukai answers reaction scenes by action - " +
+                    resolveGifukaiHint.joinToString(", ") +
+                    ". Pick Klipy or Safebooru to search a title or a sentence."
+            )
+        )
+        val handoff = "Gifukai answers reaction words only, so ${fallback.providerName} took this search."
+        return fallback.search(term, cursor).fold(
+            onSuccess = { page ->
+                Result.success(
+                    page.copy(
+                        note = if (page.results.isEmpty()) {
+                            // The miss belongs to the index that just answered, not
+                            // to the one the sentence goes on to recommend: naming
+                            // Safebooru as the search that found nothing told the
+                            // reader a catalogue they never asked had refused them.
+                            "$handoff Nothing there matches \"$term\" - try another " +
+                                "spelling, or pick Safebooru, which searches anime tags."
+                        } else {
+                            handoff
+                        }
                     )
                 )
-
-            val built = runCatching {
-                ENDPOINT.toHttpUrl().newBuilder()
-                    // A path segment, so a query cannot reach another endpoint.
-                    .addPathSegment(action)
-                    .apply {
-                        if (type != null) {
-                            addQueryParameter("type", type)
-                        }
-                    }
-                    .build()
+            },
+            onFailure = { error ->
+                Result.failure(GifSearchFailure("$handoff ${error.message ?: "It did not answer."}"))
             }
-            val request = built.getOrNull()?.let {
-                Request.Builder()
-                    .url(it)
-                    .header("Accept", "application/json")
-                    .header("User-Agent", USER_AGENT)
-                    .build()
-            } ?: return@withContext Result.failure(GifSearchFailure("That search could not be built."))
+        )
+    }
 
-            try {
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return@withContext Result.failure(
-                            GifSearchFailure(
-                                when (response.code) {
-                                    404 -> "Gifukai does not carry that reaction."
-                                    429 -> "Gifukai is limiting requests. Wait a moment and try again."
-                                    else -> "Gifukai is not answering right now (HTTP ${response.code})."
-                                }
-                            )
-                        )
+    /** One random scene from an action endpoint, as a failure the batch can report. */
+    private suspend fun fetchScene(action: String, type: String?): Result<GifResult> {
+        val built = runCatching {
+            ENDPOINT.toHttpUrl().newBuilder()
+                // A path segment, so a query cannot reach another endpoint.
+                .addPathSegment(action)
+                .apply {
+                    if (type != null) {
+                        addQueryParameter("type", type)
                     }
-                    val parsed = runCatching { adapter.fromJson(response.body?.string().orEmpty()) }
-                        .getOrNull()
-                        ?.toGifResult()
-                        ?: return@withContext Result.failure(
-                            GifSearchFailure("Gifukai answered with something unreadable.")
-                        )
-                    Result.success(GifPage(results = listOf(parsed), next = null, totalCount = 1))
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Result.failure(GifSearchFailure("Could not reach Gifukai."))
-            }
+                .build()
         }
+        val request = built.getOrNull()?.let {
+            Request.Builder()
+                .url(it)
+                .header("Accept", "application/json")
+                .header("User-Agent", USER_AGENT)
+                .build()
+        } ?: return Result.failure(GifSearchFailure("That search could not be built."))
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return Result.failure(
+                        GifSearchFailure(
+                            when (response.code) {
+                                404 -> "Gifukai does not carry that reaction."
+                                429 -> "Gifukai is limiting requests. Wait a moment and try again."
+                                else -> "Gifukai is not answering right now (HTTP ${response.code})."
+                            }
+                        )
+                    )
+                }
+                val parsed = runCatching { adapter.fromJson(response.body?.string().orEmpty()) }
+                    .getOrNull()
+                    ?.toGifResult()
+                    ?: return Result.failure(
+                        GifSearchFailure("Gifukai answered with something unreadable.")
+                    )
+                Result.success(parsed)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(GifSearchFailure("Could not reach Gifukai."))
+        }
+    }
 
     companion object {
         private const val ENDPOINT = "https://api.gifukai.com/v1"
         private const val USER_AGENT =
             "AniSequel (https://github.com/orintarotsumugi/AniSequel)"
+
+        /**
+         * Twelve asks for nine tiles: the endpoint draws with replacement, so a
+         * folder repeats scenes before it has given nine distinct ones, and a
+         * small folder may hold fewer than nine in total - the duplicates are
+         * dropped and what remains is the whole folder. The API documents no
+         * rate limit, and the asks run in parallel so the grid waits one
+         * request's latency, not twelve.
+         */
+        private const val MAX_DRAWS = 12
+        private const val BATCH_SIZE = 9
 
         /**
          * The actions the live API offers, checked against `GET /v1/actions`.
@@ -226,6 +299,42 @@ class GifukaiGifs(
             }
             return action to type
         }
+    }
+}
+
+/**
+ * Several random draws gathered into one grid's worth of distinct scenes.
+ *
+ * The endpoint draws with replacement, so the same scene can arrive twice and a
+ * grid that showed it twice would read as a broken picker rather than a small
+ * folder: duplicates are dropped by id, and the answer is capped at [wanted].
+ * A draw that failed does not sink the batch - the scenes that arrived are the
+ * answer - but when every draw failed the first failure is the answer, because
+ * an empty grid over a refused host is the silent substitution this app does
+ * not do. Top-level and internal so the dedupe and the failure rule are pinned
+ * by a JVM test without a network.
+ */
+internal suspend fun gatherGifukaiScenes(
+    drawCount: Int,
+    wanted: Int,
+    draw: suspend () -> Result<GifResult>
+): Result<List<GifResult>> = coroutineScope {
+    val draws = List(drawCount) { async { draw() } }
+    val scenes = mutableListOf<GifResult>()
+    var firstFailure: Throwable? = null
+    for (pending in draws) {
+        val result = pending.await()
+        val gif = result.getOrNull()
+        if (gif == null) {
+            if (firstFailure == null) firstFailure = result.exceptionOrNull()
+        } else if (scenes.none { it.id == gif.id }) {
+            scenes += gif
+        }
+    }
+    when {
+        scenes.isNotEmpty() -> Result.success(scenes.take(wanted))
+        firstFailure != null -> Result.failure(firstFailure)
+        else -> Result.success(emptyList())
     }
 }
 

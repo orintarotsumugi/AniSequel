@@ -23,10 +23,11 @@ import okhttp3.Request
  *   (`hug`, `pat`, `wave`), and it needs a User-Agent that names the app. See
  *   [NekosBestGifs].
  * - **Gifukai** is the default: keyless, anime-only, hand-picked and safe by
- *   construction, one random reaction scene per action endpoint. "Search" here is
- *   a word→action match, its one-result answer re-rolls rather than pages, and
- *   its free-text hole is stated in the refusal and played around in the picker's
- *   chips. See [GifukaiGifs].
+ *   construction, one random reaction scene per ask on its action endpoints. A
+ *   search gathers several draws into one grid, and a query that names no action -
+ *   an anime or character name - is handed to Klipy, which answers on the app's
+ *   bundled key; the answer carries a note saying which index gave it. See
+ *   [GifukaiGifs].
  * - **Klipy** is the general catalogue behind it: a key in the path,
  *   page-numbered results, and `file.hd` / `file.sm` copies. It answers on the
  *   app's own key - see below - and a reader's pasted key replaces that one. See
@@ -128,6 +129,17 @@ interface GifSearchApi {
     val catalogueIsNarrow: Boolean get() = false
 
     /**
+     * Whether asking the same query again draws a different answer.
+     *
+     * True only for an index whose answer is a random draw rather than a ranked
+     * page - Gifukai's action endpoints re-roll on every ask. The picker offers its
+     * "shuffle for a fresh set" row on exactly those answers: on a paged or ranked
+     * index the same query returns the same first page, and a shuffle button there
+     * would redraw the tiles it already drew.
+     */
+    val rerollable: Boolean get() = false
+
+    /**
      * The sentence under an empty grid.
      *
      * It lives on the provider because the useful advice is specific to the index
@@ -173,7 +185,16 @@ data class GifResult(
 data class GifPage(
     val results: List<GifResult>,
     val next: String? = null,
-    val totalCount: Int? = null
+    val totalCount: Int? = null,
+    /**
+     * A sentence the picker shows above these results, when the answer needs one.
+     *
+     * Set by a provider that handed the query to another index: Gifukai answers
+     * reaction words and sends names to Klipy, and a substitution that is not said
+     * out loud is the reader searching one catalogue and getting another's tiles
+     * with no way to find out. Null for an answer the chosen index gave itself.
+     */
+    val note: String? = null
 )
 
 /**

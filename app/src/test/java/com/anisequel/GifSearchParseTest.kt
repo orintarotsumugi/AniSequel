@@ -19,6 +19,7 @@ import com.squareup.moshi.Moshi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -420,5 +421,40 @@ class GifSearchParseTest {
         assertEquals("Gifukai", com.anisequel.data.network.GifukaiGifs().providerName)
         assertEquals("Klipy", com.anisequel.data.network.KlipyGifs("key").providerName)
         assertEquals("Tenor", com.anisequel.data.network.TenorGifs("key").providerName)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `a word form reaches the category endpoint and a name still asks nothing`() = runTest {
+        val requests = java.util.concurrent.ConcurrentLinkedQueue<okhttp3.Request>()
+        val client = okhttp3.OkHttpClient.Builder()
+            .addInterceptor(object : okhttp3.Interceptor {
+                override fun intercept(chain: okhttp3.Interceptor.Chain): okhttp3.Response {
+                    val request = chain.request()
+                    requests += request
+                    return okhttp3.Response.Builder()
+                        .request(request)
+                        .protocol(okhttp3.Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("ok")
+                        .body(
+                            """{"results":[{"url":"https://x/cry.gif","anime_name":"A Place Further Than the Universe"}]}"""
+                                .toResponseBody()
+                        )
+                        .build()
+                }
+            })
+            .build()
+        val nekos = com.anisequel.data.network.NekosBestGifs(client = client)
+
+        // The exact-match check refused "crying" on an index that carries `cry`;
+        // the resolved category is what the request path has to spell.
+        val page = nekos.search("Crying ", null).getOrThrow()
+        assertEquals(1, page.results.size)
+        assertEquals("/api/v2/cry", requests.single().url.encodedPath)
+
+        val error = nekos.search("frieren", null).exceptionOrNull()!!
+        assertTrue("a name is still refused with the words the index answers", error.message!!.contains("reaction"))
+        assertEquals("a refused query opens no socket", 1, requests.size)
     }
 }

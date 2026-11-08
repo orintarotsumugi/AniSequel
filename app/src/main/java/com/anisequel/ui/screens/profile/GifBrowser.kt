@@ -105,10 +105,11 @@ internal fun ColumnScope.GifBrowser(
     // between the check and the use.
     val errorMessage = state.error
     val recent by store.recent.collectAsStateWithLifecycle()
+    val recentQueries by store.recentQueries.collectAsStateWithLifecycle()
 
     GifSearchField(state = state, store = store)
     if (state.query.isBlank()) {
-        GifBlankQueryChips(provider = provider) { tag ->
+        GifBlankQueryChips(provider = provider, recentQueries = recentQueries) { tag ->
             store.setQuery(tag)
             store.searchNow()
         }
@@ -173,7 +174,22 @@ private fun GifSearchField(state: GifSearchStore.State, store: GifSearchStore) {
 }
 
 @Composable
-private fun GifBlankQueryChips(provider: GifProvider, onPick: (String) -> Unit) {
+private fun GifBlankQueryChips(
+    provider: GifProvider,
+    recentQueries: List<String>,
+    onPick: (String) -> Unit
+) {
+    // The reader's own answered searches come first: the word they are most
+    // likely to want again is one they already typed, and these chips are known
+    // to answer - the store records only searches that returned tiles.
+    if (recentQueries.isNotEmpty()) {
+        GifSuggestionRow(
+            caption = "Recent searches",
+            suggestions = recentQueries,
+            tagTestPrefix = "comment_gif_recent_query",
+            onPick = onPick
+        )
+    }
     GifSuggestionRow(
         caption = "Reactions",
         suggestions = reactionsFor(provider),
@@ -232,7 +248,20 @@ private fun ColumnScope.GifBrowserBody(
         )
 
         else -> {
-            if (state.results.size == 1 && state.next == null) {
+            // A hand-off answer says which index gave it. The placeholder still
+            // names the chosen one, and a substitution that is not said out loud
+            // is the reader searching one catalogue and getting another's tiles.
+            state.note?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
+                )
+            }
+            // Shuffle is for random-draw answers. A hand-off grid carries a note
+            // and is ranked, not drawn - re-asking would return the same page.
+            if (store.rerollable && state.next == null && state.note == null) {
                 GifShuffleRow(onShuffle = store::reroll)
             }
             GifResultsGrid(store = store, state = state, onUse = onUse)
@@ -335,14 +364,30 @@ private fun ColumnScope.GifResultsGrid(
         }
     }
     // A page that failed to arrive leaves the ones already drawn readable, and the
-    // line says so rather than replacing the grid with an error state.
+    // line says so rather than replacing the grid with an error state. The retry is
+    // a tap on purpose: the store refuses to re-ask a failed page on its own, because
+    // the end-of-list trigger above would otherwise re-fire it the instant it failed
+    // for as long as the reader stays parked at the bottom.
     state.error?.let {
-        Text(
-            text = it,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(
+                onClick = store::retryPage,
+                modifier = Modifier.testTag("comment_gif_page_retry")
+            ) {
+                Text("Try again")
+            }
+        }
     }
 }
 
@@ -427,74 +472,7 @@ private fun GifSuggestionRow(
 }
 
 /**
- * The reactions the blank field offers, per provider.
- *
- * Each provider's chips are words its own catalogue answers, because a chip that
- * searches into an empty grid reads as the picker being broken rather than as a
- * gap in the index:
- *
- * - [Gifukai][GifProvider.GIFUKAI] gets [GIFUKAI_REACTIONS] - exact actions from
- *   the endpoint table its client embeds, so a chip can no more miss than the
- *   endpoint behind it exists. It cannot answer any other word, which is exactly
- *   why the chips are the documented vocabulary rather than a curated guess.
- * - Safebooru and nekos.best get [GIF_REACTIONS], measured against their live
- *   indexes (the narrow booru tags, the reaction categories).
- * - Klipy, GIPHY and Tenor are general catalogues: free text works, so the
- *   measured [GIF_REACTIONS] row is the nudge and nothing else is needed.
- */
-private fun reactionsFor(provider: GifProvider): List<String> = when (provider) {
-    GifProvider.GIFUKAI -> GIFUKAI_REACTIONS
-    else -> GIF_REACTIONS
-}
-
-/**
- * Gifukai's chips: the actions themselves, straight off the client's endpoint
- * table.
- *
- * Deliberately the bare actions rather than the wordier English shapes the alias
- * table also maps - a chip teaches the vocabulary, and the shorter word is the one
- * that is a whole endpoint. Articles ("a hug") are for the search field, whose
- * alias matcher reads them fine; these chips are tapped, not read aloud. Kiss
- * answers without a `type` parameter too, so the chip stays a single word.
- */
-private val GIFUKAI_REACTIONS = listOf(
-    "hug", "pat", "kiss", "cuddle", "cry", "laugh", "happy", "smile",
-    "blush", "shy", "angry", "sleep", "wave", "dance"
-)
-
-/**
- * Reactions: what a reader wants to *say*, checked against the live index.
- *
- * This list is not the obvious set of words. `smiling` and `wave` answer nothing in
- * the `animated_gif rating:safe` corner of the catalogue while `laughing` and
- * `blush` answer plenty, and a chip that searches into an empty grid is worse than
- * no chip: it reads as the picker being broken rather than as a gap in the index.
- */
-private val GIF_REACTIONS = listOf("laughing", "crying", "angry", "surprised", "confused", "blush")
-
-/**
- * Series: what a reader wants to *watch*, each one a tag the index really carries.
- *
- * Typed as booru tags rather than as release titles, because that is what the field
- * is being taught to accept: `sousou no frieren` is the search a reader types and
- * `sousou_no_frieren*` is what answers - the app's own phrase tier rewrites the
- * words, and the prefix tier finds the series when the exact tag is not the one the
- * site uses (`frieren_beyond_journeys_end` answers nothing; `frieren*` answers the
- * show). Each entry was measured against the live index with the app's request
- * shape before it went in, the same rule [GIF_REACTIONS] is held to - and the row
- * is offered on Safebooru only, because these are booru tags everywhere else.
- */
-private val GIF_SERIES = listOf(
-    "spice_and_wolf",
-    "sousou_no_frieren*",
-    "kaguya*",
-    "evangelion*",
-    "mob_psycho_100*",
-    "boku_no_hero_academia*"
-)
-
-/**
- * The single-result provider's second sentence: "shuffle for another one".
+ * The random-draw provider's second sentence: "shuffle for a fresh set".
  *
  * A filled text button rather than a bare icon so the row reads as a sentence
  * about the grid above it; the icon is the affordance, the words are the meaning.
@@ -521,7 +499,7 @@ private fun GifShuffleRow(onShuffle: () -> Unit) {
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Shuffle for another one")
+            Text("Shuffle for a fresh set")
         }
     }
 }

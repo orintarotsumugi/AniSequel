@@ -396,8 +396,9 @@ private fun CommentMediaCard(context: android.content.Context) {
                 "All three are public: anybody with the link can view the file, and " +
                 "none can delete it without an account. GIF search runs against the " +
                 "index chosen below. Gifukai is the default: it needs no key and " +
-                "carries hand-picked anime reactions only, one per reaction word - " +
-                "the picker's suggestion chips name them all. Safebooru and " +
+                "carries hand-picked anime reactions, a grid of scenes per search - " +
+                "and a name that is not a reaction word is answered by Klipy, with " +
+                "a note saying which index answered. Safebooru and " +
                 "nekos.best need no key either and ask for safe anime GIFs only; " +
                 "Klipy is the general catalogue and the app carries a key for it, " +
                 "so it answers without one from you (paste a key of your own to use " +

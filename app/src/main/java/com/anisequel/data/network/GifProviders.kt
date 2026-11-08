@@ -20,9 +20,11 @@ import okhttp3.Request
  * it is no longer the default answer, and the client says so when Google refuses.
  *
  * - **Gifukai** is the default: keyless, anime-only, hand-picked and safe by
- *   construction. One random reaction scene per action endpoint (`/v1/hug`, ...) -
- *   "search" is a word-to-action match, there is no paging, and a second ask
- *   re-rolls the same reaction. See [GifukaiGifs].
+ *   construction. One ask draws one random reaction scene (`/v1/hug`, ...), so a
+ *   search gathers several draws into a grid of distinct scenes, and a query that
+ *   names no action - an anime or character name - is handed to Klipy on the
+ *   bundled key, with a note on the answer saying which index gave it. See
+ *   [GifukaiGifs].
  * - **Klipy** is the closest thing to a drop-in general catalogue: a key in the URL
  *   path, page-numbered results, and `file.hd` / `file.sm` copies that map cleanly
  *   onto a grid tile and a comment embed. It is what the default hands a sentence
@@ -37,8 +39,9 @@ import okhttp3.Request
  *   merging several.
  * - **nekos.best** is the second keyless index. It has no page cursor: a request
  *   returns up to twenty reaction GIFs. Its category endpoints (`hug`, `pat`, `wave`)
- *   are the reliable half, so a one-word search that names a category goes there and
- *   anything else goes to its metadata search.
+ *   are the reliable half, so a search that names a category - bare or in one of
+ *   the word forms [NekosBestGifs.resolveCategory] maps - goes there, and anything
+ *   else is refused with the words the index does answer.
  *
  * ## Never the AniList token
  *
@@ -398,8 +401,11 @@ internal data class GiphyImage(
  * Its `/search` endpoint searches *metadata* - anime names, artists, sources - so
  * `hug` finds a GIF whose series is named "Hug", not a hugging GIF. The category
  * endpoints are the half that does what a reader means by a reaction search, so a
- * one-word query that names a category goes there first; anything else gets a
- * metadata search, which is still better than an empty grid.
+ * query that names a category goes there and anything else is refused with the
+ * words the index does answer. [resolveCategory] reads the word forms too -
+ * "crying" is `cry`, "headpat" is `pat` - because the exact-match check this
+ * replaced refused the spellings the picker's own chips and a phone keyboard
+ * produce, on an index that carries the endpoint for them.
  *
  * ## Why there is no cursor
  *
@@ -426,7 +432,7 @@ class NekosBestGifs(
             val term = query.trim()
             if (term.isEmpty()) return@withContext Result.success(GifPage(emptyList()))
 
-            val category = term.lowercase().takeIf { it in NEKOS_CATEGORIES }
+            val category = resolveCategory(term)
             // Asked and answered against the live API: `search` needs a *category*
             // in `type`, so `?type=2` - the value nekos.best's older documentation
             // gave for "GIFs" - comes back "Invalid type", and a word that is not
@@ -501,6 +507,45 @@ class NekosBestGifs(
             "sleep", "smile", "smug", "stare", "tableflip", "teehee", "thumbsup",
             "tickle", "wag", "wave", "wink", "yawn", "yeet"
         )
+
+        /**
+         * Word forms mapped to categories the index carries. Every target is in
+         * [NEKOS_CATEGORIES]: an alias at a category the API does not have would
+         * send the request the category check exists to prevent. Gifukai's alias
+         * table is deliberately not reused - it maps `nom` to `eat` and `neko` to
+         * `nya`, and this index spells those the other way or not at all.
+         */
+        private val NEKOS_ALIASES: Map<String, String> = mapOf(
+            "crying" to "cry", "sob" to "cry", "sad" to "cry",
+            "laughing" to "laugh", "lol" to "laugh", "lmao" to "laugh",
+            "smiling" to "smile",
+            "waving" to "wave",
+            "hugging" to "hug", "snuggle" to "cuddle",
+            "patting" to "pat", "headpat" to "pat",
+            "kissing" to "kiss", "peck" to "kiss", "mwah" to "blowkiss",
+            "sleeping" to "sleep", "nap" to "sleep",
+            "mad" to "angry", "rage" to "angry",
+            "eat" to "nom", "eating" to "nom",
+            "boop" to "poke",
+            "dunno" to "shrug", "idk" to "shrug"
+        )
+
+        /**
+         * The reaction a query names, or null when it names none.
+         *
+         * The first word that is a category answers, then the first word the
+         * alias table maps - the same first-reaction-word rule Gifukai's resolver
+         * uses, so "hug please" is a hug on both keyless indexes. Internal and in
+         * the companion so the word forms are pinned by a JVM test the way
+         * [GifukaiGifs.resolve] is, rather than discovered missing on a device.
+         */
+        internal fun resolveCategory(query: String): String? {
+            val words = query.lowercase()
+                .split(Regex("[^a-z]+"))
+                .filter { it.isNotBlank() }
+            return words.firstOrNull { it in NEKOS_CATEGORIES }
+                ?: words.firstNotNullOfOrNull { NEKOS_ALIASES[it] }
+        }
     }
 }
 
@@ -564,7 +609,14 @@ fun gifSearchApiFor(
     return when (provider) {
         GifProvider.SAFEBOORU -> SafebooruGifs()
         GifProvider.NEKOS_BEST -> NekosBestGifs()
-        GifProvider.GIFUKAI -> GifukaiGifs()
+        // Gifukai answers reaction words; a name or a sentence is handed to Klipy
+        // on the same key rule as choosing Klipy directly - the reader's saved key
+        // wins, the bundled one answers when there is none - so the default
+        // provider searches anime and character names without a trip to Settings.
+        // The answer carries a note saying Klipy gave it (see GifukaiGifs.searchNames).
+        GifProvider.GIFUKAI -> GifukaiGifs(
+            nameSearch = KlipyGifs(klipyKey?.takeIf { it.isNotBlank() } ?: BUNDLED_KLIPY_KEY)
+        )
         GifProvider.TENOR -> tenorKey?.takeIf { it.isNotBlank() }
             ?.let { TenorGifs(it) } ?: SafebooruGifs(substitutionNote = standingInFor(GifProvider.TENOR.displayName))
 

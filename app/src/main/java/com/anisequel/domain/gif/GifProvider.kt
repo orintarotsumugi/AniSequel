@@ -8,10 +8,11 @@ package com.anisequel.domain.gif
  * The default is Gifukai: it is keyless, safe by construction (every GIF is
  * hand-picked, anime-only, near-16:9), and shaped like the reactions an anime
  * comment actually makes - one endpoint per reaction (`hug`, `pat`, `cry`, ...),
- * each answering a random hand-picked scene that carries its anime's name. What
- * it cannot do is answer free text the way Klipy or Safebooru can, so the picker
- * spells what it *does* answer with suggestion chips specific to it, and its
- * refusal says where to take a sentence instead. See `data/network/GifukaiGifs`.
+ * each answering a random hand-picked scene that carries its anime's name. A
+ * search gathers several draws into a grid of distinct scenes. What its keyless
+ * API cannot do is search names, so a query that names no reaction - an anime
+ * title, a character - is handed to Klipy, which answers on the app's bundled
+ * key, and the answer says which index gave it. See `data/network/GifukaiGifs`.
  *
  * Klipy is the general catalogue: reaction GIFs, spoken-word phrases, whatever a
  * reader types - and the app carries a key for it, so it answers out of the box
@@ -65,9 +66,9 @@ enum class GifProvider(
         storageValue = "gifukai",
         displayName = "Gifukai",
         // Keyless: the whole point of the default. Its limit is not a credential
-        // but a vocabulary - it answers reactions, not sentences - and that limit
-        // is stated in the client's refusal and played around in the picker's
-        // chips, not asked to be registered away.
+        // but a vocabulary - its own API answers reactions, not names - and the
+        // factory covers that limit by handing name searches to Klipy on the
+        // bundled key, rather than asking the reader to register or switch.
         needsKey = false,
         keyLabel = "",
         keyHint = ""
@@ -121,9 +122,9 @@ enum class GifProvider(
          * Gifukai is the default: keyless, safe by construction, and shaped like
          * the reactions an anime comment makes - the one index whose answer set
          * matched where the picker is actually opened from. Its free-text hole is
-         * its own UI problem (chips, a stated refusal), not a reader's
-         * registration problem. Klipy, the previous default, answers on the app's
-         * own key and remains the general catalogue behind it; Safebooru is the
+         * covered by a hand-off, not a registration: names go to Klipy on the
+         * app's own key and the answer says so. Klipy, the previous default,
+         * remains the general catalogue behind it; Safebooru is the
          * tag index and the substitution ladder's last resort in
          * [com.anisequel.data.network.gifSearchApiFor]. The line every default
          * has had to hold since a retired Tenor: one that answers without asking

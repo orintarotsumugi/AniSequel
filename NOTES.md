@@ -1916,6 +1916,55 @@ key - and a reader's unreadable GIF key must not be able to destroy the entry th
 AniList token is sealed under, which would sign them out of the account to fix a
 setting.
 
+## 1.8.8: a reaction search is a grid, and a name is a hand-off
+
+Gifukai became the default with one random scene per search, and a grid holding one
+tile read as *"there is exactly one hug"* when the API meant *"here is one of many"*.
+The endpoint has no cursor and no count parameter - its README documents neither, and
+`/v1/library`, which can browse by anime, needs an `X-Library-Key` that is not publicly
+issued - so the grid is built the only way the keyless API allows: twelve asks in
+parallel, deduplicated by URL, first nine distinct scenes kept. Parallel is the point:
+the grid costs one request's latency, not twelve, and the API documents no rate limit.
+A small action folder repeats itself before twelve draws, so the duplicates are
+dropped and what remains is the whole folder; a draw that fails does not sink the
+scenes that arrived, and only a batch where every draw failed reports an error. The
+shuffle row survives as "Shuffle for a fresh set": the store evicts the cached batch
+and the next ask draws a new one.
+
+The other half is the search the default could not answer at all. An anime or
+character name is not a reaction word, and the old refusal named Klipy or Safebooru
+and left the reader to find Settings and switch provider to finish the thought they
+started. The factory now wires Klipy - on the reader's saved key when there is one,
+the bundled key otherwise - as Gifukai's `nameSearch`, so a name is answered where it
+was typed. Every hand-off answer carries a `GifPage.note` saying which index gave it,
+because the placeholder still names Gifukai and a substitution that is not said out
+loud is the reader searching one catalogue and getting another's tiles. The note also
+hides the shuffle row: a Klipy page is ranked, not drawn, so re-asking it would redraw
+the same tiles. A hand-off page keeps Klipy's own cursor, so name searches page; an
+empty one says the miss is Klipy's and names Safebooru as the tag index that can still
+answer - the first wording named Safebooru as the search that had found nothing, which
+told the reader a catalogue they never asked had refused them; a failed one wraps
+Klipy's sentence in the hand-off's, so a rate limit is never blamed on the index that
+never saw the query.
+
+The second pass over the same release fixed what the grid exposed and added what the
+picker was missing. A failed *next page* used to re-fire the instant its loading flag
+dropped: the grid asks for more whenever its last rows are visible and no load is in
+flight, so a reader parked at the bottom of a grid whose next page kept failing aimed
+a request loop at a host that had just said no. `loadMore` now refuses while an error
+stands, and the line under the grid carries a Try again button whose `retryPage` is
+the only thing that clears the error and asks again - a tap, not a scroll position.
+The blank field offers the sheet's answered searches back as chips (newest first, one
+per normalised word, only searches that returned tiles, session-scoped like the recent
+picks and surviving a clear for the same reason), because the word a reader wants
+again is usually one they already typed. nekos.best stopped refusing the word forms
+its own categories answer - "crying" is `cry`, "headpat" is `pat`, first reaction word
+in a phrase wins, the rule Gifukai already used - with every alias target checked
+against the category set so a mapped word cannot send the request the check exists to
+prevent. The picker's measured chip vocabulary moved to `GifSuggestions.kt`: the lists
+change when a live index is re-measured, the pane changes when its states change, and
+one file doing both had passed the size ceiling.
+
 ## A centred image, and why the parser could not see one
 
 `~~~img100%(https://…/card.svg)~~~` is what AniList's own editor writes for a

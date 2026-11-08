@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.8.8",
+      "entries": [
+        {
+          "title": "GIF search answers with a grid of scenes, not one tile",
+          "detail": "A reaction search on Gifukai now gathers twelve random draws in parallel and keeps up to nine distinct hand-picked scenes, so \"hug\" opens a grid to choose from instead of a single tile. Repeats are dropped, a small folder shows everything it has, and \"Shuffle for a fresh set\" draws a new batch. The draws run in parallel, so the grid costs one request's wait, not twelve, and a draw that fails does not sink the scenes that arrived."
+        },
+        {
+          "title": "Anime and character names search from the default GIF provider",
+          "detail": "Typing a name that is not a reaction - \"frieren\", \"holo\" - used to be refused with advice to switch provider in Settings. Gifukai now hands those searches to Klipy, which answers on the key the app already carries, and the results say which index answered. Name searches page the way Klipy always has, a Klipy key of your own still replaces the bundled one, and when even Klipy has nothing the note says the miss is Klipy's and names Safebooru as the tag index that can still answer."
+        },
+        {
+          "title": "The GIF picker offers your answered searches back",
+          "detail": "Clearing the search field now shows the searches this sheet has already answered as chips, newest first, above the reaction suggestions - one tap re-runs a word you typed without retyping it, and a cached answer returns at once. Only searches that returned tiles are recorded, so a chip cannot re-run an empty grid; the list is session-scoped like the recent-picks strip and keeps one chip per word however you spelled it."
+        },
+        {
+          "title": "A failed GIF page waits for a tap instead of retrying forever",
+          "detail": "When the next page of results failed while you were scrolled to the bottom of the grid, the picker re-asked for it the instant the loading spinner stopped - a request loop aimed at a host that had just refused. A failed page now keeps its tiles readable, says what happened, and waits for the new Try again button; scrolling alone no longer re-fires it."
+        },
+        {
+          "title": "nekos.best answers the word forms you actually type",
+          "detail": "The keyless reaction index only accepted its exact category words, so \"crying\" or \"headpat\" was refused by an index that carries the cry and pat endpoints. It now reads the common word forms - crying, laughing, smiling, headpat, snuggle and the rest - and the first reaction word in a phrase answers, the same rule Gifukai uses. A query that names no reaction is still refused with the words the index answers."
+        }
+      ]
+    },
+    {
       "version": "1.8.7",
       "entries": [
         {
