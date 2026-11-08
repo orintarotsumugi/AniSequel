@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -140,5 +141,101 @@ class GifSearchRelevanceTest {
         assertFalse(store.state.value.isSearching)
         assertEquals("crying", store.state.value.results.single().id)
         assertTrue(GifSearchStore.cacheKey(" Holo  Crying ") == "holo crying")
+    }
+
+    /** A first page that answers, and a second page that refuses exactly once. */
+    private class RefusingSecondPage : GifSearchApi {
+        var calls = 0
+        private var refused = false
+
+        override suspend fun search(query: String, cursor: String?): Result<GifPage> {
+            calls += 1
+            if (cursor == null) {
+                return Result.success(
+                    GifPage(listOf(GifResult("1", "https://x/1.gif", "https://x/1.gif", null, 10, 10)), next = "2")
+                )
+            }
+            if (!refused) {
+                refused = true
+                return Result.failure(IOException("the next page refused"))
+            }
+            return Result.success(
+                GifPage(listOf(GifResult("2", "https://x/2.gif", "https://x/2.gif", null, 10, 10)))
+            )
+        }
+    }
+
+    @Test
+    fun `a failed page waits for a tap instead of re-firing at the scroll position`() = runTest {
+        val provider = RefusingSecondPage()
+        val store = GifSearchStore(this, provider)
+        store.setQuery("holo")
+        advanceUntilIdle()
+        assertEquals("2", store.state.value.next)
+
+        store.loadMore()
+        advanceUntilIdle()
+        assertEquals(2, provider.calls)
+        assertNotNull("the failed page says so", store.state.value.error)
+        assertEquals("the tiles already drawn stay readable", 1, store.state.value.results.size)
+
+        // The grid's end-of-list trigger asks again the moment the loading flag
+        // drops, for as long as the reader is parked at the bottom. While the
+        // error stands that ask must not reach the provider - it used to loop.
+        store.loadMore()
+        advanceUntilIdle()
+        assertEquals("a failed page is not re-asked on its own", 2, provider.calls)
+
+        store.retryPage()
+        advanceUntilIdle()
+        assertEquals("the explicit retry is what asks again", 3, provider.calls)
+        assertNull("a recovered page clears the error", store.state.value.error)
+        assertEquals(2, store.state.value.results.size)
+    }
+
+    @Test
+    fun `answered searches become chips, newest first and one per word`() = runTest {
+        val store = GifSearchStore(this, CountingProvider())
+
+        store.setQuery("holo")
+        advanceUntilIdle()
+        store.setQuery("kaguya")
+        advanceUntilIdle()
+        // The same search in a different shape is one chip, in its newest spelling.
+        store.setQuery("Holo ")
+        advanceUntilIdle()
+
+        assertEquals(listOf("Holo", "kaguya"), store.recentQueries.value)
+
+        // Clearing the field is when the chips are drawn, so a reset keeps them.
+        store.reset()
+        assertEquals(listOf("Holo", "kaguya"), store.recentQueries.value)
+    }
+
+    @Test
+    fun `a search that found nothing is not offered as a chip`() = runTest {
+        val provider = object : GifSearchApi {
+            override suspend fun search(query: String, cursor: String?): Result<GifPage> =
+                Result.success(GifPage(emptyList()))
+        }
+        val store = GifSearchStore(this, provider)
+        store.setQuery("nothing")
+        advanceUntilIdle()
+        assertTrue(
+            "a chip that re-runs an empty search reads as a broken picker",
+            store.recentQueries.value.isEmpty()
+        )
+    }
+
+    @Test
+    fun `the chip row keeps a sheet's worth of searches`() = runTest {
+        val store = GifSearchStore(this, CountingProvider())
+        for (i in 1..9) {
+            store.setQuery("word$i")
+            advanceUntilIdle()
+        }
+        assertEquals(GifSearchStore.MAX_RECENT_QUERIES, store.recentQueries.value.size)
+        assertEquals("word9", store.recentQueries.value.first())
+        assertFalse("the oldest search fell off", store.recentQueries.value.contains("word1"))
     }
 }

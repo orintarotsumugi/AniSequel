@@ -65,6 +65,13 @@ class GifSearchStore(
     val providerName: String get() = provider.providerName
 
     /**
+     * Whether the current index re-rolls on a repeated ask, so the picker can
+     * offer its shuffle row. A paged index returns the same first page, and a
+     * shuffle button there would redraw the tiles already on screen.
+     */
+    val rerollable: Boolean get() = provider.rerollable
+
+    /**
      * Why that index is not the one the reader chose, or null when it is.
      *
      * Set when the chosen provider needs a key that is not saved and the anonymous
@@ -126,6 +133,32 @@ class GifSearchStore(
     /** The recent picks, in the order the grid should show them. */
     fun usedThisSession(): List<GifResult> = _recent.value
 
+    /**
+     * The searches this sheet has already answered with tiles, newest first.
+     *
+     * The blank field offers them as chips, which is the picker's answer to the
+     * second-most common second visit: the reader is back for a word they already
+     * searched, and retyping it is a keyboard's worth of work for an answer the
+     * sheet has given before. Session-scoped like the recent picks above, and for
+     * the same reason - a durable history of what somebody searched is a thing to
+     * think about before shipping, not a side effect of a picker.
+     *
+     * Only searches that returned tiles are recorded: a chip that re-runs an empty
+     * search reads as the picker being broken rather than as a gap in the index.
+     * Deduplicated by [cacheKey], so "Holo" and "holo " are one chip, and it
+     * survives [reset] - clearing the field is exactly when these chips are drawn.
+     */
+    private val _recentQueries = MutableStateFlow<List<String>>(emptyList())
+    val recentQueries: StateFlow<List<String>> = _recentQueries.asStateFlow()
+
+    private fun rememberQuery(query: String) {
+        val term = query.trim()
+        val key = cacheKey(term)
+        _recentQueries.value = (
+            listOf(term) + _recentQueries.value.filterNot { cacheKey(it) == key }
+            ).take(MAX_RECENT_QUERIES)
+    }
+
     /** Rewrites the query and schedules the search it deserves. */
     fun setQuery(query: String) {
         val current = _state.value
@@ -140,7 +173,11 @@ class GifSearchStore(
             query = query,
             error = null,
             isLoadingMore = false,
-            next = null
+            next = null,
+            // The note belongs to the answer being replaced: a hand-off sentence
+            // left over the dimmed grid named an index that is no longer answering
+            // while the new query waited out its debounce.
+            note = null
         )
         if (query.isBlank()) {
             // Clearing the field clears the grid with it. Leaving another search's
@@ -169,15 +206,13 @@ class GifSearchStore(
     /**
      * Shuffles: throws away the cached answer for the current query and asks again.
      *
-     * It exists for providers whose answer to one ask is one GIF - Gifukai answers a
-     * reaction with a single random scene and has no cursor, so the grid with one
-     * tile and no "more" affordance reads as *"there is exactly one hug"* when the
-     * API actually means *"here is one of many hugs"*. The shuffle is the second
-     * half of that sentence: without it, the reader's only way to another scene is
-     * retyping the same word, which the [firstPages] cache answers with the same
-     * tile every time. Evicting the cache entry is the whole mechanism - re-search
-     * with the same query returns the fresh draw without waiting out the debounce
-     * the reader's typing put in the field's way.
+     * It exists for providers whose answer is a random draw rather than a ranked
+     * page - Gifukai answers a reaction with a batch of scenes drawn fresh per ask
+     * and has no cursor, so without the shuffle the reader's only way to another
+     * set of scenes is retyping the same word, which the [firstPages] cache answers
+     * with the same tiles every time. Evicting the cache entry is the whole
+     * mechanism - re-search with the same query returns the fresh draw without
+     * waiting out the debounce the reader's typing put in the field's way.
      *
      * Refused when a search or a page-load is in flight: a shuffle is a request,
      * and a picker that fires one on a tapping loop is a rate-limit notice.
@@ -214,13 +249,18 @@ class GifSearchStore(
         }
         result.fold(
             onSuccess = { page ->
+                if (page.results.isNotEmpty()) rememberQuery(query)
                 _state.value = current.copy(
                     isSearching = false,
                     isLoadingMore = false,
                     results = page.results,
                     next = page.next,
                     error = null,
-                    note = if (page.results.isEmpty()) emptyNote(query) else null
+                    // The page's own note wins: a hand-off answer says which index
+                    // gave it even when the grid is full, and an empty hand-off
+                    // says where to go next instead of the chosen index's hint
+                    // for a catalogue that never saw the query.
+                    note = page.note ?: if (page.results.isEmpty()) emptyNote(query) else null
                 )
             },
             onFailure = { error ->
@@ -241,11 +281,19 @@ class GifSearchStore(
      * Refused while a search is in flight, and while there is no cursor to ask
      * with: a grid that keeps firing requests at its own end is the difference
      * between a picker and a rate-limit notice.
+     *
+     * Also refused while a page has already failed. The grid asks for the next
+     * page whenever its last rows are visible and no load is in flight, and a
+     * failed load ends with the flag lowered - so without this refusal the same
+     * scroll position re-fired the same failing page the instant it failed, a
+     * request loop aimed at a host that just said no. A failed page waits for
+     * [retryPage], which is a tap, not a scroll position.
      */
     fun loadMore() {
         val current = _state.value
         val cursor = current.next ?: return
         if (current.isLoadingMore || current.isSearching || current.query.isBlank()) return
+        if (current.error != null) return
         pageJob?.cancel()
         pageJob = scope.launch {
             _state.value = _state.value.copy(isLoadingMore = true, error = null)
@@ -275,6 +323,20 @@ class GifSearchStore(
                 }
             )
         }
+    }
+
+    /**
+     * The explicit retry for a page that failed to arrive.
+     *
+     * [loadMore] refuses while an error is on the state, so the grid's
+     * end-of-list trigger cannot re-fire a failing page in a loop; clearing the
+     * error is the one thing that makes the next ask legitimate, and it belongs
+     * to a button the reader taps rather than to the scroll position that
+     * happened to be parked at the bottom when the host refused.
+     */
+    fun retryPage() {
+        _state.value = _state.value.copy(error = null)
+        loadMore()
     }
 
     /** Drops everything, for a picker that is being closed or re-provisioned. */
@@ -309,5 +371,8 @@ class GifSearchStore(
 
         /** How many recent picks the empty search shows. */
         const val MAX_USED = 12
+
+        /** How many answered searches the blank field offers as chips. */
+        const val MAX_RECENT_QUERIES = 8
     }
 }

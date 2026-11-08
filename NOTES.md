@@ -1588,13 +1588,14 @@ and an empty stored tone set means every tone rather than an empty pool, which i
 what a cleared preference or a downgrade looks like.
 
 The lines themselves are in `JokeLinesReader` (feelings, backlog, the app's own
-voice) and `JokeLinesShow` (craft and dark), and `AppJokes` is only the index and
-the draw. Splitting the text out is what kept the object under the file ceiling
-without splitting it by line count: the two files are the reader's side of the
-hobby and the shows' side, so a line that moves between them is a line whose
-subject changed, which is worth seeing in a diff. The selection API did not move
-with the text, which is why `AppJokesTest` still pins the pool without knowing
-which file a line came from.
+voice), `JokeLinesShow` (craft) and `JokeLinesDark` (what happens to a show
+afterwards), and `AppJokes` is only the index and the draw. Splitting the text out
+is what kept the object under the file ceiling without splitting it by line count:
+the files are the reader's side of the hobby, how the work is made, and what the
+industry does to it, so a line that moves between them is a line whose subject
+changed, which is worth seeing in a diff. The selection API did not move with the
+text, which is why `AppJokesTest` still pins the pool without knowing which file a
+line came from.
 
 There are five tones since 1.6.0. `DARK` was split out of `META` because the
 reader who wants Ani-chan's voice is not necessarily the reader who wants a joke
@@ -1915,6 +1916,83 @@ deletes the keystore entry, deliberately, because an invalidated key is worse th
 key - and a reader's unreadable GIF key must not be able to destroy the entry their
 AniList token is sealed under, which would sign them out of the account to fix a
 setting.
+
+## 1.8.8: a reaction search is a grid, and a name is a hand-off
+
+Gifukai became the default with one random scene per search, and a grid holding one
+tile read as *"there is exactly one hug"* when the API meant *"here is one of many"*.
+The endpoint has no cursor and no count parameter - its README documents neither, and
+`/v1/library`, which can browse by anime, needs an `X-Library-Key` that is not publicly
+issued - so the grid is built the only way the keyless API allows: twelve asks in
+parallel, deduplicated by URL, first nine distinct scenes kept. Parallel is the point:
+the grid costs one request's latency, not twelve, and the API documents no rate limit.
+A small action folder repeats itself before twelve draws, so the duplicates are
+dropped and what remains is the whole folder; a draw that fails does not sink the
+scenes that arrived, and only a batch where every draw failed reports an error. The
+shuffle row survives as "Shuffle for a fresh set": the store evicts the cached batch
+and the next ask draws a new one.
+
+The other half is the search the default could not answer at all. An anime or
+character name is not a reaction word, and the old refusal named Klipy or Safebooru
+and left the reader to find Settings and switch provider to finish the thought they
+started. The factory now wires Klipy - on the reader's saved key when there is one,
+the bundled key otherwise - as Gifukai's `nameSearch`, so a name is answered where it
+was typed. Every hand-off answer carries a `GifPage.note` saying which index gave it,
+because the placeholder still names Gifukai and a substitution that is not said out
+loud is the reader searching one catalogue and getting another's tiles. The note also
+hides the shuffle row: a Klipy page is ranked, not drawn, so re-asking it would redraw
+the same tiles. A hand-off page keeps Klipy's own cursor, so name searches page; an
+empty one says the miss is Klipy's and names Safebooru as the tag index that can still
+answer - the first wording named Safebooru as the search that had found nothing, which
+told the reader a catalogue they never asked had refused them; a failed one wraps
+Klipy's sentence in the hand-off's, so a rate limit is never blamed on the index that
+never saw the query.
+
+The second pass over the same release fixed what the grid exposed and added what the
+picker was missing. A failed *next page* used to re-fire the instant its loading flag
+dropped: the grid asks for more whenever its last rows are visible and no load is in
+flight, so a reader parked at the bottom of a grid whose next page kept failing aimed
+a request loop at a host that had just said no. `loadMore` now refuses while an error
+stands, and the line under the grid carries a Try again button whose `retryPage` is
+the only thing that clears the error and asks again - a tap, not a scroll position.
+The blank field offers the sheet's answered searches back as chips (newest first, one
+per normalised word, only searches that returned tiles, session-scoped like the recent
+picks and surviving a clear for the same reason), because the word a reader wants
+again is usually one they already typed. nekos.best stopped refusing the word forms
+its own categories answer - "crying" is `cry`, "headpat" is `pat`, first reaction word
+in a phrase wins, the rule Gifukai already used - with every alias target checked
+against the category set so a mapped word cannot send the request the check exists to
+prevent. The picker's measured chip vocabulary moved to `GifSuggestions.kt`: the lists
+change when a live index is re-measured, the pane changes when its states change, and
+one file doing both had passed the size ceiling.
+
+The third pass spent the rest of gifukai's shape. Its `?pairing=` filter is the one
+capability no other index in the app has, and the client was not sending it: a query
+now reads the genders it names and asks for `ff`, `mm`, `fm` or `mf`, with the mixed
+pairs following the order the reader wrote them (`girl and boy` is `fm`, `boy and
+girl` is `mf`) because that is how the API spells them. A lone "girl" is a person in
+the scene, not a pairing, so same-gender requests need the explicit phrase ("two
+girls", "girls only") and everything else keeps the endpoint's own spread. The filter
+composes with the kiss folder, so "boy and girl kiss on the cheek" sends both.
+
+The word table grew from the API's aliases to the shapes a phone keyboard produces:
+plurals, past tenses, near-synonyms, and two-word actions whose meaning is not in
+either word ("high five", "holding hands", "lap pillow"). It is still a hand-written
+table rather than a stemmer, and a test now checks every alias target against
+`ACTIONS`; a stemmer would answer "waving" and then turn "Fern" into a reaction, and
+the endpoint set is small enough to audit. The chips follow the same rule: the
+reaction row now exposes twenty-eight of the sixty-eight actions, and a Pairings row
+offers the four mixed and same-gender phrases as whole searches. Names became a row
+of their own - Anime and Characters - on the providers that answer free text, which
+includes Gifukai through its hand-off; Safebooru keeps the measured Series tags and
+nekos.best gets no name row at all, because a chip that opens an empty grid is a
+worse teacher than no chip.
+
+The joke pool's dark register grew by sixty lines and the pair crossed the size
+ceiling, so the dark half moved to `JokeLinesDark.kt`. That is a split by subject -
+how the work is made stays in `JokeLinesShow`, what happens to it afterwards moves -
+not a halving to satisfy a number: the two lists are still read together when a line
+is added or moved, because a reader who switches one off usually switches both off.
 
 ## A centred image, and why the parser could not see one
 

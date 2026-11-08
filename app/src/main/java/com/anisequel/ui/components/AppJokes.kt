@@ -29,7 +29,8 @@ data class Joke(val text: String, val tone: JokeTone)
  * The pool grew past the point where this object could hold the selection rules
  * *and* five registers of prose without becoming a file nobody reviews. The text
  * is in [JokeLinesReader] (the reader's side of the hobby and the app's own
- * voice) and [JokeLinesShow] (the shows themselves); this object is only the
+ * voice), [JokeLinesShow] (how the work is made) and [JokeLinesDark] (what
+ * happens to it afterwards); this object is only the
  * index and the draw. That is a split by subject, so a line moving between the
  * files is a line whose subject changed - which is worth seeing in a diff.
  *
@@ -75,7 +76,7 @@ object AppJokes {
         JokeLinesReader.feelings.forEach { add(Joke(it, JokeTone.FEELINGS)) }
         JokeLinesReader.backlog.forEach { add(Joke(it, JokeTone.BACKLOG)) }
         JokeLinesShow.craft.forEach { add(Joke(it, JokeTone.CRAFT)) }
-        JokeLinesShow.dark.forEach { add(Joke(it, JokeTone.DARK)) }
+        JokeLinesDark.lines.forEach { add(Joke(it, JokeTone.DARK)) }
         JokeLinesReader.meta.forEach { add(Joke(it, JokeTone.META)) }
     }
 

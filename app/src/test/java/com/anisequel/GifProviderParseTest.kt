@@ -4,12 +4,17 @@ import com.anisequel.data.network.GiphyResponse
 import com.anisequel.data.network.GifukaiGifs
 import com.anisequel.data.network.GifukaiResponse
 import com.anisequel.data.network.KlipyResponse
+import com.anisequel.data.network.NekosBestGifs
 import com.anisequel.data.network.NekosResponse
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.gifSearchApiFor
 import com.anisequel.data.network.toGifPage
 import com.anisequel.data.network.toGifResult
 import com.anisequel.domain.gif.GifProvider
+import com.anisequel.ui.screens.profile.GIFUKAI_PAIRINGS
+import com.anisequel.ui.screens.profile.GIFUKAI_REACTIONS
+import com.anisequel.ui.screens.profile.GIF_ANIME
+import com.anisequel.ui.screens.profile.GIF_CHARACTERS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -195,7 +200,83 @@ class GifProviderParseTest {
         assertEquals("kiss" to null, GifukaiGifs.resolve("peck"))
         assertEquals("kiss" to "forehead", GifukaiGifs.resolve("kiss forehead"))
         assertEquals("kiss" to null, GifukaiGifs.resolve("kiss"))
-        assertNull("a sentence it cannot answer is refused, not answered with a wrong GIF", GifukaiGifs.resolve("naruto running"))
+        assertNull(
+            "a name with no reaction word is refused, not answered with a wrong GIF",
+            GifukaiGifs.resolve("naruto shippuden")
+        )
         assertNull(GifukaiGifs.resolve("   "))
+    }
+
+    @Test
+    fun `gifukai reads plurals, past tenses and two-word actions`() {
+        assertEquals("hug" to null, GifukaiGifs.resolve("hugs"))
+        assertEquals("cry" to null, GifukaiGifs.resolve("cried"))
+        assertEquals("laugh" to null, GifukaiGifs.resolve("giggling"))
+        assertEquals("sleep" to null, GifukaiGifs.resolve("naps"))
+        assertEquals("kiss" to "cheek", GifukaiGifs.resolve("kisses on the cheeks"))
+        // Phrases are the actions whose meaning is in two words.
+        assertEquals("highfive" to null, GifukaiGifs.resolve("high five"))
+        assertEquals("handhold" to null, GifukaiGifs.resolve("holding hands"))
+        assertEquals("thumbsup" to null, GifukaiGifs.resolve("thumbs up"))
+        assertEquals("lappillow" to null, GifukaiGifs.resolve("lap pillow"))
+        // A word that is already an action is still the first reaction word, so
+        // "blowing a kiss" answers the kiss rather than the air-kiss action.
+        assertEquals("kiss" to null, GifukaiGifs.resolve("blowing a kiss"))
+        // An exact action still wins over a phrase later in the sentence.
+        assertEquals("hug" to null, GifukaiGifs.resolve("high five hug"))
+    }
+
+    @Test
+    fun `gifukai pairing follows the genders the query names`() {
+        assertEquals("ff", GifukaiGifs.resolvePairing("two girls hug"))
+        assertEquals("mm", GifukaiGifs.resolvePairing("two boys hug"))
+        assertEquals("fm", GifukaiGifs.resolvePairing("girl and boy hug"))
+        assertEquals("mf", GifukaiGifs.resolvePairing("boy and girl hug"))
+        assertEquals("ff", GifukaiGifs.resolvePairing("two girls hugging"))
+        assertEquals("mm", GifukaiGifs.resolvePairing("two guys hugging"))
+        assertEquals("ff", GifukaiGifs.resolvePairing("ff hug"))
+        assertEquals("fm", GifukaiGifs.resolvePairing("f m hug"))
+        assertNull("a lone person is not a pairing", GifukaiGifs.resolvePairing("girl hug"))
+        assertNull("no gender words, no pairing", GifukaiGifs.resolvePairing("hug"))
+    }
+
+    @Test
+    fun `every alias and chip points at a real gifukai action`() {
+        assertTrue(
+            "an alias that names no endpoint would send a 404: " +
+                GifukaiGifs.ALIASES.filterValues { it !in GifukaiGifs.ACTIONS },
+            GifukaiGifs.ALIASES.values.all { it in GifukaiGifs.ACTIONS }
+        )
+        assertTrue(
+            "a phrase that names no endpoint would send a 404: " +
+                GifukaiGifs.PHRASES.filterValues { it !in GifukaiGifs.ACTIONS },
+            GifukaiGifs.PHRASES.values.all { it in GifukaiGifs.ACTIONS }
+        )
+        assertTrue(
+            "a chip that is not an action opens an empty grid: " +
+                GIFUKAI_REACTIONS.filterNot { it in GifukaiGifs.ACTIONS },
+            GIFUKAI_REACTIONS.all { it in GifukaiGifs.ACTIONS }
+        )
+        assertTrue(
+            "a pairing chip must resolve to an action: " +
+                GIFUKAI_PAIRINGS.filter { GifukaiGifs.resolve(it) == null },
+            GIFUKAI_PAIRINGS.all { GifukaiGifs.resolve(it) != null }
+        )
+        assertTrue("the name rows must not be empty", GIF_ANIME.isNotEmpty())
+        assertTrue(GIF_CHARACTERS.isNotEmpty())
+    }
+
+    @Test
+    fun `nekos best reads word forms and refuses what it cannot answer`() {
+        assertEquals("cry", NekosBestGifs.resolveCategory("crying"))
+        assertEquals("pat", NekosBestGifs.resolveCategory("headpat"))
+        assertEquals("hug", NekosBestGifs.resolveCategory("Hug please"))
+        assertEquals("nom", NekosBestGifs.resolveCategory("eating"))
+        assertEquals("blowkiss", NekosBestGifs.resolveCategory("mwah"))
+        // A category word wins over an alias elsewhere in the phrase - the same
+        // first-reaction-word rule Gifukai resolves by.
+        assertEquals("hug", NekosBestGifs.resolveCategory("sad hug"))
+        assertNull("a name is not a reaction", NekosBestGifs.resolveCategory("frieren"))
+        assertNull(NekosBestGifs.resolveCategory("   "))
     }
 }
