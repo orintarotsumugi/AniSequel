@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.8.8"
-val BASELINE_VERSION_CODE = 507
+val BASELINE_VERSION_NAME = "1.8.9"
+val BASELINE_VERSION_CODE = 508
 
 plugins {
   alias(libs.plugins.android.application)
@@ -246,6 +246,15 @@ dependencies {
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.retrofit)
+  // The Watch flow's player. `media3-ui` is not only the stock controller: the
+  // screen hosts a PlayerView with its controller turned off and draws Compose
+  // controls over it, while the view itself owns the SurfaceView/TextureView and
+  // the decoder surface hand-off. Rendering one from scratch would mean
+  // reimplementing that hand-off for no visible gain.
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.exoplayer.hls)
+  implementation(libs.androidx.media3.exoplayer.dash)
+  implementation(libs.androidx.media3.ui)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)

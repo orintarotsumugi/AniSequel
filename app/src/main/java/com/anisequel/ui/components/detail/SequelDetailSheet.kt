@@ -1,5 +1,7 @@
 package com.anisequel.ui.components.detail
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,16 +16,20 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,6 +43,7 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.CoverColorRepository
@@ -45,6 +52,8 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
+import com.anisequel.ui.components.detail.info.InfoWatchDock
+import com.anisequel.ui.navigation.LocalWatchNavigator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
@@ -174,6 +183,8 @@ fun SequelDetailSheet(
 ) {
     if (subject == null) return
     val media = subject.media
+    val watchNavigator = LocalWatchNavigator.current
+    var showWatchInfo by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themePreferences = remember(context) { ThemePreferences(context) }
@@ -307,6 +318,13 @@ fun SequelDetailSheet(
         }
         val selected = destination.coerceIn(0, destinations.lastIndex)
         val navClearance = if (destinations.size > 1) 112.dp else 28.dp
+        val showsWatch = selected == 0 &&
+            watchNavigator != null &&
+            media.type.equals("ANIME", ignoreCase = true)
+        // The dock is pinned over the page, so the last card would otherwise sit
+        // under it. 76dp is the dock's own height plus its lift; the nav bar's
+        // clearance is added separately on the two-destination layout.
+        val contentClearance = if (showsWatch) navClearance + 76.dp else navClearance
 
         Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
@@ -379,7 +397,7 @@ fun SequelDetailSheet(
                         onOpenStaff = onOpenStaff,
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
-                        bottomContentPadding = navClearance,
+                        bottomContentPadding = contentClearance,
                         infoBackdropSource = themeSettings.infoBackdropSource,
                         infoBackdropBlur = themeSettings.infoBackdropBlur
                     )
@@ -396,6 +414,49 @@ fun SequelDetailSheet(
                         .windowInsetsPadding(WindowInsets.navigationBars)
                 )
             }
+
+            if (showsWatch) {
+                InfoWatchDock(
+                    onWatch = {
+                        handleDismiss()
+                        watchNavigator?.invoke(media)
+                    },
+                    onComments = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(media.pageUrl))
+                            )
+                        }
+                    },
+                    onInfo = { showWatchInfo = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = navClearance)
+                )
+            }
+        }
+    }
+
+    if (showWatchInfo) {
+        AlertDialog(
+            onDismissRequest = { showWatchInfo = false },
+            title = { Text("Where the video comes from") },
+            text = {
+                Text(
+                    "AniSequel does not host video. Watch searches the source you " +
+                        "selected in Extensions and plays the files that source reports. " +
+                        "The beta ships the Internet Archive source; installed Aniyomi " +
+                        "and CloudStream extensions are visible but their APK runtime " +
+                        "is Phase 2."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showWatchInfo = false }) { Text("Got it") }
+            }
+        )
+    }
         }
     }
 }

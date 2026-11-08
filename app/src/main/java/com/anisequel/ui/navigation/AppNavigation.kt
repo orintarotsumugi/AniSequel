@@ -3,7 +3,6 @@ package com.anisequel.ui.navigation
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
-import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -43,6 +42,8 @@ import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
+import com.anisequel.data.extensions.ExtensionManager
+import com.anisequel.data.model.MediaNode
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
@@ -53,27 +54,6 @@ import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-
-object AppRoutes {
-    const val LOGIN = "login"
-    const val DASHBOARD = "dashboard"
-    const val DASHBOARD_DEMO = "dashboard_demo"
-    const val DASHBOARD_USER = "dashboard_user/{username}"
-    const val LIBRARY = "library"
-    const val SETTINGS = "settings"
-    const val TIER_LIST = "tier_list"
-
-    /**
-     * The path is encoded, not interpolated raw.
-     *
-     * A `composable()` route is matched exactly, so a name carrying `/`, `#`, `?`
-     * or `%` produced a URI that matched no destination and the tap did nothing
-     * with no error anywhere - the same silent failure [ProfileRoutes.byId]
-     * documents for the query form. Navigation decodes the segment back for
-     * `NavType.StringType`, so the screen still receives the name as typed.
-     */
-    fun userDashboard(username: String) = "dashboard_user/${Uri.encode(username)}"
-}
 
 /** A state that never emits a real dashboard, for when there is no session VM. */
 private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
@@ -112,6 +92,18 @@ fun AppNavigation(
     val context = LocalContext.current
     val hiddenSequelsPreferences = remember(context) {
         HiddenSequelsPreferences(context.applicationContext)
+    }
+
+    // The extension catalogue, the installs and the two preference stores the
+    // Watch flow writes. Process-scoped beside the AniList repository for the same
+    // reason: the Extensions tab, the source sheet and the player must agree about
+    // what is installed and where playback stopped, and two managers would be two
+    // answers.
+    val extensionManager = remember(context) {
+        ExtensionManager(context.applicationContext)
+    }
+    val watchNavigator: (MediaNode) -> Unit = remember(navController) {
+        { media -> navController.navigateSingle(WatchRoutes.forMedia(media)) }
     }
 
     // Application-scoped for the same reason: how often the list is re-fetched is
@@ -413,7 +405,10 @@ fun AppNavigation(
                 if (currentRoute != AppRoutes.DASHBOARD &&
                     currentRoute != AppRoutes.LIBRARY &&
                     currentRoute != ProfileRoutes.OWN_ROUTE &&
-                    currentRoute != AppRoutes.SETTINGS
+                    currentRoute != AppRoutes.SETTINGS &&
+                    currentRoute != AppRoutes.EXTENSIONS &&
+                    currentRoute != WatchRoutes.WATCH &&
+                    currentRoute != WatchRoutes.PLAYER
                 ) {
                     navController.navigate(AppRoutes.DASHBOARD) {
                         popUpTo(AppRoutes.LOGIN) { inclusive = true }
@@ -501,7 +496,10 @@ fun AppNavigation(
     val seasonalAmbient = rememberSeasonalAmbientModifier()
 
     ProvideMediaCovers(aniListRepository) {
-        CompositionLocalProvider(LocalMediaCardStyle provides cardStyle) {
+        CompositionLocalProvider(
+            LocalMediaCardStyle provides cardStyle,
+            LocalWatchNavigator provides watchNavigator
+        ) {
             // Opaque, and that is the point.
             //
             // A page arrives scaled to 94% and fading up while the page it covers
@@ -584,6 +582,16 @@ fun AppNavigation(
                         mainDashboardViewModel = mainDashboardViewModel,
                         onBoardOpenChange = { tierBoardOpen = it },
                         onSignInAgain = authViewModel::logout
+                    )
+
+                    extensionsDestinations(
+                        navController = navController,
+                        manager = extensionManager
+                    )
+
+                    watchDestinations(
+                        navController = navController,
+                        manager = extensionManager
                     )
 
                     libraryDestinations(

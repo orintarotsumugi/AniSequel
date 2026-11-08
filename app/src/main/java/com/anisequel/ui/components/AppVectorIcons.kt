@@ -1,6 +1,7 @@
 package com.anisequel.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.automirrored.filled.Comment
@@ -22,7 +23,31 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarViewMonth
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.VideoSettings
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Download
@@ -307,4 +332,34 @@ object AppVectorIcons {
     val MotionInstant = Icons.Outlined.RestartAlt
     val MotionSmooth = AppCustomVectors.MotionWaves
     val MotionChill = AppCustomVectors.MotionBolt
+
+    // The extension catalogue and the Watch page. Named for the control or the
+    // destination rather than the glyph, as the rest of this file is: a puzzle
+    // piece is the Extensions tab, a folder is a path picker, and a shield is the
+    // trust badge on a source card.
+    val Extensions = Icons.Default.Extension
+    val Back = Icons.AutoMirrored.Filled.ArrowBack
+    val Folder = Icons.Default.Folder
+    val Delete = Icons.Default.Delete
+    val Shield = Icons.Default.Shield
+    val Language = Icons.Default.Language
+    val Storage = Icons.Default.Storage
+    val CloudRepo = Icons.Default.Cloud
+    val Tools = Icons.Default.Build
+    val Check = Icons.Default.Check
+    val Memory = Icons.Default.Memory
+    val GraphicEq = Icons.Default.GraphicEq
+    val HighQuality = Icons.Default.HighQuality
+    val VideoSettings = Icons.Default.VideoSettings
+    val PhotoLibrary = Icons.Default.PhotoLibrary
+    val Subtitles = Icons.Default.Subtitles
+    val Playlist = Icons.Default.PlaylistPlay
+    val SkipNext = Icons.Default.SkipNext
+    val Replay10 = Icons.Default.Replay10
+    val Forward10 = Icons.Default.Forward10
+    val Speed = Icons.Default.Speed
+    val Volume = Icons.Default.VolumeUp
+    val Fullscreen = Icons.Default.Fullscreen
+    val FullscreenExit = Icons.Default.FullscreenExit
+    val ChevronRight = Icons.Default.ChevronRight
 }

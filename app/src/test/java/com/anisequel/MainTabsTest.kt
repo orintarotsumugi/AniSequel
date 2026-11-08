@@ -4,6 +4,7 @@ import com.anisequel.ui.navigation.AppRoutes
 import com.anisequel.ui.navigation.MainTab
 import com.anisequel.ui.navigation.ProfileRoutes
 import com.anisequel.ui.navigation.StudioRoutes
+import com.anisequel.ui.navigation.WatchRoutes
 import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.navigation.mainTabForRoute
@@ -53,6 +54,7 @@ class MainTabsTest {
         // The demo runs without a session; to the reader it is the same page.
         assertEquals(MainTab.HOME, mainTabForRoute(AppRoutes.DASHBOARD_DEMO))
         assertEquals(MainTab.LIBRARY, mainTabForRoute(AppRoutes.LIBRARY))
+        assertEquals(MainTab.EXTENSIONS, mainTabForRoute(AppRoutes.EXTENSIONS))
         assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
         assertEquals(MainTab.PROFILE, mainTabForRoute(ProfileRoutes.OWN_ROUTE))
     }
@@ -62,6 +64,10 @@ class MainTabsTest {
         val pushed = listOf(
             AppRoutes.LOGIN,
             AppRoutes.SETTINGS,
+            AppRoutes.EXTENSION_MANAGER,
+            AppRoutes.PLAYER_SETTINGS,
+            WatchRoutes.WATCH,
+            WatchRoutes.PLAYER,
             // Somebody else's dashboard, reached by scanning a name - not the
             // viewer's Home.
             AppRoutes.DASHBOARD_USER,
@@ -109,7 +115,12 @@ class MainTabsTest {
 
     @Test
     fun `every other page of the bar draws it`() {
-        listOf(AppRoutes.DASHBOARD, AppRoutes.LIBRARY, ProfileRoutes.OWN_ROUTE)
+        listOf(
+            AppRoutes.DASHBOARD,
+            AppRoutes.LIBRARY,
+            AppRoutes.EXTENSIONS,
+            ProfileRoutes.OWN_ROUTE
+        )
             .forEach { route ->
                 assertTrue(
                     "$route must draw the bar",
@@ -129,7 +140,7 @@ class MainTabsTest {
     }
 
     @Test
-    fun `the bar reads Home, Library, Tiers, Profile, once each`() {
+    fun `the bar reads Home, Library, Extensions, Tiers, Profile, once each`() {
         val destinations = mainTabDestinations(
             tabs = enabledMainTabs(tierListTab = true),
             profileAvatarUrl = null
@@ -140,13 +151,14 @@ class MainTabsTest {
         // which is what `MainBar` indexes by. A reorder fails here rather than
         // selecting a tab nobody chose.
         assertEquals(
-            listOf("Home", "Library", "Tiers", "Profile"),
+            listOf("Home", "Library", "Extensions", "Tiers", "Profile"),
             destinations.map { it.label }
         )
         assertEquals(
             listOf(
                 "main_tab_home",
                 "main_tab_library",
+                "main_tab_extensions",
                 "main_tab_tiers",
                 "main_tab_profile"
             ),
@@ -159,11 +171,14 @@ class MainTabsTest {
     fun `turning the tier tab off removes one slot and nothing else`() {
         val tabs = enabledMainTabs(tierListTab = false)
 
-        assertEquals(listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.PROFILE), tabs)
+        assertEquals(
+            listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.EXTENSIONS, MainTab.PROFILE),
+            tabs
+        )
         assertEquals(
             "the bar's index is an index into this list, so the Profile tab must " +
-                "move from 3 to 2 rather than pointing at nothing",
-            2,
+                "move to the last slot rather than pointing at nothing",
+            3,
             tabs.indexOf(MainTab.PROFILE)
         )
         assertEquals(
@@ -181,7 +196,13 @@ class MainTabsTest {
         assertEquals(
             "the order is the enum's order, and the tier list was asked for " +
                 "between Library and Profile",
-            listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.TIERS, MainTab.PROFILE),
+            listOf(
+                MainTab.HOME,
+                MainTab.LIBRARY,
+                MainTab.EXTENSIONS,
+                MainTab.TIERS,
+                MainTab.PROFILE
+            ),
             tabs
         )
     }

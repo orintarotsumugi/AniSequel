@@ -35,6 +35,7 @@ import com.anisequel.ui.components.expressive.NavigationDestination
 enum class MainTab {
     HOME,
     LIBRARY,
+    EXTENSIONS,
     TIERS,
     PROFILE
 }
@@ -89,6 +90,14 @@ internal fun mainTabDestinations(
         // The same trophy the Library's card and the profile's row use, because
         // it is the same page. A second glyph for the tab would make the two
         // look like two features.
+        // The catalogue and the installs. A puzzle piece, which is the
+        // convention Aniyomi and CloudStream users already read as "extensions"
+        // rather than as a settings page.
+        MainTab.EXTENSIONS -> NavigationDestination(
+            label = "Extensions",
+            icon = AppVectorIcons.Extensions,
+            testTag = "main_tab_extensions"
+        )
         MainTab.TIERS -> NavigationDestination(
             label = "Tiers",
             icon = AppVectorIcons.Trophy,
@@ -134,6 +143,7 @@ internal fun mainTabDestinations(
 internal fun mainTabForRoute(route: String?): MainTab? = when (route) {
     AppRoutes.DASHBOARD, AppRoutes.DASHBOARD_DEMO -> MainTab.HOME
     AppRoutes.LIBRARY -> MainTab.LIBRARY
+    AppRoutes.EXTENSIONS -> MainTab.EXTENSIONS
     AppRoutes.TIER_LIST -> MainTab.TIERS
     ProfileRoutes.OWN_ROUTE -> MainTab.PROFILE
     else -> null
@@ -276,6 +286,7 @@ internal fun mainTabTarget(tab: MainTab, signedIn: Boolean): MainTabTarget {
     val route = when (tab) {
         MainTab.HOME -> homeRoute
         MainTab.LIBRARY -> AppRoutes.LIBRARY
+        MainTab.EXTENSIONS -> AppRoutes.EXTENSIONS
         MainTab.TIERS -> AppRoutes.TIER_LIST
         MainTab.PROFILE -> ProfileRoutes.OWN_DEFAULT
     }

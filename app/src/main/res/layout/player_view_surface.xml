@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The SurfaceView player surface.
+
+  A SurfaceView is composited by the hardware composer, so playback costs no
+  per-frame copy. It cannot carry a View-level RenderEffect, which is why the
+  enhancement switch asks for player_view_texture.xml instead: colour grading a
+  separate hardware layer is not possible from this side of the surface.
+-->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:keepScreenOn="true"
+    app:resize_mode="fit"
+    app:surface_type="surface_view"
+    app:use_controller="false" />

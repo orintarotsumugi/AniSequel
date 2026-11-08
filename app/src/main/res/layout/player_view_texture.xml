@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The TextureView player surface.
+
+  Chosen by the Video Renderer setting, and forced while Anime 4K Enhancement is
+  on. A TextureView is drawn in the normal view hierarchy, which is what lets
+  PlayerView.setRenderEffect apply the colour matrix; a SurfaceView bypasses it.
+  The cost is one GPU copy per frame, which is the trade the setting describes.
+-->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_view"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:keepScreenOn="true"
+    app:resize_mode="fit"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

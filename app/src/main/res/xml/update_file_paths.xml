@@ -37,6 +37,16 @@
     <files-path
         name="updates"
         path="updates/" />
+    <!--
+    An extension APK downloaded by the Extensions tab. The same contract as
+    `updates`: the file has to survive the trip to Settings to grant "install
+    unknown apps", so it is written to filesDir, not the cache Android may empty
+    in between. Without this path the system installer receives no content URI and
+    every extension install silently fails after a successful download.
+    -->
+    <files-path
+        name="extensions"
+        path="extensions/" />
     <cache-path
         name="exports"
         path="exports/" />
