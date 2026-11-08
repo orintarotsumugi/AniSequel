@@ -1588,13 +1588,14 @@ and an empty stored tone set means every tone rather than an empty pool, which i
 what a cleared preference or a downgrade looks like.
 
 The lines themselves are in `JokeLinesReader` (feelings, backlog, the app's own
-voice) and `JokeLinesShow` (craft and dark), and `AppJokes` is only the index and
-the draw. Splitting the text out is what kept the object under the file ceiling
-without splitting it by line count: the two files are the reader's side of the
-hobby and the shows' side, so a line that moves between them is a line whose
-subject changed, which is worth seeing in a diff. The selection API did not move
-with the text, which is why `AppJokesTest` still pins the pool without knowing
-which file a line came from.
+voice), `JokeLinesShow` (craft) and `JokeLinesDark` (what happens to a show
+afterwards), and `AppJokes` is only the index and the draw. Splitting the text out
+is what kept the object under the file ceiling without splitting it by line count:
+the files are the reader's side of the hobby, how the work is made, and what the
+industry does to it, so a line that moves between them is a line whose subject
+changed, which is worth seeing in a diff. The selection API did not move with the
+text, which is why `AppJokesTest` still pins the pool without knowing which file a
+line came from.
 
 There are five tones since 1.6.0. `DARK` was split out of `META` because the
 reader who wants Ani-chan's voice is not necessarily the reader who wants a joke
@@ -1964,6 +1965,34 @@ against the category set so a mapped word cannot send the request the check exis
 prevent. The picker's measured chip vocabulary moved to `GifSuggestions.kt`: the lists
 change when a live index is re-measured, the pane changes when its states change, and
 one file doing both had passed the size ceiling.
+
+The third pass spent the rest of gifukai's shape. Its `?pairing=` filter is the one
+capability no other index in the app has, and the client was not sending it: a query
+now reads the genders it names and asks for `ff`, `mm`, `fm` or `mf`, with the mixed
+pairs following the order the reader wrote them (`girl and boy` is `fm`, `boy and
+girl` is `mf`) because that is how the API spells them. A lone "girl" is a person in
+the scene, not a pairing, so same-gender requests need the explicit phrase ("two
+girls", "girls only") and everything else keeps the endpoint's own spread. The filter
+composes with the kiss folder, so "boy and girl kiss on the cheek" sends both.
+
+The word table grew from the API's aliases to the shapes a phone keyboard produces:
+plurals, past tenses, near-synonyms, and two-word actions whose meaning is not in
+either word ("high five", "holding hands", "lap pillow"). It is still a hand-written
+table rather than a stemmer, and a test now checks every alias target against
+`ACTIONS`; a stemmer would answer "waving" and then turn "Fern" into a reaction, and
+the endpoint set is small enough to audit. The chips follow the same rule: the
+reaction row now exposes twenty-eight of the sixty-eight actions, and a Pairings row
+offers the four mixed and same-gender phrases as whole searches. Names became a row
+of their own - Anime and Characters - on the providers that answer free text, which
+includes Gifukai through its hand-off; Safebooru keeps the measured Series tags and
+nekos.best gets no name row at all, because a chip that opens an empty grid is a
+worse teacher than no chip.
+
+The joke pool's dark register grew by sixty lines and the pair crossed the size
+ceiling, so the dark half moved to `JokeLinesDark.kt`. That is a split by subject -
+how the work is made stays in `JokeLinesShow`, what happens to it afterwards moves -
+not a halving to satisfy a number: the two lists are still read together when a line
+is added or moved, because a reader who switches one off usually switches both off.
 
 ## A centred image, and why the parser could not see one
 

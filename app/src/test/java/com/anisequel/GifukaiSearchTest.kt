@@ -236,6 +236,31 @@ class GifukaiSearchTest {
     }
 
     @Test
+    fun `a pairing named in the query reaches the endpoint`() = runTest {
+        val http = SceneClient { "https://cdn.gifukai.com/hug/$it.gif" }
+        GifukaiGifs(client = http.client()).search("two girls hug", null).getOrThrow()
+        assertTrue(http.requests.isNotEmpty())
+        assertTrue(
+            "a two-girl search must ask for the ff pairing: " +
+                http.requests.map { it.url.queryParameter("pairing") },
+            http.requests.all { it.url.queryParameter("pairing") == "ff" }
+        )
+        assertNull("no folder was named", http.requests.first().url.queryParameter("type"))
+    }
+
+    @Test
+    fun `a pairing and a kiss folder travel together`() = runTest {
+        val http = SceneClient { "https://cdn.gifukai.com/kiss/$it.gif" }
+        GifukaiGifs(client = http.client())
+            .search("boy and girl kiss on the cheek", null)
+            .getOrThrow()
+        assertTrue(http.requests.isNotEmpty())
+        assertTrue(http.requests.all { it.url.encodedPath == "/v1/kiss" })
+        assertTrue(http.requests.all { it.url.queryParameter("pairing") == "mf" })
+        assertTrue(http.requests.all { it.url.queryParameter("type") == "cheek" })
+    }
+
+    @Test
     fun `a cursor on an action answer asks nothing`() = runTest {
         val http = SceneClient { "https://cdn.gifukai.com/hug/$it.gif" }
         val page = GifukaiGifs(client = http.client()).search("hug", "2").getOrThrow()

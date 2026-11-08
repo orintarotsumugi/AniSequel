@@ -73,7 +73,8 @@ class GifukaiGifs(
 
     override fun emptyHint(query: String): String =
         "Gifukai carries hand-picked reaction scenes: \"$query\" matched none of " +
-            "them. Try a reaction like \"hug\", \"pat\", \"laugh\" or \"cry\", or " +
+            "them. Try a reaction like \"hug\", \"pat\", \"laugh\" or \"cry\" - " +
+            "\"two girls hug\" or \"boy and girl hug\" asks for a pairing - or " +
             "pick Klipy or Safebooru to search a title."
 
     private val adapter = moshi.adapter(GifukaiResponse::class.java)
@@ -93,7 +94,8 @@ class GifukaiGifs(
                 // in searchNames instead.
                 return@withContext Result.success(GifPage(emptyList()))
             }
-            gatherGifukaiScenes(MAX_DRAWS, BATCH_SIZE) { fetchScene(action, type) }
+            val pairing = resolvePairing(term)
+            gatherGifukaiScenes(MAX_DRAWS, BATCH_SIZE) { fetchScene(action, type, pairing) }
                 .map { scenes -> GifPage(results = scenes, next = null, totalCount = scenes.size) }
         }
 
@@ -136,7 +138,11 @@ class GifukaiGifs(
     }
 
     /** One random scene from an action endpoint, as a failure the batch can report. */
-    private suspend fun fetchScene(action: String, type: String?): Result<GifResult> {
+    private suspend fun fetchScene(
+        action: String,
+        type: String?,
+        pairing: String?
+    ): Result<GifResult> {
         val built = runCatching {
             ENDPOINT.toHttpUrl().newBuilder()
                 // A path segment, so a query cannot reach another endpoint.
@@ -144,6 +150,12 @@ class GifukaiGifs(
                 .apply {
                     if (type != null) {
                         addQueryParameter("type", type)
+                    }
+                    // The one filter the keyless API has beyond the action: the
+                    // genders in the scene. Sent only when the query named one,
+                    // so the endpoint keeps its own spread otherwise.
+                    if (pairing != null) {
+                        addQueryParameter("pairing", pairing)
                     }
                 }
                 .build()
@@ -221,10 +233,15 @@ class GifukaiGifs(
          * Words a reader actually types, mapped to the action that answers.
          *
          * The first half is the API's own alias table (`GET /v1/actions`); the
-         * second half is the ordinary English shapes of those reactions - a
-         * reader types "crying", not the bare "cry", and every search chip and
-         * substitution sentence in this app assumes the reader's word, not the
-         * endpoint's.
+         * rest is the ordinary English shapes of those reactions - a reader types
+         * "crying", not the bare "cry", and "hugs" or "hugged" are the same
+         * request with a different tense. Every search chip and substitution
+         * sentence in this app assumes the reader's word, not the endpoint's.
+         *
+         * Plurals and verb forms are listed rather than stemmed: the action set
+         * is small and a stemmer would map "waving" correctly and "sad" nowhere,
+         * while also turning a name like "Fern" into a reaction. A hand-written
+         * table is auditable against [ACTIONS] by a test, which a stemmer is not.
          */
         internal val ALIASES: Map<String, String> = mapOf(
             // The API's own aliases.
@@ -264,7 +281,143 @@ class GifukaiGifs(
             "sleeping" to "sleep",
             "angried" to "angry",
             "sad" to "cry",
-            "cheeks" to "blush"
+            "cheeks" to "blush",
+            // Plurals, past tenses and the near-synonyms a reader reaches for.
+            "anger" to "angry", "angered" to "angry", "furious" to "angry",
+            "annoyed" to "angry", "irritated" to "angry", "pissed" to "angry",
+            "biting" to "bite", "bites" to "bite", "chomp" to "bite",
+            "blep" to "bleh", "tongue" to "bleh",
+            "smooch" to "blowkiss", "smooches" to "blowkiss", "airkiss" to "blowkiss",
+            "embarrassed" to "blush", "embarrassment" to "blush",
+            "blushing" to "blush", "blushes" to "blush", "blushed" to "blush",
+            "bonks" to "bonk", "bop" to "bonk", "headbonk" to "bonk",
+            "boredom" to "bored", "boring" to "bored", "dull" to "bored",
+            "farewell" to "bye", "later" to "bye", "seeya" to "bye",
+            "carrying" to "carry", "carried" to "carry", "lift" to "carry",
+            "clapping" to "clap", "applause" to "clap", "applaud" to "clap",
+            "confusion" to "confused", "baffled" to "confused",
+            "puzzled" to "confused", "huh" to "confused",
+            "cries" to "cry", "cried" to "cry", "sobbing" to "cry",
+            "sobs" to "cry", "tears" to "cry", "weep" to "cry", "weeping" to "cry",
+            "bawl" to "cry", "bawling" to "cry", "wailed" to "cry",
+            "snuggling" to "cuddle", "snuggles" to "cuddle", "cuddling" to "cuddle",
+            "cuddles" to "cuddle", "embrace" to "cuddle", "embracing" to "cuddle",
+            "dancing" to "dance", "dances" to "dance", "danced" to "dance",
+            "boogie" to "dance", "grooving" to "dance",
+            "eating" to "eat", "ate" to "eat", "munch" to "eat", "munching" to "eat",
+            "food" to "eat", "devour" to "eat", "devouring" to "eat",
+            "despair" to "facepalm", "facepalming" to "facepalm",
+            "feeding" to "feed", "fed" to "feed", "feeds" to "feed",
+            "handholding" to "handhold", "holdhands" to "handhold",
+            "handshaking" to "handshake", "handshakes" to "handshake",
+            "glad" to "happy", "joy" to "happy", "joyful" to "happy",
+            "cheerful" to "happy", "happiness" to "happy",
+            "heya" to "hi", "hiya" to "hi", "howdy" to "hi",
+            "highfiving" to "highfive", "highfives" to "highfive",
+            "hugs" to "hug", "hugged" to "hug",
+            "kicking" to "kick", "kicks" to "kick",
+            "killing" to "kill", "kills" to "kill", "murdered" to "kill",
+            "slay" to "kill", "slaying" to "kill",
+            "kisses" to "kiss", "kissed" to "kiss", "xoxo" to "kiss",
+            "pillow" to "lappillow", "lappillows" to "lappillow",
+            "laughs" to "laugh", "laughed" to "laugh", "giggle" to "laugh",
+            "giggles" to "laugh", "giggling" to "laugh", "chuckle" to "laugh",
+            "chuckles" to "laugh", "chuckling" to "laugh", "kek" to "laugh",
+            "licking" to "lick", "licks" to "lick",
+            "nodding" to "nod", "nods" to "nod", "yep" to "nod", "yeah" to "nod",
+            "nuh" to "nope", "refuse" to "nope", "refusal" to "nope",
+            "meowing" to "nya", "meows" to "nya", "mew" to "nya", "mewing" to "nya",
+            "kitty" to "nya", "cat" to "nya",
+            "headpats" to "pat", "pats" to "pat", "patted" to "pat",
+            "peeking" to "peek", "peeks" to "peek", "peep" to "peek",
+            "pokes" to "poke", "poking" to "poke", "prod" to "poke",
+            "pouting" to "pout", "pouts" to "pout", "sulk" to "pout",
+            "sulking" to "pout", "sulks" to "pout",
+            "punching" to "punch", "punches" to "punch", "punched" to "punch",
+            "running" to "run", "ran" to "run", "sprint" to "run",
+            "sprinting" to "run", "sprinted" to "run", "dash" to "run",
+            "salutes" to "salute", "saluting" to "salute", "saluted" to "salute",
+            "afraid" to "scared", "fear" to "scared", "fearful" to "scared",
+            "frightened" to "scared", "terrified" to "scared", "spooked" to "scared",
+            "shaking" to "shake", "shakes" to "shake", "shook" to "shake",
+            "tremble" to "shake", "trembling" to "shake", "shiver" to "shake",
+            "shivering" to "shake",
+            "shock" to "shocked", "shocking" to "shocked", "gasp" to "shocked",
+            "gasped" to "shocked",
+            "shoots" to "shoot", "shooting" to "shoot", "gun" to "shoot",
+            "fired" to "shoot",
+            "shrugs" to "shrug", "shrugging" to "shrug", "meh" to "shrug",
+            "bashful" to "shy", "timid" to "shy",
+            "singing" to "sing", "sings" to "sing", "sang" to "sing",
+            "song" to "sing", "karaoke" to "sing",
+            "drinking" to "sip", "drank" to "sip", "slurp" to "sip",
+            "slurping" to "sip", "tea" to "sip",
+            "slapping" to "slap", "slaps" to "slap", "smack" to "slap",
+            "smacking" to "slap",
+            "napping" to "sleep", "naps" to "sleep", "sleepy" to "sleep",
+            "sleeps" to "sleep", "slept" to "sleep", "snooze" to "sleep",
+            "snoozing" to "sleep", "goodnight" to "sleep",
+            "smiles" to "smile", "smiled" to "smile", "grin" to "smile",
+            "grins" to "smile", "grinning" to "smile", "beaming" to "smile",
+            "smirk" to "smug", "smirking" to "smug", "smirks" to "smug",
+            "apology" to "sorry", "apologize" to "sorry", "apologise" to "sorry",
+            "apologies" to "sorry", "regret" to "sorry",
+            "spinning" to "spin", "spins" to "spin", "spun" to "spin",
+            "twirl" to "spin", "twirling" to "spin",
+            "gazing" to "stare", "stares" to "stare", "staring" to "stare",
+            "glared" to "stare", "glaring" to "stare",
+            "surprise" to "surprised", "surprising" to "surprised",
+            "astonished" to "surprised", "startled" to "surprised", "wow" to "surprised",
+            "taunting" to "taunt", "taunts" to "taunt", "mock" to "taunt",
+            "mocking" to "taunt", "mocks" to "taunt",
+            "hehe" to "teehee",
+            "thinks" to "think", "thought" to "think", "ponder" to "think",
+            "pondering" to "think", "hmm" to "think",
+            "approve" to "thumbsup", "approval" to "thumbsup", "okay" to "thumbsup",
+            "ok" to "thumbsup",
+            "tickling" to "tickle", "tickles" to "tickle", "tickled" to "tickle",
+            "exhausted" to "tired", "exhaustion" to "tired", "drained" to "tired",
+            "weary" to "tired",
+            "wagging" to "wag", "wags" to "wag", "tail" to "wag", "tailwag" to "wag",
+            "waves" to "wave", "waved" to "wave",
+            "winking" to "wink", "winks" to "wink", "winked" to "wink",
+            "yawning" to "yawn", "yawns" to "yawn", "yawned" to "yawn",
+            "hurray" to "yay", "hooray" to "yay", "woohoo" to "yay",
+            "yayy" to "yay", "yippee" to "yay", "celebrate" to "yay",
+            "celebrating" to "yay",
+            "yeeted" to "yeet", "yeeting" to "yeet", "throw" to "yeet",
+            "throwing" to "yeet", "toss" to "yeet", "tossing" to "yeet"
+        )
+
+        /**
+         * Phrases whose meaning lives in two words, where neither word alone is
+         * the action: "high five" is not a five, "holding hands" is not holding.
+         *
+         * Matched longest-first against the word sequence after the exact-action
+         * pass, so "high five" can answer while "high five hug" still answers the
+         * hug - the same first-reaction-word rule as [resolve].
+         */
+        internal val PHRASES: Map<String, String> = mapOf(
+            "high five" to "highfive",
+            "high fives" to "highfive",
+            "hold hands" to "handhold",
+            "holds hands" to "handhold",
+            "holding hands" to "handhold",
+            "hand in hand" to "handhold",
+            "shake hands" to "handshake",
+            "shaking hands" to "handshake",
+            "hand shake" to "handshake",
+            "lap pillow" to "lappillow",
+            "lap pillows" to "lappillow",
+            "wall slam" to "wallslam",
+            "wall slams" to "wallslam",
+            "thumbs up" to "thumbsup",
+            "good night" to "sleep",
+            "fall asleep" to "sleep",
+            "falls asleep" to "sleep",
+            "fell asleep" to "sleep",
+            "worn out" to "tired",
+            "glomp" to "hug"
         )
 
         /**
@@ -272,33 +425,121 @@ class GifukaiGifs(
          * `forehead` - `kiss.has_types` is true and it is the only typed action),
          * so a query that says which kind carries the folder. Nothing else can
          * carry a `type`, and sending an unknown one makes the index answer
-         * nothing, so only these three map.
+         * nothing, so only these three map. Plurals and the lip folder are here
+         * because "kiss on the cheeks" is how a reader writes it.
          */
-        private val KISS_TYPES = setOf("mouth", "cheek", "forehead")
+        private val KISS_TYPES: Map<String, String> = mapOf(
+            "mouth" to "mouth", "lips" to "mouth", "lip" to "mouth",
+            "cheek" to "cheek", "cheeks" to "cheek",
+            "forehead" to "forehead"
+        )
+
+        /**
+         * The pairing the query asks for, or null for "any".
+         *
+         * Pairing is the one thing gifukai's keyless API has that no other index
+         * in the app does: `?pairing=ff|mm|fm|mf` picks the genders in the scene.
+         * It is not a search parameter, so the client reads it from the query's
+         * own words and the picker's Pairings row is four whole searches built
+         * that way: a reader asking for "two girls hug" gets the pairing because
+         * those words named it, and the same scene without them is still a hug.
+         * Both genders named anywhere in the query resolve by the order they were
+         * named, which is how the API spells the mixed pairs: female-then-male is
+         * `fm`, male-then-female is `mf`.
+         */
+        internal fun resolvePairing(query: String): String? {
+            val words = wordsOf(query)
+            if (words.isEmpty()) return null
+            val female = words.indexOfFirst { it in FEMALE_WORDS }
+            val male = words.indexOfFirst { it in MALE_WORDS }
+            if (female >= 0 && male >= 0) {
+                return if (female < male) "fm" else "mf"
+            }
+            val padded = " ${words.joinToString(" ")} "
+            return when {
+                FEMALE_ONLY_PHRASES.any { padded.contains(" $it ") } -> "ff"
+                MALE_ONLY_PHRASES.any { padded.contains(" $it ") } -> "mm"
+                else -> null
+            }
+        }
+
+        /**
+         * The gender nouns that name a pairing. Kept apart from [ALIASES] because
+         * these never select an action - "two girls" on its own is still not a
+         * reaction, and a query with no action is handed to the name index.
+         */
+        private val FEMALE_WORDS = setOf(
+            "girl", "girls", "woman", "women", "female", "females", "she", "her",
+            "lesbian", "yuri", "wlw", "wife", "girlfriend", "mum", "mom",
+            "mother", "sister", "queen", "princess", "lady", "f"
+        )
+
+        private val MALE_WORDS = setOf(
+            "boy", "boys", "man", "men", "male", "males", "he", "him",
+            "gay", "yaoi", "mlm", "husband", "boyfriend", "dad", "father",
+            "brother", "king", "prince", "guy", "guys", "dude", "m"
+        )
+
+        /**
+         * Same-gender phrases, because a lone "girl" is a person in the scene and
+         * "two girls" is the pairing. Only the explicit forms count; "girl hug"
+         * keeps the index's own choice.
+         */
+        private val FEMALE_ONLY_PHRASES = listOf(
+            "two girls", "girl and girl", "girl girl", "girls only", "girls",
+            "lesbians", "yuri", "wlw", "female female", "ff", "f f", "women",
+            "ladies", "sisters", "sister and sister"
+        )
+
+        private val MALE_ONLY_PHRASES = listOf(
+            "two boys", "two guys", "boy and boy", "boy boy", "boys only", "boys",
+            "guys", "gay", "yaoi", "mlm", "male male", "mm", "m m", "men",
+            "lads", "brothers", "brother and brother"
+        )
 
         /** Named in the refusal above, so the reader has something to type. */
         private val resolveGifukaiHint = listOf("hug", "pat", "kiss", "cry", "laugh", "sleep")
 
+        private fun wordsOf(query: String): List<String> = query.lowercase()
+            .split(Regex("[^a-z]+"))
+            .filter { it.isNotBlank() }
+
         /**
-         * Matches [query] against the catalogue: an exact action, an alias, or a
-         * single word *inside* the phrase — "crying scared" is a cry, because the
-         * first reaction word wins. Returns the action, and a `type` folder when
-         * the action is a typed one and the query names the folder.
+         * Matches [query] against the catalogue: an exact action, a two-word
+         * phrase, an alias, or a single word *inside* the phrase — "crying
+         * scared" is a cry, because the first reaction word wins. Returns the
+         * action, and a `type` folder when the action is a typed one and the
+         * query names the folder.
          */
         internal fun resolve(query: String): Pair<String, String?>? {
-            val words = query.lowercase()
-                .split(Regex("[^a-z]+"))
-                .filter { it.isNotBlank() }
+            val words = wordsOf(query)
+            if (words.isEmpty()) return null
             val action = words.firstOrNull { it in ACTIONS }
+                ?: resolvePhrase(words)
                 ?: words.firstNotNullOfOrNull { ALIASES[it] }
                 ?: return null
             val type = if (action == "kiss") {
-                words.firstOrNull { it in KISS_TYPES }
+                words.firstNotNullOfOrNull { KISS_TYPES[it] }
             } else {
                 null
             }
             return action to type
         }
+
+        /** A longer phrase is tried first; within one length, the earliest wins. */
+        private fun resolvePhrase(words: List<String>): String? {
+            for (size in PHRASE_WINDOW downTo 1) {
+                for (start in 0..words.size - size) {
+                    val phrase = words.subList(start, start + size).joinToString(" ")
+                    PHRASES[phrase]?.let { return it }
+                }
+            }
+            return null
+        }
+
+        /** The longest phrase in [PHRASES], so the window follows the table. */
+        private val PHRASE_WINDOW =
+            PHRASES.keys.maxOf { it.split(' ').size }
     }
 }
 

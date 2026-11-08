@@ -196,14 +196,42 @@ private fun GifBlankQueryChips(
         tagTestPrefix = "comment_gif_suggestion",
         onPick = onPick
     )
-    // Series tags are booru tags; only Safebooru carries them.
-    if (provider == GifProvider.SAFEBOORU) {
+    // Pairing is gifukai's own filter, so the phrases are offered only there.
+    if (provider == GifProvider.GIFUKAI) {
         GifSuggestionRow(
+            caption = "Pairings",
+            suggestions = GIFUKAI_PAIRINGS,
+            tagTestPrefix = "comment_gif_pairing",
+            onPick = onPick
+        )
+    }
+    when (provider) {
+        // Series tags are booru tags; only Safebooru carries them.
+        GifProvider.SAFEBOORU -> GifSuggestionRow(
             caption = "Series",
             suggestions = GIF_SERIES,
             tagTestPrefix = "comment_gif_series",
             onPick = onPick
         )
+        // nekos.best carries reaction categories and nothing else, so a name row
+        // would be chips that all open an empty grid.
+        GifProvider.NEKOS_BEST -> Unit
+        // Free-text catalogues answer a name, and Gifukai reaches one through the
+        // Klipy hand-off. The note on the answer says which index gave it.
+        else -> {
+            GifSuggestionRow(
+                caption = "Anime",
+                suggestions = GIF_ANIME,
+                tagTestPrefix = "comment_gif_anime",
+                onPick = onPick
+            )
+            GifSuggestionRow(
+                caption = "Characters",
+                suggestions = GIF_CHARACTERS,
+                tagTestPrefix = "comment_gif_character",
+                onPick = onPick
+            )
+        }
     }
 }
 
