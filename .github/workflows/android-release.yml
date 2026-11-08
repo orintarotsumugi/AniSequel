@@ -183,8 +183,25 @@ jobs:
           # failure surfaces only as "this run likely failed because of a workflow
           # file issue" with no useful log. Catching it here turns that into a
           # readable error.
-          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
-            | tar xz actionlint
+          #
+          # The release asset is retried and checked before extraction: GitHub
+          # sometimes answers a release download with an HTML error page, and a
+          # bare `curl | tar` turns that into `gzip: stdin: not in gzip format` -
+          # which skips every APK and test step without saying the download was
+          # the failure. A failed fetch is still a failure, never a skipped lint.
+          for attempt in 1 2 3; do
+            if curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
+                https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+                -o /tmp/actionlint.tgz; then
+              if tar xzf /tmp/actionlint.tgz actionlint; then
+                break
+              fi
+            fi
+            echo "actionlint download attempt $attempt failed" >&2
+            rm -f actionlint /tmp/actionlint.tgz
+            sleep $((attempt * 5))
+          done
+          test -x ./actionlint
 
           # actionlint exits non-zero when a glob matches nothing, so build the file
           # list explicitly and skip the step if the directory is somehow empty.
