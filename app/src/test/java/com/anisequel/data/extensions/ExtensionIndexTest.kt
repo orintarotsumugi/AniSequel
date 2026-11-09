@@ -4,6 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * The repository shapes this app reads, pinned without the network.
@@ -13,6 +16,8 @@ import org.junit.Test
  * valid repository look broken. The `.cs3` file name matters too - it used to be
  * handed to Android's APK installer, which fails every time.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ExtensionIndexTest {
 
     @Test
