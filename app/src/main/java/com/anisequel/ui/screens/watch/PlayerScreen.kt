@@ -282,13 +282,11 @@ fun PlayerScreen(
         // Locked means a pocket tap must not hide the only way back to Unlock,
         // and must not seek either. Before this, tapping a locked player hid the
         // top bar and left Back as the only escape.
-        onToggleControls = { if (!locked) controlsVisible = !controlsVisible },
+        onToggleControls = {
+            togglePlayerControls(locked, controlsVisible) { controlsVisible = it }
+        },
         onSeekBy = { delta ->
-            if (!locked) {
-                val max = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                exoPlayer.seekTo((exoPlayer.currentPosition + delta).coerceIn(0L, max))
-                controlsVisible = true
-            }
+            seekPlayerBy(exoPlayer, delta, locked) { controlsVisible = true }
         },
         onServers = { showServers = true },
         onSettings = {
@@ -316,13 +314,12 @@ fun PlayerScreen(
         },
         onMute = {
             muted = !muted
-            exoPlayer.volume = if (muted) 0f else 1f
+            applyPlayerMute(exoPlayer, muted)
             controlsVisible = true
         },
         onScrub = { scrubFraction = it },
         onScrubFinished = {
-            val target = ((scrubFraction ?: 0f) * duration).toLong()
-            exoPlayer.seekTo(target)
+            seekPlayerToScrub(exoPlayer, scrubFraction, duration)
             scrubFraction = null
             controlsVisible = true
         },
@@ -335,9 +332,7 @@ fun PlayerScreen(
             controlsVisible = true
         },
         onSkipIntro = {
-            val target = (exoPlayer.currentPosition + 85_000L)
-                .coerceAtMost(exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
-            exoPlayer.seekTo(target)
+            skipPlayerIntro(exoPlayer)
             controlsVisible = true
         },
         onRetry = {
