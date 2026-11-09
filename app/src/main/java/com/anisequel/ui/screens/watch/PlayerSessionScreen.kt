@@ -30,6 +30,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.anisequel.data.extensions.PlaybackQueue
+import com.anisequel.data.extensions.PlayerSettings
 import com.anisequel.data.extensions.chooseServer
 import com.anisequel.data.extensions.PlayerPreferences
 import com.anisequel.data.extensions.RendererMode
@@ -54,6 +55,9 @@ import kotlinx.coroutines.delay
  * the server chooser in `PlayerServerSheet.kt`. This function is the session
  * state and the commands over it.
  */
+private fun playerUsesTexture(settings: PlayerSettings): Boolean =
+    settings.enhance || settings.renderer == RendererMode.TEXTURE
+
 @Composable
 fun PlayerScreen(
     watchPreferences: WatchPreferences,
@@ -73,6 +77,7 @@ fun PlayerScreen(
         activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
     val queueContext = remember { PlaybackQueue.context }
+    val seriesTitle = queueContext?.mediaTitle ?: "Episode"
     var currentEpisode by remember { mutableStateOf(PlaybackQueue.episode()) }
     var currentServer by remember {
         mutableStateOf(
@@ -107,7 +112,7 @@ fun PlayerScreen(
     val speedSheetState = rememberFullHeightSheetState()
     val episodesSheetState = rememberFullHeightSheetState()
 
-    val useTexture = settings.enhance || settings.renderer == RendererMode.TEXTURE
+    val useTexture = playerUsesTexture(settings)
     val canPip = activity?.packageManager
         ?.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) == true
     val mediaUrl = currentServer?.url
@@ -258,7 +263,7 @@ fun PlayerScreen(
         buffering = buffering,
         errorMessage = errorMessage,
         controlsVisible = controlsVisible,
-        title = queueContext?.mediaTitle ?: "Episode",
+        title = seriesTitle,
         episode = currentEpisode,
         server = currentServer,
         decoderLabel = settings.decoder.label,
@@ -386,7 +391,7 @@ fun PlayerScreen(
     PlayerServerSheetHost(
         visible = showServers,
         sheetState = serverSheetState,
-        seriesTitle = queueContext?.mediaTitle ?: "Episode",
+        seriesTitle = seriesTitle,
         episode = currentEpisode,
         current = currentServer,
         onPreferredServer = watchPreferences::setPreferredServer,
