@@ -79,6 +79,10 @@ internal fun AvailableList(
             .toList()
     }
 
+    val groups = remember(filtered) {
+        filtered.groupBy { it.language.ifBlank { "en" }.lowercase() }.toSortedMap()
+    }
+
     if (state.repositories.isEmpty()) {
         EmptyCatalogue(
             title = "No repositories yet",
@@ -127,9 +131,6 @@ internal fun AvailableList(
             }
         }
 
-        val groups = remember(filtered) {
-            filtered.groupBy { it.language.ifBlank { "en" }.lowercase() }.toSortedMap()
-        }
         groups.forEach { (language, entries) ->
             item(key = "header_$language") {
                 LanguageHeader(language = language, count = entries.size)

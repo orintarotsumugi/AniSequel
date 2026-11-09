@@ -1,4 +1,7 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class)
+@file:OptIn(
+    androidx.media3.common.util.UnstableApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
 
 package com.anisequel.ui.screens.watch
 
@@ -30,8 +33,6 @@ import com.anisequel.data.extensions.PlaybackQueue
 import com.anisequel.data.extensions.chooseServer
 import com.anisequel.data.extensions.PlayerPreferences
 import com.anisequel.data.extensions.RendererMode
-import com.anisequel.data.extensions.SourceEpisode
-import com.anisequel.data.extensions.SourceServer
 import com.anisequel.data.extensions.WatchPreferences
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import kotlinx.coroutines.delay
@@ -347,70 +348,58 @@ fun PlayerScreen(
         modifier = modifier.testTag("player_screen")
     )
 
-    if (showSpeed) {
-        PlayerSpeedSheet(
-            sheetState = speedSheetState,
-            speed = speed,
-            presets = speedPresets,
-            onSpeedChange = { value ->
-                speed = value
-                playerPreferences.setPlaybackSpeed(value)
-            },
-            onAddPreset = { preset ->
-                playerPreferences.setSpeedPresets(speedPresets + preset)
-            },
-            onRemovePreset = { preset ->
-                playerPreferences.setSpeedPresets(speedPresets - preset)
-            },
-            onRestorePresets = playerPreferences::resetSpeedPresets,
-            onDismiss = { showSpeed = false }
-        )
-    }
+    PlayerSpeedSheetHost(
+        visible = showSpeed,
+        sheetState = speedSheetState,
+        speed = speed,
+        presets = speedPresets,
+        onSpeedChange = { value ->
+            speed = value
+            playerPreferences.setPlaybackSpeed(value)
+        },
+        onAddPreset = { preset ->
+            playerPreferences.setSpeedPresets(speedPresets + preset)
+        },
+        onRemovePreset = { preset ->
+            playerPreferences.setSpeedPresets(speedPresets - preset)
+        },
+        onRestorePresets = playerPreferences::resetSpeedPresets,
+        onDismiss = { showSpeed = false }
+    )
 
-    if (showEpisodes && currentEpisode != null) {
-        val queue = queueContext
-        PlayerEpisodesSheet(
-            sheetState = episodesSheetState,
-            seriesTitle = queue?.mediaTitle ?: "Episode",
-            episodes = queue?.episodes.orEmpty(),
-            currentIndex = queue?.episodes?.indexOfFirst { it.id == currentEpisode?.id } ?: -1,
-            currentProgress = queue?.mediaId?.let { progressMap[it] },
-            showArtwork = showArtwork,
-            onArtworkChange = watchPreferences::setShowArtwork,
-            onChoose = { index ->
-                savePlayback(watchPreferences, exoPlayer)
-                PlaybackQueue.select(
-                    index,
-                    watchPreferences.preferredServer.value,
-                    sourceSettings.preferredQuality
-                )?.let { selected ->
-                    pendingStartMs = 0L
-                    currentEpisode = selected
-                    currentServer = PlaybackQueue.server ?: selected.servers.firstOrNull()
-                }
-                showEpisodes = false
-            },
-            onDismiss = { showEpisodes = false }
-        )
-    }
+    PlayerEpisodesSheetHost(
+        visible = showEpisodes,
+        sheetState = episodesSheetState,
+        queueContext = queueContext,
+        currentEpisodeId = currentEpisode?.id,
+        progressByMedia = progressMap,
+        showArtwork = showArtwork,
+        preferredServer = watchPreferences.preferredServer.value,
+        preferredQuality = sourceSettings.preferredQuality,
+        onArtworkChange = watchPreferences::setShowArtwork,
+        onBeforeSelect = {
+            savePlayback(watchPreferences, exoPlayer)
+            pendingStartMs = 0L
+        },
+        onSelected = { selected, selectedServer ->
+            currentEpisode = selected
+            currentServer = selectedServer
+        },
+        onDismiss = { showEpisodes = false }
+    )
 
-    if (showServers && currentEpisode != null) {
-        PlayerServerSheet(
-            sheetState = serverSheetState,
-            seriesTitle = queueContext?.mediaTitle ?: "Episode",
-            episode = currentEpisode!!,
-            current = currentServer,
-            onDismiss = { showServers = false },
-            onChoose = { server: SourceServer, remember: Boolean ->
-                savePlayback(watchPreferences, exoPlayer)
-                pendingStartMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-                PlaybackQueue.switchServer(server)
-                watchPreferences.setPreferredServer(
-                    if (remember) server.name else null
-                )
-                currentServer = server
-                showServers = false
-            }
-        )
-    }
+    PlayerServerSheetHost(
+        visible = showServers,
+        sheetState = serverSheetState,
+        seriesTitle = queueContext?.mediaTitle ?: "Episode",
+        episode = currentEpisode,
+        current = currentServer,
+        onPreferredServer = watchPreferences::setPreferredServer,
+        onBeforeSelect = {
+            savePlayback(watchPreferences, exoPlayer)
+            pendingStartMs = exoPlayer.currentPosition.coerceAtLeast(0L)
+        },
+        onSelected = { server -> currentServer = server },
+        onDismiss = { showServers = false }
+    )
 }
