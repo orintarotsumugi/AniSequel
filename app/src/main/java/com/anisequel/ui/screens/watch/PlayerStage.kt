@@ -8,9 +8,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.media3.exoplayer.ExoPlayer
 import com.anisequel.data.extensions.PlayerSettings
 import com.anisequel.data.extensions.SourceEpisode
@@ -30,6 +34,7 @@ internal fun PlayerStage(
     exoPlayer: ExoPlayer,
     settings: PlayerSettings,
     buffering: Boolean,
+    resolving: Boolean,
     errorMessage: String?,
     controlsVisible: Boolean,
     title: String,
@@ -75,7 +80,16 @@ internal fun PlayerStage(
             .background(Color.Black)
     ) {
         if (mediaUrl.isNullOrBlank()) {
-            PlayerEmpty(onBack = onBack)
+            if (resolving) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(42.dp)
+                )
+            } else {
+                PlayerEmpty(onBack = onBack, message = errorMessage)
+            }
             return@Box
         }
         PlayerSurface(

@@ -36,3 +36,12 @@
 # Keep line numbers, but hide the original source file names in the shipped APK.
 -keepattributes SourceFile, LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# --- Sandboxed extension runtime ABI -----------------------------------------
+# Extension APKs are loaded reflectively in the isolated runtime and link against
+# these clean-room declarations of the Aniyomi / Injekt API by name. R8 cannot
+# see an external dex's references, so the surface is kept whole: renaming or
+# stripping a member breaks linkage at runtime, not at build time. This is the
+# legitimate keep (reflection across a code boundary), not a Compose keep.
+-keep class eu.kanade.tachiyomi.** { *; }
+-keep class uy.kohesive.injekt.** { *; }

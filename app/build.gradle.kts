@@ -150,6 +150,8 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+    // The isolated extension runtime talks to the host over AIDL (Phase 2.1).
+    aidl = true
   }
   lint {
     // Advisory, and the workflow treats it as such: the `lintRelease` step reports
@@ -255,6 +257,14 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer.hls)
   implementation(libs.androidx.media3.exoplayer.dash)
   implementation(libs.androidx.media3.ui)
+  // The sandboxed Aniyomi runtime's ABI dependencies. Extensions link against
+  // these at runtime; see gradle/libs.versions.toml for why each pin is what it
+  // is. They are reachable only from the isolated runtime process and the
+  // clean-room eu.kanade ABI, never from the app's own screens.
+  implementation(libs.jsoup)
+  implementation(libs.rxjava)
+  implementation(libs.kotlinx.serialization.json)
+  implementation(libs.androidx.preference.ktx)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)

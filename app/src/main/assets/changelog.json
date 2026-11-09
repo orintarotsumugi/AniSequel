@@ -4,6 +4,10 @@
       "version": "1.8.9",
       "entries": [
         {
+          "title": "Aniyomi anime extensions play in a sandbox",
+          "detail": "Installed Aniyomi anime extensions are now real sources. Their code runs in a dedicated isolated process with its own user id, no permissions and no access to AniSequel's data; it reads only the extension file the app hands it and proxies every network request back through the host, so an extension never sees your AniList token. A source that hangs is killed by a per-call timeout and restarted, and only the app that owns the runtime can talk to it. The Watch page resolves an episode's files when you tap it, the player carries the headers a hoster needs, and next and previous episodes resolve the same way. CloudStream, Sora and LNReader modules are still installed and recorded but not executed."
+        },
+        {
           "title": "Extensions search by source and show what is installed",
           "detail": "Browse no longer hides an installed extension from search. The filter matches the extension name, package name and the sources the package provides, an INSTALLED badge marks what is on the device, and the list is filtered and grouped only when an input changes. CloudStream repository manifests are followed into their plugin lists, .cs3 and DEX modules are staged like JS modules instead of being handed to Android's APK installer, and the installed APK package is checked against the catalogue before the installer opens."
         },
@@ -21,7 +25,7 @@
         },
         {
           "title": "The extension runtime bridge says what can play",
-          "detail": "One host-side bridge now classifies every installed record as built-in, APK installed, APK staged or module staged, and the Extension Manager shows those counts instead of one vague installed number. The bridge is the seam the isolated Phase 2 runtime plugs into; it still does not execute third-party code."
+          "detail": "One host-side bridge classifies every installed record as built-in, APK installed, APK staged or module staged, and the Extension Manager shows those counts instead of one vague installed number. A loadable Aniyomi anime extension is listed as a playable source beside the built-in one; the bridge itself never runs third-party code, leaving that to the isolated sandboxed process."
         },
         {
           "title": "Catalogues cache, retry and keep the last good rows",
@@ -29,11 +33,11 @@
         },
         {
           "title": "Extensions get a repository browser and real APK installs",
-          "detail": "A fifth tab browses Aniyomi, CloudStream, Sora and LNReader repositories, separates Anime, Manga and Novel entries, filters by ecosystem, language and NSFW, and installs an extension through Android's own package installer. It asks for the install permission when the phone has not granted it, offers the Settings ladder when a vendor build hides that screen, copies an APK from storage, and shows a restart banner so the install is registered on a fresh process. Two Aniyomi repositories are seeded, more can be added by URL or repository root, and the manager reports what is installed and what failed. This beta installs and records third-party APKs; executing their Aniyomi or CloudStream runtime is Phase 2 and the source sheet says so rather than showing a source that cannot play."
+          "detail": "A fifth tab browses Aniyomi, CloudStream, Sora and LNReader repositories, separates Anime, Manga and Novel entries, filters by ecosystem, language and NSFW, and installs an extension through Android's own package installer. It asks for the install permission when the phone has not granted it, offers the Settings ladder when a vendor build hides that screen, copies an APK from storage, and shows a restart banner so the install is registered on a fresh process. Two Aniyomi repositories are seeded, more can be added by URL or repository root, and the manager reports what is installed and what failed. Aniyomi anime extensions run in a sandboxed process; CloudStream and JS modules are installed and recorded but not executed yet."
         },
         {
           "title": "A Watch flow for anime, with a source the app can actually play",
-          "detail": "The bottom of an anime's Info page now has a pinned Watch bar, and the Watch page that opens searches the selected source by the title's AniList name, draws the matched cover and title, and lists the episodes the source reports. Wrong Title? opens a real search against that source and remembers the result per title, so a bad match is one tap to correct. Episodes are grouped into All and 12-episode ranges, each chip carrying its own count, and can be drawn as Minimal, Compact or Detailed cards with their server count, duration and resume point. The beta's playable source is Internet Archive: it searches public-domain and Creative Commons animation and turns each file the item reports into a server. Aniyomi and CloudStream extensions installed from the Extensions tab are listed with their real install state and the Phase 2 note."
+          "detail": "The bottom of an anime's Info page now has a pinned Watch bar, and the Watch page that opens searches the selected source by the title's AniList name, draws the matched cover and title, and lists the episodes the source reports. Wrong Title? opens a real search against that source and remembers the result per title, so a bad match is one tap to correct. Episodes are grouped into All and 12-episode ranges, each chip carrying its own count, and can be drawn as Minimal, Compact or Detailed cards with their server count, duration and resume point. The beta's playable source is Internet Archive: it searches public-domain and Creative Commons animation and turns each file the item reports into a server. Aniyomi anime extensions installed from the Extensions tab are playable in the sandbox, and other module formats are listed with their real install state."
         },
         {
           "title": "Player Settings draws the choices it can honour",

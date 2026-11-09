@@ -105,6 +105,22 @@ object PlaybackQueue {
     }
 
     /**
+     * Writes an episode's resolved servers back into the queue.
+     *
+     * A runtime source discovers an episode's files only when it is reached, so
+     * the queue starts with empty server lists. Updating the stored episode (not
+     * just the player's local state) keeps the episode sheet and the next/previous
+     * controls reading the same resolved files.
+     */
+    fun updateEpisode(episode: SourceEpisode) {
+        val current = context ?: return
+        if (current.episodes.none { it.id == episode.id }) return
+        context = current.copy(
+            episodes = current.episodes.map { if (it.id == episode.id) episode else it }
+        )
+    }
+
+    /**
      * Moves the resume point without changing the episode.
      *
      * The player is disposed while Player Settings is open, and it is rebuilt

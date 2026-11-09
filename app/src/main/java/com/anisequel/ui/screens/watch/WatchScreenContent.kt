@@ -152,6 +152,7 @@ internal fun WatchBody(
                 coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
                 resume = resume,
                 isBusy = state.isBusy,
+                resolvingEpisodeId = state.resolvingEpisodeId,
                 error = state.error,
                 onRange = onRange,
                 onEpisode = { onRequestEpisode(it, 0L) },
@@ -324,9 +325,9 @@ private fun WatchSourceInfoDialog(onDismiss: () -> Unit) {
             Text(
                 "AniSequel does not host video. The built-in Internet Archive source " +
                     "searches public-domain and Creative Commons animation and plays the " +
-                    "files Archive.org serves. Aniyomi and CloudStream extensions are " +
-                    "third-party code; this beta installs and records them, but does " +
-                    "not execute APK code in this release.",
+                    "files Archive.org serves. Aniyomi anime extensions are third-party " +
+                    "code and run in a sandboxed process with no access to your data; " +
+                    "CloudStream and JS modules are installed and recorded but not run yet.",
                 style = MaterialTheme.typography.bodyMedium
             )
         },

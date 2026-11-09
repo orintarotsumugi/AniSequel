@@ -168,7 +168,9 @@ data class SourceServer(
     val id: String,
     val name: String,
     val url: String,
-    val quality: String? = null
+    val quality: String? = null,
+    /** Headers the file needs (a Referer, a token); most hosters 403 without them. */
+    val headers: Map<String, String> = emptyMap()
 )
 
 /** One episode, with every server the source offered for it. */

@@ -70,9 +70,10 @@ import java.util.Locale
  * The source picker.
  *
  * Every source the app knows about is listed, including installed third-party
- * extensions. Those are not selectable to play in this beta, and their row says
- * why (the runtime is Phase 2) instead of vanishing after installation, which
- * would make a successful install look like it did nothing.
+ * extensions. Loadable Aniyomi sources are selectable; records the runtime cannot
+ * load (other module formats) stay visible with their state instead of vanishing
+ * after installation, which would make a successful install look like it did
+ * nothing.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

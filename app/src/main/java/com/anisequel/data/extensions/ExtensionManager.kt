@@ -3,6 +3,9 @@ package com.anisequel.data.extensions
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.anisequel.data.extensions.runtime.AniyomiManifestReader
+import com.anisequel.data.extensions.runtime.ExtensionRuntimeClient
+import com.anisequel.data.extensions.runtime.RuntimeAnimeSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -38,6 +41,9 @@ class ExtensionManager(context: Context) {
     private val installer = ExtensionInstaller(appContext)
     private val repositoryClient = ExtensionRepositoryClient()
     private val runtimeBridge = ExtensionRuntimeBridge(appContext)
+    private val runtimeClient = ExtensionRuntimeClient(appContext)
+    private val manifestReader = AniyomiManifestReader(appContext)
+    private val runtimeAdapters = java.util.concurrent.ConcurrentHashMap<String, RuntimeAnimeSource>()
 
     /** Compiled-in sources. This beta ships one; the interface is the seam for more. */
     private val nativeSources: List<NativeAnimeSource> = listOf(ArchiveAnimeSource())
@@ -315,6 +321,8 @@ class ExtensionManager(context: Context) {
                 runCatching { File(path).delete() }
             }
             preferences.removeInstall(extension.key)
+            runtimeAdapters.remove(extension.key)
+            runtimeClient.forget(packageName)
             preferences.setRestartRequired(true)
         }
         return "${extension.name} removed. Restart AniSequel to refresh the extension list."
@@ -329,6 +337,8 @@ class ExtensionManager(context: Context) {
         }
         record.apkPath?.let { path -> runCatching { File(path).delete() } }
         preferences.removeInstall(record.key)
+        runtimeAdapters.remove(record.key)
+        runtimeClient.forget(record.packageName)
         preferences.setRestartRequired(true)
     }
 
@@ -348,26 +358,55 @@ class ExtensionManager(context: Context) {
      * which reads as the install having done nothing.
      */
     fun sources(): List<PlayableSource> =
-        runtimeBridge.sources(nativeSources, preferences.installed.value.values)
+        runtimeBridge.sources(nativeSources, preferences.installed.value.values, runtimeSources())
 
     /** Counts for the manager card; the bridge owns the classification. */
     fun runtimeReport(): ExtensionRuntimeReport =
-        runtimeBridge.report(nativeSources, preferences.installed.value.values)
+        runtimeBridge.report(nativeSources, preferences.installed.value.values, runtimeSources())
 
     /** The built-in source behind [sourceId], or null for an installed APK/module. */
     fun nativeSource(sourceId: String): NativeAnimeSource? =
         nativeSources.firstOrNull { it.id == sourceId }
 
+    /**
+     * The staged Aniyomi APKs the runtime can load, as ordinary sources.
+     *
+     * A record becomes a source only when its manifest declares the anime
+     * extension feature and a source class - read without executing anything.
+     * Adapters are cached per record so a search does not re-read the manifest.
+     */
+    private fun runtimeSources(): List<NativeAnimeSource> =
+        preferences.installed.value.values.mapNotNull { runtimeAdapter(it) }
+
+    private fun runtimeAdapter(record: InstalledExtension): RuntimeAnimeSource? {
+        if (record.kind != ExtensionKind.ANIYOMI || record.content != ExtensionContent.ANIME) return null
+        val path = record.apkPath ?: return null
+        runtimeAdapters[record.key]?.let { return it }
+        val manifest = manifestReader.read(File(path)) ?: return null
+        return RuntimeAnimeSource(record, manifest, runtimeClient)
+            .also { runtimeAdapters[record.key] = it }
+    }
+
+    private fun source(sourceId: String): NativeAnimeSource? =
+        nativeSource(sourceId) ?: runtimeSources().firstOrNull { it.id == sourceId }
+
     suspend fun search(sourceId: String, query: String): List<SourceAnime> {
-        val source = nativeSource(sourceId)
-            ?: throw IOException("This source runs on the Phase 2 extension runtime.")
+        val source = source(sourceId)
+            ?: throw IOException("This source is not available.")
         return source.search(query)
     }
 
     suspend fun details(sourceId: String, animeId: String): SourceDetails {
-        val source = nativeSource(sourceId)
-            ?: throw IOException("This source runs on the Phase 2 extension runtime.")
+        val source = source(sourceId)
+            ?: throw IOException("This source is not available.")
         return source.details(animeId)
+    }
+
+    /** Resolves an episode's playable files; native sources answer from [details]. */
+    suspend fun resolveServers(sourceId: String, animeId: String, episodeId: String): List<SourceServer> {
+        val source = source(sourceId)
+            ?: throw IOException("This source is not available.")
+        return source.resolveServers(animeId, episodeId)
     }
 
     /**

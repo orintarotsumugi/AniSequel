@@ -28,6 +28,14 @@ interface NativeAnimeSource {
 
     suspend fun search(query: String): List<SourceAnime>
     suspend fun details(animeId: String): SourceDetails
+
+    /**
+     * Resolves the playable files for one episode, for sources that discover them
+     * lazily. A source that embeds servers in [details] (the native one does)
+     * keeps this empty default and is never asked; a runtime-backed source
+     * scrapes the episode's hosters only when the reader taps it.
+     */
+    suspend fun resolveServers(animeId: String, episodeId: String): List<SourceServer> = emptyList()
 }
 
 /**

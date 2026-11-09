@@ -8,6 +8,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.anisequel.data.extensions.ExtensionManager
+import com.anisequel.data.extensions.PlaybackQueue
 import com.anisequel.ui.screens.watch.PlayerScreen
 import com.anisequel.ui.screens.watch.WatchScreen
 import com.anisequel.ui.viewmodel.WatchViewModel
@@ -57,6 +58,14 @@ fun NavGraphBuilder.watchDestinations(
             onBack = { navController.popBackStack() },
             onOpenSettings = {
                 navController.navigateSingle(AppRoutes.PLAYER_SETTINGS)
+            },
+            resolveServers = { episodeId ->
+                val context = PlaybackQueue.context
+                if (context == null) {
+                    emptyList()
+                } else {
+                    manager.resolveServers(context.sourceId, context.animeId, episodeId)
+                }
             }
         )
     }

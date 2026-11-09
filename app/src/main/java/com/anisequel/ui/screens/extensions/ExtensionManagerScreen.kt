@@ -249,10 +249,10 @@ fun ExtensionManagerScreen(
                         Text(
                             "Catalogue discovery, APK/module installation, the install-permission " +
                                 "handoff, source search, episode discovery, servers and playback all " +
-                                "work. Playback runs through the built-in Internet Archive source. " +
-                                "Aniyomi APKs, CloudStream .cs3/DEX modules, Sora JS and LNReader " +
-                                "modules are verified and staged, but third-party code is not " +
-                                "executed until the sandboxed runtime in Phase 2 lands.",
+                                "work. The built-in Internet Archive source plays out of the box, and " +
+                                "Aniyomi anime extensions run in a sandboxed process with no access to " +
+                                "your data. CloudStream .cs3/DEX modules, Sora JS and LNReader modules " +
+                                "are verified and staged but not executed yet.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

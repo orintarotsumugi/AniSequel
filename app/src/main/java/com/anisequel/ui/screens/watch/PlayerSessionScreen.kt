@@ -27,10 +27,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.anisequel.data.extensions.PlaybackQueue
 import com.anisequel.data.extensions.PlayerSettings
+import com.anisequel.data.extensions.SourceServer
 import com.anisequel.data.extensions.chooseServer
 import com.anisequel.data.extensions.PlayerPreferences
 import com.anisequel.data.extensions.RendererMode
@@ -64,6 +67,7 @@ fun PlayerScreen(
     playerPreferences: PlayerPreferences,
     onBack: () -> Unit,
     onOpenSettings: () -> Unit,
+    resolveServers: suspend (String) -> List<SourceServer> = { emptyList() },
     modifier: Modifier = Modifier
 ) {
     val settings by playerPreferences.settings.collectAsStateWithLifecycle()
@@ -101,6 +105,7 @@ fun PlayerScreen(
     var buffered by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
+    var resolving by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var speed by remember { mutableFloatStateOf(playerPreferences.playbackSpeed.value) }
@@ -146,16 +151,28 @@ fun PlayerScreen(
             .build()
     }
 
+    // A hoster file usually needs the Referer or token the source resolved with
+    // it; a bare URL is a 403. The headers ride on the server, so the factory is
+    // rebuilt whenever the chosen server changes.
+    val requestHeaders = currentServer?.headers ?: emptyMap()
+    val mediaSourceFactory = remember(requestHeaders) {
+        DefaultMediaSourceFactory(context).setDataSourceFactory(
+            DefaultHttpDataSource.Factory().setDefaultRequestProperties(requestHeaders)
+        )
+    }
+
     val exoPlayer = remember(
         currentEpisode?.id,
         mediaUrl,
         settings.decoder,
         settings.renderer,
         settings.enhance,
-        loadControl
+        loadControl,
+        mediaSourceFactory
     ) {
         ExoPlayer.Builder(context, buildRenderersFactory(context, settings.decoder))
             .setLoadControl(loadControl)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
             setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
@@ -173,6 +190,40 @@ fun PlayerScreen(
         errorMessage = null
         buffering = true
         controlsVisible = true
+    }
+
+    // A runtime source hands over episodes with no files yet; the next/previous
+    // controls and the episode sheet land on one and it is resolved here, once,
+    // then written back to the queue so the rest of the player sees the files.
+    LaunchedEffect(currentEpisode?.id) {
+        val episode = currentEpisode ?: return@LaunchedEffect
+        if (episode.servers.isNotEmpty()) {
+            resolving = false
+            return@LaunchedEffect
+        }
+        resolving = true
+        runCatching { resolveServers(episode.id) }
+            .onSuccess { servers ->
+                resolving = false
+                if (servers.isEmpty()) {
+                    errorMessage = "This episode has no playable file."
+                    buffering = false
+                } else {
+                    val resolved = episode.copy(servers = servers)
+                    PlaybackQueue.updateEpisode(resolved)
+                    currentEpisode = resolved
+                    currentServer = chooseServer(
+                        resolved,
+                        watchPreferences.preferredServer.value,
+                        sourceSettings.preferredQuality
+                    )
+                }
+            }
+            .onFailure { error ->
+                resolving = false
+                errorMessage = error.message ?: "The episode could not be loaded."
+                buffering = false
+            }
     }
 
     LaunchedEffect(speed, settings.audioPitchCorrection, exoPlayer) {
@@ -261,6 +312,7 @@ fun PlayerScreen(
         exoPlayer = exoPlayer,
         settings = settings,
         buffering = buffering,
+        resolving = resolving,
         errorMessage = errorMessage,
         controlsVisible = controlsVisible,
         title = seriesTitle,

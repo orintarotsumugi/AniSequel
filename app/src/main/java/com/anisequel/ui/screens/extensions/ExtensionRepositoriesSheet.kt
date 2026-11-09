@@ -201,8 +201,9 @@ fun ExtensionRepositoriesSheet(
             item(key = "note") {
                 Text(
                     text = "Aniyomi and CloudStream repositories provide APK extensions. " +
-                        "Sora and LNReader provide JavaScript modules. This beta installs and " +
-                        "registers them on restart; the third-party code runtime is Phase 2.",
+                        "Sora and LNReader provide JavaScript modules. Aniyomi anime extensions " +
+                        "run in a sandboxed process; the other module formats are installed and " +
+                        "registered but not executed yet.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 12.dp)

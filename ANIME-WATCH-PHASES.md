@@ -161,25 +161,61 @@ without ever running its code in the main process.
 
 ### 2.1 Process isolation
 
-- [ ] A dedicated `:extension-runtime` process declared with
+- [x] A dedicated `:extension-runtime` process declared with
       `android:isolatedProcess="true"` and no access to the app's private data.
-- [ ] AIDL surface with four calls: `search`, `details`, `episodes`, `resolve`.
+      `RuntimeIsolationTest` pins the manifest declaration.
+- [x] AIDL surface with four calls: `search`, `details`, `episodes`, `resolve`.
       Keep it smaller than the Aniyomi API; the Watch page only needs those.
+      `load`/`unload` carry the lifecycle; payloads are JSON (`RuntimeProtocol`).
 - [ ] A per-call timeout and a hard process kill; a misbehaving extension must
-      not take the player down.
+      not take the player down. Implemented in `ExtensionRuntimeClient` (worker
+      deadline, then unbind so the system reaps the isolated process); the hung-
+      extension case still needs a device test.
 - [ ] Binder identity check on the host side; only this app's UID may bind.
+      Implemented (the host accepts only its own service component; the runtime
+      captures the caller's real UID at load and checks every call); a device
+      test should pin the refusal.
 
 ### 2.2 Aniyomi APK loader
 
-- [ ] Load the APK with a `PathClassLoader` in the isolated process only.
-- [ ] Read the extension's `AndroidManifest` metadata (`tachiyomi.extension`,
-      version, language, NSFW) and construct its source class through the
-      published factory interface.
-- [ ] Map the Aniyomi `CatalogueSource` / `AnimeSource` results into the host's
-      `SourceAnime`, `SourceDetails`, `SourceEpisode` and `SourceServer`.
-- [ ] Do not expose `Context`, files, or the main process's OkHttp client.
+- [x] Load the APK's dex in the isolated process only. Uses
+      `InMemoryDexClassLoader`, not `PathClassLoader`: an isolated process has no
+      writable storage, so the dex travels as a read-only descriptor and loads
+      from memory. `AniyomiLoaderTest` pins extraction/order; the isolation test
+      confines the ABI to the runtime.
+- [x] Read the extension's `AndroidManifest` metadata (`tachiyomi.animeextension`
+      feature, `.class`/`.factory`, NSFW) host-side without executing code, and
+      construct the source or `AnimeSourceFactory` in the runtime.
+      `AniyomiManifestTest` pins the class-name resolution.
+- [x] Map the Aniyomi `AnimeCatalogueSource` / `AnimeSource` results into the
+      host's `SourceAnime`, `SourceDetails`, `SourceEpisode` and `SourceServer`.
+      `AniyomiMappingTest` and `RuntimeProtocolTest` pin the mapping and wire shape.
+- [x] Do not expose `Context`, files, or the main process's OkHttp client.
+      Network is a host-tunnelled OkHttp client (`RuntimeNetwork`); preferences
+      are an in-memory store. The isolation test guards the ABI boundary.
 - [ ] Test with one known Aniyomi APK that returns a fixed search result and one
       video URL; assert the host receives it without loading the class itself.
+      Needs a device and a real APK; the JVM tests cover everything up to the
+      class instantiation.
+
+#### Implementation notes (2.1 + 2.2)
+
+- The runtime ships in the same APK but executes only in the isolated process.
+  The clean-room `eu.kanade.tachiyomi` and `uy.kohesive.injekt` declarations under
+  `app/src/main/java` are the **extensions-lib 14** ABI the repositories compile
+  against, written fresh (no upstream code copied); R8 keeps them whole because
+  an external dex's references are invisible to it.
+- Compatibility artifacts are pinned to what extensions build against: jsoup
+  1.16.1, rxjava 1.3.8, kotlinx-serialization-json 1.5.1, androidx.preference
+  1.2.1 (the last is ABI for `ConfigurableAnimeSource`, never UI). The GPL/UPL
+  bridge fork is not used.
+- `Application.onCreate` skips diagnostics/crash init outside the main process:
+  the isolated UID cannot read the app's files.
+- A multi-source package uses its first source for now; per-source selection,
+  persisted extension preferences and a runtime version handshake are Phase 2.5/5.
+- Episodes resolve lazily: the Watch page resolves on tap and the player resolves
+  on next/previous/select, writing servers back into `PlaybackQueue`. Video
+  headers ride on `SourceServer` and the player applies them via Media3.
 
 ### 2.3 CloudStream JAR loader
 

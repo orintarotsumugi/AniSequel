@@ -121,5 +121,16 @@
                 android:resource="@xml/update_file_paths" />
         </provider>
 
+        <!-- The sandboxed extension runtime (Phase 2.1). isolatedProcess runs it
+             under its own UID with no permissions and no access to the app's
+             private data: it reads only the APK descriptor the host hands it and
+             proxies every network request back through the host. Not exported,
+             so only this app may bind; a hung extension is reaped by unbinding. -->
+        <service
+            android:name=".data.extensions.runtime.ExtensionRuntimeService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":extension-runtime" />
+
     </application>
 </manifest>

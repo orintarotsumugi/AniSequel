@@ -49,17 +49,18 @@ class ExtensionRuntimeBridge(context: Context) {
     fun noteFor(record: InstalledExtension): String = when (stageOf(record)) {
         ExtensionRuntimeStage.NATIVE -> "Built into AniSequel. Playable now."
         ExtensionRuntimeStage.APK_STAGED ->
-            "APK staged. Restart AniSequel to register it; the sandboxed APK runtime is Phase 2."
+            "APK staged. Restart AniSequel to register it."
         ExtensionRuntimeStage.APK_INSTALLED ->
-            "APK installed. The sandboxed APK runtime is Phase 2."
+            "APK installed, but it is not a loadable anime source."
         ExtensionRuntimeStage.MODULE_STAGED ->
-            "Module staged. The JS/DEX runtime is Phase 2."
+            "Module staged. The JS/DEX runtime is a later phase."
     }
 
     /** Every source the Watch page shows, native first, then installed records. */
     fun sources(
         nativeSources: List<NativeAnimeSource>,
-        installed: Collection<InstalledExtension>
+        installed: Collection<InstalledExtension>,
+        runtimeSources: List<NativeAnimeSource> = emptyList()
     ): List<PlayableSource> {
         val native = nativeSources.map { source ->
             PlayableSource(
@@ -74,8 +75,22 @@ class ExtensionRuntimeBridge(context: Context) {
                 note = source.note
             )
         }
+        val runtime = runtimeSources.map { source ->
+            PlayableSource(
+                id = source.id,
+                name = source.name,
+                kind = source.kind,
+                content = source.content,
+                language = source.language,
+                nsfw = source.nsfw,
+                iconUrl = null,
+                playable = true,
+                note = source.note
+            )
+        }
+        val runtimeIds = runtimeSources.map { it.id }.toSet()
         val staged = installed
-            .filter { it.content == ExtensionContent.ANIME }
+            .filter { it.content == ExtensionContent.ANIME && it.key !in runtimeIds }
             .sortedBy { it.name.lowercase() }
             .map { record ->
                 PlayableSource(
@@ -90,17 +105,18 @@ class ExtensionRuntimeBridge(context: Context) {
                     note = noteFor(record)
                 )
             }
-        return native + staged
+        return native + runtime + staged
     }
 
     fun report(
         nativeSources: List<NativeAnimeSource>,
-        installed: Collection<InstalledExtension>
+        installed: Collection<InstalledExtension>,
+        runtimeSources: List<NativeAnimeSource> = emptyList()
     ): ExtensionRuntimeReport = ExtensionRuntimeReport(
         nativeSources = nativeSources.size,
         installedApks = installed.count { stageOf(it) != ExtensionRuntimeStage.MODULE_STAGED },
         stagedModules = installed.count { stageOf(it) == ExtensionRuntimeStage.MODULE_STAGED },
-        playableSources = nativeSources.size
+        playableSources = nativeSources.size + runtimeSources.size
     )
 
     /** Metadata for a downloaded file; used by install validation and the manager. */

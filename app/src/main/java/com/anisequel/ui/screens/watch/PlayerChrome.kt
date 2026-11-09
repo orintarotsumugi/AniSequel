@@ -523,7 +523,7 @@ internal fun PlayerError(
 }
 
 @Composable
-internal fun PlayerEmpty(onBack: () -> Unit) {
+internal fun PlayerEmpty(onBack: () -> Unit, message: String? = null) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -534,7 +534,7 @@ internal fun PlayerEmpty(onBack: () -> Unit) {
         Text("Nothing to play", color = Color.White, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Open the Watch page and pick an episode.",
+            message ?: "Open the Watch page and pick an episode.",
             color = Color.White.copy(alpha = 0.7f),
             style = MaterialTheme.typography.bodySmall
         )

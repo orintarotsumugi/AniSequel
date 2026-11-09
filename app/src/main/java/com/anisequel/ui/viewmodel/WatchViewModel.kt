@@ -8,6 +8,7 @@ import com.anisequel.data.extensions.ExtensionContent
 import com.anisequel.data.extensions.PlayableSource
 import com.anisequel.data.extensions.SourceAnime
 import com.anisequel.data.extensions.SourceDetails
+import com.anisequel.data.extensions.SourceEpisode
 import com.anisequel.data.extensions.SourceMapping
 import com.anisequel.data.extensions.WatchPreferences
 import com.anisequel.ui.navigation.WatchAnime
@@ -33,6 +34,7 @@ data class WatchUiState(
     val details: SourceDetails? = null,
     val isSearching: Boolean = false,
     val isLoadingDetails: Boolean = false,
+    val resolvingEpisodeId: String? = null,
     val searchQuery: String = "",
     val error: String? = null
 ) {
@@ -169,6 +171,51 @@ class WatchViewModel(
     }
 
     /**
+     * Resolves an episode's playable files before the page's play decision.
+     *
+     * The native source embeds its servers in the detail answer, so this is a
+     * pass-through for it. A runtime source discovers an episode's hosters only
+     * when tapped; the resolved episode is written back into the detail state so
+     * a second tap does not scrape the page again.
+     */
+    fun resolveEpisode(episode: SourceEpisode, onReady: (SourceEpisode) -> Unit) {
+        if (episode.servers.isNotEmpty()) {
+            onReady(episode)
+            return
+        }
+        val state = _state.value
+        val sourceId = state.selectedSourceId ?: return
+        val animeId = state.details?.anime?.id ?: state.mapping?.animeId ?: return
+        viewModelScope.launch {
+            _state.update { it.copy(resolvingEpisodeId = episode.id, error = null) }
+            runCatching { manager.resolveServers(sourceId, animeId, episode.id) }
+                .onSuccess { servers ->
+                    val resolved = episode.copy(servers = servers)
+                    _state.update { current ->
+                        current.copy(
+                            resolvingEpisodeId = null,
+                            details = current.details?.let { details ->
+                                details.copy(
+                                    episodes = details.episodes.map { if (it.id == episode.id) resolved else it }
+                                )
+                            },
+                            error = if (servers.isEmpty()) "This episode has no playable file." else null
+                        )
+                    }
+                    if (servers.isNotEmpty()) onReady(resolved)
+                }
+                .onFailure { error ->
+                    _state.update {
+                        it.copy(
+                            resolvingEpisodeId = null,
+                            error = error.message ?: "The episode could not be loaded."
+                        )
+                    }
+                }
+        }
+    }
+
+    /**
      * Switches source and searches the new one.
      *
      * The previous mapping is dropped before the search: its anime id belongs to
@@ -180,8 +227,8 @@ class WatchViewModel(
         if (!source.playable) {
             _state.update {
                 it.copy(
-                    error = "This ${source.kind.label} extension is installed, but its " +
-                        "APK runtime is Phase 2. The built-in Internet Archive source plays now."
+                    error = "This ${source.kind.label} extension is installed, but AniSequel " +
+                        "cannot run it as a source yet. The built-in Internet Archive source plays now."
                 )
             }
             return

@@ -56,6 +56,11 @@ class AniSequelApplication : Application(), ImageLoaderFactory {
      */
     override fun onCreate() {
         super.onCreate()
+        // onCreate runs in every process, including the isolated extension
+        // runtime. That process has its own UID and cannot read the app's private
+        // files, so the diagnostics DataStore and crash-file handler must not be
+        // initialised there - they would fail before the runtime service binds.
+        if (Application.getProcessName() != packageName) return
         val preferences = diagnosticsPreferences
         CrashReports.install(this) { preferences.crashReportsEnabled }
     }

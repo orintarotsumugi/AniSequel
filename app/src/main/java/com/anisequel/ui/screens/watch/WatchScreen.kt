@@ -29,10 +29,10 @@ import com.anisequel.ui.viewmodel.WatchViewModel
  * the server sheet lists the files the source reported, and the Watch bar writes
  * a resume point the player reads.
  *
- * The third-party APK runtime is Phase 2. Installed Aniyomi/CloudStream sources
- * are still listed in the source sheet with their state, so the install is
- * visible rather than hidden; only the native source is selectable until the
- * runtime lands.
+ * Third-party Aniyomi anime extensions run in a sandboxed process and appear as
+ * ordinary sources; CloudStream/JS modules are still listed with their state but
+ * not executed. The source sheet shows what the app can load rather than hiding
+ * an install that did something.
  *
  * The body and the overlay host live in `WatchScreenContent.kt`. This function
  * owns only the state, the two playback decisions and the wiring between them.
@@ -94,18 +94,20 @@ fun WatchScreen(
     }
 
     val requestEpisode: (SourceEpisode, Long) -> Unit = { episode, startMs ->
-        requestWatchEpisode(
-            episode = episode,
-            startMs = startMs,
-            preferredServer = preferredServer,
-            preferredQuality = sourceSettings.preferredQuality,
-            onNoServers = { showInfo = true },
-            onNeedsServer = { needsServer, position ->
-                serverEpisode = needsServer
-                serverStartMs = position
-            },
-            onPlay = { server -> startPlayback(episode, server, startMs) }
-        )
+        viewModel.resolveEpisode(episode) { resolved ->
+            requestWatchEpisode(
+                episode = resolved,
+                startMs = startMs,
+                preferredServer = preferredServer,
+                preferredQuality = sourceSettings.preferredQuality,
+                onNoServers = { showInfo = true },
+                onNeedsServer = { needsServer, position ->
+                    serverEpisode = needsServer
+                    serverStartMs = position
+                },
+                onPlay = { server -> startPlayback(resolved, server, startMs) }
+            )
+        }
     }
 
     val openSearch: () -> Unit = {

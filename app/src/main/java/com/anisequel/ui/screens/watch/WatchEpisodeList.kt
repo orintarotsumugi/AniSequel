@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -145,15 +146,16 @@ internal fun WatchEpisodeRow(
     coverUrl: String?,
     progress: WatchProgress?,
     serverCount: Int,
+    resolving: Boolean,
     onClick: () -> Unit
 ) {
     when (layout) {
-        EpisodeLayout.MINIMAL -> MinimalEpisodeRow(episode, progress, serverCount, onClick)
+        EpisodeLayout.MINIMAL -> MinimalEpisodeRow(episode, progress, serverCount, resolving, onClick)
         EpisodeLayout.COMPACT -> CompactEpisodeRow(
-            episode, showArtwork, coverUrl, progress, serverCount, onClick
+            episode, showArtwork, coverUrl, progress, serverCount, resolving, onClick
         )
         EpisodeLayout.DETAILED -> DetailedEpisodeRow(
-            episode, showArtwork, coverUrl, progress, serverCount, onClick
+            episode, showArtwork, coverUrl, progress, serverCount, resolving, onClick
         )
     }
 }
@@ -163,6 +165,7 @@ private fun MinimalEpisodeRow(
     episode: SourceEpisode,
     progress: WatchProgress?,
     serverCount: Int,
+    resolving: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -199,12 +202,19 @@ private fun MinimalEpisodeRow(
                     )
                 }
             }
-            Icon(
-                AppVectorIcons.Play,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            if (resolving) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    AppVectorIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
@@ -216,6 +226,7 @@ private fun CompactEpisodeRow(
     coverUrl: String?,
     progress: WatchProgress?,
     serverCount: Int,
+    resolving: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -261,6 +272,13 @@ private fun CompactEpisodeRow(
                     )
                 }
             }
+            if (resolving) {
+                Spacer(Modifier.width(8.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         }
     }
 }
@@ -272,6 +290,7 @@ private fun DetailedEpisodeRow(
     coverUrl: String?,
     progress: WatchProgress?,
     serverCount: Int,
+    resolving: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -310,12 +329,20 @@ private fun DetailedEpisodeRow(
                         .align(Alignment.Center)
                         .padding(4.dp)
                 ) {
-                    Icon(
-                        AppVectorIcons.Play,
-                        contentDescription = "Play episode ${episode.number}",
-                        tint = Color.White,
-                        modifier = Modifier.padding(12.dp).size(24.dp)
-                    )
+                    if (resolving) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.padding(12.dp).size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            AppVectorIcons.Play,
+                            contentDescription = "Play episode ${episode.number}",
+                            tint = Color.White,
+                            modifier = Modifier.padding(12.dp).size(24.dp)
+                        )
+                    }
                 }
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -472,6 +499,7 @@ internal fun LazyListScope.watchEpisodeFeed(
     coverUrl: String?,
     resume: WatchProgress?,
     isBusy: Boolean,
+    resolvingEpisodeId: String?,
     error: String?,
     onRange: (Int) -> Unit,
     onEpisode: (SourceEpisode) -> Unit,
@@ -510,6 +538,7 @@ internal fun LazyListScope.watchEpisodeFeed(
             coverUrl = coverUrl,
             progress = resume?.takeIf { it.episodeId == episode.id },
             serverCount = episode.servers.size,
+            resolving = episode.id == resolvingEpisodeId,
             onClick = { onEpisode(episode) }
         )
     }

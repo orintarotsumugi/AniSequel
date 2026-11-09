@@ -447,9 +447,8 @@ fun SequelDetailSheet(
                 Text(
                     "AniSequel does not host video. Watch searches the source you " +
                         "selected in Extensions and plays the files that source reports. " +
-                        "The beta ships the Internet Archive source; installed Aniyomi " +
-                        "and CloudStream extensions are visible but their APK runtime " +
-                        "is Phase 2."
+                        "The built-in Internet Archive source plays out of the box, and " +
+                        "Aniyomi anime extensions run in a sandboxed process."
                 )
             },
             confirmButton = {
