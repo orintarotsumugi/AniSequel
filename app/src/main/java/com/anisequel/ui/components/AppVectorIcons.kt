@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Fullscreen
@@ -36,16 +37,25 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.SlowMotionVideo
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VideoSettings
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Close
@@ -144,6 +154,7 @@ object AppVectorIcons {
     // link is the one pictogram that means "this is a URL" without a word.
     val CopyLink = Icons.Default.Link
     val Visibility = Icons.Default.Visibility
+    val VisibilityOff = Icons.Default.VisibilityOff
 
     // GitHub's own mark, for the link to this app's source. The one glyph here
     // that is a brand rather than a drawing of an idea: a link to GitHub wearing
@@ -355,11 +366,20 @@ object AppVectorIcons {
     val Subtitles = Icons.Default.Subtitles
     val Playlist = Icons.Default.PlaylistPlay
     val SkipNext = Icons.Default.SkipNext
+    val SkipPrevious = Icons.Default.SkipPrevious
     val Replay10 = Icons.Default.Replay10
     val Forward10 = Icons.Default.Forward10
     val Speed = Icons.Default.Speed
     val Volume = Icons.Default.VolumeUp
+    val VolumeOff = Icons.Default.VolumeOff
+    val Lock = Icons.Default.Lock
+    val PictureInPicture = Icons.Default.PictureInPictureAlt
+    val Rotation = Icons.Default.ScreenRotation
     val Fullscreen = Icons.Default.Fullscreen
     val FullscreenExit = Icons.Default.FullscreenExit
     val ChevronRight = Icons.Default.ChevronRight
+    val Add = Icons.Default.Add
+    val EpisodeGrid = Icons.Default.GridView
+    val Server = Icons.Default.Dns
+    val CacheTimer = Icons.Default.Timer
 }

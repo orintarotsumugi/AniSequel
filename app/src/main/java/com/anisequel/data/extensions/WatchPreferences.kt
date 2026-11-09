@@ -14,6 +14,7 @@ private const val KEY_WATCHLIST = "watchlist_v1"
 private const val KEY_LAYOUT = "episode_layout"
 private const val KEY_ARTWORK = "episode_artwork"
 private const val KEY_SERVER = "preferred_server"
+private const val KEY_SOURCE_SETTINGS = "source_settings_v1"
 
 /** How much of an episode card the list draws. The screenshot's three choices. */
 enum class EpisodeLayout(
@@ -83,6 +84,40 @@ data class WatchProgress(
 }
 
 /**
+ * The source filters from the Gotaku/Sora settings page.
+ *
+ * These live on the Watch side rather than in [ExtensionPreferences] because
+ * they describe how a *playback source* is asked for files, not which
+ * repositories the extension catalogue knows about. Two stores also means the
+ * Extension Manager can keep its own NSFW switch while a reader hides 18+
+ * sources from the Watch page without changing the catalogue.
+ *
+ * [preferredQuality] and [hideNsfw] are the two values that change this beta:
+ * the server picker uses the quality to auto-select a matching file, and the
+ * source sheet hides NSFW rows. The server-type, audio and hoster fields are
+ * persisted for the sandboxed extension runtimes that will report those labels;
+ * Internet Archive serves a direct file and a quality only, and the settings
+ * page says so rather than pretending the stored filters changed the list.
+ */
+data class SourceSettings(
+    val preferredType: String = "All",
+    val preferredQuality: String = "1080p",
+    val preferredServerType: String = "Streaming (Embed)",
+    val preferredAudioType: String = "Soft Sub",
+    val excludedAudioTypes: Set<String> = emptySet(),
+    val showDownloadHosters: Boolean = false,
+    val hideNsfw: Boolean = true
+) {
+    companion object {
+        val DEFAULT = SourceSettings()
+        val TYPES = listOf("All", "Anime", "Manga", "Novel")
+        val QUALITIES = listOf("Auto", "480p", "720p", "1080p", "1440p", "2160p")
+        val SERVER_TYPES = listOf("Streaming (Embed)", "Direct file", "Auto")
+        val AUDIO_TYPES = listOf("Soft Sub", "Hard Sub", "Dub", "Raw", "Auto")
+    }
+}
+
+/**
  * Source choice, progress and episode-list preferences.
  *
  * One file for the Watch page's four small facts. They are written from the
@@ -114,6 +149,9 @@ class WatchPreferences(context: Context) {
 
     private val _preferredServer = MutableStateFlow(preferences.getString(KEY_SERVER, null))
     val preferredServer: StateFlow<String?> = _preferredServer.asStateFlow()
+
+    private val _sourceSettings = MutableStateFlow(readSourceSettings())
+    val sourceSettings: StateFlow<SourceSettings> = _sourceSettings.asStateFlow()
 
     fun saveMapping(mapping: SourceMapping) {
         val next = _mappings.value + (mapping.mediaId to mapping)
@@ -171,6 +209,17 @@ class WatchPreferences(context: Context) {
         _preferredServer.value = server
     }
 
+    fun setSourceSettings(settings: SourceSettings) {
+        preferences.edit()
+            .putString(KEY_SOURCE_SETTINGS, sourceSettingsToJson(settings))
+            .apply()
+        _sourceSettings.value = settings
+    }
+
+    fun updateSourceSettings(transform: (SourceSettings) -> SourceSettings) {
+        setSourceSettings(transform(_sourceSettings.value))
+    }
+
     private fun readMappings(): Map<Int, SourceMapping> {
         val raw = preferences.getString(KEY_MAPPINGS, null) ?: return emptyMap()
         val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
@@ -226,6 +275,48 @@ class WatchPreferences(context: Context) {
             }
         }
     }
+
+    private fun readSourceSettings(): SourceSettings {
+        val raw = preferences.getString(KEY_SOURCE_SETTINGS, null)
+            ?: return SourceSettings.DEFAULT
+        val obj = runCatching { JSONObject(raw) }.getOrNull()
+            ?: return SourceSettings.DEFAULT
+        val excluded = obj.optJSONArray("excludedAudioTypes")?.let { array ->
+            buildSet {
+                for (index in 0 until array.length()) {
+                    array.optString(index)
+                        .takeIf { it.isNotBlank() }
+                        ?.let(::add)
+                }
+            }
+        }.orEmpty()
+        return SourceSettings(
+            preferredType = obj.optString("preferredType")
+                .takeIf { it.isNotBlank() } ?: SourceSettings.DEFAULT.preferredType,
+            preferredQuality = obj.optString("preferredQuality")
+                .takeIf { it.isNotBlank() } ?: SourceSettings.DEFAULT.preferredQuality,
+            preferredServerType = obj.optString("preferredServerType")
+                .takeIf { it.isNotBlank() } ?: SourceSettings.DEFAULT.preferredServerType,
+            preferredAudioType = obj.optString("preferredAudioType")
+                .takeIf { it.isNotBlank() } ?: SourceSettings.DEFAULT.preferredAudioType,
+            excludedAudioTypes = excluded,
+            showDownloadHosters = obj.optBoolean(
+                "showDownloadHosters",
+                SourceSettings.DEFAULT.showDownloadHosters
+            ),
+            hideNsfw = obj.optBoolean("hideNsfw", SourceSettings.DEFAULT.hideNsfw)
+        )
+    }
+
+    private fun sourceSettingsToJson(settings: SourceSettings): String = JSONObject()
+        .put("preferredType", settings.preferredType)
+        .put("preferredQuality", settings.preferredQuality)
+        .put("preferredServerType", settings.preferredServerType)
+        .put("preferredAudioType", settings.preferredAudioType)
+        .put("excludedAudioTypes", JSONArray(settings.excludedAudioTypes.toList()))
+        .put("showDownloadHosters", settings.showDownloadHosters)
+        .put("hideNsfw", settings.hideNsfw)
+        .toString()
 
     private fun mappingsToJson(mappings: Map<Int, SourceMapping>): String {
         val obj = JSONObject()

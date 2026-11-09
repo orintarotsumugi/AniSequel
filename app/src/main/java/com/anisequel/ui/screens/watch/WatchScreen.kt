@@ -1,27 +1,6 @@
 package com.anisequel.ui.screens.watch
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,14 +9,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.anisequel.data.extensions.PlayableSource
 import com.anisequel.data.extensions.SourceEpisode
 import com.anisequel.data.extensions.SourceServer
-import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.WatchViewModel
 
@@ -53,9 +30,12 @@ import com.anisequel.ui.viewmodel.WatchViewModel
  * a resume point the player reads.
  *
  * The third-party APK runtime is Phase 2. Installed Aniyomi/CloudStream sources
- * are still listed in the source sheet with their state, so the install is visible
- * rather than hidden; only the native source is selectable until the runtime
- * lands.
+ * are still listed in the source sheet with their state, so the install is
+ * visible rather than hidden; only the native source is selectable until the
+ * runtime lands.
+ *
+ * The body and the overlay host live in `WatchScreenContent.kt`. This function
+ * owns only the state, the two playback decisions and the wiring between them.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,12 +53,14 @@ fun WatchScreen(
     val layout by viewModel.watchPreferences.episodeLayout.collectAsStateWithLifecycle()
     val artwork by viewModel.watchPreferences.showArtwork.collectAsStateWithLifecycle()
     val preferredServer by viewModel.watchPreferences.preferredServer.collectAsStateWithLifecycle()
+    val sourceSettings by viewModel.watchPreferences.sourceSettings.collectAsStateWithLifecycle()
     val resume = progressMap[media.id]
 
     val sheetState = rememberFullHeightSheetState()
     var showSources by rememberSaveable { mutableStateOf(false) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showSourceSettings by rememberSaveable { mutableStateOf(false) }
     var showInfo by rememberSaveable { mutableStateOf(false) }
     var serverEpisode by remember { mutableStateOf<SourceEpisode?>(null) }
     var serverStartMs by remember { mutableStateOf(0L) }
@@ -89,15 +71,13 @@ fun WatchScreen(
     val ranges = remember(episodes) { episodeRanges(episodes) }
     LaunchedEffect(state.details?.anime?.id) {
         rangeIndex = 0
-        // A range is an index into a list that is rebuilt when the source changes;
-        // keeping the old index would leave the reader on "26-50" of a five-episode
-        // show, with no rows under it.
+        // A range is an index into a list that is rebuilt when the source
+        // changes; keeping the old index would leave the reader on "26-50" of a
+        // five-episode show, with no rows under it.
     }
     val selectedRange = ranges.getOrNull(rangeIndex)?.range
-    val visibleEpisodes = if (selectedRange == null) {
-        episodes
-    } else {
-        episodes.filter { it.number in selectedRange }
+    val visibleEpisodes = remember(episodes, rangeIndex, selectedRange) {
+        if (selectedRange == null) episodes else episodes.filter { it.number in selectedRange }
     }
 
     val startPlayback: (SourceEpisode, SourceServer?, Long) -> Unit = { episode, server, startMs ->
@@ -118,6 +98,7 @@ fun WatchScreen(
             episode = episode,
             startMs = startMs,
             preferredServer = preferredServer,
+            preferredQuality = sourceSettings.preferredQuality,
             onNoServers = { showInfo = true },
             onNeedsServer = { needsServer, position ->
                 serverEpisode = needsServer
@@ -127,215 +108,78 @@ fun WatchScreen(
         )
     }
 
-    val resumeEpisode = resume?.let { point -> episodes.firstOrNull { it.id == point.episodeId } }
-    val targetEpisode = resumeEpisode ?: episodes.firstOrNull()
-    val targetStart = if (resumeEpisode != null && resume != null && !resume.isNearlyFinished) {
-        resume.positionMs
-    } else {
-        0L
+    val openSearch: () -> Unit = {
+        viewModel.setSearchQuery(state.mapping?.animeTitle ?: media.title)
+        showSearch = true
+        viewModel.search()
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .testTag("watch_screen")
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = if (resume != null) 224.dp else 148.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item(key = "hero") {
-                WatchHero(
-                    title = state.details?.anime?.title ?: media.title,
-                    coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
-                    bannerUrl = media.bannerUrl,
-                    studio = media.studio,
-                    status = media.status,
-                    format = media.format,
-                    year = media.year,
-                    score = media.score,
-                    onBack = onBack
-                )
-            }
+    WatchBody(
+        state = state,
+        media = media,
+        resume = resume,
+        watchlist = watchlist,
+        layout = layout,
+        artwork = artwork,
+        downloaded = downloaded,
+        rangeIndex = rangeIndex,
+        episodes = episodes,
+        visibleEpisodes = visibleEpisodes,
+        ranges = ranges,
+        onBack = onBack,
+        onToggleWatchlist = { viewModel.watchPreferences.toggleWatchlist(media.id) },
+        onOpenAniList = onOpenAniList,
+        onOpenSources = { showSources = true },
+        onOpenSettings = { showSettings = true },
+        onOpenSourceSettings = { showSourceSettings = true },
+        onOpenInfo = { showInfo = true },
+        onOpenSearch = openSearch,
+        onDownloaded = { downloaded = it },
+        onRange = { rangeIndex = it },
+        onRequestEpisode = requestEpisode,
+        onRetry = viewModel::retry,
+        modifier = modifier.testTag("watch_screen")
+    )
 
-            item(key = "list_actions") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    val inList = media.id in watchlist
-                    ListAction(
-                        label = if (inList) "CURRENT" else "MY LIST",
-                        icon = if (inList) AppVectorIcons.CheckCircle else AppVectorIcons.BookmarkAdd,
-                        selected = inList,
-                        onClick = { viewModel.watchPreferences.toggleWatchlist(media.id) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    ListAction(
-                        label = "CUSTOM LIST",
-                        icon = AppVectorIcons.Playlist,
-                        selected = false,
-                        onClick = { onOpenAniList(media.anilistUrl) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            item(key = "source") {
-                SourceCard(
-                    source = state.selectedSource,
-                    onOpenSources = { showSources = true },
-                    onOpenSettings = { showSettings = true },
-                    onOpenTrust = { showInfo = true }
-                )
-            }
-
-            item(key = "found") {
-                FoundCard(
-                    mapping = state.mapping,
-                    matched = state.matchedAnime,
-                    isSearching = state.isBusy,
-                    onWrongTitle = {
-                        viewModel.setSearchQuery(state.mapping?.animeTitle ?: media.title)
-                        showSearch = true
-                        viewModel.search()
-                    }
-                )
-            }
-
-            item(key = "tabs") {
-                WatchTabs(
-                    downloaded = downloaded,
-                    onOnline = { downloaded = false },
-                    onDownloaded = { downloaded = true },
-                    onSettings = { showSettings = true }
-                )
-            }
-
-            watchEpisodeFeed(
-                downloaded = downloaded,
-                episodes = episodes,
-                visibleEpisodes = visibleEpisodes,
-                ranges = ranges,
-                rangeIndex = rangeIndex,
-                layout = layout,
-                showArtwork = artwork,
-                coverUrl = state.details?.anime?.coverUrl ?: media.coverUrl,
-                resume = resume,
-                isBusy = state.isBusy,
-                error = state.error,
-                onRange = { rangeIndex = it },
-                onEpisode = { requestEpisode(it, 0L) },
-                onOnline = { downloaded = false },
-                onSearch = { showSearch = true },
-                onRetry = viewModel::retry
-            )
-
-            item(key = "footer_space") { Spacer(Modifier.height(4.dp)) }
-        }
-
-        WatchPinnedBar(
-            resume = resume,
-            enabled = targetEpisode != null && !state.isBusy,
-            label = if (resumeEpisode != null && !resume?.isNearlyFinished.orFalse()) {
-                "Resume"
-            } else {
-                "Watch"
-            },
-            onResume = {
-                resumeWatchEpisode(
-                    progress = resume,
-                    episodes = episodes,
-                    onEpisode = requestEpisode,
-                    onMissing = { showSearch = true }
-                )
-            },
-            onWatch = { targetEpisode?.let { requestEpisode(it, targetStart) } },
-            onInfo = { showInfo = true },
-            onComment = { onOpenAniList(media.anilistUrl) },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-    }
-
-    if (showSources) {
-        WatchSourceSheet(
-            sheetState = sheetState,
-            state = state,
-            onDismiss = { showSources = false },
-            onSelect = { source ->
-                showSources = false
-                viewModel.selectSource(source)
-            }
-        )
-    }
-
-    if (showSearch) {
-        WatchSearchSheet(
-            sheetState = sheetState,
-            state = state,
-            onDismiss = { showSearch = false },
-            onQueryChange = viewModel::setSearchQuery,
-            onSearch = { viewModel.search() },
-            onChoose = { anime ->
-                showSearch = false
-                viewModel.chooseResult(anime)
-            }
-        )
-    }
-
-    if (showSettings) {
-        WatchSettingsSheet(
-            sheetState = sheetState,
-            layout = layout,
-            showArtwork = artwork,
-            preferredServer = preferredServer,
-            serverNames = episodes.flatMap { episode -> episode.servers.map { it.name } }
-                .distinct()
-                .sorted(),
-            onLayout = viewModel.watchPreferences::setEpisodeLayout,
-            onArtwork = viewModel.watchPreferences::setShowArtwork,
-            onPreferredServer = viewModel.watchPreferences::setPreferredServer,
-            onDismiss = { showSettings = false }
-        )
-    }
-
-    serverEpisode?.let { episode ->
-        WatchServerSheet(
-            sheetState = sheetState,
-            episode = episode,
-            preferredServer = preferredServer,
-            onDismiss = { serverEpisode = null },
-            onChoose = { server ->
-                serverEpisode = null
-                startPlayback(episode, server, serverStartMs)
-            }
-        )
-    }
-
-    if (showInfo) {
-        AlertDialog(
-            onDismissRequest = { showInfo = false },
-            icon = { Icon(AppVectorIcons.Info, contentDescription = null) },
-            title = { Text("About this source") },
-            text = {
-                Text(
-                    "AniSequel does not host video. The built-in Internet Archive source " +
-                        "searches public-domain and Creative Commons animation and plays the " +
-                        "files Archive.org serves. Aniyomi and CloudStream extensions are " +
-                        "third-party code; this beta installs and records them, but does " +
-                        "not execute APK code in this release.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showInfo = false }) { Text("Got it") }
-            }
-        )
-    }
+    WatchOverlayHost(
+        state = state,
+        sheetState = sheetState,
+        showSources = showSources,
+        showSearch = showSearch,
+        showSettings = showSettings,
+        showSourceSettings = showSourceSettings,
+        showInfo = showInfo,
+        serverEpisode = serverEpisode,
+        sourceName = state.selectedSource?.name.orEmpty(),
+        sourceSettings = sourceSettings,
+        onSourceSettingsChange = viewModel.watchPreferences::setSourceSettings,
+        preferredServer = preferredServer,
+        episodes = episodes,
+        layout = layout,
+        artwork = artwork,
+        onDismissSources = { showSources = false },
+        onSelectSource = { source: PlayableSource ->
+            showSources = false
+            viewModel.selectSource(source)
+        },
+        onDismissSourceSettings = { showSourceSettings = false },
+        onDismissSearch = { showSearch = false },
+        onQueryChange = viewModel::setSearchQuery,
+        onSearch = { viewModel.search() },
+        onChoose = { anime ->
+            showSearch = false
+            viewModel.chooseResult(anime)
+        },
+        onDismissSettings = { showSettings = false },
+        onLayout = viewModel.watchPreferences::setEpisodeLayout,
+        onArtwork = viewModel.watchPreferences::setShowArtwork,
+        onPreferredServer = viewModel.watchPreferences::setPreferredServer,
+        onDismissServer = { serverEpisode = null },
+        onChooseServer = { server ->
+            val episode = serverEpisode
+            serverEpisode = null
+            if (episode != null) startPlayback(episode, server, serverStartMs)
+        },
+        onDismissInfo = { showInfo = false }
+    )
 }
-
-private fun Boolean?.orFalse(): Boolean = this == true

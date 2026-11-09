@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -351,12 +353,46 @@ private fun AddRepositoryDialog(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Quick add",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    REPOSITORY_PRESETS.forEach { preset ->
+                        Surface(
+                            onClick = { url = preset.url },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = preset.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "CloudX is CloudStream movie content; Yuzono is the recommended " +
+                        "Aniyomi anime store.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onAdd(url.trim()) },
-                enabled = url.isNotBlank() && !isAdding
+                enabled = url.trim().startsWith("http") && !isAdding
             ) {
                 Text("Add")
             }
@@ -368,3 +404,22 @@ private fun AddRepositoryDialog(
         }
     )
 }
+
+private data class RepositoryPreset(val label: String, val url: String)
+
+/**
+ * Working seeds, not a directory. They exist so the first repository is one tap
+ * instead of a URL pasted from another app, and both were checked against their
+ * live indexes. Secozzi is deliberately absent: its index now only says the app
+ * is outdated.
+ */
+private val REPOSITORY_PRESETS = listOf(
+    RepositoryPreset(
+        label = "Yuzono \u00b7 Aniyomi",
+        url = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json"
+    ),
+    RepositoryPreset(
+        label = "CloudX \u00b7 CloudStream",
+        url = "https://raw.githubusercontent.com/Asm0d3usX/CloudX-V2/builds/repo.json"
+    )
+)

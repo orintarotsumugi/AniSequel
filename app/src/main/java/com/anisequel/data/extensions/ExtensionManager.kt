@@ -3,11 +3,13 @@ package com.anisequel.data.extensions
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
@@ -35,15 +37,25 @@ class ExtensionManager(context: Context) {
     val playerPreferences = PlayerPreferences(appContext)
     private val installer = ExtensionInstaller(appContext)
     private val repositoryClient = ExtensionRepositoryClient()
+    private val runtimeBridge = ExtensionRuntimeBridge(appContext)
 
     /** Compiled-in sources. This beta ships one; the interface is the seam for more. */
     private val nativeSources: List<NativeAnimeSource> = listOf(ArchiveAnimeSource())
 
     private val catalogMutex = Mutex()
+    private val catalogCache = ExtensionCatalogCache(appContext)
     @Volatile
     private var catalog: ExtensionCatalog = ExtensionCatalog()
 
     init {
+        ExtensionHttp.installCache(appContext)
+        val cachedCatalog = catalogCache.read()
+        val repositoryIds = preferences.repositories.value.map { it.id }.toSet()
+        catalog = cachedCatalog?.copy(
+            // A cache written before a repository was removed must not keep
+            // showing rows that can no longer be refreshed or installed from.
+            entries = cachedCatalog.entries.filter { it.repositoryId in repositoryIds }
+        ) ?: ExtensionCatalog()
         // This process is the restart the previous install asked for. Clearing here,
         // before a screen can read the flow, is what turns the banner off exactly
         // once - see `ExtensionPreferences.markProcessRestarted`.
@@ -58,20 +70,23 @@ class ExtensionManager(context: Context) {
     /**
      * Reads every repository once, in parallel.
      *
-     * A repository that fails contributes a [CatalogFailure] and nothing else:
-     * the three that answered must still draw. [force] is the pull-to-refresh
-     * path; the cached answer is otherwise reused for the life of the process, so
-     * switching tabs does not re-download three indexes.
+     * A repository that fails contributes a [CatalogFailure] and keeps that
+     * repository's last good rows, if there are any; the three that answered must
+     * still draw, and one flaky host must not blank the whole tab. [force] is the
+     * refresh path; a catalogue younger than [CATALOG_TTL_MS] is otherwise reused,
+     * so switching tabs does not re-download every index.
      */
     suspend fun loadCatalog(force: Boolean = false): ExtensionCatalog {
-        if (!force && !catalog.isCold) return catalog
+        if (!force && isCatalogFresh()) return catalog
         return catalogMutex.withLock {
-            if (!force && !catalog.isCold) return@withLock catalog
+            if (!force && isCatalogFresh()) return@withLock catalog
             val repos = preferences.repositories.value
             if (repos.isEmpty()) {
                 catalog = ExtensionCatalog(loadedAt = System.currentTimeMillis())
+                catalogCache.clear()
                 return@withLock catalog
             }
+            val previousByRepository = catalog.entries.groupBy { it.repositoryId }
             val results = coroutineScope {
                 repos.map { repo ->
                     async {
@@ -88,20 +103,31 @@ class ExtensionManager(context: Context) {
             for (result in results) {
                 when (val value = result.second) {
                     is List<*> -> entries += value.filterIsInstance<CatalogExtension>()
-                    is Throwable -> errors += CatalogFailure(
-                        repository = result.first,
-                        message = value.message ?: "Could not read this repository"
-                    )
+                    is Throwable -> {
+                        entries += previousByRepository[result.first.id].orEmpty()
+                        errors += CatalogFailure(
+                            repository = result.first,
+                            message = value.message ?: "Could not read this repository"
+                        )
+                    }
                 }
             }
             catalog = ExtensionCatalog(
-                entries = entries,
+                entries = entries.distinctBy { it.key },
                 errors = errors,
                 loadedAt = System.currentTimeMillis()
             )
+            if (catalog.entries.isNotEmpty()) {
+                // Serialising 255 rows is file I/O; doing it on the main thread
+                // made the first catalogue paint hitch just after the spinner.
+                withContext(Dispatchers.IO) { catalogCache.write(catalog) }
+            }
             catalog
         }
     }
+
+    private fun isCatalogFresh(): Boolean =
+        !catalog.isCold && System.currentTimeMillis() - catalog.loadedAt < CATALOG_TTL_MS
 
     /** The catalogue rows visible under [showNsfw], newest repository order preserved. */
     fun visibleEntries(showNsfw: Boolean): List<CatalogExtension> {
@@ -119,12 +145,14 @@ class ExtensionManager(context: Context) {
         val discovery = repositoryClient.discover(url)
         preferences.addRepository(discovery.repository)
         catalog = ExtensionCatalog()
+        catalogCache.clear()
         return discovery
     }
 
     fun removeRepository(repositoryId: String) {
         preferences.removeRepository(repositoryId)
         catalog = ExtensionCatalog()
+        catalogCache.clear()
     }
 
     /**
@@ -143,12 +171,30 @@ class ExtensionManager(context: Context) {
             ?: return InstallOutcome.Failed("This repository gave no download address")
         return try {
             val file = installer.download(url, extension.fileName, onProgress)
-            val isModule = file.extension.equals("js", ignoreCase = true) ||
-                file.extension.equals("jar", ignoreCase = true)
+            val isModule = isModuleFile(file)
+            val info = runtimeBridge.inspect(file)
+            if (!isModule && info == null) {
+                file.delete()
+                return InstallOutcome.Failed(
+                    "The download is not a readable APK. Nothing was installed."
+                )
+            }
+            if (!isModule && packageMismatch(extension, info)) {
+                file.delete()
+                return InstallOutcome.Failed(
+                    "This APK is ${info?.packageName ?: "another package"}, not " +
+                        "${extension.packageName}. Nothing was installed."
+                )
+            }
+            val resolved = extension.copy(
+                packageName = info?.packageName?.takeIf { it.isNotBlank() } ?: extension.packageName,
+                version = info?.version?.takeIf { it.isNotBlank() } ?: extension.version,
+                sourceNames = extension.sourceNames.ifEmpty { info?.sourceNames.orEmpty() }
+            )
             if (isModule) {
-                preferences.recordInstall(extension, file.absolutePath, needsRestart = true)
+                preferences.recordInstall(resolved, file.absolutePath, needsRestart = true)
                 return InstallOutcome.Installed(
-                    "${extension.name} installed. Restart AniSequel to register it."
+                    "${resolved.name} installed. Restart AniSequel to register it."
                 )
             }
             if (!installer.canInstallPackages()) {
@@ -162,9 +208,9 @@ class ExtensionManager(context: Context) {
                     "Android's installer did not open. Check the install permission."
                 )
             }
-            preferences.recordInstall(extension, file.absolutePath, needsRestart = true)
+            preferences.recordInstall(resolved, file.absolutePath, needsRestart = true)
             InstallOutcome.Installed(
-                "${extension.name} handed to Android. Restart AniSequel after the install finishes."
+                "${resolved.name} handed to Android. Restart AniSequel after the install finishes."
             )
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -185,23 +231,45 @@ class ExtensionManager(context: Context) {
     suspend fun installFromUri(uri: android.net.Uri, displayName: String): InstallOutcome {
         return try {
             val file = installer.copyFromUri(uri, displayName)
-            val isModule = file.extension.equals("js", ignoreCase = true) ||
-                file.extension.equals("jar", ignoreCase = true)
-            val name = displayName.substringBeforeLast('.').ifBlank { file.name }
+            val info = runtimeBridge.inspect(file)
+            val isModule = isModuleFile(file)
+            if (!isModule && info == null) {
+                file.delete()
+                return InstallOutcome.Failed(
+                    "That file is not a readable APK. Nothing was installed."
+                )
+            }
+            val packageName = info?.packageName.orEmpty()
+            val kind = when {
+                file.extension.equals("js", ignoreCase = true) -> ExtensionKind.SORA
+                file.extension.equals("jar", ignoreCase = true) ||
+                    file.extension.equals("cs3", ignoreCase = true) ||
+                    file.extension.equals("dex", ignoreCase = true) -> ExtensionKind.CLOUDSTREAM
+                packageName.contains("cloudstream", ignoreCase = true) -> ExtensionKind.CLOUDSTREAM
+                packageName.contains("lnreader", ignoreCase = true) -> ExtensionKind.LNREADER
+                else -> ExtensionKind.ANIYOMI
+            }
+            val name = info?.label?.takeIf { it.isNotBlank() }
+                ?: displayName.substringBeforeLast('.').ifBlank { file.name }
             val synthetic = CatalogExtension(
                 key = "local:${file.name.lowercase()}",
                 repositoryId = "local",
                 repositoryUrl = "",
-                kind = if (isModule) ExtensionKind.SORA else ExtensionKind.ANIYOMI,
-                content = ExtensionContent.ANIME,
+                kind = kind,
+                content = if (kind == ExtensionKind.LNREADER) {
+                    ExtensionContent.NOVEL
+                } else {
+                    ExtensionContent.ANIME
+                },
                 name = name,
-                packageName = "",
-                version = "local",
+                packageName = packageName,
+                version = info?.version?.takeIf { it.isNotBlank() } ?: "local",
                 language = "en",
                 nsfw = false,
                 iconUrl = null,
                 downloadUrl = null,
-                description = null
+                description = null,
+                sourceNames = info?.sourceNames.orEmpty()
             )
             if (isModule) {
                 preferences.recordInstall(synthetic, file.absolutePath, needsRestart = true)
@@ -279,38 +347,12 @@ class ExtensionManager(context: Context) {
      * would make the manager's "installed" count and the source sheet disagree,
      * which reads as the install having done nothing.
      */
-    fun sources(): List<PlayableSource> {
-        val native = nativeSources.map { source ->
-            PlayableSource(
-                id = source.id,
-                name = source.name,
-                kind = source.kind,
-                content = source.content,
-                language = source.language,
-                nsfw = source.nsfw,
-                iconUrl = null,
-                playable = true,
-                note = source.note
-            )
-        }
-        val installedSources = preferences.installed.value.values
-            .filter { it.content == ExtensionContent.ANIME }
-            .sortedBy { it.name.lowercase() }
-            .map { record ->
-                PlayableSource(
-                    id = record.key,
-                    name = record.name,
-                    kind = record.kind,
-                    content = record.content,
-                    language = "en",
-                    nsfw = false,
-                    iconUrl = record.iconUrl,
-                    playable = false,
-                    note = "Installed. The ${record.kind.label} APK runtime is Phase 2."
-                )
-            }
-        return native + installedSources
-    }
+    fun sources(): List<PlayableSource> =
+        runtimeBridge.sources(nativeSources, preferences.installed.value.values)
+
+    /** Counts for the manager card; the bridge owns the classification. */
+    fun runtimeReport(): ExtensionRuntimeReport =
+        runtimeBridge.report(nativeSources, preferences.installed.value.values)
 
     /** The built-in source behind [sourceId], or null for an installed APK/module. */
     fun nativeSource(sourceId: String): NativeAnimeSource? =
@@ -326,5 +368,28 @@ class ExtensionManager(context: Context) {
         val source = nativeSource(sourceId)
             ?: throw IOException("This source runs on the Phase 2 extension runtime.")
         return source.details(animeId)
+    }
+
+    /**
+     * `.cs3` is a DEX module, not an APK: handing it to Android's package
+     * installer fails, and treating it as one made every CloudStream row install
+     * into a dead end. It is staged like a JS plugin and is not executed in beta.
+     */
+    private fun isModuleFile(file: File): Boolean {
+        val extension = file.extension.lowercase()
+        return extension in setOf("js", "jar", "cs3", "dex")
+    }
+
+    private fun packageMismatch(
+        extension: CatalogExtension,
+        info: ExtensionFileInfo?
+    ): Boolean {
+        val claimed = extension.packageName.takeIf { it.isNotBlank() } ?: return false
+        val actual = info?.packageName.orEmpty()
+        return actual.isBlank() || actual != claimed
+    }
+
+    private companion object {
+        const val CATALOG_TTL_MS = 15 * 60 * 1_000L
     }
 }

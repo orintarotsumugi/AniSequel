@@ -83,6 +83,7 @@ fun ExtensionManagerScreen(
     val installed by manager.installed.collectAsStateWithLifecycle()
     val restartRequired by manager.restartRequired.collectAsStateWithLifecycle()
     val showNsfw by manager.showNsfw.collectAsStateWithLifecycle()
+    val runtime = remember(installed) { manager.runtimeReport() }
     var canInstall by remember { mutableStateOf(manager.canInstallPackages()) }
 
     LifecycleResumeEffect(Unit) {
@@ -137,7 +138,7 @@ fun ExtensionManagerScreen(
             item(key = "plugin") {
                 PluginCard(
                     repositories = repositories.size,
-                    installed = installed.size,
+                    report = runtime,
                     restartRequired = restartRequired
                 )
             }
@@ -156,7 +157,8 @@ fun ExtensionManagerScreen(
                 SettingsRow(
                     icon = AppVectorIcons.Extensions,
                     title = "Installed extensions",
-                    subtitle = "${installed.size} records on this device",
+                    subtitle = "${runtime.installedApks} APKs \u00b7 " +
+                        "${runtime.stagedModules} staged modules",
                     onClick = onOpenExtensions,
                     trailing = { Chevron() }
                 )
@@ -199,7 +201,7 @@ fun ExtensionManagerScreen(
                 SettingsRow(
                     icon = AppVectorIcons.Folder,
                     title = "Load plugin APK from storage",
-                    subtitle = "Pick an .apk or .js file from this device",
+                    subtitle = "Pick an .apk, .js, .jar or .cs3 file from this device",
                     onClick = { picker.launch(arrayOf("*/*")) },
                     trailing = { Chevron() }
                 )
@@ -216,9 +218,10 @@ fun ExtensionManagerScreen(
             item(key = "restart") {
                 SettingsRow(
                     icon = AppVectorIcons.Refresh,
-                    title = "Restart AniSequel",                        subtitle = if (restartRequired) {
-                            "An extension changed - start again to register it"
-                        } else {
+                    title = "Restart AniSequel",
+                    subtitle = if (restartRequired) {
+                        "An extension changed - start again to register it"
+                    } else {
                         "Close every screen and start the app in a fresh process"
                     },
                     onClick = {
@@ -246,9 +249,10 @@ fun ExtensionManagerScreen(
                         Text(
                             "Catalogue discovery, APK/module installation, the install-permission " +
                                 "handoff, source search, episode discovery, servers and playback all " +
-                                "work. Playback runs through the built-in Internet Archive source; " +
-                                "Aniyomi and CloudStream APK code is installed but not executed " +
-                                "until the sandboxed runtime in Phase 2 lands.",
+                                "work. Playback runs through the built-in Internet Archive source. " +
+                                "Aniyomi APKs, CloudStream .cs3/DEX modules, Sora JS and LNReader " +
+                                "modules are verified and staged, but third-party code is not " +
+                                "executed until the sandboxed runtime in Phase 2 lands.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -279,7 +283,7 @@ fun ExtensionManagerScreen(
 @Composable
 private fun PluginCard(
     repositories: Int,
-    installed: Int,
+    report: com.anisequel.data.extensions.ExtensionRuntimeReport,
     restartRequired: Boolean
 ) {
     Surface(
@@ -309,7 +313,8 @@ private fun PluginCard(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        "Aniyomi & CloudStream catalogues ready",
+                        "${report.nativeSources} native source \u00b7 " +
+                            "${report.installedApks + report.stagedModules} staged",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -324,10 +329,12 @@ private fun PluginCard(
             Spacer(Modifier.height(12.dp))
             Row {
                 Stat(label = "Repositories", value = repositories.toString())
-                Spacer(Modifier.width(28.dp))
-                Stat(label = "Installed", value = installed.toString())
-                Spacer(Modifier.width(28.dp))
-                Stat(label = "Version", value = "0.1.0-beta")
+                Spacer(Modifier.width(20.dp))
+                Stat(label = "Playable", value = report.playableSources.toString())
+                Spacer(Modifier.width(20.dp))
+                Stat(label = "APKs", value = report.installedApks.toString())
+                Spacer(Modifier.width(20.dp))
+                Stat(label = "Modules", value = report.stagedModules.toString())
             }
         }
     }

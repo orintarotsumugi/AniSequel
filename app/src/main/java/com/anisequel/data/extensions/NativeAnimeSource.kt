@@ -46,6 +46,33 @@ interface NativeAnimeSource {
  */
 class ArchiveAnimeSource : NativeAnimeSource {
 
+    /**
+     * Archive.org metadata is large and stable for minutes; the Watch page asks
+     * for it again on every return from the player. A tiny access-ordered cache
+     * turns that into one request per title and keeps the episode list instant
+     * when switching servers. It is bounded because a source that remembers an
+     * unbounded search history is a leak with a nicer name.
+     */
+    private val cacheLock = Any()
+    private val searchCache = object : LinkedHashMap<String, Cached<List<SourceAnime>>>(
+        12,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, Cached<List<SourceAnime>>>?
+        ): Boolean = size > 12
+    }
+    private val detailsCache = object : LinkedHashMap<String, Cached<SourceDetails>>(
+        12,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, Cached<SourceDetails>>?
+        ): Boolean = size > 24
+    }
+
     override val id = "native:archive"
     override val name = "Internet Archive"
     override val kind = ExtensionKind.ANIYOMI
@@ -57,17 +84,24 @@ class ArchiveAnimeSource : NativeAnimeSource {
     override suspend fun search(query: String): List<SourceAnime> {
         val cleaned = query.trim()
         if (cleaned.isBlank()) return emptyList()
+        val key = cleaned.lowercase()
+        cached(searchCache, key, SEARCH_TTL_MS)?.let { return it }
 
         val strict = searchOnce(
             "($cleaned) AND mediatype:(movies) AND " +
                 "(subject:(animation) OR subject:(anime) OR subject:(cartoons))"
         )
-        if (strict.isNotEmpty()) return strict
+        if (strict.isNotEmpty()) {
+            remember(searchCache, key, strict)
+            return strict
+        }
         // A narrower subject filter is the right first question and the wrong
         // only question: Archive.org's animation tagging is volunteer work, and a
         // perfectly good item can carry no subject at all. One fallback keeps a
         // title that exists from reading as a missing source.
-        return searchOnce("($cleaned) AND mediatype:(movies)")
+        val fallback = searchOnce("($cleaned) AND mediatype:(movies)")
+        remember(searchCache, key, fallback)
+        return fallback
     }
 
     private suspend fun searchOnce(query: String): List<SourceAnime> {
@@ -103,6 +137,7 @@ class ArchiveAnimeSource : NativeAnimeSource {
     }
 
     override suspend fun details(animeId: String): SourceDetails {
+        cached(detailsCache, animeId, DETAILS_TTL_MS)?.let { return it }
         val metadataUrl = "https://archive.org/metadata/${encodePathSegment(animeId)}"
         val body = ExtensionHttp.getText(metadataUrl)
         val root = runCatching { JSONObject(body) }.getOrNull()
@@ -119,7 +154,7 @@ class ArchiveAnimeSource : NativeAnimeSource {
         if (episodes.isEmpty()) {
             throw IOException("This Archive item has no video file")
         }
-        return SourceDetails(
+        val details = SourceDetails(
             anime = SourceAnime(
                 id = animeId,
                 title = title,
@@ -131,6 +166,34 @@ class ArchiveAnimeSource : NativeAnimeSource {
             description = description,
             episodes = episodes
         )
+        remember(detailsCache, animeId, details)
+        return details
+    }
+
+    private fun <T> cached(
+        map: LinkedHashMap<String, Cached<T>>,
+        key: String,
+        ttlMs: Long
+    ): T? = synchronized(cacheLock) {
+        val entry = map[key]
+        when {
+            entry == null -> null
+            System.currentTimeMillis() - entry.at > ttlMs -> {
+                map.remove(key)
+                null
+            }
+            else -> entry.value
+        }
+    }
+
+    private fun <T> remember(
+        map: LinkedHashMap<String, Cached<T>>,
+        key: String,
+        value: T
+    ) {
+        synchronized(cacheLock) {
+            map[key] = Cached(System.currentTimeMillis(), value)
+        }
     }
 
     private fun episodesFrom(
@@ -266,7 +329,11 @@ class ArchiveAnimeSource : NativeAnimeSource {
         .replace(Regex("\\s+"), " ")
         .trim()
 
+    private data class Cached<T>(val at: Long, val value: T)
+
     private companion object {
         val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "ogv", "mkv")
+        const val SEARCH_TTL_MS = 2 * 60 * 1_000L
+        const val DETAILS_TTL_MS = 10 * 60 * 1_000L
     }
 }

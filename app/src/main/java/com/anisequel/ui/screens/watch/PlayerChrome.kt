@@ -3,12 +3,16 @@
 package com.anisequel.ui.screens.watch
 
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.RenderEffect
-import androidx.compose.foundation.background
+import android.util.Rational
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,24 +26,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,156 +58,201 @@ import com.anisequel.data.extensions.WatchProgress
 import com.anisequel.ui.components.AppVectorIcons
 import java.util.Locale
 
+/** The reference player's lavender, not the app's Material primary. */
+internal val PlayerAccent = Color(0xFFBCC9FF)
+private val PlayerYellow = Color(0xFFFFD84D)
+private val PlayerTrack = Color(0xFF2C2C33)
+private val PlayerPanel = Color(0xFF17171C).copy(alpha = 0.92f)
+private val PlayerChip = Color(0xFF26262D).copy(alpha = 0.92f)
+
+/**
+ * The compact top band: back, the title, episode/quality chips and the three
+ * utility controls. It is intentionally smaller than the old bar and uses
+ * rounded squares rather than pill buttons, matching the reference.
+ */
 @Composable
 internal fun PlayerTopBar(
     title: String,
     episode: SourceEpisode?,
     server: SourceServer?,
-    fullscreen: Boolean,
+    decoderLabel: String,
+    locked: Boolean,
+    canPip: Boolean,
     onBack: () -> Unit,
-    onServers: () -> Unit,
+    onLock: () -> Unit,
+    onPip: () -> Unit,
     onSettings: () -> Unit,
-    onFullscreen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (fullscreen) Modifier else Modifier.statusBarsPadding())
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .statusBarsPadding()
+            .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onBack) {
-            Icon(AppVectorIcons.Back, contentDescription = "Close player", tint = Color.White)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                playerSubtitle(episode),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.72f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
         Surface(
-            onClick = onServers,
-            shape = CircleShape,
-            color = Color.White.copy(alpha = 0.16f)
+            onClick = onBack,
+            shape = RoundedCornerShape(13.dp),
+            color = PlayerPanel,
+            modifier = Modifier.size(40.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    AppVectorIcons.CloudRepo,
-                    contentDescription = null,
+                    AppVectorIcons.Back,
+                    contentDescription = "Close player",
                     tint = Color.White,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(5.dp))
-                Text(
-                    server?.name ?: "Server",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    maxLines = 1
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
-        IconButton(onClick = onSettings) {
-            Icon(AppVectorIcons.Settings, contentDescription = "Player settings", tint = Color.White)
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = PlayerAccent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PlayerChipText(episodeChip(episode), PlayerChip)
+                PlayerChipText(qualityChip(server), PlayerChip)
+            }
         }
-        IconButton(onClick = onFullscreen) {
-            Icon(
-                if (fullscreen) AppVectorIcons.FullscreenExit else AppVectorIcons.Fullscreen,
-                contentDescription = if (fullscreen) "Exit fullscreen" else "Fullscreen",
-                tint = Color.White
+        Spacer(Modifier.width(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            PlayerChipText(decoderBadge(decoderLabel), PlayerPanel)
+            SmallRoundAction(
+                icon = if (locked) AppVectorIcons.LockOpen else AppVectorIcons.Lock,
+                description = if (locked) "Unlock controls" else "Lock controls",
+                onClick = onLock
+            )
+            if (canPip) {
+                SmallRoundAction(
+                    icon = AppVectorIcons.PictureInPicture,
+                    description = "Picture in picture",
+                    onClick = onPip
+                )
+            }
+            SmallRoundAction(
+                icon = AppVectorIcons.Settings,
+                description = "Player settings",
+                onClick = onSettings
             )
         }
     }
 }
 
+/**
+ * The three central transport controls.
+ *
+ * `prev` and `next` move the in-process episode queue. The ten-second skips are
+ * double-tap gestures on the video surface, which is the gesture viewers already
+ * expect and keeps two controls off the centre of a small screen.
+ */
 @Composable
 internal fun PlayerCenterControls(
     isPlaying: Boolean,
     ended: Boolean,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
     onTogglePlay: () -> Unit,
-    onRewind: () -> Unit,
-    onForward: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(22.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Surface(
-            onClick = onRewind,
-            shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.42f),
-            modifier = Modifier.size(52.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    AppVectorIcons.Replay10,
-                    contentDescription = "Rewind 10 seconds",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
+        TransportButton(
+            icon = AppVectorIcons.SkipPrevious,
+            description = "Previous episode",
+            enabled = hasPrevious,
+            onClick = onPrevious
+        )
         Surface(
             onClick = onTogglePlay,
             shape = CircleShape,
-            color = Color.White.copy(alpha = 0.92f),
-            modifier = Modifier.size(68.dp)
+            color = Color.Transparent,
+            modifier = Modifier.size(64.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    if (ended) AppVectorIcons.Refresh else if (isPlaying) AppVectorIcons.Pause else AppVectorIcons.Play,
-                    contentDescription = if (ended) "Replay" else if (isPlaying) "Pause" else "Play",
-                    tint = Color.Black,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-        }
-        Surface(
-            onClick = onForward,
-            shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.42f),
-            modifier = Modifier.size(52.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    AppVectorIcons.Forward10,
-                    contentDescription = "Forward 10 seconds",
+                    when {
+                        ended -> AppVectorIcons.Refresh
+                        isPlaying -> AppVectorIcons.Pause
+                        else -> AppVectorIcons.Play
+                    },
+                    contentDescription = when {
+                        ended -> "Replay"
+                        isPlaying -> "Pause"
+                        else -> "Play"
+                    },
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
         }
+        TransportButton(
+            icon = AppVectorIcons.SkipNext,
+            description = "Next episode",
+            enabled = hasNext,
+            onClick = onNext
+        )
     }
 }
 
 @Composable
+private fun TransportButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(18.dp),
+        color = PlayerPanel,
+        modifier = Modifier.size(46.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = description,
+                tint = if (enabled) Color.White else Color.White.copy(alpha = 0.3f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The bottom band: a flat scrubbable timeline with intro/outro marks, the time
+ * pills, and one row of compact controls. No Material Slider, because its
+ * track/thumb geometry cannot draw the three segments the reference uses.
+ */
+@Composable
 internal fun PlayerBottomBar(
     position: Long,
+    buffered: Long,
     duration: Long,
     scrubFraction: Float?,
+    muted: Boolean,
+    speed: Float,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
-    speed: Float,
-    hasNext: Boolean,
     onSpeed: () -> Unit,
-    onNext: () -> Unit,
     onServers: () -> Unit,
+    onEpisodes: () -> Unit,
+    onFullscreen: () -> Unit,
+    onMute: () -> Unit,
+    onSkipIntro: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val fraction = scrubFraction ?: if (duration > 0L) {
@@ -214,53 +260,232 @@ internal fun PlayerBottomBar(
     } else {
         0f
     }
+    val bufferedFraction = if (duration > 0L) {
+        (buffered.toFloat() / duration).coerceIn(fraction, 1f)
+    } else {
+        0f
+    }
+    val showSkipIntro = duration > 120_000L && position in 1L..90_000L
     Column(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Slider(
-            value = fraction,
-            onValueChange = onScrub,
-            onValueChangeFinished = onScrubFinished
+        if (showSkipIntro) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Surface(
+                    onClick = onSkipIntro,
+                    shape = RoundedCornerShape(16.dp),
+                    color = PlayerPanel
+                ) {
+                    Text(
+                        "+85",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+        PlayerProgress(
+            fraction = fraction,
+            bufferedFraction = bufferedFraction,
+            duration = duration,
+            onScrub = onScrub,
+            onScrubFinished = onScrubFinished
         )
+        Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "${formatClock((fraction * duration).toLong())} / ${formatClock(duration)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.weight(1f)
-            )
-            ControlTextButton(label = "${formatSpeed(speed)}\u00d7", onClick = onSpeed)
-            ControlTextButton(label = "Servers", onClick = onServers)
-            IconButton(onClick = onNext, enabled = hasNext) {
-                Icon(
-                    AppVectorIcons.SkipNext,
-                    contentDescription = "Next episode",
-                    tint = if (hasNext) Color.White else Color.White.copy(alpha = 0.35f)
+            TimePill(formatClock((fraction * duration).toLong()), compact = true)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SmallRoundAction(
+                    icon = AppVectorIcons.EpisodeGrid,
+                    description = "Episodes",
+                    onClick = onEpisodes
                 )
+                SmallRoundAction(
+                    icon = AppVectorIcons.Server,
+                    description = "Quality and servers",
+                    onClick = onServers
+                )
+                SmallRoundAction(
+                    icon = AppVectorIcons.Fullscreen,
+                    description = "Fullscreen",
+                    onClick = onFullscreen
+                )
+                SpeedPill(speed = speed, onClick = onSpeed)
             }
+            Spacer(Modifier.weight(1f))
+            SmallRoundAction(
+                icon = if (muted) AppVectorIcons.VolumeOff else AppVectorIcons.Volume,
+                description = if (muted) "Unmute" else "Mute",
+                onClick = onMute
+            )
+            Spacer(Modifier.width(4.dp))
+            TimePill(formatClock(duration), compact = true)
         }
     }
 }
 
 @Composable
-private fun ControlTextButton(label: String, onClick: () -> Unit) {
+private fun PlayerProgress(
+    fraction: Float,
+    bufferedFraction: Float,
+    duration: Long,
+    onScrub: (Float) -> Unit,
+    onScrubFinished: () -> Unit
+) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(26.dp)
+            .pointerInput(duration) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val width = size.width.coerceAtLeast(1).toFloat()
+                    fun at(x: Float): Float = (x / width).coerceIn(0f, 1f)
+                    onScrub(at(down.position.x))
+                    var pressed = down.pressed
+                    while (pressed) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        pressed = change.pressed
+                        if (pressed) {
+                            onScrub(at(change.position.x))
+                            change.consume()
+                        }
+                    }
+                    onScrubFinished()
+                }
+            }
+    ) {
+        val trackHeight = 7.dp.toPx()
+        val y = (size.height - trackHeight) / 2f
+        val radius = CornerRadius(trackHeight / 2f)
+        drawRoundRect(
+            color = PlayerTrack,
+            topLeft = Offset(0f, y),
+            size = Size(size.width, trackHeight),
+            cornerRadius = radius
+        )
+        drawRoundRect(
+            color = PlayerAccent.copy(alpha = 0.34f),
+            topLeft = Offset(0f, y),
+            size = Size(size.width * bufferedFraction.coerceIn(0f, 1f), trackHeight),
+            cornerRadius = radius
+        )
+        drawRoundRect(
+            color = PlayerAccent,
+            topLeft = Offset(0f, y),
+            size = Size(size.width * fraction.coerceIn(0f, 1f), trackHeight),
+            cornerRadius = radius
+        )
+        if (duration > 120_000L) {
+            val intro = (85_000f / duration).coerceIn(0f, 0.35f)
+            val outro = (75_000f / duration).coerceIn(0f, 0.35f)
+            drawRoundRect(
+                color = PlayerYellow,
+                topLeft = Offset(0f, y),
+                size = Size(size.width * intro, trackHeight),
+                cornerRadius = radius
+            )
+            drawRoundRect(
+                color = PlayerYellow,
+                topLeft = Offset(size.width * (1f - outro), y),
+                size = Size(size.width * outro, trackHeight),
+                cornerRadius = radius
+            )
+        }
+        drawCircle(
+            color = Color.White,
+            radius = 6.dp.toPx(),
+            center = Offset(size.width * fraction.coerceIn(0f, 1f), size.height / 2f)
+        )
+    }
+}
+
+@Composable
+private fun SpeedPill(speed: Float, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        shape = CircleShape,
-        color = Color.White.copy(alpha = 0.14f)
+        shape = RoundedCornerShape(12.dp),
+        color = PlayerChip,
+        modifier = Modifier.height(32.dp)
     ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                formatSpeed(speed),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 10.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SmallRoundAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(11.dp),
+        color = PlayerPanel,
+        modifier = Modifier.size(32.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = description,
+                tint = Color.White,
+                modifier = Modifier.size(17.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerChipText(label: String, color: Color) {
+    Surface(shape = RoundedCornerShape(7.dp), color = color) {
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+@Composable
+private fun TimePill(label: String, compact: Boolean = false) {
+    Surface(shape = RoundedCornerShape(20.dp), color = PlayerPanel) {
+        Text(
+            label,
+            style = if (compact) {
+                MaterialTheme.typography.labelSmall
+            } else {
+                MaterialTheme.typography.labelMedium
+            },
+            color = Color.White,
+            modifier = Modifier.padding(
+                horizontal = if (compact) 8.dp else 12.dp,
+                vertical = if (compact) 6.dp else 7.dp
+            )
         )
     }
 }
@@ -273,7 +498,7 @@ internal fun PlayerError(
 ) {
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = Color.Black.copy(alpha = 0.78f),
+        color = Color.Black.copy(alpha = 0.82f),
         modifier = modifier.padding(24.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -315,85 +540,6 @@ internal fun PlayerEmpty(onBack: () -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
         TextButton(onClick = onBack) { Text("Back", color = Color.White) }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun PlayerServerSheet(
-    sheetState: SheetState,
-    episode: SourceEpisode,
-    current: SourceServer?,
-    onDismiss: () -> Unit,
-    onChoose: (SourceServer) -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 20.dp)
-        ) {
-            Text(
-                "Select Server",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                "Episode ${episode.number} \u00b7 ${episode.name}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(12.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(episode.servers, key = { it.id }) { server ->
-                    val playing = server.id == current?.id
-                    Surface(
-                        onClick = { onChoose(server) },
-                        shape = RoundedCornerShape(16.dp),
-                        color = if (playing) {
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerLow
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                AppVectorIcons.Play,
-                                contentDescription = null,
-                                tint = if (playing) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                server.name,
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (playing) {
-                                Text(
-                                    "Playing",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -454,6 +600,18 @@ internal fun applyEnhancement(
     view.setRenderEffect(RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(matrix)))
 }
 
+/** Enters Android's picture-in-picture mode, or returns false on a device that refuses. */
+internal fun enterPip(activity: Activity?): Boolean {
+    val target = activity ?: return false
+    return runCatching {
+        target.enterPictureInPictureMode(
+            PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+                .build()
+        )
+    }.getOrDefault(false)
+}
+
 internal fun savePlayback(
     watchPreferences: WatchPreferences,
     player: ExoPlayer,
@@ -479,6 +637,20 @@ internal fun savePlayback(
     )
 }
 
+internal fun episodeChip(episode: SourceEpisode?): String =
+    episode?.let { "Episode ${it.number}" } ?: "Episode"
+
+internal fun qualityChip(server: SourceServer?): String =
+    server?.quality?.takeIf { it.isNotBlank() }
+        ?: server?.name?.takeIf { it.isNotBlank() }
+        ?: "Source"
+
+internal fun decoderBadge(decoder: String): String = when {
+    decoder.contains("software", ignoreCase = true) -> "SW"
+    decoder.contains("auto", ignoreCase = true) -> "AUTO"
+    else -> "HW+"
+}
+
 private fun formatClock(milliseconds: Long): String {
     val totalSeconds = milliseconds.coerceAtLeast(0L) / 1000L
     val hours = totalSeconds / 3600
@@ -492,17 +664,7 @@ private fun formatClock(milliseconds: Long): String {
 }
 
 private fun formatSpeed(speed: Float): String =
-    if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()
-
-private fun playerSubtitle(episode: SourceEpisode?): String {
-    if (episode == null) return ""
-    val label = "Episode ${episode.number}"
-    return if (episode.name.isNotBlank() && episode.name != label) {
-        "$label \u00b7 ${episode.name}"
-    } else {
-        label
-    }
-}
+    if (speed % 1f == 0f) "${speed.toInt()}\u00d7" else "${speed}\u00d7"
 
 internal fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this

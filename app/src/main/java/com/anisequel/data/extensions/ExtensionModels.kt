@@ -76,7 +76,9 @@ data class CatalogExtension(
     val nsfw: Boolean,
     val iconUrl: String?,
     val downloadUrl: String?,
-    val description: String?
+    val description: String?,
+    /** The sources inside the package, used by the catalogue's name search. */
+    val sourceNames: List<String> = emptyList()
 ) {
     /** The `.apk`/`.js` tail, which is what "Install" will actually fetch. */
     val fileName: String
@@ -108,7 +110,9 @@ data class InstalledExtension(
     val iconUrl: String?,
     val installedAt: Long,
     /** True once the platform installer reported that the package was replaced. */
-    val needsRestart: Boolean
+    val needsRestart: Boolean,
+    /** The sources inside the package, kept so Installed can be searched by them. */
+    val sourceNames: List<String> = emptyList()
 )
 
 /**

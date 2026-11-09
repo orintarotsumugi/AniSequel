@@ -54,6 +54,7 @@ private sealed interface PlayerDialog {
     data object Decoder : PlayerDialog
     data object Renderer : PlayerDialog
     data object Audio : PlayerDialog
+    data object Cache : PlayerDialog
     data object Shader : PlayerDialog
 }
 
@@ -126,6 +127,23 @@ fun PlayerSettingsScreen(
                     onClick = { dialog = PlayerDialog.Audio }
                 )
             }
+            item(key = "pitch") {
+                PlayerToggleRow(
+                    icon = AppVectorIcons.GraphicEq,
+                    title = "Audio Pitch Correction",
+                    subtitle = "Keep voice pitch stable at higher speeds",
+                    checked = settings.audioPitchCorrection,
+                    onCheckedChange = playerPreferences::setAudioPitchCorrection
+                )
+            }
+            item(key = "cache") {
+                PlayerRow(
+                    icon = AppVectorIcons.CacheTimer,
+                    title = "Cache Minutes",
+                    value = "${settings.cacheMinutes} min read-ahead",
+                    onClick = { dialog = PlayerDialog.Cache }
+                )
+            }
 
             item(key = "enhancement_header") {
                 SectionHeader("ANIME 4K ENHANCEMENT")
@@ -154,9 +172,10 @@ fun PlayerSettingsScreen(
                             "The Enhancement switch applies a colour-grade filter to the video " +
                                 "surface - saturation and contrast, per the selected profile. It is " +
                                 "not a spatial upscaler; a real shader pass is Phase 3. Decoder " +
-                                "and renderer choices are applied to the next playback. The " +
-                                "audio choice is stored for the Phase 2 audio engine rather " +
-                                "than claimed as active now.",
+                                "and renderer choices are applied to the next playback. Audio pitch " +
+                                "and cache minutes are applied to the next episode. An A/V offset " +
+                                "and frame interpolation are deliberately not exposed: Media3 has no " +
+                                "cross-device implementation, and a stored toggle would be a lie.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -206,6 +225,22 @@ fun PlayerSettingsScreen(
             onSelect = { label ->
                 AudioEngineMode.entries.firstOrNull { it.label == label }
                     ?.let(playerPreferences::setAudio)
+                dialog = null
+            },
+            onDismiss = { dialog = null }
+        )
+        PlayerDialog.Cache -> ChoiceDialog(
+            title = "Cache Minutes",
+            options = listOf(1, 2, 3, 5, 10).map {
+                Choice(
+                    label = "$it min",
+                    detail = "Read-ahead buffer before the file is paused to rebuffer"
+                )
+            },
+            selected = "${settings.cacheMinutes} min",
+            onSelect = { label ->
+                label.substringBefore(' ').toIntOrNull()
+                    ?.let(playerPreferences::setCacheMinutes)
                 dialog = null
             },
             onDismiss = { dialog = null }
@@ -362,6 +397,52 @@ private fun PlayerRow(
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun PlayerToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.padding(10.dp).size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         }
     }
 }

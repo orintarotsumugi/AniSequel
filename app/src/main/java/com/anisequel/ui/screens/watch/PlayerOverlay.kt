@@ -6,8 +6,7 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.LayoutInflater
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,11 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -41,6 +40,7 @@ internal fun PlayerSurface(
     buffering: Boolean,
     errorMessage: String?,
     onToggleControls: () -> Unit,
+    onSeekBy: (Long) -> Unit,
     overlay: @Composable BoxScope.() -> Unit
 ) {
     AndroidView(
@@ -68,11 +68,19 @@ internal fun PlayerSurface(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onToggleControls
-            )
+            .pointerInput(exoPlayer) {
+                detectTapGestures(
+                    onTap = { onToggleControls() },
+                    onDoubleTap = { offset ->
+                        val third = size.width / 3f
+                        when {
+                            offset.x < third -> onSeekBy(-10_000L)
+                            offset.x > third * 2f -> onSeekBy(10_000L)
+                            else -> onToggleControls()
+                        }
+                    }
+                )
+            }
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -92,35 +100,45 @@ internal fun PlayerSurface(
  * The controls, extracted from the player state.
  *
  * The player's main composable owns players, listeners and timers; this owns only
- * the three bands of controls. Splitting them is what keeps the state machine
- * readable without moving any of the callbacks away from the player that owns
- * them.
+ * the controls and the locked state. A locked player keeps the top band so Back
+ * and Unlock remain reachable, and drops the centre and bottom bands so a pocket
+ * tap cannot seek or change servers.
  */
 @Composable
 internal fun PlayerControlsOverlay(
     title: String,
     episode: SourceEpisode?,
     server: SourceServer?,
+    decoderLabel: String,
+    locked: Boolean,
+    canPip: Boolean,
     fullscreen: Boolean,
     errorMessage: String?,
     isPlaying: Boolean,
     ended: Boolean,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
     position: Long,
     duration: Long,
+    buffered: Long,
     scrubFraction: Float?,
     speed: Float,
-    hasNext: Boolean,
+    muted: Boolean,
     onBack: () -> Unit,
     onServers: () -> Unit,
     onSettings: () -> Unit,
     onFullscreen: () -> Unit,
+    onPip: () -> Unit,
+    onLock: () -> Unit,
     onTogglePlay: () -> Unit,
-    onRewind: () -> Unit,
-    onForward: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onMute: () -> Unit,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
     onSpeed: () -> Unit,
-    onNext: () -> Unit,
+    onEpisodes: () -> Unit,
+    onSkipIntro: () -> Unit,
     onRetry: () -> Unit
 ) {
     Box(
@@ -131,7 +149,7 @@ internal fun PlayerControlsOverlay(
                     listOf(
                         Color.Black.copy(alpha = 0.72f),
                         Color.Transparent,
-                        Color.Black.copy(alpha = 0.8f)
+                        Color.Black.copy(alpha = 0.82f)
                     )
                 )
             )
@@ -140,11 +158,13 @@ internal fun PlayerControlsOverlay(
             title = title,
             episode = episode,
             server = server,
-            fullscreen = fullscreen,
+            decoderLabel = decoderLabel,
+            locked = locked,
+            canPip = canPip,
             onBack = onBack,
-            onServers = onServers,
+            onLock = onLock,
+            onPip = onPip,
             onSettings = onSettings,
-            onFullscreen = onFullscreen,
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
@@ -154,30 +174,36 @@ internal fun PlayerControlsOverlay(
                 onRetry = onRetry,
                 modifier = Modifier.align(Alignment.Center)
             )
-        } else {
+        } else if (!locked) {
             PlayerCenterControls(
                 isPlaying = isPlaying,
                 ended = ended,
+                hasPrevious = hasPrevious,
+                hasNext = hasNext,
                 onTogglePlay = onTogglePlay,
-                onRewind = onRewind,
-                onForward = onForward,
+                onPrevious = onPrevious,
+                onNext = onNext,
                 modifier = Modifier.align(Alignment.Center)
             )
-        }
 
-        PlayerBottomBar(
-            position = position,
-            duration = duration,
-            scrubFraction = scrubFraction,
-            onScrub = onScrub,
-            onScrubFinished = onScrubFinished,
-            speed = speed,
-            hasNext = hasNext,
-            onSpeed = onSpeed,
-            onNext = onNext,
-            onServers = onServers,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
+            PlayerBottomBar(
+                position = position,
+                buffered = buffered,
+                duration = duration,
+                scrubFraction = scrubFraction,
+                muted = muted,
+                speed = speed,
+                onScrub = onScrub,
+                onScrubFinished = onScrubFinished,
+                onSpeed = onSpeed,
+                onServers = onServers,
+                onEpisodes = onEpisodes,
+                onFullscreen = onFullscreen,
+                onMute = onMute,
+                onSkipIntro = onSkipIntro,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
     }
 }
 

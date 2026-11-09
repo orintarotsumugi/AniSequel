@@ -4,20 +4,40 @@
       "version": "1.8.9",
       "entries": [
         {
+          "title": "Extensions search by source and show what is installed",
+          "detail": "Browse no longer hides an installed extension from search. The filter matches the extension name, package name and the sources the package provides, an INSTALLED badge marks what is on the device, and the list is filtered and grouped only when an input changes. CloudStream repository manifests are followed into their plugin lists, .cs3 and DEX modules are staged like JS modules instead of being handed to Android's APK installer, and the installed APK package is checked against the catalogue before the installer opens."
+        },
+        {
+          "title": "The Watch page counts every episode and groups them in twelves",
+          "detail": "Online shows the source's real episode count, All counts the whole list, and every range chip carries how many episodes it holds - 1-12 with 12, 13-24 with 12, 25-25 with 1. Episode List Settings keeps the Anify/Kitsu artwork switch and the Minimal, Compact and Detailed layouts as a draft with Cancel and Confirm, so a half-changed layout is never saved. The source card's gear opens that source's own settings: preferred type and quality, server and audio type, excluded audio types, download hosters and Hide NSFW."
+        },
+        {
+          "title": "The player is compact and follows the reference",
+          "detail": "The player follows the supplied reference: a compact lavender-on-black top band, episode and quality chips, a custom three-segment progress bar with intro and outro marks, centre transport, picture-in-picture, lock with no accidental seek, mute, previous episode and a quality sheet with Servers and Inbuilt tabs. The quality preference auto-selects the closest file the source reports, a remembered server still wins, and the first file is the fallback. Controls hide after playback settles, double-tap seeks ten seconds, and an old player can no longer overwrite the new episode's resume point."
+        },
+        {
+          "title": "Speed, episodes, pitch and read-ahead are real controls",
+          "detail": "Playback Speed is a bounded slider from 0.25x to 3x with Reset, eight persisted presets, Add and Restore, and the chosen speed survives the settings round trip. The Episodes sheet jumps to any episode in the queue, draws the current episode's real resume bar, and its eye button hides every thumbnail by sharing the Watch page's artwork preference. Audio Pitch Correction holds the voice at 1.0 while speed changes, and Cache Minutes sets the read-ahead buffer the player actually uses. Video Sync and Frame Interpolation are deliberately absent rather than stored toggles that do nothing."
+        },
+        {
+          "title": "The extension runtime bridge says what can play",
+          "detail": "One host-side bridge now classifies every installed record as built-in, APK installed, APK staged or module staged, and the Extension Manager shows those counts instead of one vague installed number. The bridge is the seam the isolated Phase 2 runtime plugs into; it still does not execute third-party code."
+        },
+        {
+          "title": "Catalogues cache, retry and keep the last good rows",
+          "detail": "Repository reads retry transient failures with backoff, use a bounded disk HTTP cache, and have a per-repository deadline. The last good catalogue is cached across launches, a failed refresh keeps the rows from the repositories that answered, duplicate entries are dropped, and the dead Secozzi seed is removed. Internet Archive search and metadata are cached for a short session window, so returning to an episode list does not re-fetch it."
+        },
+        {
           "title": "Extensions get a repository browser and real APK installs",
           "detail": "A fifth tab browses Aniyomi, CloudStream, Sora and LNReader repositories, separates Anime, Manga and Novel entries, filters by ecosystem, language and NSFW, and installs an extension through Android's own package installer. It asks for the install permission when the phone has not granted it, offers the Settings ladder when a vendor build hides that screen, copies an APK from storage, and shows a restart banner so the install is registered on a fresh process. Two Aniyomi repositories are seeded, more can be added by URL or repository root, and the manager reports what is installed and what failed. This beta installs and records third-party APKs; executing their Aniyomi or CloudStream runtime is Phase 2 and the source sheet says so rather than showing a source that cannot play."
         },
         {
           "title": "A Watch flow for anime, with a source the app can actually play",
-          "detail": "The bottom of an anime's Info page now has a pinned Watch bar, and the Watch page that opens searches the selected source by the title's AniList name, draws the matched cover and title, and lists the episodes the source reports. Wrong Title? opens a real search against that source and remembers the result per title, so a bad match is one tap to correct. Episodes are grouped into All and 25-episode ranges, can be drawn as Minimal, Compact or Detailed cards, and carry their server count, duration and resume point. The beta's playable source is Internet Archive: it searches public-domain and Creative Commons animation and turns each file the item reports into a server. Aniyomi and CloudStream extensions installed from the Extensions tab are listed with their real install state and the Phase 2 note."
-        },
-        {
-          "title": "A player with servers, next episode and a real resume point",
-          "detail": "Playback is Media3 ExoPlayer. The player lists every file the source offered as a server, remembers the chosen server per title, advances to the next episode when a file ends, and keeps the position in the title's Watch page as Continue Watching. The controls are the app's own - rewind and forward ten seconds, speed, fullscreen, next episode - and progress is written every five seconds and again when the player is closed, so a call or a crash does not lose the episode. The source and its file are named on screen; AniSequel hosts nothing."
+          "detail": "The bottom of an anime's Info page now has a pinned Watch bar, and the Watch page that opens searches the selected source by the title's AniList name, draws the matched cover and title, and lists the episodes the source reports. Wrong Title? opens a real search against that source and remembers the result per title, so a bad match is one tap to correct. Episodes are grouped into All and 12-episode ranges, each chip carrying its own count, and can be drawn as Minimal, Compact or Detailed cards with their server count, duration and resume point. The beta's playable source is Internet Archive: it searches public-domain and Creative Commons animation and turns each file the item reports into a server. Aniyomi and CloudStream extensions installed from the Extensions tab are listed with their real install state and the Phase 2 note."
         },
         {
           "title": "Player Settings draws the choices it can honour",
-          "detail": "Decoder, Video Renderer and Audio Engine are saved per device and shown on a Player Settings page reached from the Extension Manager and the player. The decoder choice filters Media3's codec selector, the renderer choice swaps a SurfaceView for a TextureView, and Anime 4K Enhancement applies the selected High-End or Mid-End colour grade through a real RenderEffect on the texture surface. That is a colour grade, not a spatial upscaler; the page's own note says so, and a true shader pipeline is Phase 3."
+          "detail": "Decoder, Video Renderer and Audio Engine are saved per device and shown on a Player Settings page reached from the Extension Manager and the player. The decoder choice filters Media3's codec selector, the renderer choice swaps a SurfaceView for a TextureView, and Anime 4K Enhancement applies the selected High-End or Mid-End colour grade through a real RenderEffect on the texture surface. Audio Pitch Correction and Cache Minutes are real player settings; a stored A/V offset or frame-interpolation toggle would change nothing Media3 can honour on a phone, so those are not exposed. Enhancement is a colour grade, not a spatial upscaler; the page's own note says so, and a true shader pipeline is Phase 3."
         }
       ]
     },

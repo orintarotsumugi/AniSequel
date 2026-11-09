@@ -26,7 +26,7 @@ internal object ExtensionIndex {
      * direct index needs and still small enough that a wrong URL costs a handful
      * of requests, not a crawl.
      */
-    private const val MAX_CANDIDATES = 16
+    private const val MAX_CANDIDATES = 24
 
     fun looksLikeJson(body: String): Boolean {
         val first = body.firstOrNull { !it.isWhitespace() } ?: return false
@@ -81,7 +81,10 @@ internal object ExtensionIndex {
             // `repo` is a branch name in several Aniyomi indexes, not only a
             // directory on `main` - the seeded yuzono index lives at
             // raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json.
-            for (branch in listOf("main", "master", "repo")) {
+            // `builds` is the branch CloudStream repositories actually publish
+            // their portable index to; without it a CloudX repo root expanded
+            // only main/master/repo and discovered nothing.
+            for (branch in listOf("main", "builds", "master", "repo")) {
                 candidates += "https://raw.githubusercontent.com/$user/$repo/$branch/repo/index.min.json"
                 candidates += "https://raw.githubusercontent.com/$user/$repo/$branch/index.min.json"
                 candidates += "https://raw.githubusercontent.com/$user/$repo/$branch/repo/plugins.json"
@@ -96,7 +99,7 @@ internal object ExtensionIndex {
         ).find(input)
         if (codeberg != null) {
             val (user, repo) = codeberg.destructured
-            for (branch in listOf("main", "master", "repo")) {
+            for (branch in listOf("main", "builds", "master", "repo")) {
                 candidates += "https://codeberg.org/$user/$repo/raw/branch/$branch/repo/index.min.json"
                 candidates += "https://codeberg.org/$user/$repo/raw/branch/$branch/index.min.json"
                 candidates += "https://codeberg.org/$user/$repo/raw/branch/$branch/repo/plugins.json"
@@ -179,6 +182,10 @@ internal object ExtensionIndex {
      * tie-breaker, because a mirror can be hosted under any name.
      */
     fun kindFor(body: String, url: String): ExtensionKind {
+        val root = runCatching { JSONObject(body.trim()) }.getOrNull()
+        if (root != null && (root.has("pluginLists") || root.has("manifestVersion"))) {
+            return ExtensionKind.CLOUDSTREAM
+        }
         val array = rootArray(body) ?: return kindForUrl(url)
         val first = (0 until array.length()).firstNotNullOfOrNull { array.optJSONObject(it) }
         if (first != null) {
@@ -203,6 +210,8 @@ internal object ExtensionIndex {
     ): CatalogExtension? {
         val name = entry.stringOf("name", "extensionName", "title")
             ?.takeIf { it.isNotBlank() }
+            ?.removePrefix("Aniyomi: ")
+            ?.removePrefix("Tachiyomi: ")
             ?: return null
         val packageName = entry.stringOf(
             "pkg",
@@ -236,6 +245,17 @@ internal object ExtensionIndex {
         val download = downloadRaw?.let { resolve(repositoryUrl, it) }
         val nsfw = entry.isNsfw()
         val entryContent = contentForEntry(entry, packageName, content)
+        val sourceNames = entry.optJSONArray("sources")?.let { sources ->
+            buildList {
+                for (sourceIndex in 0 until sources.length()) {
+                    val source = sources.optJSONObject(sourceIndex) ?: continue
+                    val sourceName = source.stringOf("name", "sourceName")
+                        ?.takeIf { it.isNotBlank() }
+                        ?: continue
+                    if (sourceName !in this) add(sourceName)
+                }
+            }
+        }.orEmpty()
 
         val keyName = packageName.ifBlank { download ?: name }.lowercase()
         return CatalogExtension(
@@ -251,7 +271,8 @@ internal object ExtensionIndex {
             nsfw = nsfw,
             iconUrl = icon?.let { resolve(repositoryUrl, it) } ?: icon,
             downloadUrl = download,
-            description = description
+            description = description,
+            sourceNames = sourceNames
         )
     }
 
@@ -287,6 +308,25 @@ internal object ExtensionIndex {
             return true
         }
         return stringOf("name").orEmpty().contains("NSFW", ignoreCase = true)
+    }
+
+    /**
+     * The plugin list URLs inside a CloudStream repository manifest.
+     *
+     * CloudStream's `repo.json` is a manifest, not the catalogue: it points at one
+     * or more `plugins.json` files. Reading the manifest as an empty catalogue was
+     * the reason a valid CloudX repository looked like "no extension list" and the
+     * CloudStream tab stayed empty even after adding its URL.
+     */
+    fun pluginListUrls(body: String): List<String> {
+        val root = runCatching { JSONObject(body.trim()) }.getOrNull() ?: return emptyList()
+        val array = root.optJSONArray("pluginLists") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val url = array.optString(index).takeIf { it.isNotBlank() } ?: continue
+                add(url)
+            }
+        }
     }
 
     private fun rootArray(body: String): JSONArray? {

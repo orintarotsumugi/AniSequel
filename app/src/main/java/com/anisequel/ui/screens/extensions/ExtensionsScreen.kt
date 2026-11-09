@@ -207,6 +207,7 @@ fun ExtensionsScreen(
                     selectedContent = selectedContent,
                     query = query,
                     onInstall = viewModel::install,
+                    onUninstall = viewModel::uninstall,
                     onOpenRepositories = { showRepositories = true },
                     onRefresh = { viewModel.loadCatalog(force = true) },
                     bottomPadding = mainBarClearance()
@@ -413,7 +414,7 @@ private fun InstalledSwitch(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(modifier = Modifier.padding(4.dp)) {
-            listOf(false to "Available", true to "Installed").forEach { (value, label) ->
+            listOf(false to "Browse", true to "Installed").forEach { (value, label) ->
                 val isSelected = installed == value
                 Box(
                     modifier = Modifier

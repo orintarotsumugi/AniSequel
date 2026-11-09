@@ -14,25 +14,21 @@ private const val KEY_RESTART_REQUIRED = "restart_required"
 private const val KEY_SHOW_NSFW = "show_nsfw"
 
 /**
- * The two repositories the Extensions page starts with.
+ * The repository the Extensions page starts with.
  *
- * They are the Aniyomi indexes the reference app ships in its own screenshots,
- * and they are only *seeds*: the first write replaces the stored list, so a
- * reader who removes one never sees it return on the next launch. No CloudStream
- * repository is seeded because CloudStream's plugin repositories are
- * community-run and there is no neutral default; the screenshot's CloudStream
- * tab is empty for the same reason.
+ * It is Yūzōnō's index, the Aniyomi store Wotaku currently recommends. The old
+ * Secozzi seed was removed after its live index became an "Outdated App, switch to
+ * Animiru" placeholder: keeping it made half the page a permanent failure card
+ * and taught readers that repository errors were normal. Seeds are only the
+ * first write; removing one never brings it back on the next launch. No
+ * CloudStream repository is seeded because the known one (CloudX) carries only
+ * Indonesian movie providers, not anime; the empty CloudStream tab is honest and
+ * Add Repo accepts one.
  */
 private fun defaultRepositories(): List<ExtensionRepository> = listOf(
     ExtensionRepository(
         id = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json",
         url = "https://raw.githubusercontent.com/yuzono/anime-repo/repo/index.min.json",
-        kind = ExtensionKind.ANIYOMI,
-        content = ExtensionContent.ANIME
-    ),
-    ExtensionRepository(
-        id = "https://raw.githubusercontent.com/Secozzi/aniyomi-extensions/repo/index.min.json",
-        url = "https://raw.githubusercontent.com/Secozzi/aniyomi-extensions/repo/index.min.json",
         kind = ExtensionKind.ANIYOMI,
         content = ExtensionContent.ANIME
     )
@@ -88,7 +84,8 @@ class ExtensionPreferences(context: Context) {
             apkPath = apkPath,
             iconUrl = extension.iconUrl,
             installedAt = System.currentTimeMillis(),
-            needsRestart = needsRestart
+            needsRestart = needsRestart,
+            sourceNames = extension.sourceNames
         )
         val next = _installed.value + (extension.key to record)
         writeInstalled(next)
@@ -150,6 +147,11 @@ class ExtensionPreferences(context: Context) {
             for (index in 0 until array.length()) {
                 val obj = array.optJSONObject(index) ?: continue
                 val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
+                // Readers who installed the beta before this change still have
+                // the dead Secozzi index in their preferences. Dropping it on
+                // read removes the permanent failure card without asking them to
+                // clean up a repository that no longer has any entries.
+                if (url.contains("Secozzi/aniyomi-extensions", ignoreCase = true)) continue
                 val kind = runCatching {
                     ExtensionKind.valueOf(obj.optString("kind"))
                 }.getOrDefault(ExtensionIndex.kindForUrl(url))
@@ -192,7 +194,13 @@ class ExtensionPreferences(context: Context) {
                 apkPath = obj.optString("apkPath").takeIf { it.isNotBlank() },
                 iconUrl = obj.optString("iconUrl").takeIf { it.isNotBlank() },
                 installedAt = obj.optLong("installedAt", System.currentTimeMillis()),
-                needsRestart = obj.optBoolean("needsRestart", false)
+                needsRestart = obj.optBoolean("needsRestart", false),
+                sourceNames = obj.optString("sourceNames")
+                    .lineSequence()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .toList()
             )
         }
         return out
@@ -228,6 +236,7 @@ class ExtensionPreferences(context: Context) {
                     .put("iconUrl", record.iconUrl)
                     .put("installedAt", record.installedAt)
                     .put("needsRestart", record.needsRestart)
+                    .put("sourceNames", record.sourceNames.joinToString("\n"))
             )
         }
         return array.toString()

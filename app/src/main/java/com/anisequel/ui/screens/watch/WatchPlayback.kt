@@ -6,6 +6,7 @@ import com.anisequel.data.extensions.SourceEpisode
 import com.anisequel.data.extensions.SourceMapping
 import com.anisequel.data.extensions.SourceServer
 import com.anisequel.data.extensions.WatchProgress
+import com.anisequel.data.extensions.chooseServer
 import com.anisequel.ui.navigation.WatchAnime
 
 /**
@@ -55,6 +56,7 @@ internal fun requestWatchEpisode(
     episode: SourceEpisode,
     startMs: Long,
     preferredServer: String?,
+    preferredQuality: String?,
     onNoServers: () -> Unit,
     onNeedsServer: (SourceEpisode, Long) -> Unit,
     onPlay: (SourceServer) -> Unit
@@ -63,10 +65,10 @@ internal fun requestWatchEpisode(
         onNoServers()
         return
     }
-    val chosen = episode.servers.firstOrNull {
-        it.name.equals(preferredServer, ignoreCase = true)
-    }
-    if (chosen == null && episode.servers.size > 1 && preferredServer == null) {
+    val chosen = chooseServer(episode, preferredServer, preferredQuality)
+    val hasPreference = preferredServer != null ||
+        preferredQuality?.equals("Auto", ignoreCase = true) == false
+    if (episode.servers.size > 1 && !hasPreference) {
         onNeedsServer(episode, startMs)
     } else {
         onPlay(chosen ?: episode.servers.first())

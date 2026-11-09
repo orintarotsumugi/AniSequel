@@ -79,12 +79,14 @@ import java.util.Locale
 internal fun WatchSourceSheet(
     sheetState: SheetState,
     state: WatchUiState,
+    hideNsfw: Boolean,
     onDismiss: () -> Unit,
     onSelect: (PlayableSource) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val filtered = state.sources.filter { source ->
-        query.isBlank() || source.name.contains(query, ignoreCase = true)
+        (!hideNsfw || !source.nsfw) &&
+            (query.isBlank() || source.name.contains(query, ignoreCase = true))
     }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -115,7 +117,7 @@ internal fun WatchSourceSheet(
                     color = MaterialTheme.colorScheme.secondaryContainer
                 ) {
                     Text(
-                        "${state.sources.size} installed",
+                        "${state.sources.size} sources",
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
@@ -171,6 +173,7 @@ private fun SourceRow(
 ) {
     Surface(
         onClick = onClick,
+        enabled = source.playable,
         shape = RoundedCornerShape(20.dp),
         color = if (selected) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
@@ -208,6 +211,7 @@ private fun SourceRow(
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     SourceTag(source.kind.label)
                     SourceTag(source.language.uppercase(Locale.ENGLISH))
+                    if (!source.playable) SourceTag("PHASE 2")
                     if (source.nsfw) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -233,7 +237,11 @@ private fun SourceRow(
                     )
                 }
             }
-            RadioButton(selected = selected, onClick = onClick)
+            RadioButton(
+                selected = selected,
+                onClick = onClick,
+                enabled = source.playable
+            )
         }
     }
 }

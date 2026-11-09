@@ -405,6 +405,7 @@ internal fun FoundCard(
 @Composable
 internal fun WatchTabs(
     downloaded: Boolean,
+    episodeCount: Int,
     onOnline: () -> Unit,
     onDownloaded: () -> Unit,
     onSettings: () -> Unit
@@ -418,6 +419,7 @@ internal fun WatchTabs(
     ) {
         WatchTab(
             label = "Online",
+            count = episodeCount,
             selected = !downloaded,
             onClick = onOnline,
             modifier = Modifier.weight(1f)
@@ -452,6 +454,7 @@ internal fun WatchTabs(
 @Composable
 private fun WatchTab(
     label: String,
+    count: Int? = null,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -480,6 +483,29 @@ private fun WatchTab(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
             )
+            if (count != null && count > 0) {
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHighest
+                    }
+                ) {
+                    Text(
+                        count.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
     }
 }

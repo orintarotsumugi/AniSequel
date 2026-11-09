@@ -6,11 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +20,7 @@ import androidx.compose.material3.SheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.extensions.EpisodeLayout
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 
 /** Episode list settings: artwork, card style, and the remembered server. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +60,7 @@ internal fun WatchSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp)
         ) {
@@ -100,14 +102,19 @@ internal fun WatchSettingsSheet(
             Spacer(Modifier.height(8.dp))
             EpisodeLayout.entries.forEach { option ->
                 val selected = option == draftLayout
-                Surface(
-                    onClick = { draftLayout = option },
-                    shape = RoundedCornerShape(16.dp),
-                    color = if (selected) {
+                val cardColor by animateColorAsState(
+                    targetValue = if (selected) {
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                     } else {
                         MaterialTheme.colorScheme.surfaceContainerLow
                     },
+                    animationSpec = ExpressiveMotion.FastColorEffects,
+                    label = "episode-layout-selection"
+                )
+                Surface(
+                    onClick = { draftLayout = option },
+                    shape = RoundedCornerShape(16.dp),
+                    color = cardColor,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
@@ -145,18 +152,13 @@ internal fun WatchSettingsSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(8.dp))
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.heightIn(max = 160.dp)
-                ) {
-                    item {
-                        ServerChoiceRow(
-                            label = "Auto (ask each time)",
-                            selected = draftServer == null,
-                            onClick = { draftServer = null }
-                        )
-                    }
-                    items(serverNames) { name ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ServerChoiceRow(
+                        label = "Auto (ask each time)",
+                        selected = draftServer == null,
+                        onClick = { draftServer = null }
+                    )
+                    serverNames.forEach { name ->
                         ServerChoiceRow(
                             label = name,
                             selected = draftServer == name,

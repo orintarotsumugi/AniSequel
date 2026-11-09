@@ -41,25 +41,36 @@ import com.anisequel.data.extensions.WatchProgress
 import com.anisequel.ui.components.AppVectorIcons
 import java.util.Locale
 
-/** One chip in the screenshot's All / 1-5 / 6-10 episode range row. */
-internal data class EpisodeRangeOption(val label: String, val range: IntRange?)
+/** One chip in the screenshot's All / 1-12 / 13-24 episode range row. */
+internal data class EpisodeRangeOption(
+    val label: String,
+    val range: IntRange?,
+    val count: Int
+)
 
 /**
- * Splits the episode list into the 25-episode chunks the reference uses.
+ * Splits the episode list into the twelve-episode chunks the reference uses.
  *
  * "All" is always first even when it covers the same rows as the first chunk,
- * because it is the reset control: after tapping "26-50" on a 30-episode show,
+ * because it is the reset control: after tapping "25-25" on a 25-episode show,
  * the reader needs one tap back to the whole list, not an invisible second tap.
+ * Every chip carries the number of episodes it contains: the count is the thing
+ * that tells a reader whether the last range is one episode or a full chunk.
  */
 internal fun episodeRanges(episodes: List<SourceEpisode>): List<EpisodeRangeOption> {
     if (episodes.isEmpty()) return emptyList()
-    val options = mutableListOf(EpisodeRangeOption("All", null))
+    val options = mutableListOf(EpisodeRangeOption("All", null, episodes.size))
     val ordered = episodes.map { it.number }.distinct().sorted()
     if (ordered.isEmpty()) return options
     var start = ordered.first()
     while (start <= ordered.last()) {
-        val end = start + 24
-        options += EpisodeRangeOption("$start - $end", start..end)
+        val end = start + 11
+        val range = start..end
+        options += EpisodeRangeOption(
+            label = "$start - $end",
+            range = range,
+            count = episodes.count { it.number in range }
+        )
         start = end + 1
     }
     return options
@@ -99,6 +110,27 @@ internal fun RangeChips(
                             MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.12f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHighest
+                        }
+                    ) {
+                        Text(
+                            option.count.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
         }

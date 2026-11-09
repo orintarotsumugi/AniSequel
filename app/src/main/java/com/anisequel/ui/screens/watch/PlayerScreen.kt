@@ -3,20 +3,9 @@
 package com.anisequel.ui.screens.watch
 
 import android.content.pm.ActivityInfo
-import android.view.LayoutInflater
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,33 +16,25 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
-import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import com.anisequel.R
 import com.anisequel.data.extensions.PlaybackQueue
+import com.anisequel.data.extensions.chooseServer
 import com.anisequel.data.extensions.PlayerPreferences
 import com.anisequel.data.extensions.RendererMode
+import com.anisequel.data.extensions.SourceEpisode
+import com.anisequel.data.extensions.SourceServer
 import com.anisequel.data.extensions.WatchPreferences
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import kotlinx.coroutines.delay
-
-private val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
 
 /**
  * The video player.
@@ -67,8 +48,11 @@ private val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
  * The player is rebuilt when the episode, server or decoder changes, which makes
  * "next episode" and "another server" the same operation - replace the media item
  * - without a second player instance leaking its surface.
+ *
+ * Composition is in `PlayerStage.kt`, listener/timers in `PlayerBindings.kt` and
+ * the server chooser in `PlayerServerSheet.kt`. This function is the session
+ * state and the commands over it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     watchPreferences: WatchPreferences,
@@ -78,33 +62,54 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by playerPreferences.settings.collectAsStateWithLifecycle()
+    val speedPresets by playerPreferences.speedPresets.collectAsStateWithLifecycle()
+    val sourceSettings by watchPreferences.sourceSettings.collectAsStateWithLifecycle()
+    val showArtwork by watchPreferences.showArtwork.collectAsStateWithLifecycle()
+    val progressMap by watchPreferences.progress.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val previousOrientation = remember(activity) {
         activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
     val queueContext = remember { PlaybackQueue.context }
-    var currentEpisode by remember {
-        mutableStateOf(PlaybackQueue.episode())
-    }
+    var currentEpisode by remember { mutableStateOf(PlaybackQueue.episode()) }
     var currentServer by remember {
-        mutableStateOf(PlaybackQueue.server ?: currentEpisode?.servers?.firstOrNull())
+        mutableStateOf(
+            PlaybackQueue.server
+                ?: currentEpisode?.let {
+                    chooseServer(
+                        it,
+                        watchPreferences.preferredServer.value,
+                        sourceSettings.preferredQuality
+                    )
+                }
+        )
     }
     var pendingStartMs by remember { mutableLongStateOf(PlaybackQueue.startPositionMs) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var locked by rememberSaveable { mutableStateOf(false) }
     var controlsVisible by remember { mutableStateOf(true) }
     var scrubFraction by remember { mutableStateOf<Float?>(null) }
     var position by remember { mutableLongStateOf(pendingStartMs) }
     var duration by remember { mutableLongStateOf(0L) }
+    var buffered by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(true) }
     var ended by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var speed by remember { mutableFloatStateOf(1f) }
+    var speed by remember { mutableFloatStateOf(playerPreferences.playbackSpeed.value) }
+    var muted by remember { mutableStateOf(false) }
     var showServers by rememberSaveable { mutableStateOf(false) }
+    var showSpeed by rememberSaveable { mutableStateOf(false) }
+    var showEpisodes by rememberSaveable { mutableStateOf(false) }
     val serverSheetState = rememberFullHeightSheetState()
+    val speedSheetState = rememberFullHeightSheetState()
+    val episodesSheetState = rememberFullHeightSheetState()
 
     val useTexture = settings.enhance || settings.renderer == RendererMode.TEXTURE
+    val canPip = activity?.packageManager
+        ?.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) == true
+    val mediaUrl = currentServer?.url
 
     // The system bars and the activity orientation are process-wide, not this
     // screen's; the previous values are restored on dispose so leaving the player
@@ -119,11 +124,34 @@ fun PlayerScreen(
         }
     }
     PlayerFullscreenEffect(activity = activity, fullscreen = fullscreen)
-    BackHandler(enabled = fullscreen) { fullscreen = false }
+    BackHandler(enabled = fullscreen || locked) {
+        if (locked) locked = false else fullscreen = false
+    }
 
-    val mediaUrl = currentServer?.url
-    val exoPlayer = remember(currentEpisode?.id, mediaUrl, settings.decoder, settings.renderer, settings.enhance) {
-        ExoPlayer.Builder(context, buildRenderersFactory(context, settings.decoder)).build().apply {
+    val loadControl = remember(settings.cacheMinutes) {
+        val readAhead = settings.cacheMinutes * 60_000
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                15_000,
+                readAhead.coerceAtLeast(30_000),
+                2_500,
+                5_000
+            )
+            .build()
+    }
+
+    val exoPlayer = remember(
+        currentEpisode?.id,
+        mediaUrl,
+        settings.decoder,
+        settings.renderer,
+        settings.enhance,
+        loadControl
+    ) {
+        ExoPlayer.Builder(context, buildRenderersFactory(context, settings.decoder))
+            .setLoadControl(loadControl)
+            .build()
+            .apply {
             setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
             if (!mediaUrl.isNullOrBlank()) {
                 setMediaItem(MediaItem.fromUri(mediaUrl))
@@ -137,76 +165,66 @@ fun PlayerScreen(
     LaunchedEffect(currentEpisode?.id, mediaUrl) {
         ended = false
         errorMessage = null
+        buffering = true
         controlsVisible = true
     }
 
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            position = exoPlayer.currentPosition.coerceAtLeast(0L)
-            duration = exoPlayer.duration.coerceAtLeast(0L)
-            isPlaying = exoPlayer.isPlaying
-            buffering = exoPlayer.playbackState == Player.STATE_BUFFERING
-            delay(500)
-        }
+    LaunchedEffect(speed, settings.audioPitchCorrection, exoPlayer) {
+        exoPlayer.playbackParameters = PlaybackParameters(
+            speed,
+            // Pitch correction keeps the voice at 1.0. Turning it off lets the
+            // pitch rise with the speed, which is what the reference row means.
+            if (settings.audioPitchCorrection) 1f else speed
+        )
     }
 
-    // A five-second write is frequent enough that a crash loses at most one
-    // tick, and sparse enough that playback is not doing a JSON serialisation
-    // every frame. The dispose handler does the final write.
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            delay(5_000)
-            savePlayback(watchPreferences, exoPlayer)
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        // The effect is keyed on the player, so this is the episode that player
-        // was built for. Without capturing it, disposing after "next episode"
-        // would ask the queue for the *new* episode while holding the old
-        // player's position, and overwrite the new episode's resume point.
-        val playerEpisodeId = currentEpisode?.id
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
-                    savePlayback(watchPreferences, exoPlayer, atEnd = true)
-                    val next = PlaybackQueue.moveNext(watchPreferences.preferredServer.value)
-                    if (next != null) {
-                        pendingStartMs = 0L
-                        currentEpisode = next
-                        currentServer = PlaybackQueue.server ?: next.servers.firstOrNull()
-                    } else {
-                        ended = true
-                    }
-                }
+    PlayerBindings(
+        player = exoPlayer,
+        watchPreferences = watchPreferences,
+        episodeId = currentEpisode?.id,
+        onSnapshot = { snapshot ->
+            position = snapshot.position
+            duration = snapshot.duration
+            buffered = snapshot.buffered
+            isPlaying = snapshot.isPlaying
+            buffering = snapshot.buffering
+        },
+        onEnded = {
+            val next = PlaybackQueue.moveNext(
+                watchPreferences.preferredServer.value,
+                sourceSettings.preferredQuality
+            )
+            if (next != null) {
+                pendingStartMs = 0L
+                currentEpisode = next
+                currentServer = PlaybackQueue.server ?: next.servers.firstOrNull()
+            } else {
+                ended = true
             }
-
-            override fun onPlayerError(error: PlaybackException) {
-                errorMessage = error.message ?: "This file could not be played."
-                buffering = false
-            }
+        },
+        onError = { message ->
+            errorMessage = message
+            buffering = false
+            controlsVisible = true
         }
-        exoPlayer.addListener(listener)
-        onDispose {
-            if (PlaybackQueue.episode()?.id == playerEpisodeId) {
-                savePlayback(watchPreferences, exoPlayer)
-            }
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
+    )
 
-    LaunchedEffect(controlsVisible, isPlaying) {
-        if (controlsVisible && isPlaying) {
+    LaunchedEffect(controlsVisible, isPlaying, locked) {
+        if (controlsVisible && isPlaying && !locked) {
             delay(3_500)
             controlsVisible = false
         }
     }
 
     val hasNext = PlaybackQueue.hasNext()
+    val hasPrevious = PlaybackQueue.hasPrevious()
+
     val playNext = {
         savePlayback(watchPreferences, exoPlayer, atEnd = true)
-        val next = PlaybackQueue.moveNext(watchPreferences.preferredServer.value)
+        val next = PlaybackQueue.moveNext(
+            watchPreferences.preferredServer.value,
+            sourceSettings.preferredQuality
+        )
         if (next != null) {
             pendingStartMs = 0L
             currentEpisode = next
@@ -217,97 +235,179 @@ fun PlayerScreen(
         Unit
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .testTag("player_screen")
-    ) {
-        if (mediaUrl.isNullOrBlank()) {
-            PlayerEmpty(onBack = onBack)
-        } else {
-            PlayerSurface(
-                useTexture = useTexture,
-                exoPlayer = exoPlayer,
-                settings = settings,
-                buffering = buffering,
-                errorMessage = errorMessage,
-                onToggleControls = { controlsVisible = !controlsVisible }
-            ) {
-                AnimatedVisibility(
-                    visible = controlsVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    PlayerControlsOverlay(
-                        title = queueContext?.mediaTitle ?: "Episode",
-                        episode = currentEpisode,
-                        server = currentServer,
-                        fullscreen = fullscreen,
-                        errorMessage = errorMessage,
-                        isPlaying = isPlaying,
-                        ended = ended,
-                        position = position,
-                        duration = duration,
-                        scrubFraction = scrubFraction,
-                        speed = speed,
-                        hasNext = hasNext,
-                        onBack = onBack,
-                        onServers = { showServers = true },
-                        onSettings = {
-                            savePlayback(watchPreferences, exoPlayer)
-                            PlaybackQueue.resumeAt(exoPlayer.currentPosition)
-                            onOpenSettings()
-                        },
-                        onFullscreen = { fullscreen = !fullscreen },
-                        onTogglePlay = {
-                            togglePlayerPlayback(exoPlayer, isPlaying, ended) { ended = false }
-                            controlsVisible = true
-                        },
-                        onRewind = {
-                            exoPlayer.seekTo((exoPlayer.currentPosition - 10_000L).coerceAtLeast(0L))
-                            controlsVisible = true
-                        },
-                        onForward = {
-                            val max = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                            exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(max))
-                            controlsVisible = true
-                        },
-                        onScrub = { scrubFraction = it },
-                        onScrubFinished = {
-                            val target = ((scrubFraction ?: 0f) * duration).toLong()
-                            exoPlayer.seekTo(target)
-                            scrubFraction = null
-                            controlsVisible = true
-                        },
-                        onSpeed = {
-                            speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.size]
-                            exoPlayer.playbackParameters = PlaybackParameters(speed)
-                            controlsVisible = true
-                        },
-                        onNext = { playNext() },
-                        onRetry = {
-                            errorMessage = null
-                            exoPlayer.prepare()
-                            exoPlayer.play()
-                        }
-                    )
-                }
-            }
+    val playPrevious = {
+        savePlayback(watchPreferences, exoPlayer)
+        val previous = PlaybackQueue.movePrevious(
+            watchPreferences.preferredServer.value,
+            sourceSettings.preferredQuality
+        )
+        if (previous != null) {
+            pendingStartMs = 0L
+            currentEpisode = previous
+            currentServer = PlaybackQueue.server ?: previous.servers.firstOrNull()
         }
+        Unit
+    }
+
+    PlayerStage(
+        mediaUrl = mediaUrl,
+        useTexture = useTexture,
+        exoPlayer = exoPlayer,
+        settings = settings,
+        buffering = buffering,
+        errorMessage = errorMessage,
+        controlsVisible = controlsVisible,
+        title = queueContext?.mediaTitle ?: "Episode",
+        episode = currentEpisode,
+        server = currentServer,
+        decoderLabel = settings.decoder.label,
+        locked = locked,
+        canPip = canPip,
+        fullscreen = fullscreen,
+        isPlaying = isPlaying,
+        ended = ended,
+        hasPrevious = hasPrevious,
+        hasNext = hasNext,
+        position = position,
+        duration = duration,
+        buffered = buffered,
+        scrubFraction = scrubFraction,
+        speed = speed,
+        muted = muted,
+        onBack = {
+            savePlayback(watchPreferences, exoPlayer)
+            onBack()
+        },
+        // Locked means a pocket tap must not hide the only way back to Unlock,
+        // and must not seek either. Before this, tapping a locked player hid the
+        // top bar and left Back as the only escape.
+        onToggleControls = { if (!locked) controlsVisible = !controlsVisible },
+        onSeekBy = { delta ->
+            if (!locked) {
+                val max = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                exoPlayer.seekTo((exoPlayer.currentPosition + delta).coerceIn(0L, max))
+                controlsVisible = true
+            }
+        },
+        onServers = { showServers = true },
+        onSettings = {
+            savePlayback(watchPreferences, exoPlayer)
+            PlaybackQueue.resumeAt(exoPlayer.currentPosition)
+            onOpenSettings()
+        },
+        onFullscreen = { fullscreen = !fullscreen },
+        onPip = { enterPip(activity) },
+        onLock = {
+            locked = !locked
+            controlsVisible = true
+        },
+        onTogglePlay = {
+            togglePlayerPlayback(exoPlayer, isPlaying, ended) { ended = false }
+            controlsVisible = true
+        },
+        onPrevious = {
+            playPrevious()
+            controlsVisible = true
+        },
+        onNext = {
+            playNext()
+            controlsVisible = true
+        },
+        onMute = {
+            muted = !muted
+            exoPlayer.volume = if (muted) 0f else 1f
+            controlsVisible = true
+        },
+        onScrub = { scrubFraction = it },
+        onScrubFinished = {
+            val target = ((scrubFraction ?: 0f) * duration).toLong()
+            exoPlayer.seekTo(target)
+            scrubFraction = null
+            controlsVisible = true
+        },
+        onSpeed = {
+            showSpeed = true
+            controlsVisible = true
+        },
+        onEpisodes = {
+            showEpisodes = true
+            controlsVisible = true
+        },
+        onSkipIntro = {
+            val target = (exoPlayer.currentPosition + 85_000L)
+                .coerceAtMost(exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE)
+            exoPlayer.seekTo(target)
+            controlsVisible = true
+        },
+        onRetry = {
+            errorMessage = null
+            exoPlayer.prepare()
+            exoPlayer.play()
+        },
+        modifier = modifier.testTag("player_screen")
+    )
+
+    if (showSpeed) {
+        PlayerSpeedSheet(
+            sheetState = speedSheetState,
+            speed = speed,
+            presets = speedPresets,
+            onSpeedChange = { value ->
+                speed = value
+                playerPreferences.setPlaybackSpeed(value)
+            },
+            onAddPreset = { preset ->
+                playerPreferences.setSpeedPresets(speedPresets + preset)
+            },
+            onRemovePreset = { preset ->
+                playerPreferences.setSpeedPresets(speedPresets - preset)
+            },
+            onRestorePresets = playerPreferences::resetSpeedPresets,
+            onDismiss = { showSpeed = false }
+        )
+    }
+
+    if (showEpisodes && currentEpisode != null) {
+        val queue = queueContext
+        PlayerEpisodesSheet(
+            sheetState = episodesSheetState,
+            seriesTitle = queue?.mediaTitle ?: "Episode",
+            episodes = queue?.episodes.orEmpty(),
+            currentIndex = queue?.episodes?.indexOfFirst { it.id == currentEpisode?.id } ?: -1,
+            currentProgress = queue?.mediaId?.let { progressMap[it] },
+            showArtwork = showArtwork,
+            onArtworkChange = watchPreferences::setShowArtwork,
+            onChoose = { index ->
+                savePlayback(watchPreferences, exoPlayer)
+                PlaybackQueue.select(
+                    index,
+                    watchPreferences.preferredServer.value,
+                    sourceSettings.preferredQuality
+                )?.let { selected ->
+                    pendingStartMs = 0L
+                    currentEpisode = selected
+                    currentServer = PlaybackQueue.server ?: selected.servers.firstOrNull()
+                }
+                showEpisodes = false
+            },
+            onDismiss = { showEpisodes = false }
+        )
     }
 
     if (showServers && currentEpisode != null) {
         PlayerServerSheet(
             sheetState = serverSheetState,
+            seriesTitle = queueContext?.mediaTitle ?: "Episode",
             episode = currentEpisode!!,
             current = currentServer,
             onDismiss = { showServers = false },
-            onChoose = { server ->
+            onChoose = { server: SourceServer, remember: Boolean ->
                 savePlayback(watchPreferences, exoPlayer)
                 pendingStartMs = exoPlayer.currentPosition.coerceAtLeast(0L)
                 PlaybackQueue.switchServer(server)
+                watchPreferences.setPreferredServer(
+                    if (remember) server.name else null
+                )
                 currentServer = server
                 showServers = false
             }

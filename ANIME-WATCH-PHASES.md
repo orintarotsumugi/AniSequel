@@ -38,7 +38,8 @@ returns episodes, exposes each Archive file as a server and plays through Media3
 - [x] Anime / Manga / Novel content switch and ecosystem chips.
 - [x] Language grouping, version badges, NSFW filter and per-repository error
       cards. One failed repository never hides the ones that answered.
-- [x] Search across name, package name and language.
+- [x] Search across name, package name, language and the source names an
+      extension provides; installed rows stay in Browse with a badge.
 
 Done when: a fresh install shows the seeded catalogue, a bad URL produces a
 visible repository failure rather than an empty page, and removing a repository
@@ -47,8 +48,8 @@ stays removed after a restart.
 ### 1.2 Install, permission and restart
 
 - [x] APK downloads stream to `filesDir/extensions`, never the cache.
-- [x] `.js` and `.jar` downloads are recorded as modules, not handed to the APK
-      installer.
+- [x] `.js`, `.jar`, `.cs3` and `.dex` downloads are recorded as modules, not
+      handed to the APK installer.
 - [x] `REQUEST_INSTALL_PACKAGES` handoff through `ACTION_MANAGE_UNKNOWN_APP_SOURCES`,
       then the app-details screen, then the app list, then Settings.
 - [x] The grant is observed on `onResume`, never assumed.
@@ -72,8 +73,11 @@ explains the permission, and an install is visible in Installed after a restart.
       with their Phase 2 note.
 - [x] "Wrong Title?" runs a real source search and remembers the chosen mapping
       per AniList id.
-- [x] All / 25-episode range chips, Minimal / Compact / Detailed layouts,
-      artwork toggle and server preference.
+- [x] All / 12-episode range chips, each carrying its real episode count, with
+      Minimal / Compact / Detailed layouts and a draft Cancel/Confirm artwork
+      toggle.
+- [x] Source settings for preferred type, quality, server and audio type,
+      excluded audio types, download hosters and Hide NSFW.
 - [x] Continue Watching bar writes and reads the resume point.
 - [x] Downloaded tab is explicit about downloads not existing yet rather than
       showing a fake download.
@@ -84,14 +88,23 @@ manual source selection, and "Wrong Title?" changes the match.
 ### 1.4 Playback
 
 - [x] Media3 ExoPlayer with a Compose control layer (no stock controller).
-- [x] Server picker per episode; chosen server remembered per title.
-- [x] Next episode advances the in-process queue.
+- [x] Quality sheet with Servers and Inbuilt tabs; the preferred quality picks
+      the closest file the source reports, a remembered server wins, and the
+      first file is the fallback.
+- [x] Next and previous episodes advance the in-process queue with the same
+      preferred quality.
 - [x] Resume position written every five seconds, at end, on dispose and before
       entering Player Settings.
 - [x] SurfaceView by default; TextureView when enhancement or the renderer
       setting requires it.
 - [x] Decoder filter, renderer choice and a real `RenderEffect` colour grade.
 - [x] Fullscreen, speed, seek and ten-second skip controls.
+- [x] Playback Speed sheet with a bounded slider, Reset and persisted presets;
+      the chosen speed survives the Player Settings round trip.
+- [x] Episodes sheet jumps anywhere in the queue, draws the current episode's
+      real resume bar and shares the Watch page's artwork preference.
+- [x] Audio Pitch Correction holds the voice at 1.0 while speed changes, and
+      Cache Minutes drives Media3's read-ahead buffer.
 - [x] A disposed old player cannot overwrite the new episode's resume point.
 
 Done when: an episode plays end to end, "next" advances, closing and reopening
@@ -109,6 +122,37 @@ there is no Android SDK in the development environment.
 - `episodeRanges` boundaries: empty, one episode, 25, 26 and 50.
 - A `PlaybackQueue` test for next-at-end and resume-at-server-switch.
 - A `VersionBaselineTest`/`ChangelogTest` run after every version bump.
+
+### 1.6 The 1.8.9 polish pass
+
+- [x] CloudStream `repo.json` manifests are followed into their `plugins.json`
+      lists; `.cs3` and `.dex` plugins are staged as modules.
+- [x] A GitHub repository root also probes the `builds` branch CloudStream
+      repositories publish to.
+- [x] Repository reads retry transient failures, use a bounded disk HTTP cache
+      and get a per-repository deadline; one failed host keeps its last rows.
+- [x] The last good catalogue is cached across launches and duplicate entries
+      are dropped. The dead Secozzi seed is removed, including from readers who
+      still have it stored.
+- [x] Internet Archive search and metadata are cached briefly inside the source.
+- [x] The player is redesigned against the supplied reference: compact chrome,
+      segmented seek bar, PiP, lock, mute, previous episode, double-tap seek and
+      a server sheet with Remember Server.
+- [x] The host-side `ExtensionRuntimeBridge` classifies installed records and
+      the manager renders native, APK and module counts from it.
+- [x] APK package names are checked against the catalogue before the installer
+      opens; an unreadable APK is refused by name.
+- [x] Episode ranges carry counts and use twelve-episode chunks, matching the
+      reference; the chosen layout and artwork stay a draft until Confirm.
+- [x] The source's own settings page and the player's Quality, Episodes and
+      Playback Speed sheets follow the supplied reference.
+- [x] Player Settings adds real Audio Pitch Correction and Cache Minutes rows.
+      Video Sync and Frame Interpolation are not exposed: Media3 has no
+      cross-device A/V offset or frame-interpolation implementation, and a
+      stored switch that changes nothing is worse than an absent one.
+
+Still not done here: the isolated runtime itself. The bridge is the seam, not
+an executor; third-party code remains unloaded until Phase 2.
 
 ## Phase 2 — a sandboxed third-party runtime
 

@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,20 +51,33 @@ internal fun AvailableList(
     selectedContent: ExtensionContent,
     query: String,
     onInstall: (CatalogExtension) -> Unit,
+    onUninstall: (InstalledExtension) -> Unit,
     onOpenRepositories: () -> Unit,
     onRefresh: () -> Unit,
     bottomPadding: Dp
 ) {
-    val installedKeys = state.installed.keys
-    val filtered = state.entries
-        .asSequence()
-        .filter { it.key !in installedKeys }
-        .filter { allKinds || it.kind == selectedKind }
-        .filter { it.content == selectedContent }
-        .filter { state.showNsfw || !it.nsfw }
-        .filter { extensionMatches(it, query) }
-        .sortedWith(compareBy({ it.language.lowercase() }, { it.name.lowercase() }))
-        .toList()
+    // Installed entries stay in the browse list on purpose. Filtering them out
+    // made the search look broken: a reader searched the exact extension they had
+    // installed and got "nothing here", because the only match had been hidden.
+    val filtered = remember(
+        state.entries,
+        selectedKind,
+        allKinds,
+        selectedContent,
+        state.showNsfw,
+        query
+    ) {
+        state.entries
+            .asSequence()
+            .filter { allKinds || it.kind == selectedKind }
+            .filter { it.content == selectedContent }
+            .filter { state.showNsfw || !it.nsfw }
+            .filter { extensionMatches(it, query) }
+            .sortedWith(
+                compareBy({ it.language.lowercase() }, { it.name.lowercase() })
+            )
+            .toList()
+    }
 
     if (state.repositories.isEmpty()) {
         EmptyCatalogue(
@@ -86,11 +100,16 @@ internal fun AvailableList(
                 EmptyCatalogue(
                     title = if (state.catalog.errors.isNotEmpty()) {
                         "No extensions could be read"
+                    } else if (query.isNotBlank()) {
+                        "No match for \"$query\""
                     } else {
                         "Nothing here yet"
                     },
                     body = if (state.catalog.errors.isNotEmpty()) {
                         state.catalog.errors.first().message
+                    } else if (query.isNotBlank()) {
+                        "Search checks extension names, package names and the " +
+                            "sources each extension provides."
                     } else {
                         "This tab has no extensions for the current filters. " +
                             "Try another ecosystem or add a repository."
@@ -108,19 +127,22 @@ internal fun AvailableList(
             }
         }
 
-        val groups = filtered.groupBy { it.language.ifBlank { "en" }.lowercase() }
-        groups.toSortedMap().forEach { (language, entries) ->
+        val groups = remember(filtered) {
+            filtered.groupBy { it.language.ifBlank { "en" }.lowercase() }.toSortedMap()
+        }
+        groups.forEach { (language, entries) ->
             item(key = "header_$language") {
                 LanguageHeader(language = language, count = entries.size)
             }
             items(entries, key = { it.key }) { entry ->
+                val installed = state.installed[entry.key]
                 CatalogueRow(
                     entry = entry,
-                    installed = null,
+                    installed = installed,
                     installingKey = state.installingKey,
                     progress = state.installProgress,
                     onInstall = { onInstall(entry) },
-                    onUninstall = {}
+                    onUninstall = { installed?.let(onUninstall) }
                 )
             }
         }
@@ -153,7 +175,12 @@ internal fun InstalledList(
         .asSequence()
         .filter { allKinds || it.kind == selectedKind }
         .filter { it.content == selectedContent }
-        .filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+        .filter { record ->
+            query.isBlank() ||
+                record.name.contains(query, ignoreCase = true) ||
+                record.packageName.contains(query, ignoreCase = true) ||
+                record.sourceNames.any { it.contains(query, ignoreCase = true) }
+        }
         .sortedBy { it.name.lowercase() }
         .toList()
 
@@ -246,6 +273,17 @@ private fun CatalogueRow(
                         Badge("v${entry.version}")
                         if (entry.nsfw) NsfwBadge()
                     }
+                    val sourceSummary = entry.sourceNames.take(2).joinToString(" \u00b7 ")
+                    if (sourceSummary.isNotBlank()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = sourceSummary,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 if (installingKey == entry.key) {
@@ -263,12 +301,18 @@ private fun CatalogueRow(
                         )
                     }
                 } else if (installed != null) {
-                    IconButton(onClick = onUninstall) {
-                        Icon(
-                            AppVectorIcons.Delete,
-                            contentDescription = "Uninstall ${entry.name}",
-                            tint = MaterialTheme.colorScheme.error
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        InstalledBadge()
+                        IconButton(onClick = onUninstall) {
+                            Icon(
+                                AppVectorIcons.Delete,
+                                contentDescription = "Uninstall ${entry.name}",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
                 } else {
                     Surface(
@@ -340,6 +384,17 @@ private fun InstalledRow(
                     Badge("v${record.version}")
                     if (record.needsRestart) NsfwBadge(label = "RESTART")
                 }
+                val sourceSummary = record.sourceNames.take(2).joinToString(" \u00b7 ")
+                if (sourceSummary.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = sourceSummary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             IconButton(onClick = onUninstall) {
                 Icon(
@@ -387,6 +442,33 @@ private fun ExtensionArtwork(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(16.dp)),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
+        }
+    }
+}
+
+@Composable
+private fun InstalledBadge() {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                AppVectorIcons.Check,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "INSTALLED",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }
@@ -552,9 +634,13 @@ private fun EmptyCatalogue(
 private fun extensionMatches(entry: CatalogExtension, query: String): Boolean {
     if (query.isBlank()) return true
     val needle = query.trim()
+    // The two words the switch uses still match, so typing what the UI calls the
+    // states does not produce an empty list.
+    if (needle.equals("installed", true) || needle.equals("available", true)) return true
     return entry.name.contains(needle, ignoreCase = true) ||
         entry.packageName.contains(needle, ignoreCase = true) ||
-        entry.language.contains(needle, ignoreCase = true)
+        entry.language.contains(needle, ignoreCase = true) ||
+        entry.sourceNames.any { it.contains(needle, ignoreCase = true) }
 }
 
 /** "en" -> "ENGLISH", "pt-BR" -> "PORTUGUESE (BRAZIL)". */
