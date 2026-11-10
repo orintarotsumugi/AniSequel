@@ -8,8 +8,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -30,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,7 +54,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
@@ -59,6 +66,7 @@ import com.anisequel.ui.components.expressive.ExpressiveContainedLoadingIndicato
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.LocalConfirmPlanningAdd
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -119,12 +127,76 @@ fun QuickAddPlanningButton(
     onAddToWatching: () -> Unit,
     modifier: Modifier = Modifier,
     holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true,
+    /**
+     * Whether the planning add asks for a tick first.
+     *
+     * Read from the app's own switch by default - provided once at the root from
+     * `QuickAddPreferences` - so every host (dashboard cards, the new Home's rows,
+     * the detail sheet's action row) hears the same answer without each one being
+     * handed the setting. A caller may still pass a value explicitly, which is what
+     * a preview or a screenshot fixture wants.
+     */
+    confirmBeforeAdding: Boolean = LocalConfirmPlanningAdd.current
+) {
+    // The two terminal states are answered before the active control is
+    // composed, so the gesture and confirmation state is never allocated for a
+    // title that already has a badge. Splitting them out also keeps the active
+    // control small enough to read: its branches are the gesture, not the
+    // historical states of the list.
+    if (isAddedToWatching) {
+        WatchingCompletedBadge(mediaId = mediaId, modifier = modifier)
+        return
+    }
+    if (isAddedToPlanning) {
+        PlanningCompletedBadge(mediaId = mediaId, modifier = modifier)
+        return
+    }
+
+    ActiveQuickAddPlanningButton(
+        mediaId = mediaId,
+        isBusy = isBusy,
+        onAddToPlanning = onAddToPlanning,
+        onAddToWatching = onAddToWatching,
+        onConfirmBeforeAdding = confirmBeforeAdding,
+        modifier = modifier,
+        holdDurationSeconds = holdDurationSeconds,
+        swipeEnabled = swipeEnabled
+    )
+}
+
+/**
+ * The button when the title is on neither list yet: the hold, the swipe and the
+ * tick/cross question.
+ */
+@Composable
+private fun ActiveQuickAddPlanningButton(
+    mediaId: Int,
+    isBusy: Boolean,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    onConfirmBeforeAdding: Boolean,
+    modifier: Modifier = Modifier,
+    holdDurationSeconds: Int = 3,
     swipeEnabled: Boolean = true
 ) {
     val statusColors = AniSequelTheme.statusColors
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+
+    // The small confirmation, held by the button itself rather than by a screen:
+    // it is one control's state, and hoisting it would make every card in a long
+    // list carry a flag none of its neighbours read.
+    var confirming by remember(mediaId) { mutableStateOf(false) }
+
+    // The switch can be turned off while a confirmation is open in Settings' own
+    // preview composition. Closing it is the honest answer: the setting now says
+    // one tap adds, and leaving a tick on screen would be asking a question the
+    // reader has switched off.
+    LaunchedEffect(onConfirmBeforeAdding) {
+        if (!onConfirmBeforeAdding) confirming = false
+    }
 
     // Hold progress state (0f to 1f). `holdJob` and the "a hold already
     // committed" flag live inside the gesture modifier below: both are per-press
@@ -137,24 +209,7 @@ fun QuickAddPlanningButton(
     val dragOffset = remember { Animatable(0f) }
     val swipeThresholdPx = with(density) { 90.dp.toPx() }
 
-    // Handle already completed states
-    if (isAddedToWatching) {
-        WatchingCompletedBadge(
-            mediaId = mediaId,
-            modifier = modifier
-        )
-        return
-    }
-
-    if (isAddedToPlanning) {
-        PlanningCompletedBadge(
-            mediaId = mediaId,
-            modifier = modifier
-        )
-        return
-    }
-
-    val holdDurationMs = (if (holdDurationSeconds == 5) 5000L else 3000L)
+    val holdDurationMs = holdDurationMillis(holdDurationSeconds)
 
     val progressFraction = holdProgressAnim.value
 
@@ -200,7 +255,19 @@ fun QuickAddPlanningButton(
         lerp(ExpressiveShapes.SmallCorner, ExpressiveShapes.PillCorner, progressFraction)
     )
 
-    val canSwipe = swipeEnabled && !isBusy
+    val canSwipe = swipeEnabled && !isBusy && !confirming
+
+    // A tap that will ask a question still needs the haptic the old tap had: the
+    // finger has to feel that the button took the press, or the tick that appears
+    // a frame later reads as the button having missed it.
+    val askOrAdd: () -> Unit = {
+        if (onConfirmBeforeAdding) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            confirming = true
+        } else {
+            onAddToPlanning()
+        }
+    }
 
     Box(
         modifier = modifier
@@ -227,23 +294,159 @@ fun QuickAddPlanningButton(
                 .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
                 .clip(shape)
                 .background(buttonColor)
-                .quickAddGestures(
-                    holdEnabled = !isBusy,
-                    swipeEnabled = canSwipe,
-                    holdDurationMs = holdDurationMs,
-                    swipeThresholdPx = swipeThresholdPx,
-                    holdProgress = holdProgressAnim,
-                    dragOffset = dragOffset,
-                    haptic = haptic,
-                    coroutineScope = coroutineScope,
-                    onHoldingChange = { isHolding = it },
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching
+                // The gestures are detached while the question is open. A tick is
+                // an answer, not another tap to plan - and the old gesture handler
+                // would read a press on the label as one more "add".
+                .then(
+                    if (confirming) {
+                        Modifier.clickable(
+                            onClickLabel = "Cancel adding to Planning",
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                confirming = false
+                            }
+                        )
+                    } else {
+                        Modifier.quickAddGestures(
+                            holdEnabled = !isBusy,
+                            swipeEnabled = canSwipe,
+                            holdDurationMs = holdDurationMs,
+                            swipeThresholdPx = swipeThresholdPx,
+                            holdProgress = holdProgressAnim,
+                            dragOffset = dragOffset,
+                            haptic = haptic,
+                            coroutineScope = coroutineScope,
+                            onHoldingChange = { isHolding = it },
+                            onAddToPlanning = askOrAdd,
+                            onAddToWatching = onAddToWatching
+                        )
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
             HoldProgressFill(progressFraction = progressFraction)
-            QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+
+            AnimatedContent(
+                targetState = confirming,
+                transitionSpec = {
+                    // A question arriving is the button turning over, not a page
+                    // changing: the spring gives the two small answers a little
+                    // weight without moving the row they sit in.
+                    fadeIn(ExpressiveMotion.FastEffects) +
+                        scaleIn(
+                            initialScale = 0.86f,
+                            animationSpec = ExpressiveMotion.BouncySpatial
+                        ) togetherWith
+                        fadeOut(ExpressiveMotion.FastEffects) +
+                        scaleOut(
+                            targetScale = 0.90f,
+                            animationSpec = ExpressiveMotion.FastSpatial
+                        )
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "planning_confirm_state"
+            ) { asking ->
+                if (asking) {
+                    PlanningConfirmFace(
+                        mediaId = mediaId,
+                        onConfirm = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            confirming = false
+                            onAddToPlanning()
+                        },
+                        onCancel = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            confirming = false
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The question a Planning add asks: a green tick, what the button is about to do,
+ * and a red cross that puts it back.
+ *
+ * The two answers are 30dp circles beside the label rather than two full-width
+ * buttons below it. The row is already the height of a thumb, and splitting it
+ * into three equal targets would make the destructive answer as large and as easy
+ * to hit as the one that writes to AniList. The label keeps the action named, so
+ * the tick is not a bare symbol with no object.
+ */
+@Composable
+private fun PlanningConfirmFace(
+    mediaId: Int,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val statusColors = AniSequelTheme.statusColors
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 6.dp)
+            .semantics { contentDescription = "Add to Planning? Confirm or cancel" }
+            .testTag("planning_confirm_row_$mediaId"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(statusColors.successContainer)
+                .clickable(
+                    onClickLabel = "Confirm adding to Planning",
+                    onClick = onConfirm
+                )
+                .testTag("planning_confirm_yes_$mediaId"),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Done,
+                contentDescription = "Confirm",
+                tint = statusColors.success,
+                modifier = Modifier.size(17.dp)
+            )
+        }
+
+        Text(
+            text = "Add to Planning?",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.errorContainer)
+                .clickable(
+                    onClickLabel = "Cancel adding to Planning",
+                    onClick = onCancel
+                )
+                .testTag("planning_confirm_no_$mediaId"),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Close,
+                contentDescription = "Cancel",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
@@ -524,3 +727,7 @@ private fun PlanningCompletedBadge(
         )
     }
 }
+
+/** The two supported hold lengths, as milliseconds. */
+private fun holdDurationMillis(holdDurationSeconds: Int): Long =
+    if (holdDurationSeconds == 5) 5000L else 3000L

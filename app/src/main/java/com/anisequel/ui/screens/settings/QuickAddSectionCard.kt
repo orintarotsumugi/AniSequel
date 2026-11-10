@@ -81,6 +81,25 @@ fun QuickAddSectionCard(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
+        // On by default, and deliberately so: the tick/cross is a confirmation,
+        // not an extra step the reader has to discover. Turning it off restores
+        // the single-tap add that shipped before it.
+        SwitchRow(
+            title = "Confirm before adding",
+            subtitle = "Ask with a green tick or red cross before a title joins Planning.",
+            checked = settings.confirmAdds,
+            onCheckedChange = { enabled ->
+                coroutineScope.launch {
+                    quickAddPreferences.setConfirmAdds(enabled)
+                }
+            },
+            modifier = Modifier.testTag("confirm_planning_add_switch")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(8.dp))
+
         SwitchRow(
             title = "Swipe to watch",
             subtitle = "Swipe the card's button sideways to set Currently Watching immediately.",

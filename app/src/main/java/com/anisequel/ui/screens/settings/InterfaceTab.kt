@@ -30,6 +30,8 @@ import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.MediaPosterCell
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
@@ -79,8 +81,87 @@ fun InterfaceTab(
     val style by interfacePreferences.cardStyle.collectAsState(
         initial = MediaCardStyle.DEFAULT
     )
+    val interfaceSettings by interfacePreferences.settings.collectAsState(
+        initial = InterfacePreferences.InterfaceSettings()
+    )
 
     SettingsScrollColumn(modifier) {
+        SectionCard(
+            title = "App layout",
+            icon = AppVectorIcons.Settings,
+            subtitle = "Classic is untouched. The new look is the shelf layout, in beta."
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("app_layout_row")
+            ) {
+                AppLayout.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = if (option == AppLayout.NOVA) {
+                            "${option.displayName} · Beta"
+                        } else {
+                            option.displayName
+                        },
+                        selected = option == interfaceSettings.layout,
+                        onClick = {
+                            if (option != interfaceSettings.layout) {
+                                scope.launch { interfacePreferences.setLayout(option) }
+                            }
+                        },
+                        minTouchTargetHeight = 48.dp,
+                        role = Role.RadioButton,
+                        onClickLabel = "Use the ${option.displayName} layout",
+                        modifier = Modifier.testTag("app_layout_${option.storageValue}")
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            SwitchRow(
+                title = "Continue Watching rail",
+                subtitle = "Show in-progress anime above the sequel feed on the new Home.",
+                checked = interfaceSettings.showContinueRail,
+                enabled = interfaceSettings.layout == AppLayout.NOVA,
+                onCheckedChange = { show ->
+                    scope.launch { interfacePreferences.setShowContinueRail(show) }
+                },
+                modifier = Modifier.testTag("show_continue_rail_switch")
+            )
+        }
+
+        SectionCard(
+            title = "Library view",
+            icon = AppVectorIcons.ViewGrid,
+            subtitle = interfaceSettings.libraryView.blurb
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("library_view_row")
+            ) {
+                LibraryViewMode.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.displayName,
+                        selected = option == interfaceSettings.libraryView,
+                        onClick = {
+                            if (option != interfaceSettings.libraryView) {
+                                scope.launch { interfacePreferences.setLibraryView(option) }
+                            }
+                        },
+                        minTouchTargetHeight = 48.dp,
+                        role = Role.RadioButton,
+                        onClickLabel = "Draw the library as ${option.displayName}",
+                        modifier = Modifier.testTag("library_view_${option.storageValue}")
+                    )
+                }
+            }
+        }
+
         SectionCard(
             title = "Card style",
             icon = AppVectorIcons.ViewGrid,

@@ -1,0 +1,68 @@
+package com.anisequel.domain.ui
+
+/**
+ * Which presentation the app draws.
+ *
+ * Two layouts rather than a rewrite: [CLASSIC] is the app as it shipped, and
+ * [NOVA] is the newer shelf-and-rails layout. The choice is a preference, so a
+ * reader who does not like the new one loses nothing - and, more importantly, a
+ * screen the new look does not cover yet keeps working exactly as it did.
+ *
+ * Stored by [storageValue] rather than by ordinal. A reordering of these entries
+ * would otherwise silently repaint every install, and a value written by a build
+ * that knew a layout this one does not falls back to the shipped one instead of
+ * crashing.
+ */
+enum class AppLayout(val storageValue: String, val displayName: String) {
+    CLASSIC("classic", "Classic"),
+    NOVA("nova", "New look");
+
+    companion object {
+        /** The layout the app opens in, so an update never moves a reader's pages. */
+        val DEFAULT = CLASSIC
+
+        fun fromStorage(value: String?): AppLayout =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
+ * How dense the new Library's list is.
+ *
+ * The same entries, drawn three ways for three jobs: [GRID] for browsing covers,
+ * [COMPACT] for finding something in a long list quickly, and [LIST] for reading
+ * progress and status in one column. The column count lives on the enum so the
+ * grid and the Settings preview cannot disagree about what "compact" means.
+ */
+enum class LibraryViewMode(
+    val storageValue: String,
+    val displayName: String,
+    val blurb: String,
+    val columns: Int
+) {
+    GRID(
+        storageValue = "grid",
+        displayName = "Poster grid",
+        blurb = "Three covers across with room for the caption.",
+        columns = 3
+    ),
+    COMPACT(
+        storageValue = "compact",
+        displayName = "Compact grid",
+        blurb = "Four covers across - more of the list per screen.",
+        columns = 4
+    ),
+    LIST(
+        storageValue = "list",
+        displayName = "List",
+        blurb = "One title per row, with progress, status and score.",
+        columns = 1
+    );
+
+    companion object {
+        val DEFAULT = GRID
+
+        fun fromStorage(value: String?): LibraryViewMode =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}

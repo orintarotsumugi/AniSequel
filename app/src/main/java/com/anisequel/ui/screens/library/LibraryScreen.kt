@@ -43,6 +43,7 @@ import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.domain.ui.AppLayout
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.SavedCopyPill
@@ -58,6 +59,7 @@ import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.profile.ProfileErrorView
 import com.anisequel.ui.screens.profile.ProfileLibraryTab
 import com.anisequel.ui.screens.profile.RememberedLibraryView
+import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
@@ -117,6 +119,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
+    val appLayout = LocalAppLayout.current
 
     // The manga half of the library. Collected at this level rather than inside
     // the grid because a fetch is already a request when it starts, and a
@@ -155,6 +158,10 @@ fun LibraryScreen(
             .fillMaxSize()
             .testTag("library_screen"),
         topBar = {
+            // The new page carries its own shelf header - name, count, the type
+            // switch and both controls - because those stay put over the grid. A
+            // scaffold bar above it would be a second title over the same list.
+            if (appLayout != AppLayout.NOVA) {
             val success = uiState as? UserOverviewUiState.Success
             TopAppBar(
                 title = {
@@ -267,6 +274,7 @@ fun LibraryScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+            }
         }
     ) { paddingValues ->
         // Read once and passed to both, rather than read twice at the call site:
@@ -334,6 +342,31 @@ fun LibraryScreen(
                         // a layout change on the first frame and again when the live
                         // list arrived, which is the one thing a scroll position
                         // cannot absorb.
+                        if (appLayout == AppLayout.NOVA) {
+                            NovaLibraryScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                animeEntries = state.libraryAnime,
+                                // Nullable on the ViewModel: the manga collection
+                                // has not been requested yet. The new grid draws the
+                                // "nothing here yet" state, not a loading frame
+                                // forever, so it gets the empty list.
+                                mangaEntries = mangaLibrary.orEmpty(),
+                                favouriteIds = favouriteIds,
+                                isLoadingManga = isLoadingManga,
+                                isAnimeLoading = state.isLibraryLoading,
+                                libraryError = state.libraryError,
+                                mangaError = mangaError,
+                                isRefreshing = state.isRefreshing,
+                                onRefresh = { overviewViewModel.refresh() },
+                                onLoadManga = { overviewViewModel.loadMangaLibrary() },
+                                onOpenDetail = { selectedMedia = it },
+                                onOpenProfile = onOpenProfile,
+                                remembered = remembered,
+                                gridState = gridState,
+                                username = state.username,
+                                avatarUrl = state.avatarUrl
+                            )
+                        } else {
                         ProfileLibraryTab(
                             modifier = Modifier.fillMaxSize(),
                             animeEntries = state.libraryAnime,
@@ -362,6 +395,7 @@ fun LibraryScreen(
                             isRefreshing = state.isRefreshing,
                             onRefresh = { overviewViewModel.refresh() }
                         )
+                        }
                     }
                 }
             }
