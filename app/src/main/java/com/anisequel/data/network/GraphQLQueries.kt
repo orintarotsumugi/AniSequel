@@ -75,6 +75,31 @@ object GraphQLQueries {
         }
     """.trimIndent()
 
+    /**
+     * One manga cover for Home's Manga shortcut.
+     *
+     * The shortcut used to draw an empty gradient for manga because the dashboard
+     * only downloads the anime list. Fetching the whole manga collection to fill
+     * a 48dp strip would spend the same request the Library deliberately defers
+     * until somebody opens the Manga tab, so this asks for exactly one row.
+     * `UPDATED_TIME_DESC` makes it the title the reader touched most recently,
+     * which is the one they are most likely to recognise.
+     */
+    val GET_MANGA_PREVIEW = """
+        query GetMangaPreview(${'$'}userId: Int) {
+          Page(page: 1, perPage: 1) {
+            mediaList(userId: ${'$'}userId, type: MANGA, sort: UPDATED_TIME_DESC) {
+              media {
+                id
+                type
+                title { english romaji native userPreferred }
+                coverImage { extraLarge large medium color }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
     val GET_USER_BY_NAME = """
         query GetUserByName(${'$'}userName: String) {
           User(name: ${'$'}userName) {

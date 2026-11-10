@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.8.9",
+      "entries": [
+        {
+          "title": "The new look gets its navigation back",
+          "detail": "The New look now uses the same bottom bar as Classic, including the hold-and-swipe gesture and the same tab targets. It had been drawing a second, simpler bar, which made one setting quietly change how navigation behaved. The bar was left alone; the duplicate was removed."
+        },
+        {
+          "title": "A real Schedule replaces Activity in Other Features",
+          "detail": "Other Features no longer opens Activity or recommends the sequel feed again. In their place is Schedule: the airing and announced titles already on your list, with their next episode or start date, progress and cover. Nothing extra is downloaded - it uses the arriving list Home already holds - and a title opens the same detail sheet as everywhere else."
+        },
+        {
+          "title": "Search finds a title by any of its names",
+          "detail": "Library search now checks the romaji, English, native and synonym spellings, not only the English title the card prefers. A query is read word by word, so \"super\" finds Dragon Ball Super and \"dragon ball\" finds it too. Anime and Manga stay separate lists, and switching type clears the search and its filters so one half cannot make the other look empty."
+        },
+        {
+          "title": "Advanced filters for the new Library",
+          "detail": "The new Library's filter button opens a proper sheet: sort and direction, format, release year, minimum score, genres and Favourites only, with Reset and Apply. It is a draft until Apply, so a 300-title list is not repainted on every chip and Reset can actually undo the choices."
+        },
+        {
+          "title": "Covers and titles cleaned up on the new Home and Library",
+          "detail": "The Anime List shortcut now shows one cover instead of two half-posters, and the Manga List shortcut shows the cover of the manga you touched most recently, fetched by a single-row query only while the new look is on screen. Titles under covers are bolder and allowed two lines in both grid densities, and the list view uses the same weight."
+        },
+        {
+          "title": "See the layout before you pick it",
+          "detail": "Interface settings now previews both layouts with a miniature Home and previews the selected Library density with your own covers. The previews are built from the same layout and view-mode enums the app draws with, so they cannot describe a screen the app does not build."
+        }
+      ]
+    },
+    {
       "version": "1.8.8",
       "entries": [
         {

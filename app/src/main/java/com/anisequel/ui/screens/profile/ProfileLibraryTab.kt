@@ -53,6 +53,7 @@ import com.anisequel.data.model.withListStatus
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.isManga
+import com.anisequel.data.model.matchesTitleQuery
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
@@ -372,8 +373,7 @@ internal fun filterLibrary(
             LibraryFilter.FAVOURITES -> entry.media.namespaceKey in favouriteIds
             else -> libraryBucketOf(entry.status) == filter
         }
-        val queryMatches = trimmed.isEmpty() ||
-            entry.media.title?.displayTitle?.contains(trimmed, ignoreCase = true) == true
+        val queryMatches = entry.media.matchesTitleQuery(trimmed)
         typeMatches && filterMatches && queryMatches
     }
 }

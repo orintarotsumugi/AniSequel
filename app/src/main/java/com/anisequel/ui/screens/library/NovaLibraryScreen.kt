@@ -66,6 +66,9 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.list.ListStatuses
+import com.anisequel.domain.library.LibraryAdvancedFilters
+import com.anisequel.domain.library.filterLibraryAdvanced
+import com.anisequel.domain.library.libraryReleaseYears
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
@@ -77,6 +80,7 @@ import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaProgressPill
 import com.anisequel.ui.components.nova.NovaSurface
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.nova.NovaEmptyNote
 import com.anisequel.ui.screens.nova.NovaSearchRow
@@ -88,9 +92,7 @@ import com.anisequel.ui.screens.profile.RememberedLibraryView
 import com.anisequel.ui.screens.profile.filterLibrary
 import com.anisequel.ui.screens.profile.libraryCounts
 import com.anisequel.ui.screens.profile.libraryProgressLabel
-import com.anisequel.ui.screens.profile.selectSort
 import com.anisequel.ui.screens.profile.sortLibrary
-import com.anisequel.ui.screens.profile.toggleSort
 import com.anisequel.ui.theme.LocalLibraryViewMode
 import kotlinx.coroutines.launch
 
@@ -148,7 +150,9 @@ fun NovaLibraryScreen(
     var sort by rememberSaveable { mutableStateOf(remembered.sort ?: LibrarySort.UPDATED_AT) }
     var sortAscending by rememberSaveable { mutableStateOf(remembered.sortAscending ?: false) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var sortOpen by rememberSaveable { mutableStateOf(false) }
+    var filterOpen by rememberSaveable { mutableStateOf(false) }
+    var advancedFilters by remember { mutableStateOf(LibraryAdvancedFilters()) }
+    val filterSheetState = rememberFullHeightSheetState()
 
     // A remembered choice arriving after the page is already up. Once this page
     // has written a choice, later emissions are echoes of its own writes and
@@ -170,10 +174,29 @@ fun NovaLibraryScreen(
     val counts = remember(scoped, favouriteIds) { libraryCounts(scoped, favouriteIds) }
     val scopedError = if (isManga) mangaError else libraryError
     val awaitingAnime = isAnimeLoading && !isManga
+    val availableYears = remember(scoped) { libraryReleaseYears(scoped) }
+    val availableGenres = remember(scoped) {
+        scoped.flatMap { entry -> entry.media.genres.orEmpty() }
+            .distinct()
+            .sorted()
+    }
 
-    val visible = remember(scoped, type, filter, favouriteIds, query, sort, sortAscending) {
+    val visible = remember(
+        scoped,
+        type,
+        filter,
+        favouriteIds,
+        query,
+        advancedFilters,
+        sort,
+        sortAscending
+    ) {
         sortLibrary(
-            filterLibrary(scoped, type, filter, favouriteIds, query),
+            filterLibraryAdvanced(
+                filterLibrary(scoped, type, filter, favouriteIds, query),
+                advancedFilters,
+                favouriteIds
+            ),
             sort,
             sortAscending
         )
@@ -189,6 +212,11 @@ fun NovaLibraryScreen(
             choiceMade = true
             type = chosen
             query = ""
+            // A format/year filter chosen for anime would empty the manga half,
+            // and the switch would look broken rather than separated. The two
+            // lists are separate searches, so their filter drafts are too.
+            advancedFilters = LibraryAdvancedFilters()
+            filterOpen = false
             scope.launch { remembered.preferences.setType(chosen.name) }
         }
     }
@@ -221,13 +249,13 @@ fun NovaLibraryScreen(
             username = username,
             avatarUrl = avatarUrl,
             searchOpen = searchOpen,
-            sortOpen = sortOpen,
             type = type,
             animeCount = animeEntries.size,
             mangaCount = mangaEntries.size,
             isLoadingManga = isLoadingManga,
+            activeFilterCount = advancedFilters.activeCount,
             onSearchOpenChange = { searchOpen = it },
-            onSortOpenChange = { sortOpen = it },
+            onOpenFilters = { filterOpen = true },
             onOpenProfile = onOpenProfile,
             onSelectType = chooseType
         )
@@ -235,13 +263,12 @@ fun NovaLibraryScreen(
         NovaLibraryTools(
             isManga = isManga,
             searchOpen = searchOpen,
-            sortOpen = sortOpen,
             query = query,
             onQueryChange = { query = it },
-            onOpenSort = { sortOpen = true },
+            onOpenFilters = { filterOpen = true },
             sort = sort,
             sortAscending = sortAscending,
-            onChooseSort = chooseSort,
+            onToggleDirection = { chooseSort(sort, !sortAscending) },
             filter = filter,
             counts = counts,
             onChooseFilter = chooseFilter
@@ -259,12 +286,30 @@ fun NovaLibraryScreen(
             scopedError = scopedError,
             query = query,
             filter = filter,
+            advancedFiltersActive = advancedFilters.isActive,
             viewMode = viewMode,
             gridState = gridState,
             onOpenDetail = onOpenDetail,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
+        )
+    }
+
+    if (filterOpen) {
+        LibraryFilterSheet(
+            sheetState = filterSheetState,
+            filters = advancedFilters,
+            sort = sort,
+            ascending = sortAscending,
+            years = availableYears,
+            genres = availableGenres,
+            onApply = { nextFilters, nextSort, nextAscending ->
+                advancedFilters = nextFilters
+                chooseSort(nextSort, nextAscending)
+                filterOpen = false
+            },
+            onDismiss = { filterOpen = false }
         )
     }
 }
@@ -290,6 +335,7 @@ private fun NovaLibraryBody(
     scopedError: String?,
     query: String,
     filter: LibraryFilter,
+    advancedFiltersActive: Boolean,
     viewMode: LibraryViewMode,
     gridState: LazyGridState,
     onOpenDetail: (MediaNode) -> Unit,
@@ -309,6 +355,7 @@ private fun NovaLibraryBody(
                 scopedError = scopedError,
                 query = query,
                 filter = filter,
+                advancedFiltersActive = advancedFiltersActive,
                 isManga = isManga
             )
             viewMode == LibraryViewMode.LIST -> NovaLibraryList(
@@ -352,6 +399,7 @@ private fun NovaLibraryEmpty(
     scopedError: String?,
     query: String,
     filter: LibraryFilter,
+    advancedFiltersActive: Boolean,
     isManga: Boolean
 ) {
     Column(
@@ -371,651 +419,26 @@ private fun NovaLibraryEmpty(
         when {
             showsMangaLoader -> NovaLibraryResolving()
             scopedError == null -> NovaEmptyNote(
-                text = emptyText(query = query, filter = filter, isManga = isManga)
-            )
-        }
-    }
-}
-
-private fun emptyText(query: String, filter: LibraryFilter, isManga: Boolean): String =
-    when {
-        query.isNotBlank() -> "No title in this list matches \"$query\"."
-        filter != LibraryFilter.ALL -> "Nothing in ${filter.labelFor(isManga)} yet."
-        else -> "Nothing in this list yet."
-    }
-
-@Composable
-private fun NovaLibraryList(
-    visible: List<MediaListEntryItem>,
-    isManga: Boolean,
-    awaitingAnime: Boolean,
-    scopedError: String?,
-    onOpenDetail: (MediaNode) -> Unit
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = mainBarClearance() + 20.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
-            .forEach { note ->
-                item(key = "note_$note") {
-                    PendingDataNote(note)
-                }
-            }
-        items(
-            items = visible,
-            key = { it.media.namespaceKey },
-            contentType = { "library_row" }
-        ) { entry ->
-            NovaLibraryRow(
-                entry = entry,
-                isManga = isManga,
-                onClick = { onOpenDetail(entry.media) },
-                modifier = Modifier.animateItem(
-                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                text = emptyText(
+                    query = query,
+                    filter = filter,
+                    advancedFiltersActive = advancedFiltersActive,
+                    isManga = isManga
                 )
             )
         }
     }
 }
 
-@Composable
-private fun NovaLibraryGrid(
-    visible: List<MediaListEntryItem>,
-    isManga: Boolean,
-    columns: Int,
-    compact: Boolean,
-    awaitingAnime: Boolean,
-    scopedError: String?,
-    gridState: LazyGridState,
-    onOpenDetail: (MediaNode) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("nova_library_grid"),
-        state = gridState,
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 4.dp,
-            bottom = mainBarClearance() + 20.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
-            .forEach { note ->
-                item(
-                    key = "note_$note",
-                    span = { GridItemSpan(maxLineSpan) }
-                ) {
-                    PendingDataNote(note)
-                }
-            }
-        gridItems(
-            items = visible,
-            key = { it.media.namespaceKey },
-            contentType = { "library_poster" }
-        ) { entry ->
-            NovaPoster(
-                entry = entry,
-                isManga = isManga,
-                compact = compact,
-                onClick = { onOpenDetail(entry.media) },
-                modifier = Modifier.animateItem(
-                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                )
-            )
-        }
-    }
-}
-
-/**
- * The shelf over the page: who this list belongs to, its size, the two controls
- * and the Anime/Manga switch.
- */
-@Composable
-private fun NovaLibraryHeader(
-    isManga: Boolean,
-    scopedSize: Int,
-    username: String?,
-    avatarUrl: String?,
-    searchOpen: Boolean,
-    sortOpen: Boolean,
-    type: LibraryType,
-    animeCount: Int,
-    mangaCount: Int,
-    isLoadingManga: Boolean,
-    onSearchOpenChange: (Boolean) -> Unit,
-    onSortOpenChange: (Boolean) -> Unit,
-    onOpenProfile: () -> Unit,
-    onSelectType: (LibraryType) -> Unit
-) {
-    val haptic = LocalHapticFeedback.current
-
-    NovaSurface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        tonalElevation = true
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ProfileAvatarButton(
-                    avatarUrl = avatarUrl,
-                    enabled = true,
-                    onClick = onOpenProfile,
-                    testTag = "nova_library_profile_button"
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isManga) "Manga List" else "Anime List",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = librarySubtitle(
-                            size = scopedSize,
-                            username = username
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSearchOpenChange(!searchOpen)
-                        onSortOpenChange(false)
-                    },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .testTag("nova_library_search_toggle")
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Search,
-                        contentDescription = "Search this list",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onSortOpenChange(!sortOpen)
-                        onSearchOpenChange(false)
-                    },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .testTag("nova_library_sort_toggle")
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Tune,
-                        contentDescription = "Sort this list",
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            NovaTypeSwitch(
-                type = type,
-                animeCount = animeCount,
-                mangaCount = mangaCount,
-                isLoadingManga = isLoadingManga,
-                onSelect = onSelectType
-            )
-        }
-    }
-}
-
-private fun librarySubtitle(size: Int, username: String?): String = buildString {
-    append(size)
-    append(if (size == 1) " title" else " titles")
-    username?.takeIf { it.isNotBlank() }?.let {
-        append(" · @")
-        append(it)
-    }
-}
-
-/** The search field, the sort row and the status pills. */
-@Composable
-private fun NovaLibraryTools(
-    isManga: Boolean,
-    searchOpen: Boolean,
-    sortOpen: Boolean,
+private fun emptyText(
     query: String,
-    onQueryChange: (String) -> Unit,
-    onOpenSort: () -> Unit,
-    sort: LibrarySort,
-    sortAscending: Boolean,
-    onChooseSort: (LibrarySort, Boolean) -> Unit,
     filter: LibraryFilter,
-    counts: Map<LibraryFilter, Int>,
-    onChooseFilter: (LibraryFilter) -> Unit
-) {
-    AnimatedVisibility(
-        visible = searchOpen,
-        enter = fadeIn(ExpressiveMotion.FastEffects) +
-            expandVertically(ExpressiveMotion.FastSpatialSize),
-        exit = fadeOut(ExpressiveMotion.FastEffects) +
-            shrinkVertically(ExpressiveMotion.FastSpatialSize)
-    ) {
-        NovaSearchRow(
-            query = query,
-            onQueryChange = onQueryChange,
-            onOpenFilter = onOpenSort,
-            placeholder = if (isManga) "Search your manga" else "Search your anime",
-            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
-        )
-    }
-
-    AnimatedVisibility(
-        visible = sortOpen,
-        enter = fadeIn(ExpressiveMotion.FastEffects) +
-            expandVertically(ExpressiveMotion.FastSpatialSize),
-        exit = fadeOut(ExpressiveMotion.FastEffects) +
-            shrinkVertically(ExpressiveMotion.FastSpatialSize)
-    ) {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(LibrarySort.entries, key = { it.name }, contentType = { "sort" }) { option ->
-                val active = option == sort
-                ExpressiveStateChip(
-                    label = sortLabel(option, active, sortAscending),
-                    selected = active,
-                    onClick = {
-                        val next = if (active) {
-                            toggleSort(sort, sortAscending)
-                        } else {
-                            selectSort(option)
-                        }
-                        onChooseSort(next.first, next.second)
-                    },
-                    minTouchTargetHeight = 36.dp,
-                    modifier = Modifier.testTag("nova_library_sort_${option.name.lowercase()}")
-                )
-            }
-        }
-    }
-
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        items(
-            items = LibraryFilter.entries,
-            key = { it.name },
-            contentType = { "filter" }
-        ) { option ->
-            NovaFilterPill(
-                label = option.labelFor(isManga),
-                count = counts[option] ?: 0,
-                selected = option == filter,
-                onClick = { onChooseFilter(option) },
-                testTag = "nova_library_filter_${option.name.lowercase()}"
-            )
-        }
-    }
-}
-
-private fun sortLabel(
-    option: LibrarySort,
-    active: Boolean,
-    ascending: Boolean
+    advancedFiltersActive: Boolean,
+    isManga: Boolean
 ): String = when {
-    !option.isDirectional || !active -> option.label
-    ascending -> "${option.label} ↑"
-    else -> "${option.label} ↓"
+    query.isNotBlank() -> "No title in this list matches \"$query\"."
+    advancedFiltersActive -> "No title in this list matches these filters."
+    filter != LibraryFilter.ALL -> "Nothing in ${filter.labelFor(isManga)} yet."
+    else -> "Nothing in this list yet."
 }
 
-/**
- * The waiting and failure notes a populated list still carries above its rows.
- *
- * Returned as strings because the grid and the list place them differently - one
- * full-span grid item, one list item - and the wording is the part that must not
- * diverge.
- */
-private fun notesFor(awaitingAnime: Boolean, scopedError: String?): List<String> =
-    buildList {
-        if (awaitingAnime) {
-            add("Still fetching this list - these counts are not final yet")
-        }
-        if (scopedError != null && !awaitingAnime) {
-            add("Couldn't load this list - $scopedError")
-        }
-    }
-
-/** Anime/Manga, as the two-way switch the new look uses instead of an "All" bucket. */
-@Composable
-private fun NovaTypeSwitch(
-    type: LibraryType,
-    animeCount: Int,
-    mangaCount: Int,
-    isLoadingManga: Boolean,
-    onSelect: (LibraryType) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(ExpressiveShapes.pill)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(3.dp)
-    ) {
-        listOf(
-            LibraryType.ANIME to animeCount,
-            LibraryType.MANGA to mangaCount
-        ).forEach { (option, count) ->
-            val selected = option == type
-            val container by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    Color.Transparent
-                },
-                animationSpec = ExpressiveMotion.FastColorEffects,
-                label = "nova_type_container"
-            )
-            val content = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(ExpressiveShapes.pill)
-                    .background(container)
-                    .clickable { onSelect(option) }
-                    .padding(vertical = 8.dp)
-                    .testTag("nova_library_type_${option.name.lowercase()}"),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (option == LibraryType.MANGA) {
-                        AppVectorIcons.SourceBook
-                    } else {
-                        AppVectorIcons.Tv
-                    },
-                    contentDescription = null,
-                    tint = content,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = when {
-                        option == LibraryType.MANGA && isLoadingManga && !selected -> "Manga..."
-                        option == LibraryType.MANGA -> "Manga"
-                        else -> "Anime"
-                    },
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    color = content,
-                    maxLines = 1
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = content.copy(alpha = 0.72f),
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/** One status bucket, with the count over the *whole* type scope rather than the narrowed set. */
-@Composable
-private fun NovaFilterPill(
-    label: String,
-    count: Int,
-    selected: Boolean,
-    onClick: () -> Unit,
-    testTag: String
-) {
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "nova_filter_container"
-    )
-    val content = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    Row(
-        modifier = Modifier
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            .bouncyPress(pressedScale = 0.94f)
-            .clickable(onClick = onClick)
-            .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
-            .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = content,
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(content.copy(alpha = 0.13f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = content,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-/**
- * One cover in the new grid.
- *
- * The progress capsule is on the cover, top-left, exactly as the reference draws
- * it and as the classic Library already does - the corner AniList leaves free.
- * The title is under the artwork, not over it: a second caption on a cover that
- * already carries its own typography is the failure `ProfileLibraryTab` documents.
- */
-@Composable
-private fun NovaPoster(
-    entry: MediaListEntryItem,
-    isManga: Boolean,
-    compact: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val media = entry.media
-    val interactionSource = remember { MutableInteractionSource() }
-    val total = if (isManga) media.chapters else media.episodes
-    val completed = entry.status.equals("COMPLETED", ignoreCase = true)
-    val progress = entry.progress ?: if (completed) total else null
-
-    Column(
-        modifier = modifier
-            .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .testTag("nova_library_poster")
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                // A ratio rather than a fixed height: the grid is three columns
-                // or four, so the same card is measured at two widths - and a
-                // height literal would turn the wider one into a portrait and the
-                // narrower into a strip.
-                .aspectRatio(0.68f)
-                .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
-                .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
-        ) {
-            AsyncImage(
-                model = media.posterUrl,
-                contentDescription = media.displayName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            if (progress != null) {
-                NovaProgressPill(
-                    progress = progress,
-                    total = total,
-                    isManga = isManga,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(5.dp)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(5.dp))
-        Text(
-            text = media.displayName,
-            style = if (compact) {
-                MaterialTheme.typography.labelSmall
-            } else {
-                MaterialTheme.typography.labelMedium
-            },
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = if (compact) 1 else 2,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-/**
- * The same entry as a row, for the List density.
- *
- * This is the mode that makes a long library readable rather than browsable:
- * progress, status and score are all in one line, and the cover is a thumbnail
- * rather than the page.
- */
-@Composable
-private fun NovaLibraryRow(
-    entry: MediaListEntryItem,
-    isManga: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val media = entry.media
-    val interactionSource = remember { MutableInteractionSource() }
-    val score = media.averageScore?.takeIf { it > 0 }
-    val progressLabel = libraryProgressLabel(entry)
-
-    NovaSurface(
-        modifier = modifier
-            .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.985f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .testTag("nova_library_row"),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(48.dp)
-                    .height(68.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
-            ) {
-                AsyncImage(
-                    model = media.posterUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = media.displayName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Surface(
-                        shape = ExpressiveShapes.pill,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        Text(
-                            text = ListStatuses.label(entry.status, isManga),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            maxLines = 1
-                        )
-                    }
-                    if (progressLabel != null) {
-                        Text(
-                            text = progressLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-            if (score != null) {
-                Text(
-                    text = "★ $score",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}

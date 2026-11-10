@@ -589,6 +589,16 @@ class AniListRepositoryImpl(
     @Volatile
     private var viewerCache: CachedViewer? = null
 
+    /**
+     * One cover per viewer, including a cached *null* for an account with no manga.
+     *
+     * Small enough not to need eviction: this is one node per signed-in account,
+     * and the map is a session-scoped answer to a strip on Home rather than a
+     * page's data. A null value is kept because "this account has no manga" is a
+     * fact worth not re-asking for on every refresh.
+     */
+    private val mangaPreviewCache = mutableMapOf<Int, MediaNode?>()
+
     private class CachedViewer(val profile: ViewerProfile, val storedAtMillis: Long)
 
     /**
@@ -1026,6 +1036,23 @@ class AniListRepositoryImpl(
      * fetching it eagerly would spend a request - and AniList is currently degraded
      * to 30 per minute - on a list half the profile never looks at.
      */
+    override suspend fun getUserMangaPreview(userId: Int): Result<MediaNode?> {
+        if (mangaPreviewCache.containsKey(userId)) {
+            return Result.success(mangaPreviewCache[userId])
+        }
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_MANGA_PREVIEW,
+                variables = mapOf("userId" to userId)
+            ),
+            apiService::getMangaPreview
+        ).map { data ->
+            data.page?.mediaList?.firstOrNull()?.media
+        }.onSuccess { preview ->
+            mangaPreviewCache[userId] = preview
+        }
+    }
+
     override suspend fun getUserMangaList(
         userId: Int,
         forceRefresh: Boolean
