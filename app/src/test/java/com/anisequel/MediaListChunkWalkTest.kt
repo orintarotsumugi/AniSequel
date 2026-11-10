@@ -20,6 +20,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
+import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
@@ -222,6 +223,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
         requestedChunks += chunk
         return chunks(chunk)
     }
+
+    override suspend fun getMangaPreview(
+        request: GraphQLRequest
+    ): GraphQLResponse<MangaPreviewData> = notServed("getMangaPreview")
 
     override suspend fun getViewer(
         request: GraphQLRequest
