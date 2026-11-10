@@ -51,6 +51,10 @@ import com.anisequel.ui.screens.profile.selectSort
  * 300-entry grid on each tap and has no cancel; Apply is what makes the draft
  * cheap, and Reset becomes a real control rather than a button that has already
  * happened by the time it is drawn.
+ *
+ * Each section is its own composable for the reason the Library split its chrome
+ * from its cards: a section is one question with one answer shape, and the sheet
+ * itself is only the draft, the scroll and the two buttons.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -118,155 +122,43 @@ fun LibraryFilterSheet(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
             ) {
-                FilterSectionLabel("Sort")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LibrarySort.entries.forEach { option ->
-                        ExpressiveStateChip(
-                            label = option.label,
-                            selected = draftSort == option,
-                            onClick = {
-                                val next = selectSort(option)
-                                draftSort = next.first
-                                draftAscending = next.second
-                            },
-                            minTouchTargetHeight = 38.dp
-                        )
+                SortSection(
+                    sort = draftSort,
+                    ascending = draftAscending,
+                    onSortChange = { nextSort, nextAscending ->
+                        draftSort = nextSort
+                        draftAscending = nextAscending
                     }
-                }
-                if (draftSort.isDirectional) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ExpressiveStateChip(
-                            label = "Ascending ↑",
-                            selected = draftAscending,
-                            onClick = { draftAscending = true },
-                            minTouchTargetHeight = 38.dp
-                        )
-                        ExpressiveStateChip(
-                            label = "Descending ↓",
-                            selected = !draftAscending,
-                            onClick = { draftAscending = false },
-                            minTouchTargetHeight = 38.dp
-                        )
-                    }
-                }
+                )
 
                 FilterDivider()
-                FilterSectionLabel("Format")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    libraryFormatOptions.forEach { (key, label) ->
-                        val selected = key in draft.formats
-                        ExpressiveStateChip(
-                            label = label,
-                            selected = selected,
-                            onClick = {
-                                draft = draft.copy(
-                                    formats = if (selected) draft.formats - key else draft.formats + key
-                                )
-                            },
-                            minTouchTargetHeight = 38.dp
-                        )
-                    }
-                }
+                FormatSection(draft = draft, onDraftChange = { draft = it })
 
                 if (years.isNotEmpty()) {
                     FilterDivider()
-                    FilterSectionLabel("Release year")
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        years.forEach { year ->
-                            ExpressiveStateChip(
-                                label = year.toString(),
-                                selected = draft.releaseYear == year,
-                                onClick = {
-                                    draft = draft.copy(
-                                        releaseYear = if (draft.releaseYear == year) null else year
-                                    )
-                                },
-                                minTouchTargetHeight = 38.dp
-                            )
-                        }
-                    }
+                    YearSection(
+                        years = years,
+                        selected = draft.releaseYear,
+                        onSelect = { year -> draft = draft.copy(releaseYear = year) }
+                    )
                 }
 
                 FilterDivider()
-                FilterSectionLabel("Minimum score")
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(null to "Any", 60 to "60+", 70 to "70+", 80 to "80+", 90 to "90+")
-                        .forEach { (score, label) ->
-                            ExpressiveStateChip(
-                                label = label,
-                                selected = draft.minScore == score,
-                                onClick = { draft = draft.copy(minScore = score) },
-                                minTouchTargetHeight = 38.dp
-                            )
-                        }
-                }
+                ScoreSection(
+                    selected = draft.minScore,
+                    onSelect = { score -> draft = draft.copy(minScore = score) }
+                )
 
                 if (genres.isNotEmpty()) {
                     FilterDivider()
-                    FilterSectionLabel("Genres")
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        genres.forEach { genre ->
-                            val selected = genre in draft.genres
-                            ExpressiveStateChip(
-                                label = genre,
-                                selected = selected,
-                                onClick = {
-                                    draft = draft.copy(
-                                        genres = if (selected) draft.genres - genre else draft.genres + genre
-                                    )
-                                },
-                                minTouchTargetHeight = 38.dp
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Titles carrying any of the genres you pick.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    GenreSection(genres = genres, draft = draft, onDraftChange = { draft = it })
                 }
 
                 FilterDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Favourites only",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Keep the titles you pinned on AniList.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = draft.onlyFavourites,
-                        onCheckedChange = { draft = draft.copy(onlyFavourites = it) }
-                    )
-                }
+                FavouritesRow(
+                    checked = draft.onlyFavourites,
+                    onCheckedChange = { draft = draft.copy(onlyFavourites = it) }
+                )
                 Spacer(modifier = Modifier.height(20.dp))
             }
 
@@ -303,6 +195,190 @@ fun LibraryFilterSheet(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SortSection(
+    sort: LibrarySort,
+    ascending: Boolean,
+    onSortChange: (LibrarySort, Boolean) -> Unit
+) {
+    FilterSectionLabel("Sort")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        LibrarySort.entries.forEach { option ->
+            ExpressiveStateChip(
+                label = option.label,
+                selected = sort == option,
+                onClick = {
+                    val next = selectSort(option)
+                    onSortChange(next.first, next.second)
+                },
+                minTouchTargetHeight = 38.dp
+            )
+        }
+    }
+    if (sort.isDirectional) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ExpressiveStateChip(
+                label = "Ascending ↑",
+                selected = ascending,
+                onClick = { onSortChange(sort, true) },
+                minTouchTargetHeight = 38.dp
+            )
+            ExpressiveStateChip(
+                label = "Descending ↓",
+                selected = !ascending,
+                onClick = { onSortChange(sort, false) },
+                minTouchTargetHeight = 38.dp
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FormatSection(
+    draft: LibraryAdvancedFilters,
+    onDraftChange: (LibraryAdvancedFilters) -> Unit
+) {
+    FilterSectionLabel("Format")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        libraryFormatOptions.forEach { (key, label) ->
+            val selected = key in draft.formats
+            ExpressiveStateChip(
+                label = label,
+                selected = selected,
+                onClick = {
+                    onDraftChange(
+                        draft.copy(
+                            formats = if (selected) draft.formats - key else draft.formats + key
+                        )
+                    )
+                },
+                minTouchTargetHeight = 38.dp
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun YearSection(
+    years: List<Int>,
+    selected: Int?,
+    onSelect: (Int?) -> Unit
+) {
+    FilterSectionLabel("Release year")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        years.forEach { year ->
+            ExpressiveStateChip(
+                label = year.toString(),
+                selected = selected == year,
+                onClick = { onSelect(if (selected == year) null else year) },
+                minTouchTargetHeight = 38.dp
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScoreSection(
+    selected: Int?,
+    onSelect: (Int?) -> Unit
+) {
+    FilterSectionLabel("Minimum score")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(null to "Any", 60 to "60+", 70 to "70+", 80 to "80+", 90 to "90+")
+            .forEach { (score, label) ->
+                ExpressiveStateChip(
+                    label = label,
+                    selected = selected == score,
+                    onClick = { onSelect(score) },
+                    minTouchTargetHeight = 38.dp
+                )
+            }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GenreSection(
+    genres: List<String>,
+    draft: LibraryAdvancedFilters,
+    onDraftChange: (LibraryAdvancedFilters) -> Unit
+) {
+    FilterSectionLabel("Genres")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        genres.forEach { genre ->
+            val selected = genre in draft.genres
+            ExpressiveStateChip(
+                label = genre,
+                selected = selected,
+                onClick = {
+                    onDraftChange(
+                        draft.copy(
+                            genres = if (selected) draft.genres - genre else draft.genres + genre
+                        )
+                    )
+                },
+                minTouchTargetHeight = 38.dp
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "Titles carrying any of the genres you pick.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun FavouritesRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Favourites only",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Keep the titles you pinned on AniList.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }
 
