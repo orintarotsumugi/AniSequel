@@ -139,6 +139,47 @@ fun QuickAddPlanningButton(
      */
     confirmBeforeAdding: Boolean = LocalConfirmPlanningAdd.current
 ) {
+    // The two terminal states are answered before the active control is
+    // composed, so the gesture and confirmation state is never allocated for a
+    // title that already has a badge. Splitting them out also keeps the active
+    // control small enough to read: its branches are the gesture, not the
+    // historical states of the list.
+    if (isAddedToWatching) {
+        WatchingCompletedBadge(mediaId = mediaId, modifier = modifier)
+        return
+    }
+    if (isAddedToPlanning) {
+        PlanningCompletedBadge(mediaId = mediaId, modifier = modifier)
+        return
+    }
+
+    ActiveQuickAddPlanningButton(
+        mediaId = mediaId,
+        isBusy = isBusy,
+        onAddToPlanning = onAddToPlanning,
+        onAddToWatching = onAddToWatching,
+        onConfirmBeforeAdding = confirmBeforeAdding,
+        modifier = modifier,
+        holdDurationSeconds = holdDurationSeconds,
+        swipeEnabled = swipeEnabled
+    )
+}
+
+/**
+ * The button when the title is on neither list yet: the hold, the swipe and the
+ * tick/cross question.
+ */
+@Composable
+private fun ActiveQuickAddPlanningButton(
+    mediaId: Int,
+    isBusy: Boolean,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    onConfirmBeforeAdding: Boolean,
+    modifier: Modifier = Modifier,
+    holdDurationSeconds: Int = 3,
+    swipeEnabled: Boolean = true
+) {
     val statusColors = AniSequelTheme.statusColors
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
@@ -153,8 +194,8 @@ fun QuickAddPlanningButton(
     // preview composition. Closing it is the honest answer: the setting now says
     // one tap adds, and leaving a tick on screen would be asking a question the
     // reader has switched off.
-    LaunchedEffect(confirmBeforeAdding) {
-        if (!confirmBeforeAdding) confirming = false
+    LaunchedEffect(onConfirmBeforeAdding) {
+        if (!onConfirmBeforeAdding) confirming = false
     }
 
     // Hold progress state (0f to 1f). `holdJob` and the "a hold already
@@ -168,24 +209,7 @@ fun QuickAddPlanningButton(
     val dragOffset = remember { Animatable(0f) }
     val swipeThresholdPx = with(density) { 90.dp.toPx() }
 
-    // Handle already completed states
-    if (isAddedToWatching) {
-        WatchingCompletedBadge(
-            mediaId = mediaId,
-            modifier = modifier
-        )
-        return
-    }
-
-    if (isAddedToPlanning) {
-        PlanningCompletedBadge(
-            mediaId = mediaId,
-            modifier = modifier
-        )
-        return
-    }
-
-    val holdDurationMs = (if (holdDurationSeconds == 5) 5000L else 3000L)
+    val holdDurationMs = holdDurationMillis(holdDurationSeconds)
 
     val progressFraction = holdProgressAnim.value
 
@@ -237,7 +261,7 @@ fun QuickAddPlanningButton(
     // finger has to feel that the button took the press, or the tick that appears
     // a frame later reads as the button having missed it.
     val askOrAdd: () -> Unit = {
-        if (confirmBeforeAdding) {
+        if (onConfirmBeforeAdding) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             confirming = true
         } else {
@@ -308,16 +332,16 @@ fun QuickAddPlanningButton(
                     // A question arriving is the button turning over, not a page
                     // changing: the spring gives the two small answers a little
                     // weight without moving the row they sit in.
-                    (fadeIn(ExpressiveMotion.FastEffects) +
+                    fadeIn(ExpressiveMotion.FastEffects) +
                         scaleIn(
                             initialScale = 0.86f,
                             animationSpec = ExpressiveMotion.BouncySpatial
-                        )) togetherWith
-                        (fadeOut(ExpressiveMotion.FastEffects) +
-                            scaleOut(
-                                targetScale = 0.90f,
-                                animationSpec = ExpressiveMotion.FastSpatial
-                            ))
+                        ) togetherWith
+                        fadeOut(ExpressiveMotion.FastEffects) +
+                        scaleOut(
+                            targetScale = 0.90f,
+                            animationSpec = ExpressiveMotion.FastSpatial
+                        )
                 },
                 modifier = Modifier.fillMaxSize(),
                 label = "planning_confirm_state"
@@ -703,3 +727,7 @@ private fun PlanningCompletedBadge(
         )
     }
 }
+
+/** The two supported hold lengths, as milliseconds. */
+private fun holdDurationMillis(holdDurationSeconds: Int): Long =
+    if (holdDurationSeconds == 5) 5000L else 3000L

@@ -17,6 +17,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
@@ -309,35 +311,19 @@ fun DashboardScreen(
             )
         },
         topBar = {
-            // The bar is part of the two looks, not above them: the classic bar
-            // carries the filter button, the missed count and the collapse-on-
-            // scroll behaviour the sequel feed is built around, and the new look's
-            // bar is a quiet identity strip over a page that puts its controls in
-            // the body. Swapping only the body would leave a bar that advertises
-            // controls the page below does not have.
-            if (appLayout == AppLayout.NOVA) {
-                NovaTopBar(
-                    viewerName = currentViewer?.name,
-                    avatarUrl = currentViewer?.avatar?.medium,
-                    onOpenProfile = { onOpenProfile(currentViewer) },
-                    onOpenSettings = { onOpenSettings(currentViewer) }
-                )
-            } else {
-                AniTopAppBar(
-                    viewer = currentViewer,
-                    missedCount = missedCount,
-                    onOpenFilter = { showFilterSheet = true },
-                    onRefresh = requestRefresh,
-                    onOpenSettings = { onOpenSettings(currentViewer) },
-                    onOpenProfile = { onOpenProfile(currentViewer) },
-                    isRefreshing = successState?.isRefreshing == true,
-                    hasActiveFilters = hasActiveFilters,
-                    // The snapshot is the first frame of a cold start; the bar says
-                    // so without moving the list underneath it. See [AniTopAppBar].
-                    showingSavedCopy = successState?.isCached == true,
-                    scrollBehavior = scrollBehavior
-                )
-            }
+            DashboardTopBar(
+                appLayout = appLayout,
+                viewer = currentViewer,
+                missedCount = missedCount,
+                onOpenFilter = { showFilterSheet = true },
+                onRefresh = requestRefresh,
+                onOpenSettings = { onOpenSettings(currentViewer) },
+                onOpenProfile = { onOpenProfile(currentViewer) },
+                isRefreshing = successState?.isRefreshing == true,
+                hasActiveFilters = hasActiveFilters,
+                showingSavedCopy = successState?.isCached == true,
+                scrollBehavior = scrollBehavior
+            )
         }
     ) { paddingValues ->
         val layoutDirection = LocalLayoutDirection.current
@@ -387,7 +373,9 @@ fun DashboardScreen(
                     }
 
                     is DashboardUiState.Success -> {
-                        if (appLayout == AppLayout.NOVA) {
+                        DashboardSuccessPane(
+                            layout = appLayout,
+                            nova = {
                             NovaHomeScreen(
                                 state = state,
                                 filterCriteria = filterCriteria,
@@ -423,7 +411,8 @@ fun DashboardScreen(
                                 onFormatSelected = { dashboardViewModel.selectFormat(it) },
                                 onClearFilters = { dashboardViewModel.resetFilters() }
                             )
-                        } else {
+                            },
+                            classic = {
                         PullToRefreshBox(
                             isRefreshing = state.isRefreshing,
                             onRefresh = requestRefresh,
@@ -563,7 +552,8 @@ fun DashboardScreen(
                                 }
                             }
                         }
-                        }
+                            }
+                        )
                     }
                 }
             }
@@ -572,30 +562,14 @@ fun DashboardScreen(
         }
     }
 
-    if (showFilterSheet) {
-        FilterSortSheet(
-            sheetState = filterSheetState,
-            filterCriteria = filterCriteria,
-            onSortSelected = { dashboardViewModel.updateSortOption(it) },
-            onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
-            onToggleUnreleased = { dashboardViewModel.toggleIncludeUnreleased(it) },
-            onToggleHidePlanned = { dashboardViewModel.toggleHideAlreadyPlanned(it) },
-            onFormatSelected = { dashboardViewModel.selectFormat(it) },
-            onToggleRelation = { dashboardViewModel.toggleRelation(it) },
-            onToggleSequelThisYear = { dashboardViewModel.toggleSequelReleasedThisYear(it) },
-            onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
-            onToggleCurrentlyWatching = { dashboardViewModel.toggleIncludeCurrentlyWatching(it) },
-            onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
-            onToggleGenre = { dashboardViewModel.toggleGenre(it) },
-            onSelectMinScore = { dashboardViewModel.selectMinScore(it) },
-            onSelectMinEpisodes = { dashboardViewModel.selectMinEpisodes(it) },
-            onResetFilters = { dashboardViewModel.resetFilters() },
-            hiddenSequels = hiddenSequels,
-            onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
-            onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },
-            onDismiss = { showFilterSheet = false }
-        )
-    }
+    DashboardFilterSheetHost(
+        visible = showFilterSheet,
+        sheetState = filterSheetState,
+        filterCriteria = filterCriteria,
+        hiddenSequels = hiddenSequels,
+        dashboardViewModel = dashboardViewModel,
+        onDismiss = { showFilterSheet = false }
+    )
 
     if (selectedSubject != null) {
         // `canWrite` is hoisted above, next to `successState`, so the write flag,
@@ -644,6 +618,99 @@ fun DashboardScreen(
     // row routes into the sheet's own relation navigation, which is how you walk
     // from a cast member to the next title without stacking a third window.
     profiles.Sheet { appearance -> navigatedRelation = appearance.toMediaNode() }
+}
+
+/** The filter sheet, hosted here so [DashboardScreen] does not branch for it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DashboardFilterSheetHost(
+    visible: Boolean,
+    sheetState: androidx.compose.material3.SheetState,
+    filterCriteria: FilterCriteria,
+    hiddenSequels: List<MissedSequel>,
+    dashboardViewModel: DashboardViewModel,
+    onDismiss: () -> Unit
+) {
+    if (!visible) return
+
+    FilterSortSheet(
+        sheetState = sheetState,
+        filterCriteria = filterCriteria,
+        onSortSelected = { dashboardViewModel.updateSortOption(it) },
+        onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
+        onToggleUnreleased = { dashboardViewModel.toggleIncludeUnreleased(it) },
+        onToggleHidePlanned = { dashboardViewModel.toggleHideAlreadyPlanned(it) },
+        onFormatSelected = { dashboardViewModel.selectFormat(it) },
+        onToggleRelation = { dashboardViewModel.toggleRelation(it) },
+        onToggleSequelThisYear = { dashboardViewModel.toggleSequelReleasedThisYear(it) },
+        onToggleParentCompletedThisYear = { dashboardViewModel.toggleParentCompletedThisYear(it) },
+        onToggleCurrentlyWatching = { dashboardViewModel.toggleIncludeCurrentlyWatching(it) },
+        onToggleInList = { dashboardViewModel.toggleIncludeInList(it) },
+        onToggleGenre = { dashboardViewModel.toggleGenre(it) },
+        onSelectMinScore = { dashboardViewModel.selectMinScore(it) },
+        onSelectMinEpisodes = { dashboardViewModel.selectMinEpisodes(it) },
+        onResetFilters = { dashboardViewModel.resetFilters() },
+        hiddenSequels = hiddenSequels,
+        onRestoreHidden = { dashboardViewModel.restoreHiddenSequel(it) },
+        onRestoreAllHidden = { dashboardViewModel.restoreAllHiddenSequels() },
+        onDismiss = onDismiss
+    )
+}
+
+/**
+ * The bar is part of the two looks, not above them.
+ *
+ * The classic bar carries the filter button, the missed count and the collapse-
+ * on-scroll behaviour the sequel feed is built around; the new look's bar is a
+ * quiet identity strip over a page that puts its controls in the body. Swapping
+ * only the body would leave a bar advertising controls the page does not have.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DashboardTopBar(
+    appLayout: AppLayout,
+    viewer: ViewerProfile?,
+    missedCount: Int,
+    onOpenFilter: () -> Unit,
+    onRefresh: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenProfile: () -> Unit,
+    isRefreshing: Boolean,
+    hasActiveFilters: Boolean,
+    showingSavedCopy: Boolean,
+    scrollBehavior: TopAppBarScrollBehavior
+) {
+    if (appLayout == AppLayout.NOVA) {
+        NovaTopBar(
+            viewerName = viewer?.name,
+            avatarUrl = viewer?.avatar?.medium,
+            onOpenProfile = onOpenProfile,
+            onOpenSettings = onOpenSettings
+        )
+    } else {
+        AniTopAppBar(
+            viewer = viewer,
+            missedCount = missedCount,
+            onOpenFilter = onOpenFilter,
+            onRefresh = onRefresh,
+            onOpenSettings = onOpenSettings,
+            onOpenProfile = onOpenProfile,
+            isRefreshing = isRefreshing,
+            hasActiveFilters = hasActiveFilters,
+            showingSavedCopy = showingSavedCopy,
+            scrollBehavior = scrollBehavior
+        )
+    }
+}
+
+/** Chooses the body without putting the layout branch in [DashboardScreen]. */
+@Composable
+private fun DashboardSuccessPane(
+    layout: AppLayout,
+    nova: @Composable () -> Unit,
+    classic: @Composable () -> Unit
+) {
+    if (layout == AppLayout.NOVA) nova() else classic()
 }
 
 /**
