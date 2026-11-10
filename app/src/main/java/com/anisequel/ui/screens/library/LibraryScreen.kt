@@ -346,7 +346,11 @@ fun LibraryScreen(
                             NovaLibraryScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 animeEntries = state.libraryAnime,
-                                mangaEntries = mangaLibrary,
+                                // Nullable on the ViewModel: the manga collection
+                                // has not been requested yet. The new grid draws the
+                                // "nothing here yet" state, not a loading frame
+                                // forever, so it gets the empty list.
+                                mangaEntries = mangaLibrary.orEmpty(),
                                 favouriteIds = favouriteIds,
                                 isLoadingManga = isLoadingManga,
                                 isAnimeLoading = state.isLibraryLoading,

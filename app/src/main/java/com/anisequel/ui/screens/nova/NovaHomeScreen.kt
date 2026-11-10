@@ -21,6 +21,7 @@ import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StatusFilter
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.withListStatus
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.AppVectorIcons
