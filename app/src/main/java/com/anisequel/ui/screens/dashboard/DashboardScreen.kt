@@ -57,6 +57,8 @@ import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.navigation.MainBarClearance
+import com.anisequel.domain.ui.AppLayout
+import com.anisequel.ui.components.nova.NovaTopBar
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection
 import com.anisequel.ui.screens.dashboard.DashboardDemoBanner
@@ -64,6 +66,9 @@ import com.anisequel.ui.screens.dashboard.DashboardErrorView
 import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
+import com.anisequel.ui.screens.nova.NovaHomeScreen
+import com.anisequel.ui.screens.profile.LibraryType
+import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
@@ -100,9 +105,14 @@ fun DashboardScreen(
      * always fails is the dead control this feature replaced.
      */
     repository: com.anisequel.data.repository.AniListRepository? = null,
+    /** Opens the new look's feature hub. Only the new Home has a card for it. */
+    onOpenOther: () -> Unit = {},
+    /** Opens the Library, optionally on a named type. See [NovaHomeScreen]. */
+    onOpenLibrary: (String?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsState()
+    val appLayout = LocalAppLayout.current
 
     // The connection status strip. The probe reads through the repository so it
     // asks the same client, with the same auth and the same classifier, as every
@@ -299,20 +309,35 @@ fun DashboardScreen(
             )
         },
         topBar = {
-            AniTopAppBar(
-                viewer = currentViewer,
-                missedCount = missedCount,
-                onOpenFilter = { showFilterSheet = true },
-                onRefresh = requestRefresh,
-                onOpenSettings = { onOpenSettings(currentViewer) },
-                onOpenProfile = { onOpenProfile(currentViewer) },
-                isRefreshing = successState?.isRefreshing == true,
-                hasActiveFilters = hasActiveFilters,
-                // The snapshot is the first frame of a cold start; the bar says
-                // so without moving the list underneath it. See [AniTopAppBar].
-                showingSavedCopy = successState?.isCached == true,
-                scrollBehavior = scrollBehavior
-            )
+            // The bar is part of the two looks, not above them: the classic bar
+            // carries the filter button, the missed count and the collapse-on-
+            // scroll behaviour the sequel feed is built around, and the new look's
+            // bar is a quiet identity strip over a page that puts its controls in
+            // the body. Swapping only the body would leave a bar that advertises
+            // controls the page below does not have.
+            if (appLayout == AppLayout.NOVA) {
+                NovaTopBar(
+                    viewerName = currentViewer?.name,
+                    avatarUrl = currentViewer?.avatar?.medium,
+                    onOpenProfile = { onOpenProfile(currentViewer) },
+                    onOpenSettings = { onOpenSettings(currentViewer) }
+                )
+            } else {
+                AniTopAppBar(
+                    viewer = currentViewer,
+                    missedCount = missedCount,
+                    onOpenFilter = { showFilterSheet = true },
+                    onRefresh = requestRefresh,
+                    onOpenSettings = { onOpenSettings(currentViewer) },
+                    onOpenProfile = { onOpenProfile(currentViewer) },
+                    isRefreshing = successState?.isRefreshing == true,
+                    hasActiveFilters = hasActiveFilters,
+                    // The snapshot is the first frame of a cold start; the bar says
+                    // so without moving the list underneath it. See [AniTopAppBar].
+                    showingSavedCopy = successState?.isCached == true,
+                    scrollBehavior = scrollBehavior
+                )
+            }
         }
     ) { paddingValues ->
         val layoutDirection = LocalLayoutDirection.current
@@ -362,6 +387,43 @@ fun DashboardScreen(
                     }
 
                     is DashboardUiState.Success -> {
+                        if (appLayout == AppLayout.NOVA) {
+                            NovaHomeScreen(
+                                state = state,
+                                filterCriteria = filterCriteria,
+                                quickAddSettings = quickAddSettings,
+                                arrivingEnabled = arrivingEnabled,
+                                arrivingCompact = arrivingCompact,
+                                arrivingSeparateGroups = arrivingSeparateGroups,
+                                onRefresh = requestRefresh,
+                                onOpenOther = onOpenOther,
+                                onOpenAnimeList = { onOpenLibrary(LibraryType.ANIME.name) },
+                                onOpenMangaList = { onOpenLibrary(LibraryType.MANGA.name) },
+                                onOpenSequel = {
+                                    selectedSequelId = it.sequelId
+                                    navigatedRelation = null
+                                    selectedArrivingId = null
+                                },
+                                onOpenArriving = {
+                                    selectedArrivingId = it
+                                    selectedSequelId = null
+                                    navigatedRelation = null
+                                },
+                                onOpenMedia = {
+                                    selectedSequelId = null
+                                    selectedArrivingId = null
+                                    navigatedRelation = it
+                                },
+                                onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
+                                onAddToWatching = { dashboardViewModel.addToWatching(it) },
+                                onHide = { dashboardViewModel.toggleHideSequel(it) },
+                                onSearch = { dashboardViewModel.updateSearchQuery(it) },
+                                onOpenFilter = { showFilterSheet = true },
+                                onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
+                                onFormatSelected = { dashboardViewModel.selectFormat(it) },
+                                onClearFilters = { dashboardViewModel.resetFilters() }
+                            )
+                        } else {
                         PullToRefreshBox(
                             isRefreshing = state.isRefreshing,
                             onRefresh = requestRefresh,
@@ -500,6 +562,7 @@ fun DashboardScreen(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }

@@ -39,6 +39,18 @@ sealed interface DashboardUiState {
         val totalWatchedCount: Int,
         val totalMissedCount: Int,
         /**
+         * The viewer's in-progress anime, most recently updated first.
+         *
+         * Drawn as the new Home's Continue rail. Carried in the state for the
+         * same reason as [arriving]: the collection has already been downloaded
+         * and the walk is memoised in the ViewModel, so the rail costs a slice of
+         * a list the page below it is drawing anyway - not a second query.
+         *
+         * Empty on the demo dashboard (there is no collection) and for a viewer
+         * who has not started anything, which is exactly when the rail hides.
+         */
+        val continueWatching: List<MediaListEntryItem> = emptyList(),
+        /**
          * What the activity widget's tile counts and names.
          *
          * The widget used to render "0 recent updates" for every signed-in

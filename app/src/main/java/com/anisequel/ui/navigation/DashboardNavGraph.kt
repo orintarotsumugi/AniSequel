@@ -29,6 +29,15 @@ fun NavGraphBuilder.dashboardDestinations(
     hiddenSequelsPreferences: HiddenSequelsPreferences,
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
+    /**
+     * Opens the Library on one media type, or null for whatever it remembers.
+     *
+     * The type is a string rather than the profile package's enum because this
+     * graph's only job is to hand the choice to `LibraryPreferences`, which
+     * stores the enum's name. That keeps the navigation layer from depending on a
+     * screen's types just to spell one word.
+     */
+    onOpenLibrary: (String?) -> Unit,
     onSignInAgain: () -> Unit
 ) {
     composable(AppRoutes.DASHBOARD) {
@@ -64,7 +73,9 @@ fun NavGraphBuilder.dashboardDestinations(
                 },
                 onOpenStudio = { studioId, studioName ->
                     navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
-                }
+                },
+                onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+                onOpenLibrary = onOpenLibrary
             )
         }
     }
@@ -91,7 +102,9 @@ fun NavGraphBuilder.dashboardDestinations(
             // `navigateToMainTab`.
             onOpenProfile = {
                 navController.navigateToMainTab(MainTab.PROFILE, signedIn = false)
-            }
+            },
+            onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+            onOpenLibrary = onOpenLibrary
         )
     }
 
@@ -135,7 +148,9 @@ fun NavGraphBuilder.dashboardDestinations(
             },
             onOpenStudio = { studioId, studioName ->
                 navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
-            }
+            },
+            onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+            onOpenLibrary = onOpenLibrary
         )
     }
 }

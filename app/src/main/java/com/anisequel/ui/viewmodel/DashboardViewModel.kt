@@ -413,6 +413,17 @@ class DashboardViewModel(
     private var cardPreviewSource: MediaListCollection? = null
 
     /**
+     * The new Home's Continue rail, and the collection it was taken from.
+     *
+     * Same memo shape as [cardPreviewCache]: a search keystroke recomputes the
+     * sequel list, not this rail, and the rail only changes when a refresh
+     * replaces the collection. Twelve entries is what fits a rail that is meant
+     * to be swiped once, not scrolled.
+     */
+    private var continueWatchingCache: List<MediaListEntryItem> = emptyList()
+    private var continueWatchingSource: MediaListCollection? = null
+
+    /**
      * Ids whose one-off detail query is in flight.
      *
      * Kept out of [DashboardUiState.Success] deliberately: a detail arriving
@@ -742,6 +753,7 @@ class DashboardViewModel(
             val arriving = arrivingEntries(collection)
             val recentActivity = recentActivity(collection)
             val cardPreview = cardPreviewEntries(collection)
+            val continueWatching = continueWatchingEntries(collection)
 
             val updated = filteredVisible.map { found ->
                 val entry = withCachedDetail(found)
@@ -769,7 +781,8 @@ class DashboardViewModel(
                 watchedCount = watchedCount,
                 arriving = arriving,
                 recentActivity = recentActivity,
-                cardPreview = cardPreview
+                cardPreview = cardPreview,
+                continueWatching = continueWatching
             )
         }
 
@@ -788,6 +801,7 @@ class DashboardViewModel(
             totalWatchedCount = work.watchedCount,
             totalMissedCount = work.visible.size,
             recentActivity = work.recentActivity,
+            continueWatching = work.continueWatching,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
@@ -803,7 +817,8 @@ class DashboardViewModel(
         val watchedCount: Int,
         val arriving: List<ArrivingEntry>,
         val recentActivity: RecentActivitySummary,
-        val cardPreview: List<MediaListEntryItem>
+        val cardPreview: List<MediaListEntryItem>,
+        val continueWatching: List<MediaListEntryItem>
     )
 
     /**
@@ -947,6 +962,34 @@ class DashboardViewModel(
             .take(3)
         cardPreviewSource = collection
         cardPreviewCache = computed
+        return computed
+    }
+
+    /**
+     * The viewer's currently-watching anime, newest activity first.
+     *
+     * The dashboard's collection is the anime list, but the media type is still
+     * checked: the same query shape is used by paths that mix types, and a manga
+     * entry in a Continue *Watching* rail would be a bug that only shows up for
+     * accounts with both lists. The rail is a shortcut, so entries without
+     * artwork are skipped - a row of blank covers is not a shortcut.
+     */
+    private fun continueWatchingEntries(
+        collection: MediaListCollection
+    ): List<MediaListEntryItem> {
+        if (continueWatchingSource === collection) return continueWatchingCache
+        val computed = collection.lists.orEmpty()
+            .flatMap { group -> group.entries.orEmpty() }
+            .filter { entry ->
+                entry.status.equals("CURRENT", ignoreCase = true) &&
+                    entry.media.type.equals("ANIME", ignoreCase = true) &&
+                    entry.media.posterUrl != null
+            }
+            .distinctBy { entry -> entry.media.id }
+            .sortedByDescending { entry -> entry.updatedAt ?: 0 }
+            .take(12)
+        continueWatchingSource = collection
+        continueWatchingCache = computed
         return computed
     }
 

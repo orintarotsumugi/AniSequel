@@ -15,6 +15,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +46,10 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
+import com.anisequel.ui.theme.LocalAppLayout
+import com.anisequel.ui.theme.LocalConfirmPlanningAdd
+import com.anisequel.ui.theme.LocalLibraryViewMode
+import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -53,6 +58,7 @@ import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 object AppRoutes {
     const val LOGIN = "login"
@@ -62,6 +68,9 @@ object AppRoutes {
     const val LIBRARY = "library"
     const val SETTINGS = "settings"
     const val TIER_LIST = "tier_list"
+
+    /** The new look's feature hub. Hidden from the classic bar by design. */
+    const val OTHER = "other"
 
     /**
      * The path is encoded, not interpolated raw.
@@ -196,6 +205,25 @@ fun AppNavigation(
     val cardStyle by interfacePreferences.cardStyle.collectAsState(
         initial = MediaCardStyle.DEFAULT
     )
+
+    // The rest of the interface's answer - which layout, how dense the new
+    // Library is, whether Home shows the Continue rail - in one emission. Read
+    // here and provided as composition locals rather than threaded through every
+    // destination: the dashboard, the Library, the bar and the Settings preview
+    // have to agree, and a parameter is one more place they can disagree.
+    val interfaceSettings by interfacePreferences.settings.collectAsState(
+        initial = InterfacePreferences.InterfaceSettings()
+    )
+
+    // The planning confirmation, read once at the root for the same reason. The
+    // dashboard still collects this flow for its hold/swipe settings; this read is
+    // only the tick/cross switch, and it is what makes the behaviour follow the
+    // reader from card to detail sheet without every host being handed it.
+    val quickAddSettings by quickAddPreferences.settings.collectAsState(
+        initial = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
+    )
+    val appScope = rememberCoroutineScope()
+
     // Derived from the enum, filtered by the setting - see [enabledMainTabs].
     // Remembered on the flag so the bar's list is the same instance across
     // recompositions; it is an index table for `MainBar`, not state.
@@ -501,7 +529,13 @@ fun AppNavigation(
     val seasonalAmbient = rememberSeasonalAmbientModifier()
 
     ProvideMediaCovers(aniListRepository) {
-        CompositionLocalProvider(LocalMediaCardStyle provides cardStyle) {
+        CompositionLocalProvider(
+            LocalMediaCardStyle provides cardStyle,
+            LocalAppLayout provides interfaceSettings.layout,
+            LocalLibraryViewMode provides interfaceSettings.libraryView,
+            LocalShowContinueRail provides interfaceSettings.showContinueRail,
+            LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds
+        ) {
             // Opaque, and that is the point.
             //
             // A page arrives scaled to 94% and fading up while the page it covers
@@ -563,6 +597,21 @@ fun AppNavigation(
                         hiddenSequelsPreferences = hiddenSequelsPreferences,
                         refreshIntervalPreferences = refreshIntervalPreferences,
                         arrivingPreferences = arrivingPreferences,
+                        // A list shortcut has to land on the half it named. Writing
+                        // the remembered type before the tab switch is what makes
+                        // "Manga List" open manga even on a first visit, when no
+                        // page has chosen a type yet.
+                        onOpenLibrary = { rememberedType ->
+                            if (!rememberedType.isNullOrBlank()) {
+                                appScope.launch {
+                                    libraryPreferences.setType(rememberedType)
+                                }
+                            }
+                            navController.navigateToMainTab(
+                                MainTab.LIBRARY,
+                                signedIn = authenticated != null
+                            )
+                        },
                         onSignInAgain = authViewModel::logout
                     )
 
@@ -605,6 +654,11 @@ fun AppNavigation(
                         aniListRepository = aniListRepository,
                         detailHost = detailHost,
                         sharedEntryEditor = sharedEntryEditor
+                    )
+
+                    otherDestinations(
+                        navController = navController,
+                        signedIn = authenticated != null
                     )
 
                     settingsDestinations(
