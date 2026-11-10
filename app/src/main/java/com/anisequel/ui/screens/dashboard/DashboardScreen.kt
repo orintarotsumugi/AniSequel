@@ -201,6 +201,15 @@ fun DashboardScreen(
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
 
+    // The Manga shortcut's cover is only drawn by the new Home. Ask for it when
+    // that page is actually on screen rather than on every dashboard load, so
+    // the classic layout never pays a request for a card it does not draw.
+    LaunchedEffect(appLayout, currentViewer?.id) {
+        if (appLayout == AppLayout.NOVA && currentViewer != null) {
+            dashboardViewModel.ensureMangaPreview()
+        }
+    }
+
     // One answer for "this screen may write to AniList", used by the sheet's
     // editor, its quick add and the recommendation cards' own button. `!= false`
     // rather than `== true` because a refresh briefly leaves the state outside

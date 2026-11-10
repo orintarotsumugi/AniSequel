@@ -72,6 +72,9 @@ object AppRoutes {
     /** The new look's feature hub. Hidden from the classic bar by design. */
     const val OTHER = "other"
 
+    /** Airing and announced titles from the viewer's list, opened from Other. */
+    const val SCHEDULE = "schedule"
+
     /**
      * The path is encoded, not interpolated raw.
      *
@@ -658,7 +661,11 @@ fun AppNavigation(
 
                     otherDestinations(
                         navController = navController,
-                        signedIn = authenticated != null
+                        signedIn = authenticated != null,
+                        aniListRepository = aniListRepository,
+                        dashboardViewModel = mainDashboardViewModel,
+                        detailHost = detailHost,
+                        entryEditor = sharedEntryEditor
                     )
 
                     settingsDestinations(

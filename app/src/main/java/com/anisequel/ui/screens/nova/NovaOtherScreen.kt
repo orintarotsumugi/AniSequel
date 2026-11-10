@@ -56,8 +56,7 @@ import com.anisequel.ui.components.nova.NovaSurface
 @Composable
 fun NovaOtherScreen(
     onBack: () -> Unit,
-    onOpenRecommendations: () -> Unit,
-    onOpenActivity: () -> Unit,
+    onOpenSchedule: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenLibrary: () -> Unit,
     onOpenTiers: () -> Unit,
@@ -128,20 +127,13 @@ fun NovaOtherScreen(
                     }
                 }
 
-                item(key = "activity") {
+                item(key = "schedule", span = { GridItemSpan(maxLineSpan) }) {
                     NovaFeatureCard(
                         icon = AppVectorIcons.Calendar,
-                        title = "Activity",
-                        subtitle = "Your recent watching and reading",
-                        onClick = onOpenActivity
-                    )
-                }
-                item(key = "recommendations") {
-                    NovaFeatureCard(
-                        icon = AppVectorIcons.AnimeSparkle,
-                        title = "Recommendations",
-                        subtitle = "The sequels and films you missed",
-                        onClick = onOpenRecommendations
+                        title = "Schedule",
+                        subtitle = "Airing now and upcoming from your list",
+                        onClick = onOpenSchedule,
+                        wide = true
                     )
                 }
                 item(key = "tiers", span = { GridItemSpan(maxLineSpan) }) {

@@ -100,17 +100,17 @@ fun NovaGreeting(
 /**
  * One of the three doors on Home: a count, a name, and the art that belongs to it.
  *
- * The covers are the ones already in the dashboard's hand (`cardPreview`), so the
- * card costs no request. They are drawn as a small stack on the right, separated
- * by a hairline gap - the reference's collage, at a size a thumb can still trust
- * the label over.
+ * The cover is one the dashboard already holds - the anime from `cardPreview`,
+ * the manga from its one-row preview - so the card itself costs no request. One
+ * image at the right edge, not a two-slice collage: at 44dp a pair of posters
+ * reads as a clipping bug rather than as a stack.
  */
 @Composable
 fun NovaShortcutCard(
     title: String,
     meta: String,
     icon: ImageVector,
-    coverUrls: List<String>,
+    coverUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -170,23 +170,18 @@ fun NovaShortcutCard(
                 )
             }
 
-            if (coverUrls.isNotEmpty()) {
-                Row(
+            // One cover, not the collage the first draft stacked. Two slices of
+            // two different posters read as a rendering mistake at 44dp, and the
+            // card is a door to a list - the count and the label are the content.
+            if (coverUrl != null) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
+                        .width(52.dp)
                         .fillMaxHeight()
-                        .width((44 * coverUrls.take(2).size).dp)
-                ) {
-                    coverUrls.take(2).forEach { url ->
-                        AsyncImage(
-                            model = url,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .width(44.dp)
-                                .fillMaxHeight()
-                        )
-                    }
-                }
+                )
             } else {
                 Box(
                     modifier = Modifier

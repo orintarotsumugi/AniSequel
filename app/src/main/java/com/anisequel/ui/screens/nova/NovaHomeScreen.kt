@@ -94,7 +94,8 @@ fun NovaHomeScreen(
     // fallback for a demo fixture, whose stats object is empty.
     val animeCount = viewer.statistics?.anime?.count ?: state.totalWatchedCount
     val mangaCount = viewer.statistics?.manga?.count ?: 0
-    val animeCovers = state.cardPreview.mapNotNull { it.media.posterUrl }
+    val animeCover = state.cardPreview.firstOrNull()?.media?.posterUrl
+    val mangaCover = state.mangaPreview?.posterUrl
 
     val maxWidth = 640.dp
 
@@ -147,7 +148,7 @@ fun NovaHomeScreen(
                             title = "ANIME LIST",
                             meta = "$animeCount items",
                             icon = AppVectorIcons.Tv,
-                            coverUrls = animeCovers,
+                            coverUrl = animeCover,
                             onClick = onOpenAnimeList,
                             modifier = Modifier.weight(1f)
                         )
@@ -155,7 +156,7 @@ fun NovaHomeScreen(
                             title = "MANGA LIST",
                             meta = "$mangaCount items",
                             icon = AppVectorIcons.SourceBook,
-                            coverUrls = emptyList(),
+                            coverUrl = mangaCover,
                             onClick = onOpenMangaList,
                             modifier = Modifier.weight(1f)
                         )

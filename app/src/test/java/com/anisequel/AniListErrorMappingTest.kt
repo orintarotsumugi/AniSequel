@@ -15,6 +15,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
+import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -95,6 +96,10 @@ class AniListErrorMappingTest {
         override suspend fun getMediaListCollection(
             request: GraphQLRequest
         ): GraphQLResponse<MediaListCollectionData> = GraphQLResponse(null)
+
+        override suspend fun getMangaPreview(
+            request: GraphQLRequest
+        ): GraphQLResponse<MangaPreviewData> = GraphQLResponse(null)
 
         override suspend fun saveMediaListEntry(
             request: GraphQLRequest
@@ -415,6 +420,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun getMediaListCollection(
             request: GraphQLRequest
         ): GraphQLResponse<MediaListCollectionData> = GraphQLResponse(null)
+
+        override suspend fun getMangaPreview(
+            request: GraphQLRequest
+        ): GraphQLResponse<MangaPreviewData> = GraphQLResponse(null)
 
         override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
             GraphQLResponse(null)

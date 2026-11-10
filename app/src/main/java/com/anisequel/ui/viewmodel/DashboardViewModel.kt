@@ -412,6 +412,10 @@ class DashboardViewModel(
     private var cardPreviewCache: List<MediaListEntryItem> = emptyList()
     private var cardPreviewSource: MediaListCollection? = null
 
+    /** The one-row manga cover for Home's shortcut; null until asked for. */
+    private var cachedMangaPreview: MediaNode? = null
+    private var mangaPreviewRequested = false
+
     /**
      * The new Home's Continue rail, and the collection it was taken from.
      *
@@ -675,6 +679,7 @@ class DashboardViewModel(
     private suspend fun loadDemoData() {
         cachedViewer = aniListRepository.getDemoProfile()
         cachedCollection = aniListRepository.getDemoAnimeList()
+        cachedMangaPreview = null
         // Cleared here for the same reason as a real load: the demo list is a
         // different collection from whatever was loaded before it, and the
         // detail cache is keyed by media id. This path used to skip the clear,
@@ -802,6 +807,7 @@ class DashboardViewModel(
             totalMissedCount = work.visible.size,
             recentActivity = work.recentActivity,
             continueWatching = work.continueWatching,
+            mangaPreview = cachedMangaPreview,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
@@ -991,6 +997,40 @@ class DashboardViewModel(
         continueWatchingSource = collection
         continueWatchingCache = computed
         return computed
+    }
+
+    /**
+     * Fetches the one-row manga cover for Home's Manga shortcut.
+     *
+     * Called only while the new look is showing. The classic dashboard has no
+     * Manga shortcut, and asking on every dashboard load would spend one of
+     * AniList's 30-a-minute requests on a page that cannot display the answer.
+     *
+     * Runs beside the list rather than inside `recompute`: it is a cover on a
+     * shortcut, not part of what the page is about. The answer is patched into
+     * the current state, so a filter keystroke that lands while it is in flight
+     * cannot throw it away by recomputing from an older value.
+     */
+    fun ensureMangaPreview() {
+        if (isDemo || mangaPreviewRequested) return
+        val viewerId = cachedViewer?.id ?: return
+        mangaPreviewRequested = true
+        viewModelScope.launch {
+            aniListRepository.getUserMangaPreview(viewerId).fold(
+                onSuccess = { preview ->
+                    cachedMangaPreview = preview
+                    val current = _uiState.value as? DashboardUiState.Success ?: return@fold
+                    if (current.mangaPreview != preview) {
+                        _uiState.value = current.copy(mangaPreview = preview)
+                    }
+                },
+                onFailure = {
+                    // A cover is decoration. Let the next new-look visit try
+                    // again rather than pinning the placeholder for the session.
+                    mangaPreviewRequested = false
+                }
+            )
+        }
     }
 
     /**

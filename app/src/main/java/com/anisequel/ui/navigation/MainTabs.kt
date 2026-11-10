@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -14,11 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.anisequel.domain.ui.AppLayout
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
-import com.anisequel.ui.theme.LocalAppLayout
 
 /**
  * The pages the app's main bar switches between.
@@ -251,23 +248,15 @@ internal fun MainBar(
             .windowInsetsPadding(WindowInsets.navigationBars),
         contentAlignment = Alignment.Center
     ) {
-        // The destinations, the selected index and the tap handler are shared; only
-        // the drawing changes with the layout. That is what keeps a tab pointing at
-        // one page in both looks - see [NovaMainBar].
-        if (LocalAppLayout.current == AppLayout.NOVA) {
-            NovaMainBar(
-                destinations = destinations,
-                selectedIndex = selectedIndex,
-                onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) },
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-        } else {
-            ExpressiveNavigationBar(
-                destinations = destinations,
-                selectedIndex = selectedIndex,
-                onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) }
-            )
-        }
+        // One bar for both looks. The new look used to redraw this as its own
+        // simpler capsule, which quietly cost the hold-and-swipe gesture and made
+        // "the same tab" behave differently depending on a setting. The layout
+        // switch changes pages, not navigation.
+        ExpressiveNavigationBar(
+            destinations = destinations,
+            selectedIndex = selectedIndex,
+            onSelect = { index -> tabs.getOrNull(index)?.let(onSelect) }
+        )
     }
 }
 

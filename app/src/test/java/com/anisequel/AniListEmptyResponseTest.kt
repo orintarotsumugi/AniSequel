@@ -26,6 +26,7 @@ import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
+import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.PageInfo
 import com.anisequel.data.model.ProfileAppearance
@@ -453,6 +454,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     override suspend fun getMediaListCollection(
         request: GraphQLRequest
     ): GraphQLResponse<MediaListCollectionData> = notServed("getMediaListCollection")
+
+    override suspend fun getMangaPreview(
+        request: GraphQLRequest
+    ): GraphQLResponse<MangaPreviewData> = notServed("getMangaPreview")
 
     override suspend fun saveMediaListEntry(
         request: GraphQLRequest

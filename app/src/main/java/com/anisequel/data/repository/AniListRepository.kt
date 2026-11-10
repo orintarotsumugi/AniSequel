@@ -136,6 +136,17 @@ interface AniListRepository {
     ): Result<MediaListCollection> = unsupported("getUserMangaList")
 
     /**
+     * One manga on the viewer's list, for Home's Manga shortcut.
+     *
+     * A `Page.mediaList` row rather than the full collection: the shortcut needs
+     * a cover, and the Library intentionally defers the manga download until the
+     * reader opens that tab. Null means the account has no manga, which is a real
+     * answer and leaves the card as a styled placeholder.
+     */
+    suspend fun getUserMangaPreview(userId: Int): Result<MediaNode?> =
+        unsupported("getUserMangaPreview")
+
+    /**
      * Description, banner and studio for one entry, fetched on demand because
      * the list query omits them (they are only rendered for the entry the user
      * opens, and asking for them up front makes AniList fail on large lists).

@@ -91,33 +91,16 @@ fun InterfaceTab(
             icon = AppVectorIcons.Settings,
             subtitle = "Classic is untouched. The new look is the shelf layout, in beta."
         ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("app_layout_row")
-            ) {
-                AppLayout.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = if (option == AppLayout.NOVA) {
-                            "${option.displayName} · Beta"
-                        } else {
-                            option.displayName
-                        },
-                        selected = option == interfaceSettings.layout,
-                        onClick = {
-                            if (option != interfaceSettings.layout) {
-                                scope.launch { interfacePreferences.setLayout(option) }
-                            }
-                        },
-                        minTouchTargetHeight = 48.dp,
-                        role = Role.RadioButton,
-                        onClickLabel = "Use the ${option.displayName} layout",
-                        modifier = Modifier.testTag("app_layout_${option.storageValue}")
-                    )
-                }
-            }
+            AppLayoutPreviews(
+                selected = interfaceSettings.layout,
+                entries = previewEntries,
+                onSelect = { option ->
+                    if (option != interfaceSettings.layout) {
+                        scope.launch { interfacePreferences.setLayout(option) }
+                    }
+                },
+                modifier = Modifier.testTag("app_layout_row")
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
             SwitchRow(
@@ -160,6 +143,12 @@ fun InterfaceTab(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            LibraryViewPreview(
+                mode = interfaceSettings.libraryView,
+                entries = previewEntries
+            )
         }
 
         SectionCard(

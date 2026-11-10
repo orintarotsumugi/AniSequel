@@ -20,6 +20,7 @@ import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
+import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
@@ -359,6 +360,8 @@ override suspend fun getActivityReplyWindow(request: GraphQLRequest): GraphQLRes
 // loudly with this name in the stack rather than invent an answer.
 override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLResponse<ActivityReplyLikersData> =
     throw UnsupportedOperationException("getActivityReplyLikers is not served by this double")
+    override suspend fun getMangaPreview(request: GraphQLRequest): GraphQLResponse<MangaPreviewData> =
+        throw UnsupportedOperationException("getMangaPreview is not served by this double")
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(

@@ -1,9 +1,18 @@
 package com.anisequel.ui.navigation
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
+import com.anisequel.data.repository.AniListRepository
+import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.screens.nova.NovaOtherScreen
+import com.anisequel.ui.screens.nova.NovaScheduleScreen
+import com.anisequel.ui.viewmodel.DashboardUiState
+import com.anisequel.ui.viewmodel.DashboardViewModel
+import com.anisequel.ui.viewmodel.MediaDetailHost
 
 /**
  * The new look's feature hub.
@@ -19,15 +28,16 @@ import com.anisequel.ui.screens.nova.NovaOtherScreen
  */
 fun NavGraphBuilder.otherDestinations(
     navController: NavHostController,
-    signedIn: Boolean
+    signedIn: Boolean,
+    aniListRepository: AniListRepository,
+    dashboardViewModel: DashboardViewModel?,
+    detailHost: MediaDetailHost,
+    entryEditor: EntryEditor?
 ) {
     composable(AppRoutes.OTHER) {
         NovaOtherScreen(
             onBack = { navController.popBackStack() },
-            onOpenRecommendations = { navController.popBackStack() },
-            onOpenActivity = {
-                navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
-            },
+            onOpenSchedule = { navController.navigateSingle(AppRoutes.SCHEDULE) },
             onOpenProfile = {
                 navController.navigateToMainTab(MainTab.PROFILE, signedIn = signedIn)
             },
@@ -40,4 +50,61 @@ fun NavGraphBuilder.otherDestinations(
             onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) }
         )
     }
+
+    composable(AppRoutes.SCHEDULE) {
+        val openStudio: (Int, String?) -> Unit = { id, name ->
+            navController.navigateSingle(StudioRoutes.studio(id, name))
+        }
+        if (dashboardViewModel == null) {
+            NovaScheduleScreen(
+                entries = emptyList(),
+                isLoading = false,
+                error = null,
+                repository = aniListRepository,
+                detailHost = detailHost,
+                entryEditor = null,
+                onBack = { navController.popBackStack() },
+                onOpenStudio = openStudio
+            )
+        } else {
+            DashboardSchedule(
+                dashboardViewModel = dashboardViewModel,
+                repository = aniListRepository,
+                detailHost = detailHost,
+                entryEditor = entryEditor,
+                onBack = { navController.popBackStack() },
+                onOpenStudio = openStudio
+            )
+        }
+    }
+}
+
+/**
+ * Reads the dashboard's already-downloaded list for the schedule.
+ *
+ * The schedule is not a second query: `arriving` is the same memoised slice Home
+ * draws, and opening this page while the dashboard is refreshing shows the same
+ * waiting state rather than an invented empty schedule.
+ */
+@Composable
+private fun DashboardSchedule(
+    dashboardViewModel: DashboardViewModel,
+    repository: AniListRepository,
+    detailHost: MediaDetailHost,
+    entryEditor: EntryEditor?,
+    onBack: () -> Unit,
+    onOpenStudio: (Int, String?) -> Unit
+) {
+    val state by dashboardViewModel.uiState.collectAsStateWithLifecycle()
+
+    NovaScheduleScreen(
+        entries = (state as? DashboardUiState.Success)?.arriving.orEmpty(),
+        isLoading = state is DashboardUiState.Loading,
+        error = (state as? DashboardUiState.Error)?.message,
+        repository = repository,
+        detailHost = detailHost,
+        entryEditor = entryEditor,
+        onBack = onBack,
+        onOpenStudio = onOpenStudio
+    )
 }

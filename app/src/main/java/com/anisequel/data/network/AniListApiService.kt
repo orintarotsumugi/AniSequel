@@ -15,6 +15,7 @@ import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaCoverPage
 import com.anisequel.data.model.MediaFriendsData
+import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
@@ -54,6 +55,13 @@ interface AniListApiService {
     suspend fun getMediaListCollection(
         @Body request: GraphQLRequest
     ): GraphQLResponse<MediaListCollectionData>
+
+    /** One manga cover for Home's shortcut. See [GraphQLQueries.GET_MANGA_PREVIEW]. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getMangaPreview(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MangaPreviewData>
 
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")
