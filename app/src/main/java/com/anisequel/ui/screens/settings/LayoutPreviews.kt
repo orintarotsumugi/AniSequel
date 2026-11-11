@@ -66,7 +66,15 @@ internal fun AppLayoutPreviews(
     selected: AppLayout,
     entries: List<MediaListEntryItem>,
     onSelect: (AppLayout) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * How far the mini's bottom bar floats above its lower edge, in dp.
+     *
+     * The Interface page passes the slider's value, so the previews move with it -
+     * the reader is not choosing a number, they are choosing a gap they can see.
+     * First-run setup leaves it at zero because it has no bar control.
+     */
+    barLift: Int = 0
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -109,17 +117,19 @@ internal fun AppLayoutPreviews(
                             // 132dp was shorter than the Nova mini's own fixed rows
                             // (header, greeting, shortcuts, covers, bar), so the bar
                             // at the bottom was clipped off - the one difference a
-                            // reader is choosing between. The height now has room for
-                            // every row plus a weighted gap; the card labels sit below.
-                            .height(168.dp)
+                            // reader is choosing between. 184dp leaves room for every
+                            // row, a weighted gap, and the tallest lift the bar
+                            // slider can ask for, so the preview never clips the bar
+                            // it is demonstrating.
+                            .height(184.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerLow)
                             .padding(7.dp)
                     ) {
                         if (layout == AppLayout.NOVA) {
-                            NovaLayoutMini(entries = entries)
+                            NovaLayoutMini(entries = entries, barLift = barLift)
                         } else {
-                            ClassicLayoutMini(entries = entries)
+                            ClassicLayoutMini(entries = entries, barLift = barLift)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -141,7 +151,7 @@ internal fun AppLayoutPreviews(
 }
 
 @Composable
-private fun ClassicLayoutMini(entries: List<MediaListEntryItem>) {
+private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
     Column(modifier = Modifier.fillMaxSize()) {
         MiniTopBar()
         Spacer(modifier = Modifier.height(7.dp))
@@ -152,12 +162,15 @@ private fun ClassicLayoutMini(entries: List<MediaListEntryItem>) {
             Spacer(modifier = Modifier.height(5.dp))
         }
         Spacer(modifier = Modifier.weight(1f))
+        // The bar's gap takes room from the feed above it, exactly as the real
+        // lift takes room from the page; a fixed preview height must not clip it.
+        if (barLift > 0) Spacer(modifier = Modifier.height(barLift.dp))
         MiniBottomBar()
     }
 }
 
 @Composable
-private fun NovaLayoutMini(entries: List<MediaListEntryItem>) {
+private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
     Column(modifier = Modifier.fillMaxSize()) {
         MiniTopBar()
         Spacer(modifier = Modifier.height(7.dp))
@@ -199,6 +212,7 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>) {
             }
         }
         Spacer(modifier = Modifier.weight(1f))
+        if (barLift > 0) Spacer(modifier = Modifier.height(barLift.dp))
         MiniBottomBar()
     }
 }

@@ -72,6 +72,7 @@ import com.anisequel.ui.screens.nova.NovaHomeScreen
 import com.anisequel.ui.screens.nova.NovaHomeSkeleton
 import com.anisequel.ui.screens.profile.LibraryType
 import com.anisequel.ui.theme.LocalAppLayout
+import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.viewmodel.DashboardEvent
@@ -311,10 +312,14 @@ fun DashboardScreen(
         // Planning" confirmation was drawn behind the bar that had just been tapped
         // to come back from. `MainBarClearance` and not `mainBarClearance()`: the
         // Scaffold has already paid the inset, and this is only the bar's own height.
+        // The reader's lift is added on top: the bar can now float above the inset,
+        // and a confirmation left at the old height would appear behind it.
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = MainBarClearance)
+                modifier = Modifier.padding(
+                    bottom = MainBarClearance + LocalMainBarLift.current.dp
+                )
             )
         },
         topBar = {

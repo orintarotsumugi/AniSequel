@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,11 +37,14 @@ import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
+import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.MediaPosterCell
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
+import com.anisequel.ui.components.rememberBoundSliderState
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * How the app is laid out, as distinct from what colour it is.
@@ -95,6 +101,13 @@ fun InterfaceTab(
     val interfaceSettings by interfacePreferences.settings.collectAsState(
         initial = InterfacePreferences.InterfaceSettings()
     )
+    // The slider's live value while the finger is down. The preview above reads
+    // this, not the preference, so dragging moves the mini bar immediately; the
+    // preference is written once on release rather than on every tick, because a
+    // DataStore write per frame would make the drag the thing that stutters.
+    var liftDraft by remember(interfaceSettings.mainBarLift) {
+        mutableFloatStateOf(interfaceSettings.mainBarLift.toFloat())
+    }
 
     SettingsScrollColumn(modifier) {
         SectionCard(
@@ -110,7 +123,48 @@ fun InterfaceTab(
                         scope.launch { interfacePreferences.setLayout(option) }
                     }
                 },
-                modifier = Modifier.testTag("app_layout_row")
+                modifier = Modifier.testTag("app_layout_row"),
+                barLift = liftDraft.roundToInt()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingsFieldLabel(text = "Bottom bar lift")
+                Text(
+                    text = "${liftDraft.roundToInt()} dp",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                // Bound, not owned: Reset writes this preference back to zero from
+                // elsewhere, and a state that only read its first value would leave
+                // the thumb where the reader left it.
+                state = rememberBoundSliderState(
+                    value = liftDraft,
+                    // One tick every 2dp between 0 and 24. The divisor is the step,
+                    // not a hand-written 11, so changing the range above keeps the
+                    // ticks honest.
+                    steps = (NavBarLift.MAX_DP - NavBarLift.MIN_DP) / NavBarLift.STEP_DP - 1,
+                    trackRange = NavBarLift.MIN_DP.toFloat()..NavBarLift.MAX_DP.toFloat()
+                ),
+                onValueChange = { liftDraft = it },
+                onValueChangeFinished = {
+                    val lift = NavBarLift.clamp(liftDraft.roundToInt())
+                    scope.launch { interfacePreferences.setMainBarLift(lift) }
+                },
+                modifier = Modifier.testTag("main_bar_lift_slider")
+            )
+            Text(
+                text = "The mini layouts above move with the slider. The real bar " +
+                    "floats this far above the bottom edge, and every list keeps " +
+                    "room for it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(8.dp))

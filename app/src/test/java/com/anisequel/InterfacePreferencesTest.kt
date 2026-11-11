@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.domain.ui.NavBarLift
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -51,5 +52,41 @@ class InterfacePreferencesTest {
             preferences().setCardStyle(style)
             assertEquals("${style.name} round trip", style, preferences().cardStyle.first())
         }
+    }
+
+    /**
+     * The slider writes whole dp; the preference has to survive a value it never
+     * offered. A bar lifted past its ceiling would sit over the page it is meant to
+     * navigate, and a negative lift would draw it under the device's inset - so the
+     * clamp belongs at the boundary, not only in the UI that normally enforces it.
+     */
+    @Test
+    fun `the bar lift ships at zero and clamps to its range`() = runTest {
+        assertEquals(
+            "an install that never touched the slider keeps the bar on the bottom edge",
+            NavBarLift.DEFAULT_DP,
+            preferences().settings.first().mainBarLift
+        )
+
+        preferences().setMainBarLift(NavBarLift.MAX_DP + 40)
+        assertEquals(
+            "a lift over the ceiling must land at the ceiling",
+            NavBarLift.MAX_DP,
+            preferences().settings.first().mainBarLift
+        )
+
+        preferences().setMainBarLift(-12)
+        assertEquals(
+            "a negative lift must land on the bottom edge, not under the inset",
+            NavBarLift.MIN_DP,
+            preferences().settings.first().mainBarLift
+        )
+
+        preferences().reset()
+        assertEquals(
+            "Reset puts the bar back on the bottom edge",
+            NavBarLift.DEFAULT_DP,
+            preferences().settings.first().mainBarLift
+        )
     }
 }

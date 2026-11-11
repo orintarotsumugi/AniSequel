@@ -38,6 +38,10 @@
         {
           "title": "Ani-chan reacts to what the app just did",
           "detail": "The joke system has two new moments: a title joining Planning or Watching, and a catalogue search settling with results. Both are announced by the successful write or answer, so a failure or an empty search cannot produce a line about success. The pool also grew by fifty lines across its five tones."
+        },
+        {
+          "title": "The bottom bar can float a little higher",
+          "detail": "Settings > Interface now has a slider that lifts the main bar 0-24dp above the device's navigation inset. The two mini layouts above it move with the slider while you drag, and every page's bottom clearance, the dashboard's snackbar and the joke toast follow the same value, so nothing is left sitting under the raised bar. 0dp is the shipped position."
         }
       ]
     },

@@ -53,6 +53,7 @@ import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
 import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
+import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
@@ -567,6 +568,7 @@ fun AppNavigation(
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,
+            LocalMainBarLift provides interfaceSettings.mainBarLift,
             LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds,
             LocalSearchTopBarShortcut provides searchTopBar,
             LocalTierTopBarShortcut provides tierTopBar
