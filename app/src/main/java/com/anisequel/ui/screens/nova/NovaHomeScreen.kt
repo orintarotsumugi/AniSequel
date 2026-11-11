@@ -29,6 +29,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.nova.NovaSectionHeading
+import com.anisequel.ui.components.nova.NovaGreeting
 import com.anisequel.ui.components.seasonal.SeasonalWind
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection

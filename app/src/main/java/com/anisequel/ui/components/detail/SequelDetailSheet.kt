@@ -377,6 +377,7 @@ fun SequelDetailSheet(
                         onOpenStudio = onOpenStudio,
                         onOpenCharacter = onOpenCharacter,
                         onOpenStaff = onOpenStaff,
+                        onEditEntry = { if (entryEditor != null) destination = 1 },
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
                         bottomContentPadding = navClearance,

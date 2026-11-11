@@ -72,6 +72,8 @@ import com.anisequel.ui.screens.nova.NovaHomeScreen
 import com.anisequel.ui.screens.nova.NovaHomeSkeleton
 import com.anisequel.ui.screens.profile.LibraryType
 import com.anisequel.ui.theme.LocalAppLayout
+import com.anisequel.ui.theme.LocalSearchTopBarShortcut
+import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.viewmodel.DashboardEvent
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
@@ -89,6 +91,8 @@ fun DashboardScreen(
     onOpenSettings: (ViewerProfile?) -> Unit,
     onSignInAgain: () -> Unit = {},
     onOpenProfile: (ViewerProfile?) -> Unit = {},
+    onOpenSearch: () -> Unit = {},
+    onOpenTiers: () -> Unit = {},
     /**
      * Opens a studio's page from the credits on a title the sheet is showing.
      *
@@ -322,6 +326,8 @@ fun DashboardScreen(
                 onRefresh = requestRefresh,
                 onOpenSettings = { onOpenSettings(currentViewer) },
                 onOpenProfile = { onOpenProfile(currentViewer) },
+                onOpenSearch = onOpenSearch,
+                onOpenTiers = onOpenTiers,
                 isRefreshing = successState?.isRefreshing == true,
                 hasActiveFilters = hasActiveFilters,
                 showingSavedCopy = successState?.isCached == true,
@@ -766,6 +772,8 @@ private fun DashboardTopBar(
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenProfile: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenTiers: () -> Unit,
     isRefreshing: Boolean,
     hasActiveFilters: Boolean,
     showingSavedCopy: Boolean,
@@ -776,7 +784,9 @@ private fun DashboardTopBar(
             viewerName = viewer?.name,
             avatarUrl = viewer?.avatar?.medium,
             onOpenProfile = onOpenProfile,
-            onOpenSettings = onOpenSettings
+            onOpenSettings = onOpenSettings,
+            onOpenSearch = onOpenSearch.takeIf { LocalSearchTopBarShortcut.current },
+            onOpenTiers = onOpenTiers.takeIf { LocalTierTopBarShortcut.current }
         )
     } else {
         AniTopAppBar(
@@ -788,6 +798,8 @@ private fun DashboardTopBar(
             onOpenProfile = onOpenProfile,
             isRefreshing = isRefreshing,
             hasActiveFilters = hasActiveFilters,
+            onOpenSearch = onOpenSearch.takeIf { LocalSearchTopBarShortcut.current },
+            onOpenTiers = onOpenTiers.takeIf { LocalTierTopBarShortcut.current },
             showingSavedCopy = showingSavedCopy,
             scrollBehavior = scrollBehavior
         )

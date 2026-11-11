@@ -103,6 +103,12 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val searchTab by mainTabPreferences.searchTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
+    )
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    )
 
     SectionCard(
         title = "Bottom bar",
@@ -110,9 +116,33 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
         subtitle = "Which pages the bar switches between"
     ) {
         SwitchRow(
+            title = "Tier lists top-bar shortcut",
+            subtitle = "Show the trophy beside Settings and Profile in both layouts; this also adds the Tiers tab.",
+            checked = tierTopBar,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setTierTopBar(enabled) }
+            },
+            modifier = Modifier.testTag("tier_list_top_bar_switch")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SwitchRow(
+            title = "Catalogue search top-bar shortcut",
+            subtitle = "Show the magnifier beside Settings and Profile in both layouts; this also adds the Search tab.",
+            checked = searchTopBar,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
+            },
+            modifier = Modifier.testTag("search_top_bar_switch")
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        SwitchRow(
             title = "Tier lists tab",
-            subtitle = "Add Tiers between Library and Profile, so your lists are one " +
-                "tap away. The trophy in your library opens the same page either way.",
+            subtitle = "Add Tiers between Library and Profile. Turning this off hides only " +
+                "the tab; the trophy shortcut and your lists remain available.",
             checked = tierListTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setTierListTab(enabled) }
@@ -129,9 +159,8 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
         // available would be understood as cosmetic.
         SwitchRow(
             title = "Search tab",
-            subtitle = "Search every anime and manga on AniList and add a title " +
-                "straight to your list. This page is reached from the bar, so " +
-                "turning the tab off hides it.",
+            subtitle = "Search every anime and manga on AniList. The top-bar shortcut " +
+                "also opens this page; turn both off to remove direct shortcuts.",
             checked = searchTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setSearchTab(enabled) }

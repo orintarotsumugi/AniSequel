@@ -54,3 +54,9 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * and detail sheet honours one switch.
  */
 val LocalConfirmPlanningAdd = staticCompositionLocalOf { true }
+
+/** Optional direct catalogue shortcut shown beside the Nova/classic top-bar actions. */
+val LocalSearchTopBarShortcut = staticCompositionLocalOf { false }
+
+/** Optional direct tier-list shortcut shown beside the Nova/classic top-bar actions. */
+val LocalTierTopBarShortcut = staticCompositionLocalOf { false }

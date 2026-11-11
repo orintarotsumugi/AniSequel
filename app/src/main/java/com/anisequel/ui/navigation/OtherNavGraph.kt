@@ -7,7 +7,6 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.anisequel.data.repository.AniListRepository
-import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.screens.nova.NovaOtherScreen
 import com.anisequel.ui.screens.nova.NovaScheduleScreen
@@ -34,14 +33,7 @@ fun NavGraphBuilder.otherDestinations(
     aniListRepository: AniListRepository,
     dashboardViewModel: DashboardViewModel?,
     detailHost: MediaDetailHost,
-    entryEditor: EntryEditor?,
-    /**
-     * The hold length and the swipe switch the search page's add buttons use.
-     *
-     * Handed in rather than defaulted so the catalogue's cards behave exactly
-     * like the ones on Home: one setting, every control.
-     */
-    quickAddPreferences: QuickAddPreferences
+    entryEditor: EntryEditor?
 ) {
     composable(AppRoutes.OTHER) {
         NovaOtherScreen(
@@ -67,8 +59,12 @@ fun NavGraphBuilder.otherDestinations(
         NovaSearchScreen(
             repository = aniListRepository,
             canWrite = signedIn,
-            quickAddPreferences = quickAddPreferences,
-            onBack = { navController.popBackStack() }
+            onBack = { navController.popBackStack() },
+            detailHost = detailHost,
+            entryEditor = entryEditor,
+            onOpenStudio = { id, name ->
+                navController.navigateSingle(StudioRoutes.studio(id, name))
+            }
         )
     }
 

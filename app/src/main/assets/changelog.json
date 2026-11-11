@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.9.2",
+      "entries": [
+        {
+          "title": "Five first-run choices, without locking the door",
+          "detail": "A first launch can now choose the app layout, theme, motion feel, joke frequency and top-bar shortcuts in one skippable setup. Every choice remains available in Settings."
+        },
+        {
+          "title": "A catalogue you can browse and open",
+          "detail": "Search waits for typing to settle and ignores stale replies, then lays results out as a three-column poster gallery with anime/manga, format, score and year. Tap any full card to open its in-app title page."
+        },
+        {
+          "title": "The title page can change your list",
+          "detail": "When a title is already on your AniList, its Info page now offers a direct route to the full entry editor: choose any AniList status, edit progress, score and dates, or delete the entry. The same editor works when a title was opened from catalogue search."
+        },
+        {
+          "title": "Your Home says hello in more than one way",
+          "detail": "Nova Home chooses from a larger set of greetings on each visit, with a short expressive transition instead of repeating the same opening line."
+        },
+        {
+          "title": "Search and Tiers can live beside the top-bar profile",
+          "detail": "The optional catalogue and tier-list shortcuts now appear in both Nova and Classic top bars, alongside Settings and Profile. Their switches are in Settings > Library > Bottom bar and the shortcuts are included in first-run setup."
+        }
+      ]
+    },
+    {
       "version": "1.9.1",
       "entries": [
         {

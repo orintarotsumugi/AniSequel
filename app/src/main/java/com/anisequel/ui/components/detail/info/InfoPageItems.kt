@@ -83,7 +83,8 @@ internal fun LazyListScope.infoPageItems(
     onOpenStudio: (Int, String?) -> Unit,
     onOpenCharacter: ((Int) -> Unit)?,
     onOpenStaff: ((Int) -> Unit)?,
-    onOpenCover: () -> Unit
+    onOpenCover: () -> Unit,
+    onEditEntry: (() -> Unit)?
 ) {
     val media = subject.media
 
@@ -123,6 +124,7 @@ internal fun LazyListScope.infoPageItems(
             isDetailLoading = isDetailLoading,
             holdDurationSeconds = holdDurationSeconds,
             swipeEnabled = swipeEnabled,
+            onEditEntry = onEditEntry,
             context = context,
             modifier = it
         )

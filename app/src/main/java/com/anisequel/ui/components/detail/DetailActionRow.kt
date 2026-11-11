@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.pageUrl
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.HoldAndSwipePlanningButton
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
@@ -92,17 +94,19 @@ fun DetailActionRow(
      */
     isDetailLoading: Boolean = false,
     holdDurationSeconds: Int = 3,
-    swipeEnabled: Boolean = true
+    swipeEnabled: Boolean = true,
+    onEditEntry: (() -> Unit)? = null
 ) {
     val sequel = subject.sequel
     val media = subject.media
     val listStatus = media.mediaListEntry?.status
+    val canonicalStatus = ListStatuses.normalize(listStatus)
 
     val isPlanned = quickAddStatus.isAddedToPlanning ||
-        listStatus.equals("PLANNING", ignoreCase = true)
+        canonicalStatus == ListStatuses.PLANNING
     val isWatching = quickAddStatus.isAddedToWatching ||
-        listStatus.equals("CURRENT", ignoreCase = true) ||
-        listStatus.equals("REPEATING", ignoreCase = true)
+        canonicalStatus == ListStatuses.CURRENT ||
+        canonicalStatus == ListStatuses.REPEATING
     // Completed, paused or dropped: on a list of some kind, so there is nothing
     // to add without rewriting it. Those titles get the AniList link alone.
     val isOnAnotherList = listStatus != null && !isPlanned && !isWatching
@@ -177,6 +181,30 @@ fun DetailActionRow(
                     holdDurationSeconds = holdDurationSeconds,
                     swipeEnabled = swipeEnabled
                 )
+            }
+        }
+
+        if (sequel == null && (listStatus != null || isPlanned || isWatching) &&
+            canWriteToAniList && onEditEntry != null
+        ) {
+            TextButton(
+                onClick = { onEditEntry?.invoke() },
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .testTag("info_edit_list_entry")
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.EditEntry,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                val editableStatus = listStatus ?: when {
+                    isPlanned -> ListStatuses.PLANNING
+                    isWatching -> ListStatuses.CURRENT
+                    else -> null
+                }
+                Text("Edit ${ListStatuses.label(editableStatus, media.isManga)} entry")
             }
         }
 

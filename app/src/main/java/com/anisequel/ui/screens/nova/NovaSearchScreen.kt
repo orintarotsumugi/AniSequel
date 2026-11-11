@@ -1,6 +1,8 @@
 package com.anisequel.ui.screens.nova
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,8 +20,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -49,26 +54,32 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.detailFor
+import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.model.isManga
-import com.anisequel.data.model.isOnPlanningList
-import com.anisequel.data.model.isOnWatchingList
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
-import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaBackdrop
 import com.anisequel.ui.components.nova.NovaSurface
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.navigation.mainBarClearance
-import com.anisequel.ui.viewmodel.QuickAddStatus
-import com.anisequel.ui.viewmodel.quickAddKey
+import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.SequelDetailSheet
+import com.anisequel.ui.components.rememberFullHeightSheetState
+import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
+import com.anisequel.ui.viewmodel.rememberPersonProfileHost
+import com.anisequel.ui.viewmodel.toMediaNode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /** How long the field waits after a keystroke before asking AniList. */
@@ -76,6 +87,10 @@ private const val SEARCH_DEBOUNCE_MILLIS = 350L
 
 /** Two characters, because one is a prefix rather than a question. */
 private const val SEARCH_MIN_LENGTH = 2
+
+/** A late response is allowed to publish only while it still owns the field. */
+internal fun isCurrentSearchGeneration(response: Int, current: Int): Boolean =
+    response == current
 
 /**
  * The catalogue search: AniList's whole library, not the reader's list.
@@ -100,9 +115,9 @@ private const val SEARCH_MIN_LENGTH = 2
  * network. AniList allows roughly thirty requests a minute, and a request per
  * character is how the field would spend them before the reader finished typing.
  *
- * A title that is already on the reader's list draws the shared badge rather
- * than a button - the same rule every other card in the app follows, and the
- * reason the query asks for `mediaListEntry`.
+ * A result is a full, tappable title card. `mediaListEntry` is displayed on
+ * that card and the shared detail sheet handles every edit, so search cannot
+ * accidentally overwrite an existing status with a quick-add mutation.
  */
 @Composable
 fun NovaSearchScreen(
@@ -110,22 +125,33 @@ fun NovaSearchScreen(
     canWrite: Boolean,
     quickAddPreferences: QuickAddPreferences,
     onBack: () -> Unit,
+    detailHost: MediaDetailHost,
+    entryEditor: com.anisequel.ui.components.detail.EntryEditor? = null,
+    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    val profiles = rememberPersonProfileHost(repository)
     val planningAdd = rememberPlanningAddHost(repository = repository, canWrite = canWrite)
-    val statuses by planningAdd.statuses.collectAsState()
+    val quickAddStatuses by planningAdd.statuses.collectAsState()
     val quickAdd by quickAddPreferences.settings.collectAsState(
         initial = QuickAddPreferences.QuickAddSettings()
     )
+    val detailSheetState = rememberFullHeightSheetState()
 
     var query by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaNode>>(emptyList()) }
     var searchedTerm by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
+    var requestGeneration by remember { mutableIntStateOf(0) }
+    val details by detailHost.details.collectAsState()
+    val loadingDetailIds by detailHost.loading.collectAsState()
+    val friends by detailHost.friends.collectAsState()
 
     LaunchedEffect(query) {
         val term = query.trim()
+        val generation = ++requestGeneration
         if (term.length < SEARCH_MIN_LENGTH) {
             results = emptyList()
             searchedTerm = ""
@@ -135,19 +161,32 @@ fun NovaSearchScreen(
         }
 
         isSearching = true
-        delay(SEARCH_DEBOUNCE_MILLIS)
-        repository.searchMedia(term)
-            .onSuccess { found ->
-                results = found
-                searchedTerm = term
-                error = null
-            }
-            .onFailure { failure ->
-                results = emptyList()
-                searchedTerm = term
-                error = failure.message ?: "AniList did not answer."
-            }
-        isSearching = false
+        error = null
+        try {
+            delay(SEARCH_DEBOUNCE_MILLIS)
+            repository.searchMedia(term)
+                .onSuccess { found ->
+                    // A repository implementation may complete despite cancellation.
+                    // The generation check prevents its stale answer replacing the
+                    // results for the query currently visible in the field.
+                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
+                        results = found
+                        searchedTerm = term
+                        error = null
+                    }
+                }
+                .onFailure { failure ->
+                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
+                        results = emptyList()
+                        searchedTerm = term
+                        error = failure.message ?: "AniList did not answer."
+                    }
+                }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } finally {
+            if (isCurrentSearchGeneration(generation, requestGeneration)) isSearching = false
+        }
     }
 
     NovaBackdrop(modifier = modifier.fillMaxSize()) {
@@ -247,8 +286,8 @@ fun NovaSearchScreen(
                 when {
                     query.trim().length < SEARCH_MIN_LENGTH -> SearchNote(
                         text = "Type at least $SEARCH_MIN_LENGTH characters to search " +
-                            "every anime and manga AniList knows about. Nothing here " +
-                            "changes your list until you add it."
+                            "every anime and manga AniList knows about. Your list " +
+                            "only changes after you edit a title's entry."
                     )
 
                     isSearching -> SearchSkeleton()
@@ -261,28 +300,28 @@ fun NovaSearchScreen(
                         text = "No title matches \"$searchedTerm\"."
                     )
 
-                    else -> LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                    else -> LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("nova_search_results"),
                         contentPadding = PaddingValues(
-                            start = 20.dp,
-                            end = 20.dp,
-                            top = 4.dp,
+                            start = 14.dp,
+                            end = 14.dp,
+                            top = 6.dp,
                             bottom = mainBarClearance() + 20.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(
                             items = results,
                             key = { media -> "${media.type}_${media.id}" },
                             contentType = { "search_result" }
                         ) { media ->
-                            SearchResultRow(
+                            SearchResultCard(
                                 media = media,
-                                status = statuses[quickAddKey(media)],
-                                holdDurationSeconds = quickAdd.holdDurationSeconds,
-                                swipeEnabled = quickAdd.swipeEnabled,
-                                onAddToPlanning = { planningAdd.onAddToPlanning(media) },
-                                onAddToWatching = { planningAdd.onAddToWatching(media) }
+                                onOpen = { selectedMedia = media }
                             )
                         }
                     }
@@ -290,37 +329,70 @@ fun NovaSearchScreen(
             }
         }
     }
+
+    selectedMedia?.let { summary ->
+        val subject = AnimeDetailSubject.Media(
+            details.detailFor(summary)?.withSummaryProgress(summary) ?: summary
+        )
+        SequelDetailSheet(
+            subject = subject,
+            sheetState = detailSheetState,
+            onDismiss = { selectedMedia = null },
+            onAddToPlanning = {},
+            onAddToWatching = {},
+            quickAddStatuses = quickAddStatuses,
+            onAddMediaToPlanning = planningAdd.onAddToPlanning,
+            onAddMediaToWatching = planningAdd.onAddToWatching,
+            holdDurationSeconds = quickAdd.holdDurationSeconds,
+            swipeEnabled = quickAdd.swipeEnabled,
+            onLoadDetail = detailHost.onLoadDetail,
+            onLoadFriends = detailHost.onLoadFriends,
+            friends = friends[subject.mediaId].orEmpty(),
+            isDetailLoading = subject.mediaId in loadingDetailIds,
+            canWriteToAniList = canWrite,
+            entryEditor = entryEditor,
+            onOpenMedia = { selectedMedia = it },
+            onOpenStudio = { id, name ->
+                selectedMedia = null
+                onOpenStudio(id, name)
+            },
+            onOpenCharacter = profiles.onOpenCharacter,
+            onOpenStaff = profiles.onOpenStaff
+        )
+    }
+    profiles.Sheet { appearance -> selectedMedia = appearance.toMediaNode() }
 }
 
-/** One result: the cover, what it is, and the shared quick-add control. */
+/** One catalogue title as a complete, tappable poster card. */
 @Composable
-private fun SearchResultRow(
-    media: MediaNode,
-    status: QuickAddStatus?,
-    holdDurationSeconds: Int,
-    swipeEnabled: Boolean,
-    onAddToPlanning: () -> Unit,
-    onAddToWatching: () -> Unit
-) {
+private fun SearchResultCard(media: MediaNode, onOpen: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val coverColor = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHigh
+    val metadata = listOfNotNull(
+        media.type?.lowercase()?.replaceFirstChar { it.uppercase() },
+        media.format?.takeIf { it.isNotBlank() },
+        media.averageScore?.takeIf { it > 0 }?.let { "★ $it" },
+        media.seasonYear?.toString()
+    ).joinToString(" · ")
     NovaSurface(
         modifier = Modifier
             .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onOpen
+            )
             .testTag("nova_search_result_${media.id}"),
-        tonalElevation = true
+        tonalElevation = true,
+        shape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Top
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
-                    .width(62.dp)
-                    .height(92.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(media.posterColor.toCoverColorOrNull() ?: Color.Transparent)
+                    .fillMaxWidth()
+                    .aspectRatio(0.68f)
+                    .background(coverColor)
             ) {
                 AsyncImage(
                     model = media.posterUrl,
@@ -328,9 +400,28 @@ private fun SearchResultRow(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                Surface(
+                    shape = ExpressiveShapes.pill,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(7.dp)
+                ) {
+                    Text(
+                        text = if (media.isManga) "MANGA" else "ANIME",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                    )
+                }
             }
-
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(108.dp)
+                    .padding(horizontal = 9.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
                     text = media.displayName,
                     style = MaterialTheme.typography.titleSmall,
@@ -339,39 +430,21 @@ private fun SearchResultRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = listOfNotNull(
-                        media.type?.lowercase()?.replaceFirstChar { it.uppercase() },
-                        media.format?.takeIf { it.isNotBlank() },
-                        media.averageScore?.takeIf { it > 0 }?.let { "★ $it" },
-                        media.seasonYear?.toString()
-                    ).joinToString("  ·  "),
+                    text = metadata.ifBlank { "Tap for details" },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                QuickAddPlanningButton(
-                    mediaId = media.id,
-                    isAddedToPlanning = media.isOnPlanningList() ||
-                        status?.isAddedToPlanning == true,
-                    isAddedToWatching = media.isOnWatchingList() ||
-                        status?.isAddedToWatching == true,
-                    isBusy = status?.isBusy == true,
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                status?.error?.let { message ->
-                    Spacer(modifier = Modifier.height(4.dp))
+                val listStatus = media.mediaListEntry?.status
+                if (listStatus != null) {
                     Text(
-                        text = message,
+                        text = com.anisequel.domain.list.ListStatuses.label(listStatus, media.isManga),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
                     )
                 }
             }
@@ -403,17 +476,49 @@ private fun SearchSkeleton() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        repeat(4) {
-            ShimmerBox(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(112.dp),
-                shape = RoundedCornerShape(26.dp),
-                phase = phase
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            ExpressiveLoadingIndicator(
+                modifier = Modifier.size(24.dp),
+                color = MaterialTheme.colorScheme.primary
             )
+        }
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            userScrollEnabled = false
+        ) {
+            items(count = 6, key = { "search_skeleton_$it" }) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainerLow,
+                            RoundedCornerShape(ExpressiveShapes.MediumCorner)
+                        )
+                        .padding(7.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(0.68f),
+                        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+                        phase = phase
+                    )
+                    ShimmerBox(modifier = Modifier.fillMaxWidth(0.9f).height(13.dp), phase = phase)
+                    ShimmerBox(modifier = Modifier.fillMaxWidth(0.62f).height(10.dp), phase = phase)
+                }
+            }
         }
     }
 }

@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -69,50 +68,6 @@ import com.anisequel.ui.navigation.mainBarClearance
  * shortcut card and a compact sequel row. The screen file then reads as the order
  * of its sections, which is the part a reader actually changes.
  */
-
-/** The greeting, and the one sentence that says what this page is for. */
-@Composable
-fun NovaGreeting(
-    viewerName: String,
-    modifier: Modifier = Modifier
-) {
-    // Centred, because the greeting is the page's one moment of address rather
-    // than the first row of a list. Left-aligned it competed with the shortcut
-    // cards below it for the same edge, and the two lines read as a header that
-    // had been cut off; centred, the block answers the identity card above it and
-    // the shelf below starts clean on its own margin.
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Hey $viewerName,",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Text(
-            text = "what are we doing today?",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Find your favourite anime or manga, manhwa or whatever you like!",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(0.92f)
-        )
-    }
-}
 
 /**
  * One of the three doors on Home: a count, a name, and the art that belongs to it.

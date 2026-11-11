@@ -153,6 +153,8 @@ fun NovaTopBar(
     avatarUrl: String?,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: (() -> Unit)? = null,
+    onOpenTiers: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -210,6 +212,38 @@ fun NovaTopBar(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                if (onOpenSearch != null) {
+                    IconButton(
+                        onClick = onOpenSearch,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .bouncyPress(pressedScale = 0.9f)
+                            .testTag("nova_top_search")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Search,
+                            contentDescription = "Search anime and manga",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                if (onOpenTiers != null) {
+                    IconButton(
+                        onClick = onOpenTiers,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .bouncyPress(pressedScale = 0.9f)
+                            .testTag("nova_top_tiers")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Trophy,
+                            contentDescription = "Tier lists",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
                 IconButton(

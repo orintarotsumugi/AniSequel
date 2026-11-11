@@ -41,6 +41,8 @@ class MainTabPreferences(private val context: Context) {
     private object Keys {
         val TIER_LIST_TAB = booleanPreferencesKey("tier_list_tab")
         val SEARCH_TAB = booleanPreferencesKey("search_tab")
+        val SEARCH_TOP_BAR = booleanPreferencesKey("search_top_bar")
+        val TIER_TOP_BAR = booleanPreferencesKey("tier_top_bar")
     }
 
     /**
@@ -58,6 +60,7 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setTierListTab(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.TIER_LIST_TAB] = enabled
+            if (!enabled) preferences[Keys.TIER_TOP_BAR] = false
         }
     }
 
@@ -79,6 +82,31 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setSearchTab(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.SEARCH_TAB] = enabled
+            if (!enabled) preferences[Keys.SEARCH_TOP_BAR] = false
+        }
+    }
+
+    /** Whether the catalogue has a direct shortcut beside the top-bar profile/settings. */
+    val searchTopBar: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.SEARCH_TOP_BAR] ?: DEFAULT_SEARCH_TOP_BAR
+    }
+
+    suspend fun setSearchTopBar(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.SEARCH_TOP_BAR] = enabled
+            if (enabled) preferences[Keys.SEARCH_TAB] = true
+        }
+    }
+
+    /** Whether tier lists have a direct top-bar shortcut. */
+    val tierTopBar: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.TIER_TOP_BAR] ?: DEFAULT_TIER_TOP_BAR
+    }
+
+    suspend fun setTierTopBar(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.TIER_TOP_BAR] = enabled
+            if (enabled) preferences[Keys.TIER_LIST_TAB] = true
         }
     }
 
@@ -87,11 +115,15 @@ class MainTabPreferences(private val context: Context) {
         context.mainTabsDataStore.edit { preferences ->
             preferences.remove(Keys.TIER_LIST_TAB)
             preferences.remove(Keys.SEARCH_TAB)
+            preferences.remove(Keys.SEARCH_TOP_BAR)
+            preferences.remove(Keys.TIER_TOP_BAR)
         }
     }
 
     companion object {
         const val DEFAULT_TIER_LIST_TAB = false
         const val DEFAULT_SEARCH_TAB = false
+        const val DEFAULT_SEARCH_TOP_BAR = false
+        const val DEFAULT_TIER_TOP_BAR = false
     }
 }

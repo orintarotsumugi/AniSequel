@@ -40,18 +40,22 @@ import com.anisequel.data.repository.HiddenSequelsPreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MainTabPreferences
+import com.anisequel.data.repository.OnboardingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
+import com.anisequel.ui.screens.login.FirstRunSetupDialog
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
 import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
 import com.anisequel.ui.theme.LocalShowContinueRail
+import com.anisequel.ui.theme.LocalSearchTopBarShortcut
+import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -204,6 +208,20 @@ fun AppNavigation(
     val searchTab by mainTabPreferences.searchTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
+    )
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    )
+
+    val onboardingPreferences = remember(context) {
+        OnboardingPreferences(context.applicationContext)
+    }
+    // Hold the setup until DataStore has answered: showing it on the initial default
+    // frame flashed onboarding over every existing installation before "completed"
+    // had been read from disk.
+    val onboardingCompleted by onboardingPreferences.completed.collectAsState(initial = true)
 
     // How the media cards are drawn. Read here and handed down as a composition
     // local rather than as another parameter on every destination, because the
@@ -552,7 +570,9 @@ fun AppNavigation(
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,
-            LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds
+            LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds,
+            LocalSearchTopBarShortcut provides searchTopBar,
+            LocalTierTopBarShortcut provides tierTopBar
         ) {
             // Opaque, and that is the point.
             //
@@ -687,8 +707,7 @@ fun AppNavigation(
                         aniListRepository = aniListRepository,
                         dashboardViewModel = mainDashboardViewModel,
                         detailHost = detailHost,
-                        entryEditor = sharedEntryEditor,
-                        quickAddPreferences = quickAddPreferences
+                        entryEditor = sharedEntryEditor
                     )
 
                     settingsDestinations(
@@ -752,6 +771,16 @@ fun AppNavigation(
                     settings = jokeSettings,
                     favourites = jokeFavourites
                 )
+
+                if (!onboardingCompleted && authState !is AuthUiState.Restoring) {
+                    FirstRunSetupDialog(
+                        onboardingPreferences = onboardingPreferences,
+                        interfacePreferences = interfacePreferences,
+                        themePreferences = themePreferences,
+                        jokePreferences = jokePreferences,
+                        mainTabPreferences = mainTabPreferences
+                    )
+                }
             }
         }
     }

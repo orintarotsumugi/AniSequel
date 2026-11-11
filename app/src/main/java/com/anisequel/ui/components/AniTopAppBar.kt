@@ -46,6 +46,8 @@ fun AniTopAppBar(
     onOpenProfile: () -> Unit,
     isRefreshing: Boolean = false,
     hasActiveFilters: Boolean = false,
+    onOpenSearch: (() -> Unit)? = null,
+    onOpenTiers: (() -> Unit)? = null,
     /**
      * True while the list on screen is the device's saved copy rather than a
      * live AniList answer.
@@ -137,6 +139,38 @@ fun AniTopAppBar(
             val filterSource = remember { MutableInteractionSource() }
             val refreshSource = remember { MutableInteractionSource() }
             val settingsSource = remember { MutableInteractionSource() }
+            val searchSource = remember { MutableInteractionSource() }
+            val tiersSource = remember { MutableInteractionSource() }
+
+            if (onOpenSearch != null) {
+                IconButton(
+                    onClick = onOpenSearch,
+                    modifier = Modifier
+                        .bouncyPress(interactionSource = searchSource)
+                        .testTag("classic_top_search"),
+                    interactionSource = searchSource
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Search,
+                        contentDescription = "Search anime and manga"
+                    )
+                }
+            }
+
+            if (onOpenTiers != null) {
+                IconButton(
+                    onClick = onOpenTiers,
+                    modifier = Modifier
+                        .bouncyPress(interactionSource = tiersSource)
+                        .testTag("classic_top_tiers"),
+                    interactionSource = tiersSource
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Trophy,
+                        contentDescription = "Tier lists"
+                    )
+                }
+            }
 
             IconButton(
                 onClick = {
