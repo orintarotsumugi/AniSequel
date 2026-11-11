@@ -537,10 +537,15 @@ private fun resolveDetailSubject(
     successState: DashboardUiState.Success?,
     detailNodes: Map<Int, MediaNode>
 ): AnimeDetailSubject? = when {
-    navigatedRelation != null -> AnimeDetailSubject.Media(
-        detailNodes.detailFor(navigatedRelation)?.withSummaryProgress(navigatedRelation)
-            ?: navigatedRelation
-    )
+    // The `let` names the summary `summary` because `RelationDetailResolutionTest`
+    // pins this exact expression: the fetched detail wins, and the relation node's
+    // progress is merged into it. That guard is a source-level one (there is no
+    // Compose harness in the unit-test source set), so the shape is the contract.
+    navigatedRelation != null -> navigatedRelation.let { summary ->
+        AnimeDetailSubject.Media(
+            detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
+        )
+    }
     selectedSequelId != null -> successState?.missedSequels
         ?.firstOrNull { it.sequelId == selectedSequelId }
         ?.let { AnimeDetailSubject.Sequel(it) }
