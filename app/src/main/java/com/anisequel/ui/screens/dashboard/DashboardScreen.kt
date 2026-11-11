@@ -424,145 +424,29 @@ fun DashboardScreen(
                             )
                             },
                             classic = {
-                        PullToRefreshBox(
-                            isRefreshing = state.isRefreshing,
-                            onRefresh = requestRefresh,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .testTag("sequels_list"),
-                                // The bar floats over the list, so the Scaffold's bottom
-                                // inset is *replaced* by the bar's clearance rather than
-                                // added to it - the two describe the same strip of screen.
-                                // The 32dp of breathing room stays on top of it.
-                                contentPadding = PaddingValues(bottom = 32.dp + mainBarClearance()),
-                                verticalArrangement = Arrangement.spacedBy(14.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                if (state.isDemoMode) {
-                                    item(key = "demo_banner", contentType = "banner") {
-                                        DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
-                                    }
-                                }
-
-                                // The saved-copy notice moved to the top app bar. It
-                                // used to be an item here, so it appeared and
-                                // disappeared above the stats card as the network
-                                // answered and moved every row below it by its
-                                // height. See [AniTopAppBar.showingSavedCopy].
-
-                                item(key = "stats_banner", contentType = "banner") {
-                                    StatsBanner(
-                                        totalWatched = state.totalWatchedCount,
-                                        missedCount = state.totalMissedCount,
-                                        modifier = Modifier
-                                            .widthIn(max = MaxContentWidth)
-                                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                                    )
-                                }
-
-                                // Above the search bar and the missed-sequel list
-                                // because it is a different question from either,
-                                // and hidden entirely when the viewer has nothing
-                                // arriving rather than rendering an empty header.
-                                // The same emptiness check gates the switch in
-                                // Settings: disabled means the section - and every
-                                // poster load it draws - is not composed at all.
-                                if (state.arriving.isNotEmpty() && arrivingEnabled) {
-                                    item(key = "arriving_section", contentType = "arriving") {
-                                        ArrivingSection(
-                                            entries = state.arriving,
-                                            compact = arrivingCompact,
-                                            separateGroups = arrivingSeparateGroups,
-                                            maxWidth = MaxContentWidth,
-                                            onEntryClick = {
-                                                selectedArrivingId = it.mediaId
-                                                navigatedRelation = null
-                                            }
-                                        )
-                                    }
-                                }
-
-                                item(key = "search_bar", contentType = "controls") {
-                                    DashboardSearchBar(
-                                        query = filterCriteria.searchQuery,
-                                        onQueryChange = { dashboardViewModel.updateSearchQuery(it) },
-                                        maxWidth = MaxContentWidth
-                                    )
-                                }
-
-                                item(key = "quick_filter_bar", contentType = "controls") {
-                                    QuickFilterBar(
-                                        filterCriteria = filterCriteria,
-                                        onStatusSelected = { dashboardViewModel.updateStatusFilter(it) },
-                                        onFormatSelected = { dashboardViewModel.selectFormat(it) },
-                                        onClearAll = { dashboardViewModel.resetFilters() }
-                                    )
-                                }
-
-                                item(key = "section_header", contentType = "header") {
-                                    DashboardSectionHeader(
-                                        count = state.missedSequels.size,
-                                        filterCriteria = filterCriteria,
-                                        maxWidth = MaxContentWidth
-                                    )
-                                }
-
-                                if (state.missedSequels.isEmpty()) {
-                                    item(key = "empty_state", contentType = "empty") {
-                                        EmptyStateView(
-                                            // The same predicate as the badge and
-                                            // the quick filter row: an empty list
-                                            // with no filter active has nothing to
-                                            // reset, and an empty list with one
-                                            // active has a way out.
-                                            filtersActive = filterCriteria.isNarrowing,
-                                            onResetFilters = { dashboardViewModel.resetFilters() }
-                                        )
-                                    }
-                                } else {
-                                    items(
-                                        items = state.missedSequels,
-                                        key = { "${it.parentId}_${it.sequelId}" },
-                                        contentType = { "sequel_card" }
-                                    ) { item ->
-                                        SequelCard(
-                                            sequel = item,
-                                            onClick = {
-                                                selectedSequelId = item.sequelId
-                                                navigatedRelation = null
-                                            },
-                                            onAddToPlanning = { dashboardViewModel.addToPlanning(item) },
-                                            onAddToWatching = { dashboardViewModel.addToWatching(item) },
-                                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
-                                            swipeEnabled = quickAddSettings.swipeEnabled,
-                                            onHide = {
-                                                dashboardViewModel.toggleHideSequel(item)
-                                            },
-                                            // The banner names the parent, and the parent is not in this
-                                            // list - so the tap hands the sheet a summary built from the
-                                            // four fields the relation walk kept, and the sheet's own
-                                            // detail fetch replaces it. Same route an arriving row takes.
-                                            onOpenParent = {
-                                                selectedSequelId = null
-                                                selectedArrivingId = null
-                                                navigatedRelation = item.toParentSummary()
-                                            },
-                                            modifier = Modifier
-                                                .widthIn(max = MaxContentWidth)
-                                                .padding(horizontal = 16.dp)
-                                                .animateItem(
-                                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                                                )
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                                DashboardClassicList(
+                                    state = state,
+                                    filterCriteria = filterCriteria,
+                                    quickAddSettings = quickAddSettings,
+                                    arrivingEnabled = arrivingEnabled,
+                                    arrivingCompact = arrivingCompact,
+                                    arrivingSeparateGroups = arrivingSeparateGroups,
+                                    onRequestRefresh = requestRefresh,
+                                    onSelectSequel = { sequelId ->
+                                        selectedSequelId = sequelId
+                                        navigatedRelation = null
+                                    },
+                                    onSelectArriving = { mediaId ->
+                                        selectedArrivingId = mediaId
+                                        navigatedRelation = null
+                                    },
+                                    onSelectParent = { parent ->
+                                        selectedSequelId = null
+                                        selectedArrivingId = null
+                                        navigatedRelation = parent
+                                    },
+                                    viewModel = dashboardViewModel
+                                )
                             }
                         )
                     }
@@ -669,6 +553,157 @@ private fun resolveDetailSubject(
             )
         }
     else -> null
+}
+
+/**
+ * The classic layout's feed, split out of [DashboardScreen].
+ *
+ * It was the deepest nesting in that screen's body - Scaffold, Box, crossfade, state
+ * branch, pull-to-refresh, list, item - and a complexity metric reads that as hard to
+ * follow even though every branch in it is a section gate. The screen still owns
+ * *which* pane is drawn and what a tap on a title means; this owns what the classic
+ * pane paints.
+ *
+ * Selection is passed as three callbacks rather than three mutable ids: the open sheet
+ * is the screen's state, and a helper that wrote it directly would have to know all
+ * three ids the sheet keys off - the same reason the screen keeps one `closeSheet`.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DashboardClassicList(
+    state: DashboardUiState.Success,
+    filterCriteria: FilterCriteria,
+    quickAddSettings: com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings,
+    arrivingEnabled: Boolean,
+    arrivingCompact: Boolean,
+    arrivingSeparateGroups: Boolean,
+    onRequestRefresh: () -> Unit,
+    onSelectSequel: (Int) -> Unit,
+    onSelectArriving: (Int) -> Unit,
+    onSelectParent: (MediaNode) -> Unit,
+    viewModel: DashboardViewModel
+) {
+    PullToRefreshBox(
+        isRefreshing = state.isRefreshing,
+        onRefresh = onRequestRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("sequels_list"),
+            // The bar floats over the list, so the Scaffold's bottom inset is
+            // *replaced* by the bar's clearance rather than added to it - the two
+            // describe the same strip of screen. The 32dp of breathing room stays on
+            // top of it.
+            contentPadding = PaddingValues(bottom = 32.dp + mainBarClearance()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (state.isDemoMode) {
+                item(key = "demo_banner", contentType = "banner") {
+                    DashboardDemoBanner(modifier = Modifier.widthIn(max = MaxContentWidth))
+                }
+            }
+
+            // The saved-copy notice moved to the top app bar. It used to be an item
+            // here, so it appeared and disappeared above the stats card as the network
+            // answered and moved every row below it by its height.
+
+            item(key = "stats_banner", contentType = "banner") {
+                StatsBanner(
+                    totalWatched = state.totalWatchedCount,
+                    missedCount = state.totalMissedCount,
+                    modifier = Modifier
+                        .widthIn(max = MaxContentWidth)
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            // Above the search bar and the missed-sequel list because it is a
+            // different question from either, and hidden entirely when the viewer has
+            // nothing arriving rather than rendering an empty header. The same
+            // emptiness check gates the switch in Settings: disabled means the
+            // section - and every poster load it draws - is not composed at all.
+            if (state.arriving.isNotEmpty() && arrivingEnabled) {
+                item(key = "arriving_section", contentType = "arriving") {
+                    ArrivingSection(
+                        entries = state.arriving,
+                        compact = arrivingCompact,
+                        separateGroups = arrivingSeparateGroups,
+                        maxWidth = MaxContentWidth,
+                        onEntryClick = { entry -> onSelectArriving(entry.mediaId) }
+                    )
+                }
+            }
+
+            item(key = "search_bar", contentType = "controls") {
+                DashboardSearchBar(
+                    query = filterCriteria.searchQuery,
+                    onQueryChange = { viewModel.updateSearchQuery(it) },
+                    maxWidth = MaxContentWidth
+                )
+            }
+
+            item(key = "quick_filter_bar", contentType = "controls") {
+                QuickFilterBar(
+                    filterCriteria = filterCriteria,
+                    onStatusSelected = { viewModel.updateStatusFilter(it) },
+                    onFormatSelected = { viewModel.selectFormat(it) },
+                    onClearAll = { viewModel.resetFilters() }
+                )
+            }
+
+            item(key = "section_header", contentType = "header") {
+                DashboardSectionHeader(
+                    count = state.missedSequels.size,
+                    filterCriteria = filterCriteria,
+                    maxWidth = MaxContentWidth
+                )
+            }
+
+            if (state.missedSequels.isEmpty()) {
+                item(key = "empty_state", contentType = "empty") {
+                    EmptyStateView(
+                        // The same predicate as the badge and the quick filter row: an
+                        // empty list with no filter active has nothing to reset, and an
+                        // empty list with one active has a way out.
+                        filtersActive = filterCriteria.isNarrowing,
+                        onResetFilters = { viewModel.resetFilters() }
+                    )
+                }
+            } else {
+                items(
+                    items = state.missedSequels,
+                    key = { "${it.parentId}_${it.sequelId}" },
+                    contentType = { "sequel_card" }
+                ) { item ->
+                    SequelCard(
+                        sequel = item,
+                        onClick = { onSelectSequel(item.sequelId) },
+                        onAddToPlanning = { viewModel.addToPlanning(item) },
+                        onAddToWatching = { viewModel.addToWatching(item) },
+                        holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                        swipeEnabled = quickAddSettings.swipeEnabled,
+                        onHide = { viewModel.toggleHideSequel(item) },
+                        // The banner names the parent, and the parent is not in this
+                        // list - so the tap hands the sheet a summary built from the
+                        // four fields the relation walk kept, and the sheet's own
+                        // detail fetch replaces it. Same route an arriving row takes.
+                        onOpenParent = { onSelectParent(item.toParentSummary()) },
+                        modifier = Modifier
+                            .widthIn(max = MaxContentWidth)
+                            .padding(horizontal = 16.dp)
+                            .animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** The filter sheet, hosted here so [DashboardScreen] does not branch for it. */
