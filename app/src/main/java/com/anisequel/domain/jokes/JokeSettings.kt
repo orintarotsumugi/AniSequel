@@ -181,11 +181,17 @@ enum class JokeTone(
  * The timer is the feature's spine - it is the only trigger that needs no
  * explanation - but it also means a reader who opens the app for a minute never
  * sees a joke, while a reader who leaves it open for an hour gets several.
- * These three moments put a line where something already happened, which is why
+ * These moments put a line where something already happened, which is why
  * each carries a minimum gap: the point is a line now and then, not one per tap.
  *
- * [OPEN] has no gap because it can only fire once per launch; the other two are
+ * [OPEN] has no gap because it can only fire once per launch; the others are
  * gated so the toast cannot become a reaction to every gesture.
+ *
+ * [LIST_ADD] and [SEARCH] are the first two that follow the app's own work rather
+ * than the reader's navigation: a title joining a list and a catalogue answer
+ * arriving are the two things this app exists to do. They are announced by the
+ * code that performed the write or the search, not inferred from a screen, so a
+ * failed add or an empty search cannot produce a line about success.
  */
 enum class JokeMoment(
     val storageValue: String,
@@ -209,6 +215,18 @@ enum class JokeMoment(
         "refresh",
         "After you refresh",
         "A line after you ask the dashboard to reload.",
+        3 * 60_000L
+    ),
+    LIST_ADD(
+        "list_add",
+        "When a title joins your list",
+        "After a title lands in Planning or Watching, at most every two minutes.",
+        2 * 60_000L
+    ),
+    SEARCH(
+        "search",
+        "After a catalogue search",
+        "When a search settles with results, at most every three minutes.",
         3 * 60_000L
     );
 

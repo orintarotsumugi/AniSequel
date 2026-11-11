@@ -69,6 +69,25 @@ class MainTabPreferencesTest {
     }
 
     @Test
+    fun `top bar shortcuts enable a matching tab and tabs can hide their shortcut`() = runTest {
+        val preferences = preferences()
+
+        preferences.setSearchTopBar(true)
+        preferences.setTierTopBar(true)
+
+        assertTrue(preferences.searchTopBar.first())
+        assertTrue(preferences.tierTopBar.first())
+        assertTrue(preferences.searchTab.first())
+        assertTrue(preferences.tierListTab.first())
+
+        preferences.setSearchTab(false)
+        preferences.setTierListTab(false)
+
+        assertFalse(preferences.searchTopBar.first())
+        assertFalse(preferences.tierTopBar.first())
+    }
+
+    @Test
     fun `reset brings the tab back to hidden`() = runTest {
         val preferences = preferences()
         preferences.setTierListTab(true)

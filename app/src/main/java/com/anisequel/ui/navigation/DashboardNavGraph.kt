@@ -75,6 +75,8 @@ fun NavGraphBuilder.dashboardDestinations(
                     navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
                 },
                 onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+                onOpenSearch = { navController.navigateToMainTab(MainTab.SEARCH, signedIn = true) },
+                onOpenTiers = { navController.navigateToMainTab(MainTab.TIERS, signedIn = true) },
                 onOpenLibrary = onOpenLibrary
             )
         }
@@ -104,6 +106,8 @@ fun NavGraphBuilder.dashboardDestinations(
                 navController.navigateToMainTab(MainTab.PROFILE, signedIn = false)
             },
             onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+            onOpenSearch = { navController.navigateToMainTab(MainTab.SEARCH, signedIn = false) },
+            onOpenTiers = { navController.navigateToMainTab(MainTab.TIERS, signedIn = false) },
             onOpenLibrary = onOpenLibrary
         )
     }
@@ -150,6 +154,11 @@ fun NavGraphBuilder.dashboardDestinations(
                 navController.navigateSingle(StudioRoutes.studio(studioId, studioName))
             },
             onOpenOther = { navController.navigateSingle(AppRoutes.OTHER) },
+            // A scanned dashboard is not the main Home route, so its top-bar
+            // shortcuts push destinations rather than popping to a Home that is
+            // not on this stack.
+            onOpenSearch = { navController.navigateSingle(AppRoutes.SEARCH) },
+            onOpenTiers = { navController.navigateSingle(AppRoutes.TIER_LIST) },
             onOpenLibrary = onOpenLibrary
         )
     }

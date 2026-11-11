@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -16,6 +17,7 @@ import androidx.navigation.NavHostController
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
+import com.anisequel.ui.theme.LocalMainBarLift
 
 /**
  * The pages the app's main bar switches between.
@@ -213,16 +215,22 @@ internal fun showsMainBar(tab: MainTab?, tierBoardOpen: Boolean): Boolean =
 internal val MainBarClearance: Dp = 86.dp
 
 /**
- * The bar, plus the device's own navigation inset beneath it.
+ * The bar, plus the device's own navigation inset beneath it, plus the reader's
+ * lift.
  *
  * Composable because it reads a `WindowInsets`, which is only available during
  * composition. Read rather than assumed - see [MainBarClearance] for why a constant
  * is the wrong answer here.
+ *
+ * The lift is read from the same composition local the bar reads, not passed in:
+ * a list that asked the preference itself would keep its old padding for a frame
+ * after the slider moved, and the bar would arrive on top of its last row. A lift
+ * of zero is the shipped clearance exactly.
  */
 @Composable
 internal fun mainBarClearance(): Dp {
     val systemInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    return MainBarClearance + systemInset
+    return MainBarClearance + systemInset + LocalMainBarLift.current.dp
 }
 
 /**
@@ -240,7 +248,10 @@ internal fun mainBarClearance(): Dp {
  *
  * The bar owns its own bottom inset instead of leaving it to the caller: it is the
  * one element in this app that is always pinned to the bottom edge, and a caller
- * that forgot the inset would draw it under a gesture bar.
+ * that forgot the inset would draw it under a gesture bar. The reader can also
+ * lift it above that inset - [LocalMainBarLift] - and the padding here is the one
+ * place that moves; the list clearance in [mainBarClearance] follows the same
+ * local so content is never stranded under the raised bar.
  *
  * The selection morph - the growing label, the springing weight, the press scale -
  * is [ExpressiveNavigationBar]'s and is documented there.
@@ -276,7 +287,12 @@ internal fun MainBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars),
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            // After the inset, not before: the lift is daylight *above* the
+            // device's gesture area. Adding it inside the inset instead would
+            // shorten the bar's distance from the screen edge only on devices
+            // with no gesture bar.
+            .padding(bottom = LocalMainBarLift.current.dp),
         contentAlignment = Alignment.Center
     ) {
         // One bar for both looks. The new look used to redraw this as its own

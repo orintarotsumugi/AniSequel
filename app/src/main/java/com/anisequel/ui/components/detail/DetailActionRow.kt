@@ -17,13 +17,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
+import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.HoldAndSwipePlanningButton
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
@@ -92,30 +95,18 @@ fun DetailActionRow(
      */
     isDetailLoading: Boolean = false,
     holdDurationSeconds: Int = 3,
-    swipeEnabled: Boolean = true
+    swipeEnabled: Boolean = true,
+    onEditEntry: (() -> Unit)? = null
 ) {
     val sequel = subject.sequel
     val media = subject.media
     val listStatus = media.mediaListEntry?.status
-
-    val isPlanned = quickAddStatus.isAddedToPlanning ||
-        listStatus.equals("PLANNING", ignoreCase = true)
-    val isWatching = quickAddStatus.isAddedToWatching ||
-        listStatus.equals("CURRENT", ignoreCase = true) ||
-        listStatus.equals("REPEATING", ignoreCase = true)
-    // Completed, paused or dropped: on a list of some kind, so there is nothing
-    // to add without rewriting it. Those titles get the AniList link alone.
-    val isOnAnotherList = listStatus != null && !isPlanned && !isWatching
-
-    // A sequel's flags come from the recommendation itself; a plain title's from
-    // the quick-add store. Kept apart so the dashboard's write - which also
-    // recomputes the card behind the sheet - is the one still used there.
-    val showSequelAction = sequel != null
-    // A quick-add state the reader has already reached (or an in-flight write)
-    // is drawn even while the detail loads: the store knows more than the
-    // fetch does at that point.
-    val showMediaAction = sequel == null && !isOnAnotherList &&
-        (!isDetailLoading || isPlanned || isWatching || quickAddStatus.isBusy)
+    val state = DetailActionState(
+        listStatus = listStatus,
+        quickAddStatus = quickAddStatus,
+        isDetailLoading = isDetailLoading,
+        hasSequel = sequel != null
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -138,7 +129,7 @@ fun DetailActionRow(
                     // AniList, and as a row that failed to lay out rather than as a row
                     // with one control in it.
                     .then(
-                        if (showSequelAction || showMediaAction) Modifier.weight(1f) else Modifier
+                        if (state.sharesRow) Modifier.weight(1f) else Modifier
                     )
                     // 48dp, the platform minimum. 44 was the Material 2 button
                     // height, and on the one row a reader reaches for at the bottom
@@ -165,11 +156,11 @@ fun DetailActionRow(
                     holdDurationSeconds = holdDurationSeconds,
                     swipeEnabled = swipeEnabled
                 )
-            } else if (showMediaAction) {
+            } else if (state.showMediaAction) {
                 MediaQuickAdd(
                     media = media,
-                    isPlanned = isPlanned,
-                    isWatching = isWatching,
+                    isPlanned = state.isPlanned,
+                    isWatching = state.isWatching,
                     canWriteToAniList = canWriteToAniList,
                     status = quickAddStatus,
                     onAddToPlanning = onAddMediaToPlanning,
@@ -179,6 +170,15 @@ fun DetailActionRow(
                 )
             }
         }
+
+        EntryStatusEditAction(
+            visible = state.showEntryEdit && canWriteToAniList && onEditEntry != null,
+            label = ListStatuses.label(
+                status = state.editableStatus,
+                isManga = media.isManga
+            ),
+            onClick = { onEditEntry?.invoke() }
+        )
 
         // The sheet is opened from four screens and only the dashboard owns a
         // snackbar, so a failed write says so here, under the control that made
@@ -193,6 +193,29 @@ fun DetailActionRow(
                     .testTag("sheet_quick_add_error")
             )
         }
+    }
+}
+
+@Composable
+private fun EntryStatusEditAction(
+    visible: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    if (!visible) return
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .testTag("info_edit_list_entry")
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.EditEntry,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("Edit $label entry")
     }
 }
 

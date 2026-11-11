@@ -4,6 +4,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
+import com.anisequel.domain.ui.NavBarLift
 
 /**
  * The layout the app is drawing.
@@ -44,6 +45,17 @@ val LocalShowContinueRail = staticCompositionLocalOf { true }
 val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
 
 /**
+ * How far the main bar floats above the bottom edge, in dp.
+ *
+ * Read by the bar, by every list's bottom clearance and by the Interface page's
+ * live preview, so dragging the slider in Settings and leaving the page cannot
+ * leave one of the three describing a different position. Provided once at the
+ * app root from [com.anisequel.data.repository.InterfacePreferences]; see
+ * [com.anisequel.domain.ui.NavBarLift] for why the range is small.
+ */
+val LocalMainBarLift = staticCompositionLocalOf { NavBarLift.DEFAULT_DP }
+
+/**
  * Whether tapping "Add to Planning" asks for a tick or a cross first.
  *
  * Defaults to **true** - the confirmation is the shipped behaviour. The option
@@ -54,3 +66,9 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * and detail sheet honours one switch.
  */
 val LocalConfirmPlanningAdd = staticCompositionLocalOf { true }
+
+/** Optional direct catalogue shortcut shown beside the Nova/classic top-bar actions. */
+val LocalSearchTopBarShortcut = staticCompositionLocalOf { false }
+
+/** Optional direct tier-list shortcut shown beside the Nova/classic top-bar actions. */
+val LocalTierTopBarShortcut = staticCompositionLocalOf { false }

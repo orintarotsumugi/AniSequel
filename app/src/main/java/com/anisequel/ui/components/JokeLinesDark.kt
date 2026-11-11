@@ -500,5 +500,15 @@ internal object JokeLinesDark {
         "The production committee's minutes describe the ending as a cost-saving measure.",
         "The author's replacement draws the characters better and the grief worse.",
         "The final chapter's colour page is a photo of the desk where it was drawn.",
+        "The anniversary art features everyone who made it, except the ones who did not.",
+        "The reboot recast the voice you hear when you remember the character.",
+        "The final volume's afterword thanks the readers for staying and the author for leaving.",
+        "The show's set is now a parking lot with one plaque nobody can find.",
+        "The studio folded a week after the finale and the finale was already about endings.",
+        "The creator's next work is a different genre and everyone mentions the old one.",
+        "The fandom wiki has a page for the unmade season and it is longer than some shows.",
+        "The last season aired at midnight and the discussion ended at sunrise.",
+        "The character's final line was added by the editor, not the writer.",
+        "The merchandise line ended with a gravestone keychain and no refunds."
     )
 }

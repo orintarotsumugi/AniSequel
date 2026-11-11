@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "1.9.2",
+      "entries": [
+        {
+          "title": "Five first-run choices, without locking the door",
+          "detail": "A first launch can now choose the app layout, theme, motion feel, joke frequency and top-bar shortcuts in one skippable setup. Every choice remains available in Settings."
+        },
+        {
+          "title": "A catalogue you can browse and open",
+          "detail": "Search waits for typing to settle and ignores stale replies, then lays results out as a three-column poster gallery with anime/manga, format, score and year. Tap any full card to open its in-app title page."
+        },
+        {
+          "title": "The title page can change your list",
+          "detail": "When a title is already on your AniList, its Info page now offers a direct route to the full entry editor: choose any AniList status, edit progress, score and dates, or delete the entry. The same editor works when a title was opened from catalogue search."
+        },
+        {
+          "title": "Your Home says hello in more than one way",
+          "detail": "Nova Home chooses from a larger set of greetings on each visit, with a short expressive transition instead of repeating the same opening line."
+        },
+        {
+          "title": "Search and Tiers can live beside the top-bar profile",
+          "detail": "The optional catalogue and tier-list shortcuts now appear in both Nova and Classic top bars, alongside Settings and Profile. Their switches are in Settings > Library > Bottom bar and the shortcuts are included in first-run setup."
+        },
+        {
+          "title": "Search stays put while you type",
+          "detail": "The catalogue keeps the results already on screen while the next answer is on the wire, and shows a small indicator in the field instead. Previously every keystroke replaced the whole grid with a skeleton, which was the page reloading rather than a search. The skeleton also drove a second animation beside its shimmer; it now has one clock."
+        },
+        {
+          "title": "The interface preview shows the whole layout",
+          "detail": "Settings > Interface draws taller mini layouts with the shared bottom bar and tinted poster placeholders, so the bar is no longer clipped and the preview is readable before the library has loaded. First-run setup uses the same preview instead of two names, so the layout is chosen by looking at it."
+        },
+        {
+          "title": "The greeting changes as one piece",
+          "detail": "Nova Home now fades both greeting lines and the sentence below them together. It used to animate only the first line while the second changed underneath it, and the first resume after launch could consume a greeting before it had been read. The first composition now leaves the chosen greeting alone."
+        },
+        {
+          "title": "Ani-chan reacts to what the app just did",
+          "detail": "The joke system has two new moments: a title joining Planning or Watching, and a catalogue search settling with results. Both are announced by the successful write or answer, so a failure or an empty search cannot produce a line about success. The pool also grew by fifty lines across its five tones."
+        },
+        {
+          "title": "The bottom bar can float a little higher",
+          "detail": "Settings > Interface now has a slider that lifts the main bar 0-24dp above the device's navigation inset. The two mini layouts above it move with the slider while you drag, and every page's bottom clearance, the dashboard's snackbar and the joke toast follow the same value, so nothing is left sitting under the raised bar. 0dp is the shipped position."
+        }
+      ]
+    },
+    {
       "version": "1.9.1",
       "entries": [
         {

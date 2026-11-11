@@ -141,6 +141,7 @@ fun AnimeInfoPage(
     onOpenCharacter: ((Int) -> Unit)? = null,
     /** The same, for the crew row. See [onOpenCharacter]. */
     onOpenStaff: ((Int) -> Unit)? = null,
+    onEditEntry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the sheet, because the capsule's other destination disposes this
@@ -259,7 +260,8 @@ fun AnimeInfoPage(
                     // must not expand from where the previous title's poster was.
                     coverOrigin = null
                     showCover = true
-                }
+                },
+                onEditEntry = onEditEntry
             )
         }
 

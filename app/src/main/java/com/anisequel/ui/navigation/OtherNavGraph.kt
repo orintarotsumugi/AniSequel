@@ -32,16 +32,10 @@ fun NavGraphBuilder.otherDestinations(
     navController: NavHostController,
     signedIn: Boolean,
     aniListRepository: AniListRepository,
+    quickAddPreferences: QuickAddPreferences,
     dashboardViewModel: DashboardViewModel?,
     detailHost: MediaDetailHost,
-    entryEditor: EntryEditor?,
-    /**
-     * The hold length and the swipe switch the search page's add buttons use.
-     *
-     * Handed in rather than defaulted so the catalogue's cards behave exactly
-     * like the ones on Home: one setting, every control.
-     */
-    quickAddPreferences: QuickAddPreferences
+    entryEditor: EntryEditor?
 ) {
     composable(AppRoutes.OTHER) {
         NovaOtherScreen(
@@ -68,7 +62,12 @@ fun NavGraphBuilder.otherDestinations(
             repository = aniListRepository,
             canWrite = signedIn,
             quickAddPreferences = quickAddPreferences,
-            onBack = { navController.popBackStack() }
+            onBack = { navController.popBackStack() },
+            detailHost = detailHost,
+            entryEditor = entryEditor,
+            onOpenStudio = { id, name ->
+                navController.navigateSingle(StudioRoutes.studio(id, name))
+            }
         )
     }
 

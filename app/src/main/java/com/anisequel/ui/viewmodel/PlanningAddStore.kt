@@ -7,6 +7,8 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.isManga
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.domain.jokes.JokeMoment
+import com.anisequel.ui.components.JokeMomentBus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -135,6 +137,12 @@ class PlanningAddStore(
                             error = null
                         )
                     }
+                    // The write, not the button, is the event. This shared store is
+                    // the route every screen except the dashboard's own sequel cards
+                    // uses, so the announcement lives beside the successful write
+                    // rather than in each caller. A failed add returns above and
+                    // cannot produce a line about a title joining a list.
+                    JokeMomentBus.announce(JokeMoment.LIST_ADD)
                 },
                 onFailure = { failure ->
                     update(key) {

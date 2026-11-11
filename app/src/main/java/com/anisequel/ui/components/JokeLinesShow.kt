@@ -263,6 +263,16 @@ internal object JokeLinesShow {
         "The foley team made the snow sound loud enough to notice.",
         "The frame is 4:3 on purpose and the wides are the flashbacks.",
         "The opening dance was rotoscoped and you can tell at frame twelve.",
-        "The two-shot in episode six becomes the poster of a later arc."
+        "The two-shot in episode six becomes the poster of a later arc.",
+        "The background painter put a whole weather system in one establishing shot.",
+        "The cut from the eye to the window does more than the monologue.",
+        "The composer held the main theme until the reveal. Worth the wait.",
+        "The animation director gives the villain the best walk cycle.",
+        "The colour script turns colder every arc and nobody says why.",
+        "The one-take scene is three cuts and a very confident camera.",
+        "The key animation list for the finale reads like a closing credits.",
+        "The show uses silence where the manga used a caption.",
+        "The character design simplifies with age and you only notice on rewatch.",
+        "The storyboard leaves the frame empty so the entrance can own it."
     )
 }

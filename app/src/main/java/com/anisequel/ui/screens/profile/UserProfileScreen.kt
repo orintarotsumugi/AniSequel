@@ -69,6 +69,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.navigation.MainBarClearance
+import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.UserOverviewUiState
@@ -99,7 +100,10 @@ private val LocalMainBarOverProfile = staticCompositionLocalOf { false }
  */
 @Composable
 internal fun profileListPadding(contentPadding: PaddingValues = PaddingValues()): PaddingValues {
-    val mainBar = if (LocalMainBarOverProfile.current) MainBarClearance else 0.dp
+    val overBar = LocalMainBarOverProfile.current
+    // The bar's own height plus the reader's lift. Both belong to the bar and both
+    // are zero for a profile the bar does not float over.
+    val mainBar = if (overBar) MainBarClearance + LocalMainBarLift.current.dp else 0.dp
     // Read from the device at draw time rather than assumed, for the reason
     // [MainBarClearance] gives: a gesture bar, a three-button bar and a cutout
     // are three different heights, and hardcoding the largest of them either

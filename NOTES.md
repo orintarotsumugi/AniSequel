@@ -461,7 +461,7 @@ spring the first slide is still travelling when the second starts, which reads a
 a stutter rather than a switch.
 
 The rows the bar floats over leave it room with `mainBarClearance()` — the bar's
-96dp plus the device's own navigation inset, read at draw time rather than
+86dp plus the device's own navigation inset, read at draw time rather than
 assumed, so a gesture bar, a three-button bar and a cutout each get their own
 answer. The profile reserves it only where the bar is really drawn: on the
 viewer's own profile. A scanned or followed profile is a pushed screen with no
@@ -469,6 +469,21 @@ bar and reserves the system inset alone, which is why the flag travels as a
 `CompositionLocal` rather than through four tab signatures. The tier list's
 library reserves it too, now that the bar is drawn there; without it the last row
 of lists ended underneath the capsule.
+
+**The bar can float above the inset.** Settings → Interface has a 0–24dp slider
+(`NavBarLift`, `LocalMainBarLift`) that moves the bar up from the device's
+navigation inset, and the two mini layouts in the same card move with it while
+the finger is down. Three readers have to agree, so the lift is one composition
+local rather than a parameter: `MainBar` pads its own bottom, `mainBarClearance()`
+adds the same dp for every page's scroll, and the dashboard's snackbar and the
+profile's list padding — the two places that read `MainBarClearance` directly
+because the Scaffold already paid the inset — add it themselves. A lift applied
+to only the bar would draw it over the last row of every list; one applied to the
+clearance but not the bar would leave a hole. The preference is clamped on read
+and on write: a hand-edited value must land on the ceiling rather than push the
+bar into the page. The slider keeps a local draft while dragging and writes on
+release, because a DataStore write per frame would make the drag the stutter. The
+shipped 0dp is exactly the old position.
 
 **The chrome reads the route in its own scope.** The bar and the joke toast are
 `MainBarHost` and `JokeHost` in `ui/navigation/MainChrome.kt`, and each calls
@@ -1619,6 +1634,16 @@ moment, whether a line is already up, and whether the moment's quiet gap has
 passed. Announcing at the request rather than after a successful fetch is
 deliberate: the reader asked for the refresh, and the pill is not claiming the
 data arrived.
+
+`LIST_ADD` and `SEARCH` are the two moments that follow a completed result rather
+than a request. A title joining a list is announced from the successful write —
+both `PlanningAddStore` (every screen except the dashboard's sequel cards) and
+`DashboardViewModel`'s own quick add — and a catalogue answer is announced by
+`NovaSearchScreen` only when the settled search returned at least one result. The
+failure paths sit above the call and cannot reach it, so a rejected mutation or an
+empty query can never produce a line congratulating the reader on something that
+did not happen. Both carry a minimum gap like the tab and refresh moments; the
+"open the app" arm remains the one that fires once per host lifetime instead.
 
 This split is also what makes the behaviour testable without a device.
 `JokeSettingsTest` pins that Off never schedules, that the master switch wins
