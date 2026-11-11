@@ -385,8 +385,19 @@ internal fun SequelStylePreview(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        MiniSequelRow(entry = entries.getOrNull(0))
-                        MiniSequelRow(entry = entries.getOrNull(1))
+                        // The weight is applied here, in the Column, rather than
+                        // inside MiniSequelRow: `Modifier.weight` only exists on a
+                        // Column/Row scope, and the row's own body was reaching for
+                        // it from outside one - which is a compile error the first
+                        // CI run after this preview was written.
+                        MiniSequelRow(
+                            entry = entries.getOrNull(0),
+                            modifier = Modifier.weight(1f)
+                        )
+                        MiniSequelRow(
+                            entry = entries.getOrNull(1),
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     HomeSequelStyle.CARDS -> Column(modifier = Modifier.fillMaxSize()) {
@@ -424,11 +435,13 @@ internal fun SequelStylePreview(
 }
 
 @Composable
-private fun MiniSequelRow(entry: MediaListEntryItem?) {
+private fun MiniSequelRow(
+    entry: MediaListEntryItem?,
+    modifier: Modifier = Modifier
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .weight(1f)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
         verticalAlignment = Alignment.CenterVertically
