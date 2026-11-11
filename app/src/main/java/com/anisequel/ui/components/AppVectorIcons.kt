@@ -77,6 +77,7 @@ import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Tune
 import com.anisequel.ui.components.icons.AppCustomVectors
 import com.anisequel.ui.components.icons.AppExtraVectors
+import com.anisequel.ui.components.icons.MotionVectors
 
 /**
  * Central vector icon repository for AniSequel to avoid emoji usage
@@ -188,6 +189,16 @@ object AppVectorIcons {
     // reads as analytics without being the same drawing, so the two sit on one
     // screen without being mistaken for each other.
     val ProfileHome = Icons.Default.Home
+
+    /**
+     * The main bar's Home tab.
+     *
+     * Its own glyph rather than [ProfileHome]: the profile's Home *tab* and the
+     * app's Home *page* are two different destinations, and sharing one drawing
+     * made the bar look like a shortcut into somebody's overview. See
+     * [com.anisequel.ui.components.icons.AppCustomVectors.HomeHearth].
+     */
+    val HomeTab = AppCustomVectors.HomeHearth
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group
@@ -287,7 +298,7 @@ object AppVectorIcons {
     val SectionUpdates = Icons.Default.SystemUpdate
     val SectionHelp = Icons.AutoMirrored.Filled.MenuBook
     val SectionBackground = AppCustomVectors.SurfaceTones
-    val SectionMotion = AppCustomVectors.MotionWaves
+    val SectionMotion = MotionVectors.MotionTrail
     val ThemeLight = Icons.Outlined.LightMode
     val ThemeDark = Icons.Outlined.DarkMode
     val Restore = Icons.Outlined.RestartAlt
@@ -301,10 +312,8 @@ object AppVectorIcons {
     val NewReleases = Icons.Outlined.NewReleases
     val FullscreenExpand = AppCustomVectors.FullscreenExpand
 
-    // The three motion styles on the Theme tab, each named for what the style
-    // *is*: no motion, calm motion, everything-bounces motion. They sit side
-    // by side in one segment bar, so their glyphs must read as different.
-    val MotionInstant = Icons.Outlined.RestartAlt
-    val MotionSmooth = AppCustomVectors.MotionWaves
-    val MotionChill = AppCustomVectors.MotionBolt
+    // The five motion styles are deliberately *not* listed here. Their glyphs are
+    // one family with one mapping (`motionGlyph` in `icons/MotionVectors.kt`), and a
+    // second list of the same five names is exactly how Snappy and Floaty ended up
+    // borrowing another style's icon: the picker read a mapping that had gone stale.
 }

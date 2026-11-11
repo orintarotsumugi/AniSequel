@@ -459,6 +459,12 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
         request: GraphQLRequest
     ): GraphQLResponse<MangaPreviewData> = notServed("getMangaPreview")
 
+    // Catalogue search is the new look's page; this double answers it the same way
+    // it answers every endpoint it does not serve.
+    override suspend fun searchMedia(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = notServed("searchMedia")
+
     override suspend fun saveMediaListEntry(
         request: GraphQLRequest
     ): GraphQLResponse<SaveMediaListEntryData> = notServed("saveMediaListEntry")

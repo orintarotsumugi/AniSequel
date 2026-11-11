@@ -1,12 +1,18 @@
 package com.anisequel.ui.screens.library
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -30,8 +36,10 @@ import com.anisequel.domain.library.LibraryAdvancedFilters
 import com.anisequel.domain.library.filterLibraryAdvanced
 import com.anisequel.domain.library.libraryReleaseYears
 import com.anisequel.domain.ui.LibraryViewMode
+import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberFullHeightSheetState
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.screens.nova.NovaEmptyNote
 import com.anisequel.ui.screens.profile.LibraryFilter
 import com.anisequel.ui.screens.profile.LibrarySort
@@ -329,14 +337,51 @@ private fun NovaLibraryBody(
 
 @Composable
 private fun NovaLibraryResolving() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+    // The shape of the grid that is coming, not a spinner in the middle of an
+    // empty page. The spinner said "something is happening"; the poster outlines
+    // say what and where, so the covers land into a page that already has its
+    // layout instead of replacing a blank one. One shimmer clock for every
+    // skeleton on screen - see `rememberShimmerPhase`.
+    val phase = rememberShimmerPhase()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(28.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(2) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp),
+                    shape = RoundedCornerShape(percent = 50),
+                    phase = phase
+                )
+            }
+        }
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(3) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(0.68f),
+                            shape = RoundedCornerShape(16.dp),
+                            phase = phase
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        ShimmerBox(
+                            modifier = Modifier
+                                .fillMaxWidth(0.82f)
+                                .height(10.dp),
+                            phase = phase
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

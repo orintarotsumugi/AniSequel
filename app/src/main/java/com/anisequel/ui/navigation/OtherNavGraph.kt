@@ -7,9 +7,11 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.screens.nova.NovaOtherScreen
 import com.anisequel.ui.screens.nova.NovaScheduleScreen
+import com.anisequel.ui.screens.nova.NovaSearchScreen
 import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.MediaDetailHost
@@ -32,7 +34,14 @@ fun NavGraphBuilder.otherDestinations(
     aniListRepository: AniListRepository,
     dashboardViewModel: DashboardViewModel?,
     detailHost: MediaDetailHost,
-    entryEditor: EntryEditor?
+    entryEditor: EntryEditor?,
+    /**
+     * The hold length and the swipe switch the search page's add buttons use.
+     *
+     * Handed in rather than defaulted so the catalogue's cards behave exactly
+     * like the ones on Home: one setting, every control.
+     */
+    quickAddPreferences: QuickAddPreferences
 ) {
     composable(AppRoutes.OTHER) {
         NovaOtherScreen(
@@ -48,6 +57,18 @@ fun NavGraphBuilder.otherDestinations(
                 navController.navigateToMainTab(MainTab.TIERS, signedIn = signedIn)
             },
             onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS) }
+        )
+    }
+
+    // The catalogue search. One of the bar's pages when its tab is enabled, and
+    // the only page in the app that is reached *only* through the bar - which is
+    // why it is registered here beside the hub rather than in a graph of its own.
+    composable(AppRoutes.SEARCH) {
+        NovaSearchScreen(
+            repository = aniListRepository,
+            canWrite = signedIn,
+            quickAddPreferences = quickAddPreferences,
+            onBack = { navController.popBackStack() }
         )
     }
 

@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
@@ -46,6 +48,7 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -335,6 +338,150 @@ private fun RowScope.MiniShortcut(entry: MediaListEntryItem?) {
                 .fillMaxHeight()
         )
     }
+}
+
+/**
+ * The two shapes the new Home's sequel list can take, drawn from the reader's
+ * own covers.
+ *
+ * Shares [MiniCover] with the layout previews above, and the sample titles fall
+ * back to the same place: a reader choosing between "Rows" and "Cards" is
+ * choosing how much of a poster they get, which is exactly the thing a label
+ * cannot tell them.
+ */
+@Composable
+internal fun SequelStylePreview(
+    style: HomeSequelStyle,
+    entries: List<MediaListEntryItem>,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Preview \u00b7 ${style.displayName}",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                .padding(10.dp)
+                .testTag("home_sequel_style_preview")
+        ) {
+            AnimatedContent(
+                targetState = style,
+                transitionSpec = {
+                    fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                        fadeOut(ExpressiveMotion.FastEffects)
+                },
+                label = "home_sequel_style_preview_mode"
+            ) { current ->
+                when (current) {
+                    HomeSequelStyle.ROWS -> Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        // The weight is applied here, in the Column, rather than
+                        // inside MiniSequelRow: `Modifier.weight` only exists on a
+                        // Column/Row scope, and the row's own body was reaching for
+                        // it from outside one - which is a compile error the first
+                        // CI run after this preview was written.
+                        MiniSequelRow(
+                            entry = entries.getOrNull(0),
+                            modifier = Modifier.weight(1f)
+                        )
+                        MiniSequelRow(
+                            entry = entries.getOrNull(1),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    HomeSequelStyle.CARDS -> Column(modifier = Modifier.fillMaxSize()) {
+                        MiniCover(
+                            entry = entries.getOrNull(0),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        MiniBar(
+                            fraction = 0.7f,
+                            height = 6.dp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        MiniBar(
+                            fraction = 0.42f,
+                            height = 4.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        )
+                        Spacer(modifier = Modifier.height(7.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(13.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.38f))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MiniSequelRow(
+    entry: MediaListEntryItem?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MiniCover(
+            entry = entry,
+            modifier = Modifier
+                .width(30.dp)
+                .fillMaxHeight()
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 8.dp)) {
+            MiniBar(
+                fraction = 0.72f,
+                height = 5.dp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.34f))
+            )
+        }
+    }
+}
+
+@Composable
+private fun MiniBar(fraction: Float, height: Dp, color: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(fraction)
+            .height(height)
+            .clip(CircleShape)
+            .background(color)
+    )
 }
 
 @Composable

@@ -27,10 +27,12 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.InterfacePreferences
+import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.MediaPosterCell
@@ -58,6 +60,15 @@ import kotlinx.coroutines.launch
 fun InterfaceTab(
     themePreferences: ThemePreferences,
     interfacePreferences: InterfacePreferences,
+    /**
+     * The hold/swipe/confirm gestures.
+     *
+     * On this page rather than in Device Manager: a gesture is part of how the
+     * interface behaves, and the preview below it is the whole reason the
+     * settings are worth a page of their own - the reader can try the real
+     * control before deciding whether the tick is worth it.
+     */
+    quickAddPreferences: QuickAddPreferences,
     modifier: Modifier = Modifier,
     /**
      * Up to three of the reader's own entries, for the preview to draw.
@@ -113,6 +124,44 @@ fun InterfaceTab(
                 },
                 modifier = Modifier.testTag("show_continue_rail_switch")
             )
+        }
+
+        SectionCard(
+            title = "Home sequels",
+            icon = AppVectorIcons.ViewGrid,
+            subtitle = interfaceSettings.homeSequelStyle.blurb
+        ) {
+            SequelStylePreview(
+                style = interfaceSettings.homeSequelStyle,
+                entries = previewEntries
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("home_sequel_style_row")
+            ) {
+                HomeSequelStyle.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.displayName,
+                        selected = option == interfaceSettings.homeSequelStyle,
+                        onClick = {
+                            if (option != interfaceSettings.homeSequelStyle) {
+                                scope.launch {
+                                    interfacePreferences.setHomeSequelStyle(option)
+                                }
+                            }
+                        },
+                        minTouchTargetHeight = 48.dp,
+                        role = Role.RadioButton,
+                        onClickLabel = "Draw Home sequels as ${option.displayName}",
+                        modifier = Modifier.testTag("home_sequel_style_${option.storageValue}")
+                    )
+                }
+            }
         }
 
         SectionCard(
@@ -203,6 +252,12 @@ fun InterfaceTab(
             settings = themeSettings,
             scope = scope
         )
+
+        // The gestures moved here from Device Manager: they shape how the app
+        // behaves, and this page is the one that answers that question. The
+        // card carries a live copy of the control, so the tick/cross layout is
+        // something the reader can see before they meet it on a card.
+        QuickAddSectionCard(quickAddPreferences = quickAddPreferences)
 
         Spacer(modifier = Modifier.height(24.dp))
     }

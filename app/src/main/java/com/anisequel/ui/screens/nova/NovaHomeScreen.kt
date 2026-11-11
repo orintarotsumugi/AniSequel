@@ -24,6 +24,7 @@ import com.anisequel.data.model.StatusFilter
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.withListStatus
 import com.anisequel.data.repository.QuickAddPreferences
+import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.QuickFilterBar
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -32,6 +33,7 @@ import com.anisequel.ui.components.seasonal.SeasonalWind
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.dashboard.ArrivingSection
 import com.anisequel.ui.screens.dashboard.DashboardDemoBanner
+import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.viewmodel.DashboardUiState
 
@@ -86,6 +88,9 @@ fun NovaHomeScreen(
 ) {
     val showContinueRail = LocalShowContinueRail.current
     val continueEntries = if (showContinueRail) state.continueWatching else emptyList()
+    // The reader's chosen shape for this list. Both arms draw the same sequel and
+    // call the same callbacks - the setting moves the artwork, not the behaviour.
+    val sequelStyle = LocalHomeSequelStyle.current
     val viewer = state.viewer
 
     // The whole list's size, not the completed tally: the shortcut says "your
@@ -240,23 +245,37 @@ fun NovaHomeScreen(
                     key = { "${it.parentId}_${it.sequelId}" },
                     contentType = { "sequel_row" }
                 ) { sequel ->
-                    NovaSequelRow(
-                        sequel = sequel,
-                        onOpen = { onOpenSequel(sequel) },
-                        onAddToPlanning = { onAddToPlanning(sequel) },
-                        onAddToWatching = { onAddToWatching(sequel) },
-                        onHide = { onHide(sequel) },
-                        holdDurationSeconds = quickAddSettings.holdDurationSeconds,
-                        swipeEnabled = quickAddSettings.swipeEnabled,
-                        modifier = Modifier
-                            .widthIn(max = maxWidth)
-                            .padding(horizontal = 20.dp)
-                            .animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
-                    )
+                    val entryModifier = Modifier
+                        .widthIn(max = maxWidth)
+                        .padding(horizontal = 20.dp)
+                        .animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
+                    if (sequelStyle == HomeSequelStyle.CARDS) {
+                        NovaSequelCard(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                    } else {
+                        NovaSequelRow(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                    }
                 }
             }
 

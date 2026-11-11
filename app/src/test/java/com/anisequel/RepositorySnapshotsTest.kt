@@ -362,6 +362,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     throw UnsupportedOperationException("getActivityReplyLikers is not served by this double")
     override suspend fun getMangaPreview(request: GraphQLRequest): GraphQLResponse<MangaPreviewData> =
         throw UnsupportedOperationException("getMangaPreview is not served by this double")
+    override suspend fun searchMedia(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> =
+        throw UnsupportedOperationException("searchMedia is not served by this double")
     // The fake does not serve direct messages; a test that ever sends one should
     // fail loudly rather than invent an answer.
     override suspend fun saveActivityMessage(

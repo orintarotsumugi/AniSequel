@@ -101,6 +101,12 @@ class AniListErrorMappingTest {
             request: GraphQLRequest
         ): GraphQLResponse<MangaPreviewData> = GraphQLResponse(null)
 
+        // The catalogue search page is the new look's, not the classifier's or
+        // the coalescer's; answered with no data, as the editor endpoints below are.
+        override suspend fun searchMedia(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = GraphQLResponse(null)
+
         override suspend fun saveMediaListEntry(
             request: GraphQLRequest
         ): GraphQLResponse<SaveMediaListEntryData> = GraphQLResponse(null)
@@ -424,6 +430,12 @@ class RequestCoalescingPolicyTest {
         override suspend fun getMangaPreview(
             request: GraphQLRequest
         ): GraphQLResponse<MangaPreviewData> = GraphQLResponse(null)
+
+        // The catalogue search page is the new look's, not the classifier's or
+        // the coalescer's; answered with no data, as the editor endpoints below are.
+        override suspend fun searchMedia(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = GraphQLResponse(null)
 
         override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
             GraphQLResponse(null)

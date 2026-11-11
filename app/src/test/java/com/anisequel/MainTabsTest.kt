@@ -53,6 +53,7 @@ class MainTabsTest {
         // The demo runs without a session; to the reader it is the same page.
         assertEquals(MainTab.HOME, mainTabForRoute(AppRoutes.DASHBOARD_DEMO))
         assertEquals(MainTab.LIBRARY, mainTabForRoute(AppRoutes.LIBRARY))
+        assertEquals(MainTab.SEARCH, mainTabForRoute(AppRoutes.SEARCH))
         assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
         assertEquals(MainTab.PROFILE, mainTabForRoute(ProfileRoutes.OWN_ROUTE))
     }
@@ -130,8 +131,9 @@ class MainTabsTest {
 
     @Test
     fun `the bar reads Home, Library, Tiers, Profile, once each`() {
+        val tabs = enabledMainTabs(tierListTab = true)
         val destinations = mainTabDestinations(
-            tabs = enabledMainTabs(tierListTab = true),
+            tabs = tabs,
             profileAvatarUrl = null
         )
 
@@ -152,7 +154,42 @@ class MainTabsTest {
             ),
             destinations.map { it.testTag }
         )
-        assertEquals(MainTab.entries.size, destinations.size)
+        // One destination per *enabled* tab, not per enum entry: the bar has
+        // optional pages now (the tier list and the catalogue search), and
+        // counting the enum would fail the moment a third optional page is added
+        // for a reason that has nothing to do with this list's order.
+        assertEquals(tabs.size, destinations.size)
+    }
+
+    @Test
+    fun `turning the search tab on adds one slot between Library and Tiers`() {
+        val tabs = enabledMainTabs(tierListTab = true, searchTab = true)
+
+        assertEquals(
+            listOf(MainTab.HOME, MainTab.LIBRARY, MainTab.SEARCH, MainTab.TIERS, MainTab.PROFILE),
+            tabs
+        )
+        assertEquals(
+            "the search page is the bar's page, so the bar stays drawn over it",
+            MainTab.SEARCH,
+            mainTabForRoute(AppRoutes.SEARCH)
+        )
+        assertEquals(
+            "a search tab is an alternative to Home like every other tab",
+            AppRoutes.SEARCH,
+            mainTabTarget(MainTab.SEARCH, signedIn = true).route
+        )
+    }
+
+    @Test
+    fun `the search tab is off unless it is asked for`() {
+        assertEquals(
+            "off by default, like the tier tab: the bar is the app's most " +
+                "contended strip of screen",
+            listOf(MainTab.HOME, MainTab.LIBRARY),
+            enabledMainTabs(tierListTab = false).take(2)
+        )
+        assertFalse(enabledMainTabs(tierListTab = false).contains(MainTab.SEARCH))
     }
 
     @Test

@@ -537,6 +537,7 @@ private fun SettingsPageContent(
         SettingsPage.UI -> InterfaceTab(
             themePreferences = themePreferences,
             interfacePreferences = interfacePreferences,
+            quickAddPreferences = quickAddPreferences,
             previewEntries = cardPreviewEntries
         )
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
@@ -554,8 +555,7 @@ private fun SettingsPageContent(
             seasonalPreferences = seasonalPreferences,
             devicePreferences = devicePreferences,
             themePreferences = themePreferences,
-            appLockPreferences = appLockPreferences,
-            quickAddPreferences = quickAddPreferences
+            appLockPreferences = appLockPreferences
         )
         SettingsPage.ACCOUNT -> EditSettingsTab(
             authViewModel = authViewModel,

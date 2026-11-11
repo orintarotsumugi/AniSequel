@@ -35,6 +35,16 @@ import com.anisequel.ui.components.expressive.NavigationDestination
 enum class MainTab {
     HOME,
     LIBRARY,
+
+    /**
+     * The catalogue search.
+     *
+     * Declared between the Library and the tier list because that is where it is
+     * useful: the two list-shaped pages either side of it are where a reader
+     * notices a title is missing. It is off by default, and unlike the tier list
+     * there is no second door into it - see `MainTabPreferences.searchTab`.
+     */
+    SEARCH,
     TIERS,
     PROFILE
 }
@@ -51,8 +61,16 @@ enum class MainTab {
  * this stays a pure function - it is the host that collects the preference, and a
  * preview or a test can ask for either bar without a DataStore.
  */
-internal fun enabledMainTabs(tierListTab: Boolean): List<MainTab> =
-    MainTab.entries.filter { tab -> tab != MainTab.TIERS || tierListTab }
+internal fun enabledMainTabs(
+    tierListTab: Boolean,
+    searchTab: Boolean = false
+): List<MainTab> = MainTab.entries.filter { tab ->
+    when (tab) {
+        MainTab.TIERS -> tierListTab
+        MainTab.SEARCH -> searchTab
+        else -> true
+    }
+}
 
 /**
  * The destinations of [MainBar], derived from [tabs] so the bar's order and the
@@ -68,9 +86,12 @@ internal fun mainTabDestinations(
     profileAvatarUrl: String?
 ): List<NavigationDestination> = tabs.map { tab ->
     when (tab) {
+        // The app's own house, not the profile's borrowed one. See
+        // [AppVectorIcons.HomeTab]: Home and the profile's Home tab are two
+        // destinations, and one drawing for both read as a shortcut.
         MainTab.HOME -> NavigationDestination(
             label = "Home",
-            icon = AppVectorIcons.ProfileHome,
+            icon = AppVectorIcons.HomeTab,
             testTag = "main_tab_home"
         )
         // A shelf of books, and it used to be the Stats tab's stopwatch.
@@ -85,6 +106,15 @@ internal fun mainTabDestinations(
             label = "Library",
             icon = AppVectorIcons.Library,
             testTag = "main_tab_library"
+        )
+        // The magnifier, and nothing else in the bar uses one: the Library's
+        // search is a field *inside* that page, so a bar icon that also meant
+        // "search" had to mean the catalogue rather than the list. That
+        // distinction is the whole reason this is a page of its own.
+        MainTab.SEARCH -> NavigationDestination(
+            label = "Search",
+            icon = AppVectorIcons.Search,
+            testTag = "main_tab_search"
         )
         // The same trophy the Library's card and the profile's row use, because
         // it is the same page. A second glyph for the tab would make the two
@@ -134,6 +164,7 @@ internal fun mainTabDestinations(
 internal fun mainTabForRoute(route: String?): MainTab? = when (route) {
     AppRoutes.DASHBOARD, AppRoutes.DASHBOARD_DEMO -> MainTab.HOME
     AppRoutes.LIBRARY -> MainTab.LIBRARY
+    AppRoutes.SEARCH -> MainTab.SEARCH
     AppRoutes.TIER_LIST -> MainTab.TIERS
     ProfileRoutes.OWN_ROUTE -> MainTab.PROFILE
     else -> null
@@ -280,6 +311,7 @@ internal fun mainTabTarget(tab: MainTab, signedIn: Boolean): MainTabTarget {
     val route = when (tab) {
         MainTab.HOME -> homeRoute
         MainTab.LIBRARY -> AppRoutes.LIBRARY
+        MainTab.SEARCH -> AppRoutes.SEARCH
         MainTab.TIERS -> AppRoutes.TIER_LIST
         MainTab.PROFILE -> ProfileRoutes.OWN_DEFAULT
     }
