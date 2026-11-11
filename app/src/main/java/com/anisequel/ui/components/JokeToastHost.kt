@@ -299,7 +299,7 @@ private fun JokeAutoSchedule(
 }
 
 /**
- * The three moments that are not the timer.
+ * The moments that are not the timer.
  *
  * The screen that knows something happened announces it on [JokeMomentBus];
  * this effect is the one place that decides whether the reader asked for that

@@ -29,6 +29,8 @@ import com.anisequel.domain.usecase.GetViewerProfileUseCase
 import com.anisequel.domain.usecase.RecentActivitySummary
 import com.anisequel.domain.usecase.SaveToPlanningUseCase
 import com.anisequel.domain.usecase.SummarizeRecentActivityUseCase
+import com.anisequel.domain.jokes.JokeMoment
+import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.detail.EntryEditor
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -1330,6 +1332,10 @@ class DashboardViewModel(
                             "Added \"${sequel.sequelTitle}\" to your AniList Planning list"
                         )
                     )
+                    // The dashboard's own quick add does not use PlanningAddStore,
+                    // so the shared store's announcement cannot cover this write.
+                    // Both routes say the same thing when the write succeeds.
+                    JokeMomentBus.announce(JokeMoment.LIST_ADD)
                     recompute()
                 },
                 onFailure = { err ->
@@ -1393,6 +1399,7 @@ class DashboardViewModel(
                             "Added \"${sequel.sequelTitle}\" to your Currently Watching list"
                         )
                     )
+                    JokeMomentBus.announce(JokeMoment.LIST_ADD)
                     recompute()
                 },
                 onFailure = { err ->

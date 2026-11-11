@@ -2,6 +2,7 @@ package com.anisequel.ui.components.nova
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -216,12 +218,14 @@ fun NovaTopBar(
                 }
 
                 if (onOpenSearch != null) {
+                    val searchSource = remember { MutableInteractionSource() }
                     IconButton(
                         onClick = onOpenSearch,
                         modifier = Modifier
                             .size(40.dp)
-                            .bouncyPress(pressedScale = 0.9f)
-                            .testTag("nova_top_search")
+                            .bouncyPress(pressedScale = 0.9f, interactionSource = searchSource)
+                            .testTag("nova_top_search"),
+                        interactionSource = searchSource
                     ) {
                         Icon(
                             imageVector = AppVectorIcons.Search,
@@ -232,12 +236,14 @@ fun NovaTopBar(
                 }
 
                 if (onOpenTiers != null) {
+                    val tiersSource = remember { MutableInteractionSource() }
                     IconButton(
                         onClick = onOpenTiers,
                         modifier = Modifier
                             .size(40.dp)
-                            .bouncyPress(pressedScale = 0.9f)
-                            .testTag("nova_top_tiers")
+                            .bouncyPress(pressedScale = 0.9f, interactionSource = tiersSource)
+                            .testTag("nova_top_tiers"),
+                        interactionSource = tiersSource
                     ) {
                         Icon(
                             imageVector = AppVectorIcons.Trophy,
@@ -247,11 +253,13 @@ fun NovaTopBar(
                     }
                 }
 
+                val settingsSource = remember { MutableInteractionSource() }
                 IconButton(
                     onClick = onOpenSettings,
                     modifier = Modifier
                         .size(40.dp)
-                        .bouncyPress(pressedScale = 0.9f)
+                        .bouncyPress(pressedScale = 0.9f, interactionSource = settingsSource),
+                    interactionSource = settingsSource
                 ) {
                     Icon(
                         imageVector = AppVectorIcons.Settings,

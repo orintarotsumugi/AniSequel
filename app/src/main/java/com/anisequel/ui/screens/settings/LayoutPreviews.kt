@@ -1,9 +1,6 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -108,7 +106,12 @@ internal fun AppLayoutPreviews(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(132.dp)
+                            // 132dp was shorter than the Nova mini's own fixed rows
+                            // (header, greeting, shortcuts, covers, bar), so the bar
+                            // at the bottom was clipped off - the one difference a
+                            // reader is choosing between. The height now has room for
+                            // every row plus a weighted gap; the card labels sit below.
+                            .height(168.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerLow)
                             .padding(7.dp)
@@ -148,6 +151,8 @@ private fun ClassicLayoutMini(entries: List<MediaListEntryItem>) {
             MiniClassicRow(entry = entry, index = index)
             Spacer(modifier = Modifier.height(5.dp))
         }
+        Spacer(modifier = Modifier.weight(1f))
+        MiniBottomBar()
     }
 }
 
@@ -194,14 +199,44 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>) {
             }
         }
         Spacer(modifier = Modifier.weight(1f))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.78f)
-                .height(18.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .align(Alignment.CenterHorizontally)
-        )
+        MiniBottomBar()
+    }
+}
+
+/**
+ * The bar both layouts share.
+ *
+ * The two previews used to end at their content, which made the layouts look like
+ * two feeds rather than two ways of using one app. The bar is what the reader
+ * actually navigates, and since 1.9.0 both layouts draw the same one, so it is
+ * drawn identically here too. The selected dot is Home in both.
+ */
+@Composable
+private fun MiniBottomBar() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(18.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(4) { index ->
+            Box(
+                modifier = Modifier
+                    .size(if (index == 0) 6.dp else 4.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (index == 0) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        }
+                    )
+            )
+        }
     }
 }
 
@@ -366,18 +401,15 @@ internal fun SequelStylePreview(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .height(160.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(10.dp)
                 .testTag("home_sequel_style_preview")
         ) {
-            AnimatedContent(
+            Crossfade(
                 targetState = style,
-                transitionSpec = {
-                    fadeIn(ExpressiveMotion.FastEffects) togetherWith
-                        fadeOut(ExpressiveMotion.FastEffects)
-                },
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "home_sequel_style_preview_mode"
             ) { current ->
                 when (current) {
@@ -501,18 +533,15 @@ internal fun LibraryViewPreview(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(152.dp)
+                .height(168.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(10.dp)
                 .testTag("library_view_preview")
         ) {
-            AnimatedContent(
+            Crossfade(
                 targetState = mode,
-                transitionSpec = {
-                    fadeIn(ExpressiveMotion.FastEffects) togetherWith
-                        fadeOut(ExpressiveMotion.FastEffects)
-                },
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "library_view_preview_mode"
             ) { current ->
                 when (current) {
@@ -606,10 +635,28 @@ private fun MiniCover(
     entry: MediaListEntryItem?,
     modifier: Modifier = Modifier
 ) {
+    // A preview with no library used to draw four flat grey boxes, so the reader
+    // choosing a layout saw placeholders rather than poster-shaped covers. The
+    // gradient is the same pair the app uses for cover fallbacks; it keeps the
+    // shape readable without inventing a fake title.
+    val cover = entry?.media?.posterColor.toCoverColorOrNull()
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(entry?.media?.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHighest)
+            .then(
+                if (cover != null) {
+                    Modifier.background(cover)
+                } else {
+                    Modifier.background(
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.tertiaryContainer
+                            )
+                        )
+                    )
+                }
+            )
     ) {
         AsyncImage(
             model = entry?.media?.posterUrl,

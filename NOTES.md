@@ -1620,6 +1620,16 @@ passed. Announcing at the request rather than after a successful fetch is
 deliberate: the reader asked for the refresh, and the pill is not claiming the
 data arrived.
 
+`LIST_ADD` and `SEARCH` are the two moments that follow a completed result rather
+than a request. A title joining a list is announced from the successful write —
+both `PlanningAddStore` (every screen except the dashboard's sequel cards) and
+`DashboardViewModel`'s own quick add — and a catalogue answer is announced by
+`NovaSearchScreen` only when the settled search returned at least one result. The
+failure paths sit above the call and cannot reach it, so a rejected mutation or an
+empty query can never produce a line congratulating the reader on something that
+did not happen. Both carry a minimum gap like the tab and refresh moments; the
+"open the app" arm remains the one that fires once per host lifetime instead.
+
 This split is also what makes the behaviour testable without a device.
 `JokeSettingsTest` pins that Off never schedules, that the master switch wins
 over Chatty, that every wait falls inside its frequency's window, that exactly

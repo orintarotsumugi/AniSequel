@@ -37,6 +37,7 @@ import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.screens.settings.AppLayoutPreviews
 import com.anisequel.ui.screens.settings.SectionCard
 import com.anisequel.ui.screens.settings.SwitchRow
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
@@ -117,12 +118,20 @@ fun FirstRunSetupDialog(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SectionCard(title = "Interface", icon = AppVectorIcons.ViewGrid) {
-                        ChoiceChips(
-                            values = AppLayout.entries.map { it.storageValue to it.displayName },
-                            selected = layout,
-                            onSelect = { layout = it },
-                            tag = "onboarding_layout"
+                    SectionCard(
+                        title = "Interface",
+                        icon = AppVectorIcons.ViewGrid,
+                        subtitle = "The same two layouts as Settings, drawn with sample posters"
+                    ) {
+                        // The chooser shows the shapes, not two names. This is the
+                        // same preview Settings uses, so first-run cannot describe a
+                        // layout the Interface page draws differently - and with no
+                        // library yet, its covers fall back to tinted placeholders.
+                        AppLayoutPreviews(
+                            selected = AppLayout.fromStorage(layout),
+                            entries = emptyList(),
+                            onSelect = { layout = it.storageValue },
+                            modifier = Modifier.testTag("onboarding_layout")
                         )
                     }
                     SectionCard(title = "Theme", icon = AppVectorIcons.ThemeDark) {

@@ -9,12 +9,13 @@ import kotlinx.coroutines.flow.asSharedFlow
 /**
  * "Something happened that the reader said may be worth a line."
  *
- * The timer is scheduled by the host because it belongs to the toast. The other
- * three moments belong to screens: only the dashboard knows a refresh was asked
- * for, and only the navigation graph knows a tab changed. Rather than thread a
- * callback through four screens into one composable, they announce it here and
- * the single host - which already outlives all of them - decides whether the
- * reader asked for this moment and whether a line is due.
+ * The timer is scheduled by the host because it belongs to the toast. The event
+ * moments belong to the code that performed the action: only the dashboard knows
+ * a refresh was asked for, only the navigation graph knows a tab changed, and
+ * only the write or the search knows it succeeded. Rather than thread a callback
+ * through every screen into one composable, they announce it here and the single
+ * host - which already outlives all of them - decides whether the reader asked
+ * for this moment and whether a line is due.
  *
  * A `SharedFlow` with one slot rather than a counter: the moment *is* the event,
  * and an announcement that arrives while a joke is on screen should be dropped

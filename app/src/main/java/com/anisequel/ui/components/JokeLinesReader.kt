@@ -219,7 +219,17 @@ internal object JokeLinesReader {
         "You remembered the spoiler and watched anyway, for the company.",
         "The last arc was uneven and you defended it in a group chat.",
         "You have one episode left for three weeks. That is a choice.",
-        "The show ended and you sat there like the credits owed you something."
+        "The show ended and you sat there like the credits owed you something.",
+        "The episode ends on a held shot and you forget to breathe on cue.",
+        "You know it is a comfort show because the ads never interrupt it in your memory.",
+        "The confession is four frames long and you have replayed it forty times.",
+        "You bought the soundtrack for one track and the rest became the mood.",
+        "The character says one word and you need a moment for the room.",
+        "You have a favourite frame that is not a scene, just a look.",
+        "The show is over and you are still holding the remote like a question.",
+        "You watched the opening in full on the last episode. That is the ritual.",
+        "The last line lands and the phone stays face down for a while.",
+        "You did not need the sequel. You needed that one minute of quiet."
     )
 
     /** Watchlists, one more episode and the sleep schedule. */
@@ -417,7 +427,17 @@ internal object JokeLinesReader {
         "You added the movie on release day and the movie is four months old.",
         "You have watched more episodes this week than the calendar had room for.",
         "The list is up to date as of last season. That season is over.",
-        "You are one dropped show away from a list you respect."
+        "You are one dropped show away from a list you respect.",
+        "Your watchlist has a watchlist. It keeps its own calendar.",
+        "The app remembers where you stopped. You do not.",
+        "You call it a short break from the show and it lasts a season.",
+        "The queue has a queue and the second one is more honest.",
+        "You finished a season in a weekend and the week recovered first.",
+        "The plan is one episode before bed. The plan is not in charge.",
+        "You have a tab open for a show you will not start this month.",
+        "The dropped list is the graveyard of good intentions.",
+        "You added a sequel before you finished the first one. Optimistic.",
+        "The next episode is queued. So is the morning."
     )
 
     /** The app's own voice: Ani-chan, the pill, the tier list, the settings. */
@@ -596,6 +616,15 @@ internal object JokeLinesReader {
         "The greeting is centred now. It would like you to notice.",
         "You changed the home list shape and the covers got bigger out of spite.",
         "The skeleton screens are not hiding content. They are predicting it.",
-        "Ani-chan counted the new jokes and added one about counting."
+        "Ani-chan counted the new jokes and added one about counting.",
+        "The catalogue search waits for you to stop typing. It has manners.",
+        "Three columns of posters and you still tap the one you already own.",
+        "The first-run setup asked five questions and you changed all five later.",
+        "You set the layout in a dialog before signing in. That is commitment.",
+        "The top bar has a magnifier and a trophy, and both are your fault.",
+        "The list status lives in the entry editor now, out of the quick-add's reach.",
+        "You opened a search result and the title page knew more than the card.",
+        "The update downloaded before it asked for permission. Efficient, invasive.",
+        "The joke system now reacts to a list add. It is watching the good part."
     )
 }

@@ -22,6 +22,22 @@
         {
           "title": "Search and Tiers can live beside the top-bar profile",
           "detail": "The optional catalogue and tier-list shortcuts now appear in both Nova and Classic top bars, alongside Settings and Profile. Their switches are in Settings > Library > Bottom bar and the shortcuts are included in first-run setup."
+        },
+        {
+          "title": "Search stays put while you type",
+          "detail": "The catalogue keeps the results already on screen while the next answer is on the wire, and shows a small indicator in the field instead. Previously every keystroke replaced the whole grid with a skeleton, which was the page reloading rather than a search. The skeleton also drove a second animation beside its shimmer; it now has one clock."
+        },
+        {
+          "title": "The interface preview shows the whole layout",
+          "detail": "Settings > Interface draws taller mini layouts with the shared bottom bar and tinted poster placeholders, so the bar is no longer clipped and the preview is readable before the library has loaded. First-run setup uses the same preview instead of two names, so the layout is chosen by looking at it."
+        },
+        {
+          "title": "The greeting changes as one piece",
+          "detail": "Nova Home now fades both greeting lines and the sentence below them together. It used to animate only the first line while the second changed underneath it, and the first resume after launch could consume a greeting before it had been read. The first composition now leaves the chosen greeting alone."
+        },
+        {
+          "title": "Ani-chan reacts to what the app just did",
+          "detail": "The joke system has two new moments: a title joining Planning or Watching, and a catalogue search settling with results. Both are announced by the successful write or answer, so a failure or an empty search cannot produce a line about success. The pool also grew by fifty lines across its five tones."
         }
       ]
     },

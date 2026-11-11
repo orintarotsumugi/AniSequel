@@ -1,9 +1,6 @@
 package com.anisequel.ui.components.nova
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,12 +33,34 @@ private val greetings = listOf(
     "A new day, a new episode" to "let's see what's waiting."
 )
 
-/** A greeting selected on each app resume, with a calm content transition. */
+/**
+ * A greeting selected on each app resume, with one calm content transition.
+ *
+ * The whole block fades as one piece. It used to wrap only the first line in an
+ * `AnimatedContent`, so on every resume "Hey, name" faded while "what are we
+ * watching today?" changed underneath it without moving - two halves of one
+ * sentence arriving at two different times. The pair is the target now.
+ *
+ * The first resume is the one this component is *composed* into, not a return
+ * visit. Advancing there too made the freshly chosen greeting vanish on the frame
+ * after it appeared, which read as a stutter on launch. `hasResumed` lets that
+ * first callback through without consuming a greeting.
+ *
+ * `Crossfade` rather than `AnimatedContent`: every greeting is the same block of
+ * three centred lines at the same width, so there is nothing to size-animate, and
+ * the size transform `AnimatedContent` adds was measuring both blocks on every
+ * resume to animate a height that does not change.
+ */
 @Composable
 fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
     var greetingIndex by remember { mutableIntStateOf(greetings.indices.random()) }
+    var hasResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
-        greetingIndex = nextGreeting(greetingIndex)
+        if (hasResumed) {
+            greetingIndex = nextGreeting(greetingIndex)
+        } else {
+            hasResumed = true
+        }
         onPauseOrDispose { }
     }
     val greeting = greetings[greetingIndex]
@@ -50,43 +70,46 @@ fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        AnimatedContent(
-            targetState = greeting.first,
-            transitionSpec = {
-                fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects)
-            },
+        Crossfade(
+            targetState = greeting,
+            animationSpec = ExpressiveMotion.FastEffects,
             label = "nova_greeting"
-        ) { line ->
-            Text(
-                text = "$line, $viewerName",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+        ) { current ->
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "${current.first}, $viewerName",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = current.second,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Find your favourite anime or manga, manhwa or whatever you like!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(0.92f)
+                )
+            }
         }
-        Text(
-            text = greeting.second,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Find your favourite anime or manga, manhwa or whatever you like!",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(0.92f)
-        )
     }
 }
 
 /** Advances the greeting without repeating the one on the previous app visit. */
-internal fun nextGreeting(currentIndex: Int, count: Int = 8): Int {
+internal fun nextGreeting(currentIndex: Int, count: Int = greetings.size): Int {
     require(count > 0)
     return (currentIndex + 1).mod(count)
 }

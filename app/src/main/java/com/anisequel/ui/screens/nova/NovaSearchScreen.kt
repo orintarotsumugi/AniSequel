@@ -63,12 +63,13 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.QuickAddPreferences
+import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.toCoverColorOrNull
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
-import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaBackdrop
 import com.anisequel.ui.components.nova.NovaSurface
@@ -176,6 +177,13 @@ fun NovaSearchScreen(
                         results = found
                         searchedTerm = term
                         error = null
+                        // A settled search is a system moment the reader can invite
+                        // a line into. Announced only for a real answer with results:
+                        // a joke over "nothing found" would read as the app mocking
+                        // the query it just failed.
+                        if (found.isNotEmpty()) {
+                            JokeMomentBus.announce(JokeMoment.SEARCH)
+                        }
                     }
                 }
                 .onFailure { failure ->
@@ -266,16 +274,30 @@ fun NovaSearchScreen(
                     )
                 },
                 trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(
-                            onClick = { query = "" },
-                            modifier = Modifier.testTag("nova_search_clear")
-                        ) {
-                            Icon(
-                                imageVector = AppVectorIcons.Close,
-                                contentDescription = "Clear search",
-                                modifier = Modifier.size(16.dp)
+                    when {
+                        // Keep the results that are already on screen while the next
+                        // answer is on the wire. Replacing the grid with the skeleton
+                        // on every keystroke tore down a whole screen of cards after
+                        // the debounce started and rebuilt it when it ended, which is
+                        // what made typing feel like the page was reloading.
+                        isSearching && results.isNotEmpty() -> {
+                            ExpressiveLoadingIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = MaterialTheme.colorScheme.primary
                             )
+                        }
+
+                        query.isNotEmpty() -> {
+                            IconButton(
+                                onClick = { query = "" },
+                                modifier = Modifier.testTag("nova_search_clear")
+                            ) {
+                                Icon(
+                                    imageVector = AppVectorIcons.Close,
+                                    contentDescription = "Clear search",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -293,7 +315,7 @@ fun NovaSearchScreen(
                             "only changes after you edit a title's entry."
                     )
 
-                    isSearching -> SearchSkeleton()
+                    isSearching && results.isEmpty() -> SearchSkeleton()
 
                     error != null -> SearchNote(
                         text = "Couldn't search AniList - $error"
@@ -475,52 +497,41 @@ private fun SearchNote(text: String) {
 /** The shape of the results that are on the wire, drawn with the app's shimmer. */
 @Composable
 private fun SearchSkeleton() {
+    // One clock for this screen. The skeleton used to put a Material loading
+    // indicator above the shimmering cards, so a wait that is already animated ran
+    // two independent loops and the smaller one was the only thing moving. The
+    // shimmer is the state; the spinner above it said the same thing twice.
     val phase = rememberShimmerPhase()
-    Column(
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 14.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp)
+            .testTag("nova_search_skeleton"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        userScrollEnabled = false
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(36.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            ExpressiveLoadingIndicator(
-                modifier = Modifier.size(24.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            userScrollEnabled = false
-        ) {
-            items(count = 6, key = { "search_skeleton_$it" }) {
-                Column(
+        items(count = 6, key = { "search_skeleton_$it" }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        MaterialTheme.colorScheme.surfaceContainerLow,
+                        RoundedCornerShape(ExpressiveShapes.MediumCorner)
+                    )
+                    .padding(7.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ShimmerBox(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainerLow,
-                            RoundedCornerShape(ExpressiveShapes.MediumCorner)
-                        )
-                        .padding(7.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.68f),
-                        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
-                        phase = phase
-                    )
-                    ShimmerBox(modifier = Modifier.fillMaxWidth(0.9f).height(13.dp), phase = phase)
-                    ShimmerBox(modifier = Modifier.fillMaxWidth(0.62f).height(10.dp), phase = phase)
-                }
+                        .aspectRatio(0.68f),
+                    shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+                    phase = phase
+                )
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.9f).height(13.dp), phase = phase)
+                ShimmerBox(modifier = Modifier.fillMaxWidth(0.62f).height(10.dp), phase = phase)
             }
         }
     }
