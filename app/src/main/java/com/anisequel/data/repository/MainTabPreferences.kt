@@ -40,6 +40,7 @@ class MainTabPreferences(private val context: Context) {
 
     private object Keys {
         val TIER_LIST_TAB = booleanPreferencesKey("tier_list_tab")
+        val SEARCH_TAB = booleanPreferencesKey("search_tab")
     }
 
     /**
@@ -60,14 +61,37 @@ class MainTabPreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Whether the catalogue search is one of the bar's pages.
+     *
+     * Off by default for the same reason the tier tab is: the bar is the app's
+     * most contended strip of screen, and a reader who never searches the
+     * catalogue should not pay a tab for it. The difference is where the feature
+     * lives without the tab - there is no alternative door into Search, on
+     * purpose, because a search field on the dashboard is the thing this page
+     * exists to replace. So the switch is how the page exists for a reader at
+     * all, and its subtitle says so.
+     */
+    val searchTab: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.SEARCH_TAB] ?: DEFAULT_SEARCH_TAB
+    }
+
+    suspend fun setSearchTab(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.SEARCH_TAB] = enabled
+        }
+    }
+
     /** Back to the shipped default, which is "hidden". */
     suspend fun reset() {
         context.mainTabsDataStore.edit { preferences ->
             preferences.remove(Keys.TIER_LIST_TAB)
+            preferences.remove(Keys.SEARCH_TAB)
         }
     }
 
     companion object {
         const val DEFAULT_TIER_LIST_TAB = false
+        const val DEFAULT_SEARCH_TAB = false
     }
 }

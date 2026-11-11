@@ -69,6 +69,7 @@ import com.anisequel.ui.screens.dashboard.DashboardLoadingView
 import com.anisequel.ui.screens.dashboard.DashboardSearchBar
 import com.anisequel.ui.screens.dashboard.DashboardSectionHeader
 import com.anisequel.ui.screens.nova.NovaHomeScreen
+import com.anisequel.ui.screens.nova.NovaHomeSkeleton
 import com.anisequel.ui.screens.profile.LibraryType
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.viewmodel.DashboardEvent
@@ -306,7 +307,17 @@ fun DashboardScreen(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            // The collapse behaviour belongs to the classic bar, which is a real
+            // `TopAppBar` the connection drives. The new look's bar is a static
+            // shelf, so registering it there would let a bar that cannot collapse
+            // take part in every scroll the new Home's list receives.
+            .then(
+                if (appLayout == AppLayout.NOVA) {
+                    Modifier
+                } else {
+                    Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+                }
+            )
             .testTag("dashboard_screen"),
         // Lifted clear of the main bar: the Scaffold sits a snackbar on the system
         // inset, which is exactly where the floating bar begins, so an "Added to
@@ -358,10 +369,18 @@ fun DashboardScreen(
             ) { state ->
                 when (state) {
                     is DashboardUiState.Loading -> {
-                        DashboardLoadingView(
-                            message = state.message,
-                            maxWidth = MaxContentWidth
-                        )
+                        // The waiting state is part of the look, not a third one.
+                        // The classic skeleton is built from the classic page's
+                        // sections, so drawing it under the new bar put the new
+                        // bar over a page the reader had not chosen.
+                        if (appLayout == AppLayout.NOVA) {
+                            NovaHomeSkeleton()
+                        } else {
+                            DashboardLoadingView(
+                                message = state.message,
+                                maxWidth = MaxContentWidth
+                            )
+                        }
                     }
 
                     is DashboardUiState.Error -> {

@@ -41,6 +41,59 @@ object AppCustomVectors {
     }
 
     /**
+     * The main bar's Home glyph: a house with a doorway, drawn here rather than
+     * imported.
+     *
+     * The Material `Home` the bar used to borrow is the same shape the profile's
+     * own Home *tab* draws, so the app's most-tapped destination and a tab inside
+     * a pushed screen wore one icon - and the profile's is the one that should
+     * keep it, because there it means "this person's overview". This house is
+     * squarer, with a wider roof overhang and a real doorway, so at 22dp it reads
+     * as a place rather than as a filled pentagon.
+     *
+     * One path with `EvenOdd` and the doorway as a subpath: two filled paths would
+     * paint the door in the same colour as the wall, and a stroke-only door
+     * vanishes when the icon is tinted at 20dp.
+     */
+    val HomeHearth: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "HomeHearth",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.EvenOdd
+            ) {
+                // The roof, with a little overhang past both walls.
+                moveTo(12f, 2.1f)
+                lineTo(22.1f, 10.5f)
+                curveTo(22.7f, 11f, 22.4f, 11.9f, 21.6f, 11.9f)
+                lineTo(20.4f, 11.9f)
+                lineTo(20.4f, 20f)
+                curveTo(20.4f, 20.9f, 19.7f, 21.6f, 18.8f, 21.6f)
+                lineTo(5.2f, 21.6f)
+                curveTo(4.3f, 21.6f, 3.6f, 20.9f, 3.6f, 20f)
+                lineTo(3.6f, 11.9f)
+                lineTo(2.4f, 11.9f)
+                curveTo(1.6f, 11.9f, 1.3f, 11f, 1.9f, 10.5f)
+                close()
+
+                // The doorway, cut out of the wall it stands in.
+                moveTo(9.5f, 21.6f)
+                lineTo(9.5f, 15.4f)
+                curveTo(9.5f, 14.9f, 9.9f, 14.5f, 10.4f, 14.5f)
+                lineTo(13.6f, 14.5f)
+                curveTo(14.1f, 14.5f, 14.5f, 14.9f, 14.5f, 15.4f)
+                lineTo(14.5f, 21.6f)
+                close()
+            }
+        }.build()
+    }
+
+    /**
      * Studio / Production building vector icon.
      */
     val StudioBuilding: ImageVector by lazy {

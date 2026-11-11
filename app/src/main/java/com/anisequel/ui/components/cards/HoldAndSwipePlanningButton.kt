@@ -1,6 +1,8 @@
 package com.anisequel.ui.components.cards
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
@@ -15,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -269,185 +272,204 @@ private fun ActiveQuickAddPlanningButton(
         }
     }
 
-    Box(
+    // The question sits *beside* the control, not on top of it.
+    //
+    // Turning the button into its own question (`PlanningConfirmFace` replaced
+    // the whole face) read as the button having been replaced rather than asked:
+    // the label grew, the two answers were drawn on the same surface, and the
+    // control the reader had reached for was momentarily gone. Here the control
+    // stays - smaller, because it now has neighbours - and the two answers are
+    // square buttons immediately to its right, in the order the question asks:
+    // tick to plan, cross to put it back.
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .graphicsLayer {
-                scaleX = buttonScale
-                scaleY = buttonScale
-            }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .testTag("hold_swipe_button_$mediaId")
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        if (canSwipe) {
-            SwipeToWatchReveal(
-                revealColor = statusColors.info,
-                containerColor = statusColors.infoContainer
-            )
-        }
-
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                .weight(1f)
+                .height(44.dp)
+                .graphicsLayer {
+                    scaleX = buttonScale
+                    scaleY = buttonScale
+                }
                 .clip(shape)
-                .background(buttonColor)
-                // The gestures are detached while the question is open. A tick is
-                // an answer, not another tap to plan - and the old gesture handler
-                // would read a press on the label as one more "add".
-                .then(
-                    if (confirming) {
-                        Modifier.clickable(
-                            onClickLabel = "Cancel adding to Planning",
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                confirming = false
-                            }
-                        )
-                    } else {
-                        Modifier.quickAddGestures(
-                            holdEnabled = !isBusy,
-                            swipeEnabled = canSwipe,
-                            holdDurationMs = holdDurationMs,
-                            swipeThresholdPx = swipeThresholdPx,
-                            holdProgress = holdProgressAnim,
-                            dragOffset = dragOffset,
-                            haptic = haptic,
-                            coroutineScope = coroutineScope,
-                            onHoldingChange = { isHolding = it },
-                            onAddToPlanning = askOrAdd,
-                            onAddToWatching = onAddToWatching
-                        )
-                    }
-                ),
-            contentAlignment = Alignment.Center
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .testTag("hold_swipe_button_$mediaId")
         ) {
-            HoldProgressFill(progressFraction = progressFraction)
+            if (canSwipe) {
+                SwipeToWatchReveal(
+                    revealColor = statusColors.info,
+                    containerColor = statusColors.infoContainer
+                )
+            }
 
-            AnimatedContent(
-                targetState = confirming,
-                transitionSpec = {
-                    // A question arriving is the button turning over, not a page
-                    // changing: the spring gives the two small answers a little
-                    // weight without moving the row they sit in.
-                    fadeIn(ExpressiveMotion.FastEffects) +
-                        scaleIn(
-                            initialScale = 0.86f,
-                            animationSpec = ExpressiveMotion.BouncySpatial
-                        ) togetherWith
-                        fadeOut(ExpressiveMotion.FastEffects) +
-                        scaleOut(
-                            targetScale = 0.90f,
-                            animationSpec = ExpressiveMotion.FastSpatial
-                        )
-                },
-                modifier = Modifier.fillMaxSize(),
-                label = "planning_confirm_state"
-            ) { asking ->
-                if (asking) {
-                    PlanningConfirmFace(
-                        mediaId = mediaId,
-                        onConfirm = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            confirming = false
-                            onAddToPlanning()
-                        },
-                        onCancel = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            confirming = false
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                    .clip(shape)
+                    .background(buttonColor)
+                    // The gestures are detached while the question is open. A tick
+                    // is an answer, not another tap to plan - and the old gesture
+                    // handler would read a press on the label as one more "add".
+                    .then(
+                        if (confirming) {
+                            Modifier.clickable(
+                                onClickLabel = "Cancel adding to Planning",
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    confirming = false
+                                }
+                            )
+                        } else {
+                            Modifier.quickAddGestures(
+                                holdEnabled = !isBusy,
+                                swipeEnabled = canSwipe,
+                                holdDurationMs = holdDurationMs,
+                                swipeThresholdPx = swipeThresholdPx,
+                                holdProgress = holdProgressAnim,
+                                dragOffset = dragOffset,
+                                haptic = haptic,
+                                coroutineScope = coroutineScope,
+                                onHoldingChange = { isHolding = it },
+                                onAddToPlanning = askOrAdd,
+                                onAddToWatching = onAddToWatching
+                            )
                         }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                HoldProgressFill(progressFraction = progressFraction)
+
+                AnimatedContent(
+                    targetState = confirming,
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "planning_confirm_state"
+                ) { asking ->
+                    if (asking) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Add to Planning?",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+                        }
                     }
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = confirming,
+            enter = fadeIn(ExpressiveMotion.FastEffects) +
+                scaleIn(
+                    initialScale = 0.86f,
+                    animationSpec = ExpressiveMotion.BouncySpatial
+                ),
+            exit = fadeOut(ExpressiveMotion.FastEffects) +
+                scaleOut(
+                    targetScale = 0.90f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                )
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlanningConfirmSquare(
+                    mediaId = mediaId,
+                    confirm = true,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        confirming = false
+                        onAddToPlanning()
+                    }
+                )
+                PlanningConfirmSquare(
+                    mediaId = mediaId,
+                    confirm = false,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        confirming = false
+                    }
+                )
             }
         }
     }
 }
 
 /**
- * The question a Planning add asks: a green tick, what the button is about to do,
- * and a red cross that puts it back.
+ * One square answer beside the button: the tick that plans, the cross that does
+ * not.
  *
- * The two answers are 30dp circles beside the label rather than two full-width
- * buttons below it. The row is already the height of a thumb, and splitting it
- * into three equal targets would make the destructive answer as large and as easy
- * to hit as the one that writes to AniList. The label keeps the action named, so
- * the tick is not a bare symbol with no object.
+ * A square rather than a circle, and the same 44dp height as the control it
+ * stands beside: two round bubbles next to a rounded rectangle read as three
+ * different kinds of thing, while a matched row of rounded squares reads as one
+ * control that unfolded. Both answers keep a full-height touch target without
+ * stealing the add button's whole width.
  */
 @Composable
-private fun PlanningConfirmFace(
+private fun PlanningConfirmSquare(
     mediaId: Int,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit
+    confirm: Boolean,
+    onClick: () -> Unit
 ) {
     val statusColors = AniSequelTheme.statusColors
+    val container = if (confirm) {
+        statusColors.successContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
+    val content = if (confirm) statusColors.success else MaterialTheme.colorScheme.error
 
-    Row(
+    Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 6.dp)
-            .semantics { contentDescription = "Add to Planning? Confirm or cancel" }
-            .testTag("planning_confirm_row_$mediaId"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)
+            .size(44.dp)
+            .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
+            .background(container)
+            .clickable(
+                onClickLabel = if (confirm) {
+                    "Confirm adding to Planning"
+                } else {
+                    "Cancel adding to Planning"
+                },
+                onClick = onClick
+            )
+            .semantics {
+                contentDescription = if (confirm) "Confirm" else "Cancel"
+            }
+            .testTag(
+                if (confirm) {
+                    "planning_confirm_yes_$mediaId"
+                } else {
+                    "planning_confirm_no_$mediaId"
+                }
+            ),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(statusColors.successContainer)
-                .clickable(
-                    onClickLabel = "Confirm adding to Planning",
-                    onClick = onConfirm
-                )
-                .testTag("planning_confirm_yes_$mediaId"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Done,
-                contentDescription = "Confirm",
-                tint = statusColors.success,
-                modifier = Modifier.size(17.dp)
-            )
-        }
-
-        Text(
-            text = "Add to Planning?",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimary,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.weight(1f)
+        Icon(
+            imageVector = if (confirm) AppVectorIcons.Done else AppVectorIcons.Close,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(20.dp)
         )
-
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.errorContainer)
-                .clickable(
-                    onClickLabel = "Cancel adding to Planning",
-                    onClick = onCancel
-                )
-                .testTag("planning_confirm_no_$mediaId"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Close,
-                contentDescription = "Cancel",
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(16.dp)
-            )
-        }
     }
 }
 

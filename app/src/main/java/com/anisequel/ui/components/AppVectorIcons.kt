@@ -188,6 +188,16 @@ object AppVectorIcons {
     // reads as analytics without being the same drawing, so the two sit on one
     // screen without being mistaken for each other.
     val ProfileHome = Icons.Default.Home
+
+    /**
+     * The main bar's Home tab.
+     *
+     * Its own glyph rather than [ProfileHome]: the profile's Home *tab* and the
+     * app's Home *page* are two different destinations, and sharing one drawing
+     * made the bar look like a shortcut into somebody's overview. See
+     * [com.anisequel.ui.components.icons.AppCustomVectors.HomeHearth].
+     */
+    val HomeTab = AppCustomVectors.HomeHearth
     val ProfileActivity = Icons.AutoMirrored.Filled.Comment
     val ProfileStats = Icons.Default.Insights
     val ProfileSocial = Icons.Default.Group

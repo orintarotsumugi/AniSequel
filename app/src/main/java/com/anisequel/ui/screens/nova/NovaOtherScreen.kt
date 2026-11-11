@@ -101,7 +101,17 @@ fun NovaOtherScreen(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
+                // The remaining height, not the whole screen's.
+                //
+                // `fillMaxSize` here measured the grid against the Column's full
+                // incoming height and then placed it *below* the header, so its
+                // viewport ran past the bottom of the window: the last row of
+                // cards could not be scrolled into view, because reaching it
+                // meant scrolling the grid's edge - which was already off screen.
+                // A weight is the grid asking the Column for what is left.
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 contentPadding = PaddingValues(
                     start = 20.dp,
                     end = 20.dp,

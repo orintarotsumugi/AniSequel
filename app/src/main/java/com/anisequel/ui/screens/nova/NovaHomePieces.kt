@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -49,12 +51,15 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaProgressPill
 import com.anisequel.ui.components.nova.NovaSurface
+import com.anisequel.ui.components.rememberShimmerPhase
+import com.anisequel.ui.navigation.mainBarClearance
 
 /**
  * The pieces the new Home is assembled from.
@@ -71,28 +76,40 @@ fun NovaGreeting(
     viewerName: String,
     modifier: Modifier = Modifier
 ) {
+    // Centred, because the greeting is the page's one moment of address rather
+    // than the first row of a list. Left-aligned it competed with the shortcut
+    // cards below it for the same edge, and the two lines read as a header that
+    // had been cut off; centred, the block answers the identity card above it and
+    // the shelf below starts clean on its own margin.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "Hey $viewerName,",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         Text(
             text = "what are we doing today?",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Find your favourite anime or manga, manhwa or whatever you like!",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(0.92f)
         )
     }
 }
@@ -473,6 +490,265 @@ fun NovaSequelRow(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+        }
+    }
+}
+
+/**
+ * One missed sequel as a poster card: the same row, with the artwork given the
+ * room it needs to be recognised.
+ *
+ * The second of the two shapes [com.anisequel.domain.ui.HomeSequelStyle] offers.
+ * Everything it draws is the row's own vocabulary - the relation label, the
+ * title, the compact metadata line, the shared planning button and the hide
+ * cross - so switching between them changes the picture and not the behaviour.
+ * The cover is the only part that is genuinely new, and it is drawn from the
+ * URL the row already had; no request is made for this layout either.
+ */
+@Composable
+fun NovaSequelCard(
+    sequel: MissedSequel,
+    onOpen: () -> Unit,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    onHide: () -> Unit,
+    holdDurationSeconds: Int,
+    swipeEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    NovaSurface(
+        modifier = modifier
+            .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.985f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onOpen
+            )
+            .testTag("nova_sequel_card_${sequel.sequelId}"),
+        tonalElevation = true
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(176.dp)
+                    .background(
+                        sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent
+                    )
+            ) {
+                AsyncImage(
+                    model = sequel.sequelCoverUrl,
+                    contentDescription = sequel.sequelTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = ExpressiveShapes.pill,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.94f),
+                        // The one label on the artwork, and the reason the card
+                        // can say "this is a sequel to a show you finished"
+                        // without a second column of text.
+                        modifier = Modifier.testTag("nova_sequel_card_relation")
+                    ) {
+                        Text(
+                            text = sequel.relationLabel.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(
+                        onClick = onHide,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
+                            )
+                            .bouncyPress(pressedScale = 0.88f)
+                            .testTag("nova_sequel_card_hide_${sequel.sequelId}")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Close,
+                            contentDescription = "Not interested",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)
+            ) {
+                Text(
+                    text = sequel.sequelTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = listOfNotNull(
+                        sequel.format.takeIf { it.isNotBlank() },
+                        sequel.episodes.takeIf { it.isNotBlank() && it != "-" },
+                        sequel.score.takeIf { it.isNotBlank() }
+                    ).joinToString("  ·  "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                QuickAddPlanningButton(
+                    mediaId = sequel.sequelId,
+                    isAddedToPlanning = sequel.isAddedToPlanning,
+                    isAddedToWatching = sequel.isAddedToWatching,
+                    isBusy = sequel.isSavingToList,
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching,
+                    holdDurationSeconds = holdDurationSeconds,
+                    swipeEnabled = swipeEnabled,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * What the new Home draws while its first answer is in flight.
+ *
+ * The classic dashboard's skeleton is built from the classic page's sections -
+ * a stats banner, a search field, five sequel cards - and drawing it under the
+ * new look put the new bar over a page the reader had not chosen: the loading
+ * state was the only screen in the app that ignored the layout setting. This
+ * mirrors the shelf instead: the centred greeting, the two shortcut cards, the
+ * continue rail and the rows below.
+ *
+ * One shimmer clock for the whole page, and no scrolling - there is nothing to
+ * scroll to yet, and a skeleton that can be dragged implies content behind it.
+ */
+@Composable
+fun NovaHomeSkeleton(modifier: Modifier = Modifier) {
+    val phase = rememberShimmerPhase()
+    val maxWidth = 640.dp
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("nova_home_skeleton"),
+        contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance() + 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        userScrollEnabled = false
+    ) {
+        item(key = "skeleton_greeting") {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.58f)
+                        .height(28.dp),
+                    phase = phase
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.44f)
+                        .height(24.dp),
+                    phase = phase
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.86f)
+                        .height(14.dp),
+                    phase = phase
+                )
+            }
+        }
+
+        item(key = "skeleton_shortcuts") {
+            Row(
+                modifier = Modifier
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                repeat(2) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(104.dp),
+                        shape = RoundedCornerShape(26.dp),
+                        phase = phase
+                    )
+                }
+            }
+        }
+
+        item(key = "skeleton_rail") {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth(0.42f)
+                        .height(20.dp),
+                    phase = phase
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    repeat(3) {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(150.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            phase = phase
+                        )
+                    }
+                }
+            }
+        }
+
+        items(count = 3, key = { "skeleton_row_$it" }) {
+            ShimmerBox(
+                modifier = Modifier
+                    .widthIn(max = maxWidth)
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .height(104.dp),
+                shape = RoundedCornerShape(26.dp),
+                phase = phase
+            )
         }
     }
 }

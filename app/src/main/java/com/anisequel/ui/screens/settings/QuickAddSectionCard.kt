@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +15,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.SegmentedOption
 import kotlinx.coroutines.launch
@@ -49,6 +51,36 @@ fun QuickAddSectionCard(
         subtitle = "Hold or swipe to add to Currently Watching",
         modifier = modifier.testTag("quick_add_settings_card")
     ) {
+        // The real control, not a drawing of one: it reads the same
+        // `LocalConfirmPlanningAdd` the cards do, so the tick/cross the reader
+        // sees here is the tick/cross they will see on Home. Tapping it writes
+        // nothing - the two callbacks are empty because a settings page has no
+        // title to plan - which is what makes the preview safe.
+        SettingsFieldLabel(text = "Preview")
+        Spacer(modifier = Modifier.height(6.dp))
+        QuickAddPlanningButton(
+            mediaId = 0,
+            isAddedToPlanning = false,
+            isAddedToWatching = false,
+            isBusy = false,
+            onAddToPlanning = {},
+            onAddToWatching = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("quick_add_preview_button")
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Tap it to see the confirmation, or hold it to fill toward " +
+                "Currently Watching. Nothing is saved from this page.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider()
+        Spacer(modifier = Modifier.height(10.dp))
+
         SettingsFieldLabel(text = "Hold duration")
         Spacer(modifier = Modifier.height(4.dp))
         Text(

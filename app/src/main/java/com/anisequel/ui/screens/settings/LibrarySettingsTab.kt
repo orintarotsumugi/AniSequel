@@ -100,6 +100,9 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val tierListTab by mainTabPreferences.tierListTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
     )
+    val searchTab by mainTabPreferences.searchTab.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_TAB
+    )
 
     SectionCard(
         title = "Bottom bar",
@@ -115,6 +118,25 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
                 scope.launch { mainTabPreferences.setTierListTab(enabled) }
             },
             modifier = Modifier.testTag("tier_list_tab_switch")
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // The search tab is the one optional page with no second door: the tier
+        // list is reachable from the Library's trophy and the profile's row, but
+        // catalogue search exists here and nowhere else. The subtitle says so,
+        // because a switch that reads like a shortcut for something already
+        // available would be understood as cosmetic.
+        SwitchRow(
+            title = "Search tab",
+            subtitle = "Search every anime and manga on AniList and add a title " +
+                "straight to your list. This page is reached from the bar, so " +
+                "turning the tab off hides it.",
+            checked = searchTab,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setSearchTab(enabled) }
+            },
+            modifier = Modifier.testTag("search_tab_switch")
         )
     }
 }
