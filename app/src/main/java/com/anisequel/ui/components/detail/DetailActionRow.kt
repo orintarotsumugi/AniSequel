@@ -184,29 +184,15 @@ fun DetailActionRow(
             }
         }
 
-        if (sequel == null && (listStatus != null || isPlanned || isWatching) &&
-            canWriteToAniList && onEditEntry != null
-        ) {
-            TextButton(
-                onClick = { onEditEntry?.invoke() },
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .testTag("info_edit_list_entry")
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.EditEntry,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                val editableStatus = listStatus ?: when {
-                    isPlanned -> ListStatuses.PLANNING
-                    isWatching -> ListStatuses.CURRENT
-                    else -> null
-                }
-                Text("Edit ${ListStatuses.label(editableStatus, media.isManga)} entry")
-            }
-        }
+        EntryStatusEditAction(
+            visible = sequel == null && (listStatus != null || isPlanned || isWatching) &&
+                canWriteToAniList && onEditEntry != null,
+            label = ListStatuses.label(
+                status = listStatus ?: if (isPlanned) ListStatuses.PLANNING else ListStatuses.CURRENT,
+                isManga = media.isManga
+            ),
+            onClick = { onEditEntry?.invoke() }
+        )
 
         // The sheet is opened from four screens and only the dashboard owns a
         // snackbar, so a failed write says so here, under the control that made
@@ -221,6 +207,29 @@ fun DetailActionRow(
                     .testTag("sheet_quick_add_error")
             )
         }
+    }
+}
+
+@Composable
+private fun EntryStatusEditAction(
+    visible: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    if (!visible) return
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .testTag("info_edit_list_entry")
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.EditEntry,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("Edit $label entry")
     }
 }
 

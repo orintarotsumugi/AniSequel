@@ -35,11 +35,37 @@ import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.screens.settings.SectionCard
 import com.anisequel.ui.screens.settings.SwitchRow
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import kotlinx.coroutines.launch
+
+/** Keeps the state-read gate out of the app navigation host. */
+@Composable
+fun FirstRunSetupHost(
+    completed: Boolean,
+    authState: AuthUiState,
+    onboardingPreferences: OnboardingPreferences,
+    interfacePreferences: InterfacePreferences,
+    themePreferences: ThemePreferences,
+    jokePreferences: JokePreferences,
+    mainTabPreferences: MainTabPreferences
+) {
+    if (!shouldShowFirstRunSetup(completed, authState)) return
+    FirstRunSetupDialog(
+        onboardingPreferences = onboardingPreferences,
+        interfacePreferences = interfacePreferences,
+        themePreferences = themePreferences,
+        jokePreferences = jokePreferences,
+        mainTabPreferences = mainTabPreferences
+    )
+}
+
+/** Pure gate so a restoring session can never flash first-run choices over Home. */
+internal fun shouldShowFirstRunSetup(completed: Boolean, authState: AuthUiState): Boolean =
+    !completed && authState !is AuthUiState.Restoring
 
 /** First-run choices, grouped into the five things that most change the experience. */
 @OptIn(ExperimentalLayoutApi::class)

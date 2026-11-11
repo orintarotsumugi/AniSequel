@@ -47,7 +47,7 @@ import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
-import com.anisequel.ui.screens.login.FirstRunSetupDialog
+import com.anisequel.ui.screens.login.FirstRunSetupHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
@@ -218,9 +218,6 @@ fun AppNavigation(
     val onboardingPreferences = remember(context) {
         OnboardingPreferences(context.applicationContext)
     }
-    // Hold the setup until DataStore has answered: showing it on the initial default
-    // frame flashed onboarding over every existing installation before "completed"
-    // had been read from disk.
     val onboardingCompleted by onboardingPreferences.completed.collectAsState(initial = true)
 
     // How the media cards are drawn. Read here and handed down as a composition
@@ -772,15 +769,15 @@ fun AppNavigation(
                     favourites = jokeFavourites
                 )
 
-                if (!onboardingCompleted && authState !is AuthUiState.Restoring) {
-                    FirstRunSetupDialog(
-                        onboardingPreferences = onboardingPreferences,
-                        interfacePreferences = interfacePreferences,
-                        themePreferences = themePreferences,
-                        jokePreferences = jokePreferences,
-                        mainTabPreferences = mainTabPreferences
-                    )
-                }
+                FirstRunSetupHost(
+                    completed = onboardingCompleted,
+                    authState = authState,
+                    onboardingPreferences = onboardingPreferences,
+                    interfacePreferences = interfacePreferences,
+                    themePreferences = themePreferences,
+                    jokePreferences = jokePreferences,
+                    mainTabPreferences = mainTabPreferences
+                )
             }
         }
     }
