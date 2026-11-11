@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -48,6 +49,7 @@ import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
+import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
@@ -66,6 +68,9 @@ object AppRoutes {
     const val DASHBOARD_DEMO = "dashboard_demo"
     const val DASHBOARD_USER = "dashboard_user/{username}"
     const val LIBRARY = "library"
+
+    /** The catalogue search, one of the bar's pages when its tab is enabled. */
+    const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val TIER_LIST = "tier_list"
 
@@ -196,6 +201,9 @@ fun AppNavigation(
     val tierListTab by mainTabPreferences.tierListTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
     )
+    val searchTab by mainTabPreferences.searchTab.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_TAB
+    )
 
     // How the media cards are drawn. Read here and handed down as a composition
     // local rather than as another parameter on every destination, because the
@@ -230,7 +238,7 @@ fun AppNavigation(
     // Derived from the enum, filtered by the setting - see [enabledMainTabs].
     // Remembered on the flag so the bar's list is the same instance across
     // recompositions; it is an index table for `MainBar`, not state.
-    val mainTabs = remember(tierListTab) { enabledMainTabs(tierListTab) }
+    val mainTabs = remember(tierListTab, searchTab) { enabledMainTabs(tierListTab, searchTab) }
 
     // Whether the tier list has a board open, which is the one thing that hides the
     // bar on a page that is otherwise one of its own. It lives here because the bar
@@ -443,6 +451,11 @@ fun AppNavigation(
                 // emission is about the session, not about where they were.
                 if (currentRoute != AppRoutes.DASHBOARD &&
                     currentRoute != AppRoutes.LIBRARY &&
+                    // Every one of the bar's pages belongs here, including the
+                    // optional ones: an auth emission is not a reason to pull a
+                    // reader off a page the bar is currently showing as theirs.
+                    currentRoute != AppRoutes.SEARCH &&
+                    currentRoute != AppRoutes.TIER_LIST &&
                     currentRoute != ProfileRoutes.OWN_ROUTE &&
                     currentRoute != AppRoutes.SETTINGS
                 ) {
@@ -470,6 +483,7 @@ fun AppNavigation(
                     currentRoute == AppRoutes.SETTINGS ||
                     currentRoute == AppRoutes.TIER_LIST ||
                     currentRoute == AppRoutes.LIBRARY ||
+                    currentRoute == AppRoutes.SEARCH ||
                     currentRoute == ProfileRoutes.OWN_ROUTE
                 ) {
                     // `popUpTo(0)` is not a destination - it popped nothing and
@@ -537,6 +551,7 @@ fun AppNavigation(
             LocalAppLayout provides interfaceSettings.layout,
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
+            LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,
             LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds
         ) {
             // Opaque, and that is the point.
@@ -553,6 +568,13 @@ fun AppNavigation(
                 modifier = modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
+                    // Mounted once, above the graph, so every scrollable page
+                    // reaches the bar's hide-on-scroll rule without a single
+                    // screen having to know it exists. The connection never
+                    // consumes, and it sits beside the seasonal wind rather
+                    // than replacing it - both are observers of the same
+                    // gesture.
+                    .nestedScroll(MainBarAutoHide.connection)
                     .then(seasonalAmbient)
             ) {
                 NavHost(
@@ -665,7 +687,8 @@ fun AppNavigation(
                         aniListRepository = aniListRepository,
                         dashboardViewModel = mainDashboardViewModel,
                         detailHost = detailHost,
-                        entryEditor = sharedEntryEditor
+                        entryEditor = sharedEntryEditor,
+                        quickAddPreferences = quickAddPreferences
                     )
 
                     settingsDestinations(

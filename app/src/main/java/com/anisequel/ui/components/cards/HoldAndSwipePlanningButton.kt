@@ -1,20 +1,19 @@
 package com.anisequel.ui.components.cards
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -39,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,9 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -67,9 +65,6 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -202,11 +197,16 @@ private fun ActiveQuickAddPlanningButton(
     // committed" flag live inside the gesture modifier below: both are per-press
     // facts that no layout reads, and keeping them in composition only made the
     // button recompose for state nothing drew.
-    var isHolding by remember { mutableStateOf(false) }
-    val holdProgressAnim = remember { Animatable(0f) }
+    //
+    // Keyed on the title, every one of them. They used to be remembered without a
+    // key, so a row that a `LazyColumn` reused for a different sequel could start
+    // out half-filled (a cancelled hold) or part-dragged (a cancelled swipe) before
+    // the reader had touched anything.
+    var isHolding by remember(mediaId) { mutableStateOf(false) }
+    val holdProgressAnim = remember(mediaId) { Animatable(0f) }
 
     // Swipe drag state
-    val dragOffset = remember { Animatable(0f) }
+    val dragOffset = remember(mediaId) { Animatable(0f) }
     val swipeThresholdPx = with(density) { 90.dp.toPx() }
 
     val holdDurationMs = holdDurationMillis(holdDurationSeconds)
@@ -257,309 +257,243 @@ private fun ActiveQuickAddPlanningButton(
 
     val canSwipe = swipeEnabled && !isBusy && !confirming
 
+    // The gesture block below only restarts for a new title, so anything it reads
+    // has to be read through state or the block keeps the value it was first given.
+    // The suspect is not hypothetical: this control is previewed live in Settings,
+    // where the confirmation switch can be turned off under a composition that is
+    // already running - and a `pointerInput` that captured `onConfirmBeforeAdding`
+    // would go on asking a question the setting had just retired. The same hazard
+    // is recorded on `expressiveHoldGesture` for recycled lazy rows.
+    val currentOnAddToPlanning by rememberUpdatedState(onAddToPlanning)
+    val currentOnAddToWatching by rememberUpdatedState(onAddToWatching)
+    val currentConfirmBeforeAdding by rememberUpdatedState(onConfirmBeforeAdding)
+
     // A tap that will ask a question still needs the haptic the old tap had: the
     // finger has to feel that the button took the press, or the tick that appears
     // a frame later reads as the button having missed it.
     val askOrAdd: () -> Unit = {
-        if (onConfirmBeforeAdding) {
+        if (currentConfirmBeforeAdding) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             confirming = true
         } else {
-            onAddToPlanning()
+            currentOnAddToPlanning()
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .graphicsLayer {
-                scaleX = buttonScale
-                scaleY = buttonScale
-            }
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .testTag("hold_swipe_button_$mediaId")
-    ) {
-        if (canSwipe) {
-            SwipeToWatchReveal(
-                revealColor = statusColors.info,
-                containerColor = statusColors.infoContainer
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
-                .clip(shape)
-                .background(buttonColor)
-                // The gestures are detached while the question is open. A tick is
-                // an answer, not another tap to plan - and the old gesture handler
-                // would read a press on the label as one more "add".
-                .then(
-                    if (confirming) {
-                        Modifier.clickable(
-                            onClickLabel = "Cancel adding to Planning",
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                confirming = false
-                            }
-                        )
-                    } else {
-                        Modifier.quickAddGestures(
-                            holdEnabled = !isBusy,
-                            swipeEnabled = canSwipe,
-                            holdDurationMs = holdDurationMs,
-                            swipeThresholdPx = swipeThresholdPx,
-                            holdProgress = holdProgressAnim,
-                            dragOffset = dragOffset,
-                            haptic = haptic,
-                            coroutineScope = coroutineScope,
-                            onHoldingChange = { isHolding = it },
-                            onAddToPlanning = askOrAdd,
-                            onAddToWatching = onAddToWatching
-                        )
-                    }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            HoldProgressFill(progressFraction = progressFraction)
-
-            AnimatedContent(
-                targetState = confirming,
-                transitionSpec = {
-                    // A question arriving is the button turning over, not a page
-                    // changing: the spring gives the two small answers a little
-                    // weight without moving the row they sit in.
-                    fadeIn(ExpressiveMotion.FastEffects) +
-                        scaleIn(
-                            initialScale = 0.86f,
-                            animationSpec = ExpressiveMotion.BouncySpatial
-                        ) togetherWith
-                        fadeOut(ExpressiveMotion.FastEffects) +
-                        scaleOut(
-                            targetScale = 0.90f,
-                            animationSpec = ExpressiveMotion.FastSpatial
-                        )
-                },
-                modifier = Modifier.fillMaxSize(),
-                label = "planning_confirm_state"
-            ) { asking ->
-                if (asking) {
-                    PlanningConfirmFace(
-                        mediaId = mediaId,
-                        onConfirm = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            confirming = false
-                            onAddToPlanning()
-                        },
-                        onCancel = {
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            confirming = false
-                        }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * The question a Planning add asks: a green tick, what the button is about to do,
- * and a red cross that puts it back.
- *
- * The two answers are 30dp circles beside the label rather than two full-width
- * buttons below it. The row is already the height of a thumb, and splitting it
- * into three equal targets would make the destructive answer as large and as easy
- * to hit as the one that writes to AniList. The label keeps the action named, so
- * the tick is not a bare symbol with no object.
- */
-@Composable
-private fun PlanningConfirmFace(
-    mediaId: Int,
-    onConfirm: () -> Unit,
-    onCancel: () -> Unit
-) {
-    val statusColors = AniSequelTheme.statusColors
-
+    // The question sits *beside* the control, not on top of it.
+    //
+    // Turning the button into its own question (`PlanningConfirmFace` replaced
+    // the whole face) read as the button having been replaced rather than asked:
+    // the label grew, the two answers were drawn on the same surface, and the
+    // control the reader had reached for was momentarily gone. Here the control
+    // stays - smaller, because it now has neighbours - and the two answers are
+    // square buttons immediately to its right, in the order the question asks:
+    // tick to plan, cross to put it back.
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 6.dp)
-            .semantics { contentDescription = "Add to Planning? Confirm or cancel" }
-            .testTag("planning_confirm_row_$mediaId"),
+        // No `animateContentSize` here: this Row is always the window's width, so
+        // there was nothing for it to animate. The change of width is real, but it
+        // belongs to the answers that take it - see the AnimatedVisibility below.
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(statusColors.successContainer)
-                .clickable(
-                    onClickLabel = "Confirm adding to Planning",
-                    onClick = onConfirm
-                )
-                .testTag("planning_confirm_yes_$mediaId"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Done,
-                contentDescription = "Confirm",
-                tint = statusColors.success,
-                modifier = Modifier.size(17.dp)
-            )
-        }
-
-        Text(
-            text = "Add to Planning?",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimary,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.weight(1f)
-        )
-
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.errorContainer)
-                .clickable(
-                    onClickLabel = "Cancel adding to Planning",
-                    onClick = onCancel
-                )
-                .testTag("planning_confirm_no_$mediaId"),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Close,
-                contentDescription = "Cancel",
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
-}
-
-/**
- * Tap to plan, hold to watch, swipe sideways for watching too.
- *
- * Split out of [QuickAddPlanningButton] because the gesture branches were most
- * of that composable's complexity and none of its layout. `holdJob` and the
- * "a hold already committed" flag live here, in the pointer-input coroutine,
- * rather than in composition: no frame reads either one. The flag is not
- * cosmetic - the hold handler snaps the fill back to 0f when it completes, so
- * without it the release after a completed hold looks like a quick tap and the
- * same title gets written to Planning immediately after Watching.
- */
-private fun Modifier.quickAddGestures(
-    holdEnabled: Boolean,
-    swipeEnabled: Boolean,
-    holdDurationMs: Long,
-    swipeThresholdPx: Float,
-    holdProgress: Animatable<Float, AnimationVector1D>,
-    dragOffset: Animatable<Float, AnimationVector1D>,
-    haptic: HapticFeedback,
-    coroutineScope: CoroutineScope,
-    onHoldingChange: (Boolean) -> Unit,
-    onAddToPlanning: () -> Unit,
-    onAddToWatching: () -> Unit
-): Modifier {
-    if (!holdEnabled) return this
-
-    val tapAndHold = pointerInput(holdDurationMs) {
-        var holdJob: Job? = null
-        var holdCommitted = false
-
-        detectTapGestures(
-            onPress = {
-                onHoldingChange(true)
-                holdCommitted = false
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-
-                holdJob?.cancel()
-                holdJob = coroutineScope.launch {
-                    holdProgress.snapTo(0f)
-                    holdProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(
-                            durationMillis = holdDurationMs.toInt(),
-                            easing = LinearEasing
-                        )
-                    )
-                    // Hold reached 100% -> Trigger watching!
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onHoldingChange(false)
-                    holdCommitted = true
-                    onAddToWatching()
-                    holdProgress.snapTo(0f)
+                .weight(1f)
+                .height(44.dp)
+                .graphicsLayer {
+                    scaleX = buttonScale
+                    scaleY = buttonScale
                 }
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .testTag("hold_swipe_button_$mediaId")
+        ) {
+            if (canSwipe) {
+                SwipeToWatchReveal(
+                    revealColor = statusColors.info,
+                    containerColor = statusColors.infoContainer
+                )
+            }
 
-                val released = tryAwaitRelease()
-                onHoldingChange(false)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                    .clip(shape)
+                    .background(buttonColor)
+                    // The gestures are detached while the question is open. A tick
+                    // is an answer, not another tap to plan - and the old gesture
+                    // handler would read a press on the label as one more "add".
+                    .then(
+                        if (confirming) {
+                            Modifier.clickable(
+                                onClickLabel = "Cancel adding to Planning",
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    confirming = false
+                                }
+                            )
+                        } else {
+                            Modifier.quickAddGestures(
+                                mediaId = mediaId,
+                                holdEnabled = !isBusy,
+                                swipeEnabled = canSwipe,
+                                holdDurationMs = holdDurationMs,
+                                swipeThresholdPx = swipeThresholdPx,
+                                holdProgress = holdProgressAnim,
+                                dragOffset = dragOffset,
+                                haptic = haptic,
+                                coroutineScope = coroutineScope,
+                                onHoldingChange = { isHolding = it },
+                                onAddToPlanning = askOrAdd,
+                                onAddToWatching = { currentOnAddToWatching() }
+                            )
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                HoldProgressFill(progressFraction = progressFraction)
 
-                if (released) {
-                    // User released before hold finished
-                    val elapsedFraction = holdProgress.value
-                    holdJob.cancel()
-                    coroutineScope.launch {
-                        holdProgress.animateTo(0f, ExpressiveMotion.FastEffects)
+                AnimatedContent(
+                    targetState = confirming,
+                    transitionSpec = {
+                        fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(ExpressiveMotion.FastEffects)
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "planning_confirm_state"
+                ) { asking ->
+                    if (asking) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Add to Planning?",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            QuickAddButtonFace(isBusy = isBusy, isHolding = isHolding)
+                        }
                     }
+                }
+            }
+        }
 
-                    // Quick tap -> Add to Planning. Only when the hold did not
-                    // already commit: see `holdCommitted` above.
-                    if (elapsedFraction < 0.25f && !holdCommitted) {
+        AnimatedVisibility(
+            visible = confirming,
+            // The width is the animation. The add button is this Row's weighted
+            // child, so the only way it can get smaller smoothly is for the squares
+            // beside it to take their width a pixel at a time. They used to arrive
+            // at full width while the button snapped narrower on the same frame -
+            // at the exact moment the reader was watching the control they had just
+            // pressed - and `animateContentSize` on the Row could not help, because
+            // the Row never changes width.
+            enter = expandHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialSize,
+                expandFrom = Alignment.Start
+            ) + fadeIn(ExpressiveMotion.FastEffects) +
+                scaleIn(
+                    initialScale = 0.86f,
+                    animationSpec = ExpressiveMotion.BouncySpatial
+                ),
+            exit = shrinkHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialSize,
+                shrinkTowards = Alignment.Start
+            ) + fadeOut(ExpressiveMotion.FastEffects) +
+                scaleOut(
+                    targetScale = 0.90f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                )
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlanningConfirmSquare(
+                    mediaId = mediaId,
+                    confirm = true,
+                    onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        confirming = false
                         onAddToPlanning()
                     }
-                } else {
-                    holdJob.cancel()
-                    coroutineScope.launch { holdProgress.snapTo(0f) }
-                }
+                )
+                PlanningConfirmSquare(
+                    mediaId = mediaId,
+                    confirm = false,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        confirming = false
+                    }
+                )
             }
+        }
+    }
+}
+
+/**
+ * One square answer beside the button: the tick that plans, the cross that does
+ * not.
+ *
+ * A square rather than a circle, and the same 44dp height as the control it
+ * stands beside: two round bubbles next to a rounded rectangle read as three
+ * different kinds of thing, while a matched row of rounded squares reads as one
+ * control that unfolded. Both answers keep a full-height touch target without
+ * stealing the add button's whole width.
+ */
+@Composable
+private fun PlanningConfirmSquare(
+    mediaId: Int,
+    confirm: Boolean,
+    onClick: () -> Unit
+) {
+    val statusColors = AniSequelTheme.statusColors
+    val container = if (confirm) {
+        statusColors.successContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
+    val content = if (confirm) statusColors.success else MaterialTheme.colorScheme.error
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(RoundedCornerShape(ExpressiveShapes.SmallCorner))
+            .background(container)
+            .clickable(
+                onClickLabel = if (confirm) {
+                    "Confirm adding to Planning"
+                } else {
+                    "Cancel adding to Planning"
+                },
+                onClick = onClick
+            )
+            .semantics {
+                contentDescription = if (confirm) "Confirm" else "Cancel"
+            }
+            .testTag(
+                if (confirm) {
+                    "planning_confirm_yes_$mediaId"
+                } else {
+                    "planning_confirm_no_$mediaId"
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (confirm) AppVectorIcons.Done else AppVectorIcons.Close,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(20.dp)
         )
     }
-
-    val swipe = if (swipeEnabled) {
-        Modifier.pointerInput(Unit) {
-            detectDragGestures(
-                onDragEnd = {
-                    coroutineScope.launch {
-                        if (dragOffset.value >= swipeThresholdPx) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onAddToWatching()
-                        }
-                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
-                    }
-                },
-                onDragCancel = {
-                    coroutineScope.launch {
-                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
-                    }
-                },
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    val newOffset = (dragOffset.value + dragAmount.x)
-                        .coerceIn(0f, swipeThresholdPx * 1.5f)
-                    coroutineScope.launch { dragOffset.snapTo(newOffset) }
-                }
-            )
-        }
-    } else {
-        Modifier
-    }
-
-    return this.then(tapAndHold).then(swipe)
 }
 
 /**

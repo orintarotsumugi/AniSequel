@@ -4,22 +4,26 @@ import android.animation.ValueAnimator
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,10 +49,12 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.icons.motionGlyph
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -132,7 +141,7 @@ internal fun MotionSection(
             MotionStyle.entries.forEach { style ->
                 MotionChip(
                     label = style.displayName,
-                    icon = motionIcon(style),
+                    icon = motionGlyph(style),
                     selected = style == settings.motionStyle,
                     onClick = {
                         if (style != settings.motionStyle) {
@@ -206,6 +215,15 @@ private fun MotionChip(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "motion_chip_content"
     )
+    // The glyph is the only part of the chip that is a picture of the choice, so
+    // it is the part that reacts to being chosen: it springs up to full size while
+    // the unselected marks sit slightly back. Read inside `graphicsLayer` below, so
+    // the spring is a draw-phase invalidation and not a recomposition of the chip.
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0.82f,
+        animationSpec = ExpressiveMotion.SelectionScale,
+        label = "motion_chip_icon_scale"
+    )
 
     Row(
         modifier = Modifier
@@ -232,11 +250,16 @@ private fun MotionChip(
             .testTag("motion_style_${label.lowercase()}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        androidx.compose.material3.Icon(
+        Icon(
             imageVector = icon,
             contentDescription = null,
             tint = content,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier
+                .size(18.dp)
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
@@ -250,36 +273,59 @@ private fun MotionChip(
 }
 
 /**
- * One sample that plays the chosen style's actual physics.
+ * One stage that plays the chosen style's own physics.
  *
- * A dot travels a track and grows; the stage surface shifts colour with it; both
- * read [progress] directly rather than animating toward it, so there is exactly
- * one animation running and it is the one being previewed. Tapping replays it -
- * a one-shot loop rather than an infinite one, because a sample that never stops
- * is a screen that never settles.
+ * Two pieces, because the app's motion is two interactions: a piece travels to a
+ * marked point with a ghost trail behind it, then the style's own glyph on a
+ * capsule takes a press. Both drivers are the style's real tokens -
+ * [ExpressiveMotion.DefaultSpatial] for the travel and
+ * [ExpressiveMotion.PressSpatialIn] / [ExpressiveMotion.PressSpatialOut] for the
+ * press - so the sample cannot flatter a style the app does not use.
+ *
+ * The travel is **not** clamped to the marker. Chill and Floaty are defined by the
+ * way they pass it and come back, and the old sample clamped the dot so an
+ * overshoot could not leave the card - which hid the one frame this preview exists
+ * to show. The marker stops short of the stage's end instead, so the overshoot has
+ * somewhere to go. Tapping replays it: one-shot, never infinite, because a sample
+ * that never stops is a screen that never settles.
  */
 @Composable
 private fun MotionSample(style: MotionStyle) {
     var replay by remember(style) { mutableIntStateOf(0) }
-    val progress = remember(style) { Animatable(0f) }
+
+    // Two drivers rather than one: the travel and the press are two springs with
+    // different jobs, and a single progress value could only ever approximate one of
+    // them. Both live inside the sample, so leaving the page stops the animation.
+    val travel = remember(style) { Animatable(0f) }
+    val press = remember(style) { Animatable(1f) }
 
     LaunchedEffect(style, replay) {
-        progress.snapTo(0f)
+        press.snapTo(1f)
+        travel.snapTo(0f)
         // The token is the preview: INSTANT snaps, SMOOTH arrives clean, SNAPPY is
         // quicker than SMOOTH, CHILL overshoots, FLOATY drifts. No bespoke spec
         // here, or the sample could flatter a style the app does not actually use.
-        progress.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+        travel.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+        // Sequenced after the travel rather than with it: two springs overlapping in
+        // a card this small read as one shaky shape, not as two behaviours.
+        press.animateTo(0.9f, ExpressiveMotion.PressSpatialIn)
+        press.animateTo(1f, ExpressiveMotion.PressSpatialOut)
     }
 
-    val stage = lerp(
-        MaterialTheme.colorScheme.surfaceContainerHigh,
-        MaterialTheme.colorScheme.secondaryContainer,
-        progress.value.coerceIn(0f, 1f)
-    )
+    val stageBase = MaterialTheme.colorScheme.surfaceContainerHigh
+    val stageLit = MaterialTheme.colorScheme.secondaryContainer
+    val railColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.26f)
+    val markerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+    val dotColor = MaterialTheme.colorScheme.primary
+    val nearGhost = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+    val farGhost = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val capsuleColor = MaterialTheme.colorScheme.primary
+    val onCapsule = MaterialTheme.colorScheme.onPrimary
 
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = stage,
+        color = stageBase,
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
@@ -294,59 +340,147 @@ private fun MotionSample(style: MotionStyle) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
+                .height(150.dp)
+                // The stage's colour used to be lerped in composition, so this
+                // whole sample recomposed on every frame of the animation it was
+                // previewing - a preview of motion that made the screen do more
+                // work than the motion. The driver is read in the draw phase now.
+                .drawBehind {
+                    drawRect(
+                        color = lerp(
+                            stageBase,
+                            stageLit,
+                            travel.value.coerceIn(0f, 1f)
+                        )
+                    )
+                }
                 .padding(horizontal = 16.dp)
         ) {
+            val dotSize = 30.dp
+            // 78% of the inner width, not 100%: the marker is the settle point and
+            // the fifth left over is the spring's room to overshoot into.
             val travelPx = with(LocalDensity.current) {
-                (maxWidth - DotSize).toPx().coerceAtLeast(0f)
+                ((maxWidth - dotSize) * 0.78f).toPx().coerceAtLeast(0f)
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f))
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .size(DotSize)
-                    .graphicsLayer {
-                        // Travel is clamped; the grow is not. A spring overshoots
-                        // *past* its target, and letting the dot carry that
-                        // overshoot off the end of the track clipped it against the
-                        // card's rounded edge - which read as a rendering bug. The
-                        // scale keeps the raw value, so Chill and Floaty still show
-                        // their bounce as a pulse at the end.
-                        translationX = travelPx * progress.value.coerceIn(0f, 1f)
-                        val dotScale = 1f + 0.14f * progress.value
-                        scaleX = dotScale
-                        scaleY = dotScale
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(62.dp)
+                        // The rail and the marker never move, so they are drawn rather
+                        // than laid out - one shape each, no boxes to measure.
+                        .drawBehind {
+                            val centreY = size.height / 2f
+                            val startX = dotSize.toPx() / 2f
+                            drawLine(
+                                color = railColor,
+                                start = Offset(startX, centreY),
+                                end = Offset(startX + travelPx, centreY),
+                                strokeWidth = 3.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                            drawLine(
+                                color = markerColor,
+                                start = Offset(startX + travelPx, centreY - 9.dp.toPx()),
+                                end = Offset(startX + travelPx, centreY + 9.dp.toPx()),
+                                strokeWidth = 2.5.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                        }
+                ) {
+                    // The trail, behind the piece and shrinking with distance. A
+                    // stationary dot on a line reads as a slider; the ghosts are what
+                    // make the track read as movement at every speed, including the
+                    // slow one, where the piece itself barely appears to move.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .size(dotSize)
+                            .graphicsLayer {
+                                translationX = travelPx * (travel.value - 0.10f).coerceAtLeast(0f)
+                                scaleX = 0.64f
+                                scaleY = 0.64f
+                            }
+                            .clip(CircleShape)
+                            .background(farGhost)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .size(dotSize)
+                            .graphicsLayer {
+                                translationX = travelPx * (travel.value - 0.05f).coerceAtLeast(0f)
+                                scaleX = 0.8f
+                                scaleY = 0.8f
+                            }
+                            .clip(CircleShape)
+                            .background(nearGhost)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .size(dotSize)
+                            .graphicsLayer {
+                                // Raw, unclamped progress: the overshoot is the point.
+                                translationX = travelPx * travel.value
+                                val dotScale = 1f + 0.07f * travel.value
+                                scaleX = dotScale
+                                scaleY = dotScale
+                            }
+                            .clip(CircleShape)
+                            .background(dotColor)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                // The press tokens, not a scale chosen for the
+                                // drawing: this is the same squash every button in
+                                // the app gives under a finger.
+                                scaleX = press.value
+                                scaleY = press.value
+                            }
+                            .clip(ExpressiveShapes.pill)
+                            .background(capsuleColor)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = motionGlyph(style),
+                            contentDescription = null,
+                            tint = onCapsule,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                        Text(
+                            text = "Press",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = onCapsule
+                        )
                     }
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-            Text(
-                text = "Tap to replay · ${style.displayName}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.BottomStart)
-            )
+                }
+
+                Text(
+                    text = "Tap to replay · ${style.displayName}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = hintColor,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
+                )
+            }
         }
     }
-}
-
-private val DotSize = 34.dp
-
-private fun motionIcon(style: MotionStyle): ImageVector = when (style) {
-    MotionStyle.INSTANT -> AppVectorIcons.MotionInstant
-    MotionStyle.SMOOTH -> AppVectorIcons.MotionSmooth
-    // Snappy reuses the smooth glyph: both are no-overshoot curves, and the pair
-    // reads as "the same family, one is quicker" rather than as two unrelated ideas.
-    MotionStyle.SNAPPY -> AppVectorIcons.MotionSmooth
-    MotionStyle.CHILL -> AppVectorIcons.MotionChill
-    MotionStyle.FLOATY -> AppVectorIcons.MotionChill
 }
 
 private fun motionDescription(style: MotionStyle): String = when (style) {

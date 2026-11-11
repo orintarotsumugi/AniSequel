@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -47,13 +48,15 @@ class InterfacePreferences(private val context: Context) {
         val APP_LAYOUT = stringPreferencesKey("app_layout")
         val LIBRARY_VIEW = stringPreferencesKey("library_view_mode")
         val SHOW_CONTINUE_RAIL = booleanPreferencesKey("show_continue_rail")
+        val HOME_SEQUEL_STYLE = stringPreferencesKey("home_sequel_style")
     }
 
     /** Everything about the interface that is not the colour palette. */
     data class InterfaceSettings(
         val layout: AppLayout = AppLayout.DEFAULT,
         val libraryView: LibraryViewMode = LibraryViewMode.DEFAULT,
-        val showContinueRail: Boolean = true
+        val showContinueRail: Boolean = true,
+        val homeSequelStyle: HomeSequelStyle = HomeSequelStyle.DEFAULT
     )
 
     /**
@@ -81,7 +84,10 @@ class InterfacePreferences(private val context: Context) {
             InterfaceSettings(
                 layout = AppLayout.fromStorage(preferences[Keys.APP_LAYOUT]),
                 libraryView = LibraryViewMode.fromStorage(preferences[Keys.LIBRARY_VIEW]),
-                showContinueRail = preferences[Keys.SHOW_CONTINUE_RAIL] ?: true
+                showContinueRail = preferences[Keys.SHOW_CONTINUE_RAIL] ?: true,
+                homeSequelStyle = HomeSequelStyle.fromStorage(
+                    preferences[Keys.HOME_SEQUEL_STYLE]
+                )
             )
         }
 
@@ -109,6 +115,19 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
+    /**
+     * How the new Home draws its recommendation list.
+     *
+     * A setting rather than a second screen: both layouts read the same state and
+     * call the same callbacks, so the reader switches the shape and keeps their
+     * place - see [HomeSequelStyle].
+     */
+    suspend fun setHomeSequelStyle(style: HomeSequelStyle) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.HOME_SEQUEL_STYLE] = style.storageValue
+        }
+    }
+
     /** Back to the shipped layout, density, rail and card style. */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
@@ -116,6 +135,7 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.APP_LAYOUT)
             preferences.remove(Keys.LIBRARY_VIEW)
             preferences.remove(Keys.SHOW_CONTINUE_RAIL)
+            preferences.remove(Keys.HOME_SEQUEL_STYLE)
         }
     }
 }

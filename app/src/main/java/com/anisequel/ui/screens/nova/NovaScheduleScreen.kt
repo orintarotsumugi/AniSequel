@@ -134,6 +134,15 @@ fun NovaScheduleScreen(
                 onBack = onBack
             )
 
+            // The body gets what the header leaves, not the whole window.
+            // `fillMaxSize` here (and on the list below) measured against the
+            // Column's full height and was then placed under a header, so its
+            // last rows sat past the bottom edge and could not be scrolled to.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
             when {
                 isLoading -> Box(
                     modifier = Modifier.fillMaxSize(),
@@ -214,6 +223,7 @@ fun NovaScheduleScreen(
                         }
                     }
                 }
+            }
             }
         }
     }

@@ -2,6 +2,7 @@ package com.anisequel.ui.theme
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 
 /**
@@ -31,6 +32,16 @@ val LocalLibraryViewMode = staticCompositionLocalOf { LibraryViewMode.DEFAULT }
  * which still lives in the Library.
  */
 val LocalShowContinueRail = staticCompositionLocalOf { true }
+
+/**
+ * How the new Home draws its missed sequels: compact rows or poster cards.
+ *
+ * Read by the Home list and by the Interface page's preview, written only by the
+ * preference - so the sample the reader is choosing between is drawn by the same
+ * enum the real rows are, and a card style added later cannot appear in one and
+ * not the other.
+ */
+val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
 
 /**
  * Whether tapping "Add to Planning" asks for a tick or a cross first.

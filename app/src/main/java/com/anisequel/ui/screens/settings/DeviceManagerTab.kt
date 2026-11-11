@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.DevicePreferences
-import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
@@ -58,7 +57,6 @@ fun DeviceManagerTab(
     devicePreferences: DevicePreferences,
     themePreferences: ThemePreferences,
     appLockPreferences: AppLockPreferences,
-    quickAddPreferences: QuickAddPreferences,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -123,7 +121,9 @@ fun DeviceManagerTab(
 
         AppLockCard(appLockPreferences)
 
-        QuickAddSectionCard(quickAddPreferences)
+        // The hold/swipe/confirm gestures moved to the Interface page, which is
+        // where the rest of "how does this app behave" lives - and where their
+        // preview can be tapped without a card to hold it.
 
         Spacer(modifier = Modifier.height(24.dp))
     }

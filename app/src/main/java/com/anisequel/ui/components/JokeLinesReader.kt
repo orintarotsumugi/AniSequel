@@ -211,7 +211,15 @@ internal object JokeLinesReader {
         "You finished the show and went straight into the prequel.",
         "You have a comfort show that is only good for two specific episodes.",
         "You call it a comfort show like that is a small thing to admit.",
-        "The show's sad episode is named after an object. You know which."
+        "The show's sad episode is named after an object. You know which.",
+        "You rewatched the ending to check it still lands. It lands.",
+        "The character you relate to has been through enough for both of you.",
+        "You have a show you only watch when it rains, and it knows.",
+        "The soundtrack queued up in your head before the scene started.",
+        "You remembered the spoiler and watched anyway, for the company.",
+        "The last arc was uneven and you defended it in a group chat.",
+        "You have one episode left for three weeks. That is a choice.",
+        "The show ended and you sat there like the credits owed you something."
     )
 
     /** Watchlists, one more episode and the sleep schedule. */
@@ -578,6 +586,16 @@ internal object JokeLinesReader {
         "You scrolled Settings to find the quiet switch and found a louder one.",
         "The version number went up. The opinions are the same ones.",
         "Ani-chan signs the pill and does not check the spelling.",
-        "The joke list in Settings is longer than your current watchlist."
+        "The joke list in Settings is longer than your current watchlist.",
+        "The bar hides when you scroll down. It is being polite, not leaving.",
+        "You scrolled up just to check the bar still liked you. It does.",
+        "The new look has a switch for its own switch. You found it.",
+        "The tick and the cross moved beside the button to give it room.",
+        "You tapped add and got a question. The question had two squares.",
+        "The preview in Settings is a real button and it has never saved anything.",
+        "The greeting is centred now. It would like you to notice.",
+        "You changed the home list shape and the covers got bigger out of spite.",
+        "The skeleton screens are not hiding content. They are predicting it.",
+        "Ani-chan counted the new jokes and added one about counting."
     )
 }

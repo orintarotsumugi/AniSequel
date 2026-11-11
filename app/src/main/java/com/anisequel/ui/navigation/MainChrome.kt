@@ -89,6 +89,11 @@ internal fun BoxScope.MainBarHost(
     // is the only place that knows the route changed.
     LaunchedEffect(currentRoute) {
         if (currentRoute != AppRoutes.TIER_LIST) onTierBoardOpenChange(false)
+        // A new page starts with its navigation on screen. Without this, a
+        // reader who scrolled Home away and tapped through to Settings would
+        // arrive with the bar still hidden - the page would look like it had no
+        // way out before it had been scrolled at all.
+        MainBarAutoHide.reset()
         // A page change is the UI moving too, not just a finger. A small
         // alternating gust keeps the sky from feeling like a screenshot with a
         // scroll hook.
@@ -112,7 +117,13 @@ internal fun BoxScope.MainBarHost(
     // the control, so the bar publishes nothing to the sky and nothing is painted
     // over it. See the note in SeasonalPiles about why the drift sits on the
     // screen edge rather than on the bar.
-    val barVisible = showsMainBar(currentTab, tierBoardOpen)
+    // Two reasons to hide, and only one of them is the route: the bar steps
+    // aside for an open tier board, and it also slides away while the reader is
+    // travelling down a page. `MainBarAutoHide` is a read of app-wide scroll
+    // state, so this recomposes the bar host only - the page underneath and the
+    // navigation graph are untouched - and the content's bottom clearance stays
+    // put, so the bar neither jumps the list nor changes where it can scroll to.
+    val barVisible = showsMainBar(currentTab, tierBoardOpen) && !MainBarAutoHide.hidden
 
     AnimatedVisibility(
         visible = barVisible,

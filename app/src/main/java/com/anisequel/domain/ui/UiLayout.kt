@@ -27,6 +27,46 @@ enum class AppLayout(val storageValue: String, val displayName: String) {
 }
 
 /**
+ * How the new Home draws its missed sequels.
+ *
+ * Two answers to the same question, because the two readers are real: [ROWS]
+ * fits nine or ten titles on a screen and is the layout for working through a
+ * backlog, while [CARDS] gives each recommendation a poster large enough to
+ * recognise at a glance and is the layout for browsing what to start next.
+ *
+ * The choice lives on the enum rather than in the composable so the Settings
+ * preview and the real list cannot describe different things - the same reason
+ * `LibraryViewMode` carries its own column count.
+ */
+enum class HomeSequelStyle(
+    val storageValue: String,
+    val displayName: String,
+    val blurb: String,
+    /** Whether a row of this style draws the artwork as a full poster. */
+    val showsPoster: Boolean
+) {
+    ROWS(
+        storageValue = "rows",
+        displayName = "Rows",
+        blurb = "A thumbnail, the title and the add button - more titles per screen.",
+        showsPoster = false
+    ),
+    CARDS(
+        storageValue = "cards",
+        displayName = "Cards",
+        blurb = "A large cover with the details underneath - one title at a time.",
+        showsPoster = true
+    );
+
+    companion object {
+        val DEFAULT = ROWS
+
+        fun fromStorage(value: String?): HomeSequelStyle =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
  * How dense the new Library's list is.
  *
  * The same entries, drawn three ways for three jobs: [GRID] for browsing covers,

@@ -327,7 +327,21 @@ class SeasonalParticleHostTest {
         val page = source("app/src/main/java/com/anisequel/ui/screens/settings/DeviceManagerTab.kt")
         assertTrue("the page does not draw full screen", page.contains("DisplaySection("))
         assertTrue("the page does not draw the app lock", page.contains("AppLockCard("))
-        assertTrue("the page does not draw the quick-add card", page.contains("QuickAddSectionCard("))
+        // The quick-add card left this page for the Interface page, where the rest
+        // of "how does the app behave" lives - and where its live preview can be
+        // tapped without a card to hold. The assertion is inverted rather than
+        // deleted: a copy left behind is the failure this test exists for.
+        assertFalse(
+            "Device Manager still draws the quick-add card, so the control exists " +
+                "on two pages at once",
+            page.contains("QuickAddSectionCard(")
+        )
+        assertTrue(
+            "the quick-add card is not on the Interface page, so the gestures have " +
+                "no page",
+            source("app/src/main/java/com/anisequel/ui/screens/settings/InterfaceTab.kt")
+                .contains("QuickAddSectionCard(")
+        )
 
         val movedOut = mapOf(
             "app/src/main/java/com/anisequel/ui/screens/settings/ThemeTab.kt" to "DisplaySection(",

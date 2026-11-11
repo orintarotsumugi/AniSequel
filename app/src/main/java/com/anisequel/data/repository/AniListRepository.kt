@@ -521,6 +521,27 @@ interface AniListRepository {
      * would hand them to the next account signed in on this device.
      */
     suspend fun clearDetailCache() {}
+
+    /**
+     * Titles matching [query] anywhere in AniList's catalogue.
+     *
+     * The only read in this interface that is not about a person. It exists for
+     * the bar's Search page, which answers "what is this show called" for a title
+     * the reader has never tracked - so the result set is the catalogue's, not
+     * theirs, and each returned node carries its own `mediaListEntry` when they
+     * already own it.
+     *
+     * A blank query is answered with an empty list by the implementation rather
+     * than by every caller: the search field is a text field, and a request for
+     * an empty string returns the most popular titles instead of nothing, which
+     * would look like the search ignoring what was typed.
+     *
+     * A default that refuses, for the same reason every optional read here has
+     * one: the demo and the test doubles have no catalogue to search, and an
+     * empty list would claim they had looked.
+     */
+    suspend fun searchMedia(query: String): Result<List<MediaNode>> =
+        unsupported("searchMedia")
 }
 
 /**

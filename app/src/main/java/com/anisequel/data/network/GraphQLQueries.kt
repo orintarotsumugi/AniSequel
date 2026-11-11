@@ -2019,4 +2019,33 @@ object GraphQLQueries {
           __typename
         }
     """.trimIndent()
+
+    /**
+     * The app-wide title search: AniList's own catalogue, not the reader's list.
+     *
+     * Deliberately no `type` variable. The reader searching for "Frieren" does
+     * not know or care which namespace it lives in, and a two-tab search would
+     * make them ask the same question twice to find out. Every result carries
+     * its own `type`, which is what the card's medium glyph and the planning
+     * mutation key off.
+     *
+     * `sort: SEARCH_MATCH` is AniList's relevance order - the only sort that
+     * means anything for a text query - and `isAdult: false` keeps the store's
+     * default list clean without a filter the reader has to find.
+     *
+     * `RELATED_NODE_FIELDS` is reused rather than a second field list: it is the
+     * exact shape the shared cards and the quick-add control need (title, cover,
+     * format, score and the viewer's own entry status), and the two lists
+     * drifting apart is how a search result ended up with no rating while the
+     * same title on the Library grid had one.
+     */
+    val SEARCH_MEDIA = """
+        query SearchMedia(${'$'}search: String) {
+          Page(page: 1, perPage: 20) {
+            media(search: ${'$'}search, sort: SEARCH_MATCH, isAdult: false) {
+              $RELATED_NODE_FIELDS
+            }
+          }
+        }
+    """.trimIndent()
 }

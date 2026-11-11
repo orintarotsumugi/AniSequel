@@ -19,6 +19,7 @@ import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
+import com.anisequel.data.model.MediaSearchData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SaveActivityReplyData
@@ -324,6 +325,20 @@ interface AniListApiService {
     suspend fun getStaffProfile(
         @Body request: GraphQLRequest
     ): GraphQLResponse<StaffProfileData>
+
+    /**
+     * The app-wide title search.
+     *
+     * Its own endpoint rather than a reuse of the cover batch: this is the one
+     * query the app makes that is *about* the catalogue rather than about one
+     * person's corner of it, and it is the only one whose variable is a text
+     * query rather than an id. See [GraphQLQueries.SEARCH_MEDIA].
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun searchMedia(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MediaSearchData>
 
     /**
      * The reachability probe. Deliberately the narrowest call in this interface:

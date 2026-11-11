@@ -1,8 +1,11 @@
 package com.anisequel
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.icons.AppCustomVectors
 import com.anisequel.ui.components.icons.AppExtraVectors
+import com.anisequel.ui.components.icons.MotionVectors
+import com.anisequel.ui.components.icons.motionGlyph
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,8 +13,8 @@ import org.junit.Test
 import java.lang.reflect.Method
 
 /**
- * Guards the contract every hand-authored icon in [AppCustomVectors] and
- * [AppExtraVectors] has to keep.
+ * Guards the contract every hand-authored icon in [AppCustomVectors],
+ * [AppExtraVectors] and [MotionVectors] has to keep.
  *
  * The call sites reach these icons by property, and each one is a `by lazy`
  * `ImageVector` builder with no drawable behind it, so a rename, or a
@@ -37,7 +40,8 @@ class VectorIconsTest {
 
     @Test
     fun `every custom icon declares its own name and a 24x24 frame`() {
-        val icons = collectIcons(AppCustomVectors) + collectIcons(AppExtraVectors)
+        val icons = collectIcons(AppCustomVectors) + collectIcons(AppExtraVectors) +
+            collectIcons(MotionVectors)
 
         assertTrue(
             "reflection found no icons; the objects or their accessors changed shape",
@@ -81,9 +85,32 @@ class VectorIconsTest {
         }
     }
 
+    /**
+     * Five motion styles, five marks.
+     *
+     * The picker drew Snappy with Smooth's waves and Floaty with Chill's bolt, so two
+     * of five choices wore another choice's face - and the glyph is the only part of
+     * that picker which is not a word. The names are compared rather than the objects
+     * because the test above pins every custom icon's `name` to its property: two
+     * different names cannot be the same drawing.
+     */
+    @Test
+    fun `every motion style has a glyph of its own`() {
+        val names = MotionStyle.entries.map { style -> motionGlyph(style).name }
+
+        assertEquals(
+            "two motion styles share a glyph: $names. A reader choosing between them " +
+                "is shown the same picture for both halves of the question. Give the " +
+                "style its own mark in MotionVectors and map it in motionGlyph.",
+            MotionStyle.entries.size,
+            names.distinct().size
+        )
+    }
+
     @Test
     fun `the redesigned icons are all still present`() {
-        val names = (collectIcons(AppCustomVectors) + collectIcons(AppExtraVectors))
+        val names = (collectIcons(AppCustomVectors) + collectIcons(AppExtraVectors) +
+            collectIcons(MotionVectors))
             .map { it.first }
             .toSet()
 

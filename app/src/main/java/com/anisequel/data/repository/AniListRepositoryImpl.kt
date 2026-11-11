@@ -1036,6 +1036,24 @@ class AniListRepositoryImpl(
      * fetching it eagerly would spend a request - and AniList is currently degraded
      * to 30 per minute - on a list half the profile never looks at.
      */
+    /**
+     * The catalogue search. No cache: a query nobody has typed before is the
+     * common case, and the repository's other caches are keyed by person rather
+     * than by text.
+     */
+    override suspend fun searchMedia(query: String): Result<List<MediaNode>> {
+        val term = query.trim()
+        if (term.isEmpty()) return Result.success(emptyList())
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.SEARCH_MEDIA,
+                variables = mapOf("search" to term)
+            ),
+            apiService::searchMedia
+        ).map { data -> data.page?.media.orEmpty() }
+    }
+
     override suspend fun getUserMangaPreview(userId: Int): Result<MediaNode?> {
         if (mangaPreviewCache.containsKey(userId)) {
             return Result.success(mangaPreviewCache[userId])
