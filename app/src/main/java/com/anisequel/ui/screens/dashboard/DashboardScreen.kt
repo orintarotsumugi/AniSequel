@@ -269,30 +269,13 @@ fun DashboardScreen(
         successState,
         detailNodes
     ) {
-        when {
-            // The same resolution an arriving row gets: the tapped node is the
-            // summary the sheet can draw on the first frame, and the fetched
-            // detail supersedes it the moment it lands. Without this, a relation
-            // was the one place a subject was built straight from its summary -
-            // the detail request went out and its answer was thrown away.
-            navigatedRelation != null -> navigatedRelation?.let { summary ->
-                AnimeDetailSubject.Media(
-                    detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
-                )
-            }
-            selectedSequelId != null -> successState?.missedSequels
-                ?.firstOrNull { it.sequelId == selectedSequelId }
-                ?.let { AnimeDetailSubject.Sequel(it) }
-            selectedArrivingId != null -> successState?.arriving
-                ?.firstOrNull { it.mediaId == selectedArrivingId }
-                ?.let { entry ->
-                    val summary = entry.toDetailMedia()
-                    AnimeDetailSubject.Media(
-                        detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
-                    )
-                }
-            else -> null
-        }
+        resolveDetailSubject(
+            selectedSequelId = selectedSequelId,
+            selectedArrivingId = selectedArrivingId,
+            navigatedRelation = navigatedRelation,
+            successState = successState,
+            detailNodes = detailNodes
+        )
     }
 
     val selectedDetailId = selectedSubject?.mediaId
@@ -646,6 +629,46 @@ fun DashboardScreen(
     // row routes into the sheet's own relation navigation, which is how you walk
     // from a cast member to the next title without stacking a third window.
     profiles.Sheet { appearance -> navigatedRelation = appearance.toMediaNode() }
+}
+
+/**
+ * The one subject the detail sheet is showing, from whichever source was tapped.
+ *
+ * A pure function rather than another `when` inside [DashboardScreen]. It was one,
+ * and it was the densest branch cluster in a composable that CodeFactor reported as
+ * a complex method: the screen's own decision is *which* sheet, and the resolution
+ * of a tapped id into a subject is a separate question with its own four answers.
+ *
+ * ## The resolution itself
+ *
+ * A tapped node is the summary the sheet can draw on the first frame, and the
+ * fetched detail supersedes it the moment it lands. Without this, a relation was the
+ * one place a subject was built straight from its summary - the detail request went
+ * out and its answer was thrown away.
+ */
+private fun resolveDetailSubject(
+    selectedSequelId: Int?,
+    selectedArrivingId: Int?,
+    navigatedRelation: MediaNode?,
+    successState: DashboardUiState.Success?,
+    detailNodes: Map<Int, MediaNode>
+): AnimeDetailSubject? = when {
+    navigatedRelation != null -> AnimeDetailSubject.Media(
+        detailNodes.detailFor(navigatedRelation)?.withSummaryProgress(navigatedRelation)
+            ?: navigatedRelation
+    )
+    selectedSequelId != null -> successState?.missedSequels
+        ?.firstOrNull { it.sequelId == selectedSequelId }
+        ?.let { AnimeDetailSubject.Sequel(it) }
+    selectedArrivingId != null -> successState?.arriving
+        ?.firstOrNull { it.mediaId == selectedArrivingId }
+        ?.let { entry ->
+            val summary = entry.toDetailMedia()
+            AnimeDetailSubject.Media(
+                detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
+            )
+        }
+    else -> null
 }
 
 /** The filter sheet, hosted here so [DashboardScreen] does not branch for it. */
