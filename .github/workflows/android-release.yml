@@ -33,18 +33,48 @@ permissions:
   pull-requests: write
 
 # Two pushes landing together would both mint a release tag and race to write
-# update.json. Serialising per ref keeps the newest run the one that publishes.
+# update.json. One run per ref keeps the newest run the one that publishes.
 #
-# A pull request is the exception, and only a pull request: a superseded PR run
-# is cancelled rather than queued, because pushing a fix three times in a row
-# used to leave two full APK builds - each one R8 over the whole app, plus the
-# unit tests - finishing behind the one that matters. Nothing is published from
-# a PR (every publishing step is gated on `github.event_name != 'pull_request'`),
-# so cancelling one cannot leave a half-written release. Branch and tag runs
-# keep the serialisation above.
+# A newer run on the same branch *supersedes* the older one instead of queueing
+# behind it, for every event on the branch - not just pull requests as this used
+# to be. Two reasons, and the first one is a bug that actually wedged the
+# repository:
+#
+#  - A queued run can only start once the run ahead of it finishes. On
+#    2026-11-11 the `push` run for the merge of #125 (43094493997) stalled in
+#    "Upload Build Artifacts to Workflow Run", was cancelled there by GitHub at
+#    20:24:59, and then never reported a terminal status: its last steps,
+#    including "Complete job", are green to this day while the run still says
+#    "in progress". The manual retry dispatched nine seconds later (43095931218)
+#    could not start, because the group was still held by a run that would never
+#    finish. With no cancellation, every future push to main would queue behind
+#    that corpse forever - which is what "stuck" looked like from the outside.
+#    Cancelling in progress makes a new commit (or a manual re-run) the escape
+#    hatch: it retires the wedged run and takes the group.
+#
+#  - Superseding is also what serialisation was being used to achieve. Pushing a
+#    fix three times used to leave two full APK builds - each one R8 over the
+#    whole app, plus the unit tests - finishing behind the one that matters.
+#
+# What cancellation can interrupt is the publish: if run A is between "Create or
+# Update GitHub Release" and "Publish the update manifest" - about twenty
+# seconds out of a seven-minute run - A can leave a published tag with no
+# update.json asset on it. That window is deliberately accepted:
+#
+#  - The app reads `releases/latest/download/update.json`, so a stray tag is not
+#    what it sees once run B publishes the next release with its manifest. Run B
+#    also resolves its version from the newest *published* release, so it steps
+#    past A's tag rather than colliding with it.
+#  - The alternative is worse. Ordering runs strictly behind each other means a
+#    single hung run blocks every commit after it, which is the state this file
+#    was in, and no amount of care in the build steps can prevent GitHub from
+#    leaving a job that never reports completion.
+#
+# Tags are the exception and are never cancelled: a tag names a published
+# release, and a half-run tag is not something a later commit can supersede.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   # Advisory, and on its own runner rather than inside the release job.
@@ -73,6 +103,10 @@ jobs:
   lint:
     name: Android Lint (advisory)
     runs-on: ubuntu-latest
+    # A normal lint run is about four minutes. The bound is only here so a stuck
+    # step cannot hold a runner (and, before the concurrency change above, the
+    # ref's whole queue) for GitHub's six-hour default.
+    timeout-minutes: 25
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -110,6 +144,11 @@ jobs:
   build-and-release:
     name: Build APKs, Bug Check & Release
     runs-on: ubuntu-latest
+    # About seven minutes in the normal case: tests, the release APK, signing
+    # verification, publish. The bound exists so a step that hangs the way the
+    # artifact upload did on 2026-11-11 ends the job on its own instead of
+    # leaving a run that never completes.
+    timeout-minutes: 40
 
     # Only the keystore *location* is a literal. The keystore itself and both
     # passwords come from repository secrets, and are exported into the step
@@ -552,8 +591,22 @@ jobs:
           echo "Signing key matches the pinned release certificate."
           echo "::endgroup::"
 
+      # The workflow-run artifact is a convenience: on a pull request it is what
+      # a reviewer downloads, and on a branch push it duplicates the asset the
+      # release already carries. It is not what users receive, so a stall in the
+      # artifact service must not be able to withhold a release.
+      #
+      # It did exactly that on 2026-11-11: the run this file is fixing sat in this
+      # step for five minutes with no artifact uploaded, was cancelled there, and
+      # left the job "in progress" for good. The step now gives up after ten
+      # minutes - far above the few seconds a 3.7 MB APK needs - and a failed
+      # upload leaves the run green, because a preview artifact is not a gate.
+      # The "Tell reviewers where the APK is" step below already warns when the
+      # artifact it wants to link is missing.
       - name: Upload Build Artifacts to Workflow Run
         uses: actions/upload-artifact@v7
+        timeout-minutes: 10
+        continue-on-error: true
         with:
           name: anisequel-apks
           path: release-artifacts/*.apk
