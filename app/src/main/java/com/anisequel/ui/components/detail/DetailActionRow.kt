@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
@@ -100,26 +101,12 @@ fun DetailActionRow(
     val sequel = subject.sequel
     val media = subject.media
     val listStatus = media.mediaListEntry?.status
-    val canonicalStatus = ListStatuses.normalize(listStatus)
-
-    val isPlanned = quickAddStatus.isAddedToPlanning ||
-        canonicalStatus == ListStatuses.PLANNING
-    val isWatching = quickAddStatus.isAddedToWatching ||
-        canonicalStatus == ListStatuses.CURRENT ||
-        canonicalStatus == ListStatuses.REPEATING
-    // Completed, paused or dropped: on a list of some kind, so there is nothing
-    // to add without rewriting it. Those titles get the AniList link alone.
-    val isOnAnotherList = listStatus != null && !isPlanned && !isWatching
-
-    // A sequel's flags come from the recommendation itself; a plain title's from
-    // the quick-add store. Kept apart so the dashboard's write - which also
-    // recomputes the card behind the sheet - is the one still used there.
-    val showSequelAction = sequel != null
-    // A quick-add state the reader has already reached (or an in-flight write)
-    // is drawn even while the detail loads: the store knows more than the
-    // fetch does at that point.
-    val showMediaAction = sequel == null && !isOnAnotherList &&
-        (!isDetailLoading || isPlanned || isWatching || quickAddStatus.isBusy)
+    val state = DetailActionState(
+        listStatus = listStatus,
+        quickAddStatus = quickAddStatus,
+        isDetailLoading = isDetailLoading,
+        hasSequel = sequel != null
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -142,7 +129,7 @@ fun DetailActionRow(
                     // AniList, and as a row that failed to lay out rather than as a row
                     // with one control in it.
                     .then(
-                        if (showSequelAction || showMediaAction) Modifier.weight(1f) else Modifier
+                        if (state.sharesRow) Modifier.weight(1f) else Modifier
                     )
                     // 48dp, the platform minimum. 44 was the Material 2 button
                     // height, and on the one row a reader reaches for at the bottom
@@ -169,11 +156,11 @@ fun DetailActionRow(
                     holdDurationSeconds = holdDurationSeconds,
                     swipeEnabled = swipeEnabled
                 )
-            } else if (showMediaAction) {
+            } else if (state.showMediaAction) {
                 MediaQuickAdd(
                     media = media,
-                    isPlanned = isPlanned,
-                    isWatching = isWatching,
+                    isPlanned = state.isPlanned,
+                    isWatching = state.isWatching,
                     canWriteToAniList = canWriteToAniList,
                     status = quickAddStatus,
                     onAddToPlanning = onAddMediaToPlanning,
@@ -185,10 +172,9 @@ fun DetailActionRow(
         }
 
         EntryStatusEditAction(
-            visible = sequel == null && (listStatus != null || isPlanned || isWatching) &&
-                canWriteToAniList && onEditEntry != null,
+            visible = state.showEntryEdit && canWriteToAniList && onEditEntry != null,
             label = ListStatuses.label(
-                status = listStatus ?: if (isPlanned) ListStatuses.PLANNING else ListStatuses.CURRENT,
+                status = state.editableStatus,
                 isManga = media.isManga
             ),
             onClick = { onEditEntry?.invoke() }

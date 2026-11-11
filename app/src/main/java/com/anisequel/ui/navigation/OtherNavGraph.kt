@@ -7,6 +7,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.anisequel.data.repository.AniListRepository
+import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.screens.nova.NovaOtherScreen
 import com.anisequel.ui.screens.nova.NovaScheduleScreen
@@ -31,6 +32,7 @@ fun NavGraphBuilder.otherDestinations(
     navController: NavHostController,
     signedIn: Boolean,
     aniListRepository: AniListRepository,
+    quickAddPreferences: QuickAddPreferences,
     dashboardViewModel: DashboardViewModel?,
     detailHost: MediaDetailHost,
     entryEditor: EntryEditor?
@@ -59,6 +61,7 @@ fun NavGraphBuilder.otherDestinations(
         NovaSearchScreen(
             repository = aniListRepository,
             canWrite = signedIn,
+            quickAddPreferences = quickAddPreferences,
             onBack = { navController.popBackStack() },
             detailHost = detailHost,
             entryEditor = entryEditor,

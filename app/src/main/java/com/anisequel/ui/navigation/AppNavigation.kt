@@ -702,6 +702,7 @@ fun AppNavigation(
                         navController = navController,
                         signedIn = authenticated != null,
                         aniListRepository = aniListRepository,
+                        quickAddPreferences = quickAddPreferences,
                         dashboardViewModel = mainDashboardViewModel,
                         detailHost = detailHost,
                         entryEditor = sharedEntryEditor

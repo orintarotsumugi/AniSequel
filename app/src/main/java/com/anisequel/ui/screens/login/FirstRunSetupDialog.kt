@@ -112,71 +112,72 @@ fun FirstRunSetupDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                Text(
-                    "Pick a starting point. You can change every choice later in Settings.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                SectionCard(title = "Interface", icon = AppVectorIcons.ViewGrid) {
-                    ChoiceChips(
-                        values = AppLayout.entries.map { it.storageValue to it.displayName },
-                        selected = layout,
-                        onSelect = { layout = it },
-                        tag = "onboarding_layout"
+                    Text(
+                        "Pick a starting point. You can change every choice later in Settings.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-                SectionCard(title = "Theme", icon = AppVectorIcons.ThemeDark) {
-                    ChoiceChips(
-                        values = listOf(
-                            ThemeMode.SYSTEM.storageValue to "System",
-                            ThemeMode.LIGHT.storageValue to "Light",
-                            ThemeMode.DARK.storageValue to "Dark"
-                        ),
-                        selected = theme,
-                        onSelect = { theme = it },
-                        tag = "onboarding_theme"
-                    )
-                }
-                SectionCard(title = "Motion", icon = AppVectorIcons.SectionMotion) {
-                    ChoiceChips(
-                        values = MotionStyle.entries.map { it.storageValue to it.displayName },
-                        selected = motion,
-                        onSelect = { motion = it },
-                        tag = "onboarding_motion"
-                    )
-                }
-                SectionCard(title = "Jokes", icon = AppVectorIcons.Star) {
-                    SwitchRow(
-                        title = "Ani-chan's jokes",
-                        subtitle = "Keep the app's occasional one-liners on.",
-                        checked = jokesEnabled,
-                        onCheckedChange = { jokesEnabled = it },
-                        modifier = Modifier.testTag("onboarding_jokes_switch")
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    ChoiceChips(
-                        values = JokeFrequency.entries.map { it.storageValue to it.displayName },
-                        selected = jokeFrequency,
-                        onSelect = { jokeFrequency = it },
-                        tag = "onboarding_joke_frequency"
-                    )
-                }
-                SectionCard(title = "Top-bar shortcuts", icon = AppVectorIcons.Search) {
-                    SwitchRow(
-                        title = "Catalogue search",
-                        subtitle = "Add a Search tab and a magnifier shortcut in both layouts.",
-                        checked = searchShortcut,
-                        onCheckedChange = { searchShortcut = it },
-                        modifier = Modifier.testTag("onboarding_search_shortcut")
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    SwitchRow(
-                        title = "Tier lists",
-                        subtitle = "Add a Tiers tab and a trophy shortcut in both layouts.",
-                        checked = tiersShortcut,
-                        onCheckedChange = { tiersShortcut = it },
-                        modifier = Modifier.testTag("onboarding_tiers_shortcut")
-                    )
+                    SectionCard(title = "Interface", icon = AppVectorIcons.ViewGrid) {
+                        ChoiceChips(
+                            values = AppLayout.entries.map { it.storageValue to it.displayName },
+                            selected = layout,
+                            onSelect = { layout = it },
+                            tag = "onboarding_layout"
+                        )
+                    }
+                    SectionCard(title = "Theme", icon = AppVectorIcons.ThemeDark) {
+                        ChoiceChips(
+                            values = listOf(
+                                ThemeMode.SYSTEM.storageValue to "System",
+                                ThemeMode.LIGHT.storageValue to "Light",
+                                ThemeMode.DARK.storageValue to "Dark"
+                            ),
+                            selected = theme,
+                            onSelect = { theme = it },
+                            tag = "onboarding_theme"
+                        )
+                    }
+                    SectionCard(title = "Motion", icon = AppVectorIcons.SectionMotion) {
+                        ChoiceChips(
+                            values = MotionStyle.entries.map { it.storageValue to it.displayName },
+                            selected = motion,
+                            onSelect = { motion = it },
+                            tag = "onboarding_motion"
+                        )
+                    }
+                    SectionCard(title = "Jokes", icon = AppVectorIcons.Star) {
+                        SwitchRow(
+                            title = "Ani-chan's jokes",
+                            subtitle = "Keep the app's occasional one-liners on.",
+                            checked = jokesEnabled,
+                            onCheckedChange = { jokesEnabled = it },
+                            modifier = Modifier.testTag("onboarding_jokes_switch")
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        ChoiceChips(
+                            values = JokeFrequency.entries.map { it.storageValue to it.displayName },
+                            selected = jokeFrequency,
+                            onSelect = { jokeFrequency = it },
+                            tag = "onboarding_joke_frequency"
+                        )
+                    }
+                    SectionCard(title = "Top-bar shortcuts", icon = AppVectorIcons.Search) {
+                        SwitchRow(
+                            title = "Catalogue search",
+                            subtitle = "Add a Search tab and a magnifier shortcut in both layouts.",
+                            checked = searchShortcut,
+                            onCheckedChange = { searchShortcut = it },
+                            modifier = Modifier.testTag("onboarding_search_shortcut")
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        SwitchRow(
+                            title = "Tier lists",
+                            subtitle = "Add a Tiers tab and a trophy shortcut in both layouts.",
+                            checked = tiersShortcut,
+                            onCheckedChange = { tiersShortcut = it },
+                            modifier = Modifier.testTag("onboarding_tiers_shortcut")
+                        )
+                    }
                 }
             }
         },
