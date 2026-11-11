@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "1.9.1",
+      "entries": [
+        {
+          "title": "Five motion styles, five separate glyphs",
+          "detail": "Interface > Motion now gives every style its own mark. Instant is a dot stopped against a wall, Smooth keeps its easing waves, Snappy takes the bolt, Chill gets a spring that overshoots and settles, and Floaty is a trail of drifting dots. Snappy and Floaty used to borrow Chill's and Smooth's icons, so two of the five choices wore another choice's face - and the selected glyph now springs to full size as the style is chosen."
+        },
+        {
+          "title": "The motion sample shows the movement it describes",
+          "detail": "The sample is a small stage now: a piece travels to a marked point, two ghost dots follow it, and a button underneath takes a press. The piece is allowed to pass the mark and settle back, so Chill's overshoot and Floaty's drift are visible instead of being clamped away for the sake of the layout, and the stage's colour is painted while drawing rather than recomposing every element on every frame of the animation it is previewing."
+        },
+        {
+          "title": "Three animation fixes in the new look's controls",
+          "detail": "The Planning question now grows its tick and cross beside the button, so the add button narrows smoothly instead of snapping the moment the squares appear; the quick-add gestures restart when a card is reused for a different title, so a scroll cannot leave one row acting on the title it used to show; and the motion sample no longer recomposes itself for every frame it animates."
+        }
+      ]
+    },
+    {
       "version": "1.9.0",
       "entries": [
         {

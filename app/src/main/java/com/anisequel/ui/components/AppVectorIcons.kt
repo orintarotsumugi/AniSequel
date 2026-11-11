@@ -77,6 +77,7 @@ import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Tune
 import com.anisequel.ui.components.icons.AppCustomVectors
 import com.anisequel.ui.components.icons.AppExtraVectors
+import com.anisequel.ui.components.icons.MotionVectors
 
 /**
  * Central vector icon repository for AniSequel to avoid emoji usage
@@ -297,7 +298,7 @@ object AppVectorIcons {
     val SectionUpdates = Icons.Default.SystemUpdate
     val SectionHelp = Icons.AutoMirrored.Filled.MenuBook
     val SectionBackground = AppCustomVectors.SurfaceTones
-    val SectionMotion = AppCustomVectors.MotionWaves
+    val SectionMotion = MotionVectors.MotionTrail
     val ThemeLight = Icons.Outlined.LightMode
     val ThemeDark = Icons.Outlined.DarkMode
     val Restore = Icons.Outlined.RestartAlt
@@ -311,10 +312,8 @@ object AppVectorIcons {
     val NewReleases = Icons.Outlined.NewReleases
     val FullscreenExpand = AppCustomVectors.FullscreenExpand
 
-    // The three motion styles on the Theme tab, each named for what the style
-    // *is*: no motion, calm motion, everything-bounces motion. They sit side
-    // by side in one segment bar, so their glyphs must read as different.
-    val MotionInstant = Icons.Outlined.RestartAlt
-    val MotionSmooth = AppCustomVectors.MotionWaves
-    val MotionChill = AppCustomVectors.MotionBolt
+    // The five motion styles are deliberately *not* listed here. Their glyphs are
+    // one family with one mapping (`motionGlyph` in `icons/MotionVectors.kt`), and a
+    // second list of the same five names is exactly how Snappy and Floaty ended up
+    // borrowing another style's icon: the picker read a mapping that had gone stale.
 }
