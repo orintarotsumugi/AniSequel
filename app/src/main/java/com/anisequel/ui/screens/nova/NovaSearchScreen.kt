@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaSearchType
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
@@ -69,7 +70,9 @@ import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaBackdrop
 import com.anisequel.ui.components.nova.NovaSurface
@@ -82,6 +85,8 @@ import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.toMediaNode
+import com.anisequel.ui.theme.LocalSearchAnimeEnabled
+import com.anisequel.ui.theme.LocalSearchMangaEnabled
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -113,10 +118,16 @@ internal fun isCurrentSearchGeneration(response: Int, current: Int): Boolean =
  * lifecycle and a key for no second reader; the repository is the only thing
  * that outlives the composition, and it is handed in.
  *
- * The search is debounced and cancelled by `LaunchedEffect(query)`: every
+ * The search is debounced and cancelled by `LaunchedEffect(query, type)`: every
  * keystroke restarts the coroutine, so only the last one in a burst reaches the
  * network. AniList allows roughly thirty requests a minute, and a request per
  * character is how the field would spend them before the reader finished typing.
+ *
+ * The page asks **one namespace at a time**, chosen by the segmented control and
+ * limited by the two switches in Settings. A combined list could not answer "the
+ * anime I meant" without also offering a manga of the same name, and the two
+ * namespaces number their ids independently - so `anime/1` and `manga/1` are
+ * different titles that a shared result card would key as one.
  *
  * A result is a full, tappable title card. `mediaListEntry` is displayed on
  * that card and the shared detail sheet handles every edit, so search cannot
@@ -132,7 +143,14 @@ fun NovaSearchScreen(
     detailHost: MediaDetailHost,
     entryEditor: com.anisequel.ui.components.detail.EntryEditor? = null,
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * The two halves Settings allows. Read as composition locals by default so
+     * the nav graph does not have to thread two booleans through every layer, and
+     * a preview can show either arm without a DataStore.
+     */
+    searchAnimeEnabled: Boolean = LocalSearchAnimeEnabled.current,
+    searchMangaEnabled: Boolean = LocalSearchMangaEnabled.current
 ) {
     val profiles = rememberPersonProfileHost(repository)
     val planningAdd = rememberPlanningAddHost(repository = repository, canWrite = canWrite)
@@ -142,9 +160,23 @@ fun NovaSearchScreen(
     )
     val detailSheetState = rememberFullHeightSheetState()
 
+    val enabledTypes = remember(searchAnimeEnabled, searchMangaEnabled) {
+        buildList {
+            if (searchAnimeEnabled) add(MediaSearchType.ANIME)
+            if (searchMangaEnabled) add(MediaSearchType.MANGA)
+        }
+    }
+    // Saved by name rather than by ordinal: the enabled set can lose an entry
+    // when a Settings switch changes, and an ordinal would then silently point at
+    // the other namespace instead of falling back to the first enabled one.
+    var typeName by rememberSaveable { mutableStateOf(MediaSearchType.DEFAULT.name) }
+    val activeType = enabledTypes.firstOrNull { it.name == typeName } ?: enabledTypes.firstOrNull()
+    val activeLabel = activeType?.displayName?.lowercase()
+
     var query by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaNode>>(emptyList()) }
     var searchedTerm by remember { mutableStateOf("") }
+    var searchedType by remember { mutableStateOf<MediaSearchType?>(null) }
     var isSearching by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
@@ -153,9 +185,27 @@ fun NovaSearchScreen(
     val loadingDetailIds by detailHost.loading.collectAsState()
     val friends by detailHost.friends.collectAsState()
 
-    LaunchedEffect(query) {
+    LaunchedEffect(query, activeType) {
+        val type = activeType
+        if (type == null) {
+            results = emptyList()
+            searchedTerm = ""
+            searchedType = null
+            isSearching = false
+            error = null
+            return@LaunchedEffect
+        }
+
         val term = query.trim()
         val generation = ++requestGeneration
+        // A result from the other namespace is worse than no result: it is an
+        // answer to a question the reader did not ask, drawn under the selected
+        // chip. Drop it the moment the chip moves.
+        if (searchedType != type) {
+            results = emptyList()
+            searchedTerm = ""
+            searchedType = type
+        }
         if (term.length < SEARCH_MIN_LENGTH) {
             results = emptyList()
             searchedTerm = ""
@@ -168,7 +218,7 @@ fun NovaSearchScreen(
         error = null
         try {
             delay(SEARCH_DEBOUNCE_MILLIS)
-            repository.searchMedia(term)
+            repository.searchMedia(term, type)
                 .onSuccess { found ->
                     // A repository implementation may complete despite cancellation.
                     // The generation check prevents its stale answer replacing the
@@ -176,6 +226,7 @@ fun NovaSearchScreen(
                     if (isCurrentSearchGeneration(generation, requestGeneration)) {
                         results = found
                         searchedTerm = term
+                        searchedType = type
                         error = null
                         // A settled search is a system moment the reader can invite
                         // a line into. Announced only for a real answer with results:
@@ -236,11 +287,32 @@ fun NovaSearchScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Any anime or manga on AniList",
+                        text = when {
+                            activeType == null -> "Both catalogue halves are off"
+                            enabledTypes.size == 1 -> "The ${activeLabel ?: "catalogue"} " +
+                                "catalogue on AniList"
+                            else -> "Anime and manga, one catalogue at a time"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            if (enabledTypes.size > 1 && activeType != null) {
+                ExpressivePolygonSegmentedBar(
+                    options = enabledTypes.map { SegmentedOption(label = it.displayName) },
+                    selectedIndex = enabledTypes.indexOf(activeType),
+                    onSelect = { index ->
+                        enabledTypes.getOrNull(index)?.let { chosen ->
+                            if (chosen != activeType) typeName = chosen.name
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 4.dp)
+                        .testTag("catalogue_search_type_row")
+                )
             }
 
             OutlinedTextField(
@@ -252,7 +324,11 @@ fun NovaSearchScreen(
                     .testTag("nova_search_input"),
                 placeholder = {
                     Text(
-                        text = "Search the catalogue",
+                        text = when (activeType) {
+                            MediaSearchType.MANGA -> "Search the manga catalogue"
+                            MediaSearchType.ANIME -> "Search the anime catalogue"
+                            null -> "Turn a catalogue half on in Settings"
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -309,9 +385,14 @@ fun NovaSearchScreen(
                     .fillMaxWidth()
             ) {
                 when {
+                    activeType == null -> SearchNote(
+                        text = "Anime search and manga search are both off. Turn one " +
+                            "on in Settings > Library > Bottom bar to bring this page back."
+                    )
+
                     query.trim().length < SEARCH_MIN_LENGTH -> SearchNote(
                         text = "Type at least $SEARCH_MIN_LENGTH characters to search " +
-                            "every anime and manga AniList knows about. Your list " +
+                            "the ${activeLabel ?: "catalogue"} catalogue. Your list " +
                             "only changes after you edit a title's entry."
                     )
 
@@ -322,7 +403,8 @@ fun NovaSearchScreen(
                     )
 
                     results.isEmpty() -> SearchNote(
-                        text = "No title matches \"$searchedTerm\"."
+                        text = "No ${activeLabel ?: "catalogue"} title matches " +
+                            "\"$searchedTerm\"."
                     )
 
                     else -> LazyVerticalGrid(

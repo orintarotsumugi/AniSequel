@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
@@ -95,6 +96,37 @@ internal fun InfoBackdropSection(
                     "detail that competes with the cards; Heavy leaves only the palette."
             } else {
                 "Turn a backdrop on to choose how soft it is."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsFieldLabel(text = "Colour tint")
+        Spacer(modifier = Modifier.height(8.dp))
+        ExpressivePolygonSegmentedBar(
+            options = InfoBackdropTint.entries.map { SegmentedOption(label = it.displayName) },
+            selectedIndex = InfoBackdropTint.entries.indexOf(settings.infoBackdropTint),
+            onSelect = { index ->
+                if (backdropOn) {
+                    scope.launch {
+                        themePreferences.setInfoBackdropTint(InfoBackdropTint.entries[index])
+                    }
+                }
+            },
+            enabled = backdropOn,
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (backdropOn) 1f else 0.4f)
+                .testTag("info_backdrop_tint_row")
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = if (backdropOn) {
+                "Natural keeps the cover's own colours; Tinted blends the active theme " +
+                    "accent into the blur so the page belongs to the app around it."
+            } else {
+                "Turn a backdrop on to tint it."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant

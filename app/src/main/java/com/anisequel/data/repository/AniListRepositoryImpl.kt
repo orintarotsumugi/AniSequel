@@ -25,6 +25,7 @@ import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaName
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaSearchType
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -590,14 +591,15 @@ class AniListRepositoryImpl(
     private var viewerCache: CachedViewer? = null
 
     /**
-     * One cover per viewer, including a cached *null* for an account with no manga.
+     * A few covers per viewer, including a cached empty list for an account with
+     * no manga.
      *
-     * Small enough not to need eviction: this is one node per signed-in account,
-     * and the map is a session-scoped answer to a strip on Home rather than a
-     * page's data. A null value is kept because "this account has no manga" is a
-     * fact worth not re-asking for on every refresh.
+     * Small enough not to need eviction: this is one page of nodes per signed-in
+     * account, and the map is a session-scoped answer to a strip on Home rather
+     * than a page's data. An empty value is kept because "this account has no
+     * manga" is a fact worth not re-asking for on every refresh.
      */
-    private val mangaPreviewCache = mutableMapOf<Int, MediaNode?>()
+    private val mangaPreviewCache = mutableMapOf<Int, List<MediaNode>>()
 
     private class CachedViewer(val profile: ViewerProfile, val storedAtMillis: Long)
 
@@ -1041,23 +1043,30 @@ class AniListRepositoryImpl(
      * common case, and the repository's other caches are keyed by person rather
      * than by text.
      */
-    override suspend fun searchMedia(query: String): Result<List<MediaNode>> {
+    override suspend fun searchMedia(
+        query: String,
+        type: MediaSearchType?
+    ): Result<List<MediaNode>> {
         val term = query.trim()
         if (term.isEmpty()) return Result.success(emptyList())
 
+        // Omitted rather than sent as null when the caller wants both halves:
+        // AniList treats an absent `type` as "no filter", and a null variable in
+        // a `MediaType` position is the same request with a needless chance for a
+        // serializer to disagree about how the absence is spelled.
+        val variables = buildMap<String, Any> {
+            put("search", term)
+            if (type != null) put("type", type.apiValue)
+        }
+
         return execute(
-            GraphQLRequest(
-                query = GraphQLQueries.SEARCH_MEDIA,
-                variables = mapOf("search" to term)
-            ),
+            GraphQLRequest(query = GraphQLQueries.SEARCH_MEDIA, variables = variables),
             apiService::searchMedia
         ).map { data -> data.page?.media.orEmpty() }
     }
 
-    override suspend fun getUserMangaPreview(userId: Int): Result<MediaNode?> {
-        if (mangaPreviewCache.containsKey(userId)) {
-            return Result.success(mangaPreviewCache[userId])
-        }
+    override suspend fun getUserMangaPreviews(userId: Int): Result<List<MediaNode>> {
+        mangaPreviewCache[userId]?.let { cached -> return Result.success(cached) }
         return execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_MANGA_PREVIEW,
@@ -1065,9 +1074,9 @@ class AniListRepositoryImpl(
             ),
             apiService::getMangaPreview
         ).map { data ->
-            data.page?.mediaList?.firstOrNull()?.media
-        }.onSuccess { preview ->
-            mangaPreviewCache[userId] = preview
+            data.page?.mediaList.orEmpty().mapNotNull { entry -> entry.media }
+        }.onSuccess { previews ->
+            mangaPreviewCache[userId] = previews
         }
     }
 

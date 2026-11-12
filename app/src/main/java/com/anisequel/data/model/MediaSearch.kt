@@ -4,6 +4,27 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 /**
+ * Which half of AniList a catalogue search is allowed to answer from.
+ *
+ * A search that spans both types cannot say "the anime I meant" and "the manga I
+ * meant" at once, and the two namespaces number their ids independently, so the
+ * same title can exist twice with the same number. The Search page asks for one
+ * type at a time, and Settings can switch each one off; [apiValue] is the exact
+ * `MediaType` enum AniList's GraphQL document expects.
+ *
+ * Pure Kotlin with no storage parsing: the two switches are separate booleans in
+ * `MainTabPreferences`, and this enum is only the question the page asks.
+ */
+enum class MediaSearchType(val apiValue: String, val displayName: String) {
+    ANIME("ANIME", "Anime"),
+    MANGA("MANGA", "Manga");
+
+    companion object {
+        val DEFAULT = ANIME
+    }
+}
+
+/**
  * AniList's answer to a catalogue search.
  *
  * The same `Page` envelope the app's cover and preview queries use, wrapped

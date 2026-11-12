@@ -41,6 +41,8 @@ class MainTabPreferences(private val context: Context) {
     private object Keys {
         val TIER_LIST_TAB = booleanPreferencesKey("tier_list_tab")
         val SEARCH_TAB = booleanPreferencesKey("search_tab")
+        val SEARCH_ANIME = booleanPreferencesKey("search_anime")
+        val SEARCH_MANGA = booleanPreferencesKey("search_manga")
         val SEARCH_TOP_BAR = booleanPreferencesKey("search_top_bar")
         val TIER_TOP_BAR = booleanPreferencesKey("tier_top_bar")
     }
@@ -86,6 +88,38 @@ class MainTabPreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Whether the catalogue search may answer with anime.
+     *
+     * Two switches rather than one because the namespaces are independent: a
+     * reader who tracks manga but no anime should not have to see an anime half
+     * of every search, and a reader who wants both should not lose the anime
+     * results because they hid the manga page. Both default on, so a fresh
+     * install keeps the combined search it had; turning both off leaves no
+     * catalogue half to ask, and [com.anisequel.ui.navigation.enabledMainTabs]
+     * then hides the Search tab rather than opening a page with nothing in it.
+     */
+    val searchAnimeEnabled: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.SEARCH_ANIME] ?: DEFAULT_SEARCH_ANIME
+    }
+
+    suspend fun setSearchAnimeEnabled(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.SEARCH_ANIME] = enabled
+        }
+    }
+
+    /** The manga half of [searchAnimeEnabled]; same rules and default. */
+    val searchMangaEnabled: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.SEARCH_MANGA] ?: DEFAULT_SEARCH_MANGA
+    }
+
+    suspend fun setSearchMangaEnabled(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.SEARCH_MANGA] = enabled
+        }
+    }
+
     /** Whether the catalogue has a direct shortcut beside the top-bar profile/settings. */
     val searchTopBar: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
         preferences[Keys.SEARCH_TOP_BAR] ?: DEFAULT_SEARCH_TOP_BAR
@@ -115,6 +149,8 @@ class MainTabPreferences(private val context: Context) {
         context.mainTabsDataStore.edit { preferences ->
             preferences.remove(Keys.TIER_LIST_TAB)
             preferences.remove(Keys.SEARCH_TAB)
+            preferences.remove(Keys.SEARCH_ANIME)
+            preferences.remove(Keys.SEARCH_MANGA)
             preferences.remove(Keys.SEARCH_TOP_BAR)
             preferences.remove(Keys.TIER_TOP_BAR)
         }
@@ -123,6 +159,10 @@ class MainTabPreferences(private val context: Context) {
     companion object {
         const val DEFAULT_TIER_LIST_TAB = false
         const val DEFAULT_SEARCH_TAB = false
+
+        /** Both catalogue halves are on; the *tab* is still off by default. */
+        const val DEFAULT_SEARCH_ANIME = true
+        const val DEFAULT_SEARCH_MANGA = true
         const val DEFAULT_SEARCH_TOP_BAR = false
         const val DEFAULT_TIER_TOP_BAR = false
     }

@@ -76,18 +76,21 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
-     * One manga cover for Home's Manga shortcut.
+     * A handful of manga covers for Home's Manga shortcut.
      *
      * The shortcut used to draw an empty gradient for manga because the dashboard
      * only downloads the anime list. Fetching the whole manga collection to fill
      * a 48dp strip would spend the same request the Library deliberately defers
-     * until somebody opens the Manga tab, so this asks for exactly one row.
-     * `UPDATED_TIME_DESC` makes it the title the reader touched most recently,
-     * which is the one they are most likely to recognise.
+     * until somebody opens the Manga tab, so this asks for one row per cover —
+     * still one request, but enough real covers that the card can pick one each
+     * visit instead of showing the same poster forever.
+     *
+     * The order is `UPDATED_TIME_DESC`, so the set is the titles the reader
+     * touched most recently: the ones they are most likely to recognise.
      */
     val GET_MANGA_PREVIEW = """
         query GetMangaPreview(${'$'}userId: Int) {
-          Page(page: 1, perPage: 1) {
+          Page(page: 1, perPage: 6) {
             mediaList(userId: ${'$'}userId, type: MANGA, sort: UPDATED_TIME_DESC) {
               media {
                 id
@@ -2023,11 +2026,14 @@ object GraphQLQueries {
     /**
      * The app-wide title search: AniList's own catalogue, not the reader's list.
      *
-     * Deliberately no `type` variable. The reader searching for "Frieren" does
-     * not know or care which namespace it lives in, and a two-tab search would
-     * make them ask the same question twice to find out. Every result carries
-     * its own `type`, which is what the card's medium glyph and the planning
-     * mutation key off.
+     * `type` is optional in the document and always supplied by the Search page,
+     * which asks one namespace at a time. It used to be omitted so one field
+     * returned both halves, but that made the page unable to answer "the anime I
+     * meant" without also offering the manga of the same name - and the two
+     * namespaces number their ids independently, so the result card could not
+     * even use the number as identity. Every result still carries its own
+     * `type`, which is what the card's medium glyph and the planning mutation
+     * key off.
      *
      * `sort: SEARCH_MATCH` is AniList's relevance order - the only sort that
      * means anything for a text query - and `isAdult: false` keeps the store's
@@ -2040,9 +2046,9 @@ object GraphQLQueries {
      * same title on the Library grid had one.
      */
     val SEARCH_MEDIA = """
-        query SearchMedia(${'$'}search: String) {
+        query SearchMedia(${'$'}search: String, ${'$'}type: MediaType) {
           Page(page: 1, perPage: 20) {
-            media(search: ${'$'}search, sort: SEARCH_MATCH, isAdult: false) {
+            media(search: ${'$'}search, type: ${'$'}type, sort: SEARCH_MATCH, isAdult: false) {
               $RELATED_NODE_FIELDS
             }
           }

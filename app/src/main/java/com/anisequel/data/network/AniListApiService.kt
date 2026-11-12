@@ -57,7 +57,7 @@ interface AniListApiService {
         @Body request: GraphQLRequest
     ): GraphQLResponse<MediaListCollectionData>
 
-    /** One manga cover for Home's shortcut. See [GraphQLQueries.GET_MANGA_PREVIEW]. */
+    /** A few manga covers for Home's shortcut. See [GraphQLQueries.GET_MANGA_PREVIEW]. */
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")
     suspend fun getMangaPreview(

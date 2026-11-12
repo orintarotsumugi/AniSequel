@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.RetainedTint
@@ -138,6 +139,7 @@ fun ThemeTab(
             // the button restore everything but the page a title opens on.
             themeSettings.infoBackdropSource != InfoBackdropSource.DEFAULT ||
             themeSettings.infoBackdropBlur != InfoBackdropBlur.DEFAULT ||
+            themeSettings.infoBackdropTint != InfoBackdropTint.DEFAULT ||
             // Full screen is off by default; turning it on is a change, so the
             // reset row has to offer itself for exactly that case.
             themeSettings.immersive

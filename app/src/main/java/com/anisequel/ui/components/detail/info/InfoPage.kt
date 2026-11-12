@@ -35,6 +35,7 @@ import com.anisequel.data.model.pageUrl
 import com.anisequel.data.repository.AniThemes
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.viewmodel.QuickAddStatus
@@ -150,9 +151,19 @@ fun AnimeInfoPage(
      */
     listState: LazyListState = rememberLazyListState(),
     bottomContentPadding: Dp = 24.dp,
+    /**
+     * Opens the page's own appearance editor.
+     *
+     * The palette lives on the page rather than only in Settings because the
+     * thing being changed is the page the reader is looking at. Null on a host
+     * with no preferences to write, which then draws the hero without the
+     * control rather than a button that cannot work.
+     */
+    onOpenAppearance: (() -> Unit)? = null,
     /** The artwork behind the cards; see [InfoPageBackdrop]. */
     infoBackdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
-    infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT
+    infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
+    infoBackdropTint: InfoBackdropTint = InfoBackdropTint.DEFAULT
 ) {
     val media = subject.media
     val context = LocalContext.current
@@ -205,6 +216,7 @@ fun AnimeInfoPage(
             media = media,
             source = infoBackdropSource,
             blur = infoBackdropBlur,
+            tint = infoBackdropTint,
             collapse = { collapse.value }
         )
 
@@ -230,7 +242,9 @@ fun AnimeInfoPage(
                     },
                     onClose = onClose,
                     onOpenStudio = onOpenStudio,
-                    backdropSource = infoBackdropSource
+                    backdropSource = infoBackdropSource,
+                    tint = infoBackdropTint,
+                    onOpenAppearance = onOpenAppearance
                 )
             }
 
@@ -275,6 +289,7 @@ fun AnimeInfoPage(
             // follow rather than a jump cut.
             onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
             onOpenAniList = openOnAniList,
+            onOpenAppearance = onOpenAppearance,
             onClose = onClose,
             modifier = Modifier.align(Alignment.TopCenter)
         )

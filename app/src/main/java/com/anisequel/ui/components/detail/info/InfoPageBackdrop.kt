@@ -21,6 +21,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 
@@ -57,6 +58,7 @@ internal fun InfoPageBackdrop(
     media: MediaNode,
     source: InfoBackdropSource,
     blur: InfoBackdropBlur,
+    tint: InfoBackdropTint = InfoBackdropTint.DEFAULT,
     collapse: () -> Float,
     modifier: Modifier = Modifier
 ) {
@@ -112,6 +114,20 @@ internal fun InfoPageBackdrop(
                         }
                         .blur(radius)
                         .unseamedCover()
+                )
+            }
+
+            // The theme's colour, under the legibility scrim. Tinted is a wash of
+            // the scheme's primary over the artwork, which is what makes a brown
+            // or grey key visual belong to the app rather than to its own poster;
+            // natural leaves the pixels alone. It sits *below* the scrim so the
+            // cards' text is still read against `surface`, not against pigment.
+            if (tint == InfoBackdropTint.TINTED) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        .testTag("info_page_backdrop_tint")
                 )
             }
 

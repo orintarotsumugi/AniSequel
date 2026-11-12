@@ -14,6 +14,7 @@ import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaSearchType
 import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfile
@@ -136,15 +137,19 @@ interface AniListRepository {
     ): Result<MediaListCollection> = unsupported("getUserMangaList")
 
     /**
-     * One manga on the viewer's list, for Home's Manga shortcut.
+     * A few manga on the viewer's list, for Home's Manga shortcut.
      *
-     * A `Page.mediaList` row rather than the full collection: the shortcut needs
-     * a cover, and the Library intentionally defers the manga download until the
-     * reader opens that tab. Null means the account has no manga, which is a real
-     * answer and leaves the card as a styled placeholder.
+     * A page of `mediaList` rows rather than the full collection: the shortcut
+     * needs covers, and the Library intentionally defers the manga download until
+     * the reader opens that tab. An empty list means the account has no manga,
+     * which is a real answer and leaves the card as a styled placeholder.
+     *
+     * A list rather than one node because the card shows a cover from the
+     * reader's own shelf on each visit: one poster forever made the shortcut look
+     * like a fixed illustration instead of a door into their list.
      */
-    suspend fun getUserMangaPreview(userId: Int): Result<MediaNode?> =
-        unsupported("getUserMangaPreview")
+    suspend fun getUserMangaPreviews(userId: Int): Result<List<MediaNode>> =
+        unsupported("getUserMangaPreviews")
 
     /**
      * Description, banner and studio for one entry, fetched on demand because
@@ -531,6 +536,12 @@ interface AniListRepository {
      * theirs, and each returned node carries its own `mediaListEntry` when they
      * already own it.
      *
+     * [type] names one namespace. The page asks anime and manga separately
+     * because a shared result list cannot answer which of the two the reader
+     * meant, and because the two ids are only unique inside their namespace.
+     * Null keeps the old "ask both" behaviour for a caller that genuinely wants
+     * the whole catalogue.
+     *
      * A blank query is answered with an empty list by the implementation rather
      * than by every caller: the search field is a text field, and a request for
      * an empty string returns the most popular titles instead of nothing, which
@@ -540,8 +551,10 @@ interface AniListRepository {
      * one: the demo and the test doubles have no catalogue to search, and an
      * empty list would claim they had looked.
      */
-    suspend fun searchMedia(query: String): Result<List<MediaNode>> =
-        unsupported("searchMedia")
+    suspend fun searchMedia(
+        query: String,
+        type: MediaSearchType? = null
+    ): Result<List<MediaNode>> = unsupported("searchMedia")
 }
 
 /**

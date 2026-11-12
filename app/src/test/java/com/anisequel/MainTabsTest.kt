@@ -182,6 +182,28 @@ class MainTabsTest {
     }
 
     @Test
+    fun `both catalogue halves off hides the search tab and its shortcut`() {
+        assertFalse(
+            "a Search tab with neither anime nor manga to search is an empty room",
+            enabledMainTabs(
+                tierListTab = false,
+                searchTab = true,
+                searchAnimeEnabled = false,
+                searchMangaEnabled = false
+            ).contains(MainTab.SEARCH)
+        )
+        assertTrue(
+            "one half is enough; the page still has a question to answer",
+            enabledMainTabs(
+                tierListTab = false,
+                searchTab = true,
+                searchAnimeEnabled = true,
+                searchMangaEnabled = false
+            ).contains(MainTab.SEARCH)
+        )
+    }
+
+    @Test
     fun `the search tab is off unless it is asked for`() {
         assertEquals(
             "off by default, like the tier tab: the bar is the app's most " +

@@ -81,6 +81,8 @@ fun InfoFloatingBar(
     progress: () -> Float,
     onScrollToTop: () -> Unit,
     onOpenAniList: () -> Unit,
+    /** Opens the page's appearance editor; null removes the palette button. */
+    onOpenAppearance: (() -> Unit)? = null,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -198,6 +200,20 @@ fun InfoFloatingBar(
                         onClick = onOpenAniList,
                         tint = onContainer
                     )
+                    if (onOpenAppearance != null) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(22.dp)
+                                .background(onContainer.copy(alpha = 0.18f))
+                        )
+                        HeroIconButton(
+                            icon = AppVectorIcons.SectionAppearance,
+                            label = "Page appearance",
+                            onClick = onOpenAppearance,
+                            tint = onContainer
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .width(1.dp)

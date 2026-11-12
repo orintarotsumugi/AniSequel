@@ -51,17 +51,20 @@ sealed interface DashboardUiState {
          */
         val continueWatching: List<MediaListEntryItem> = emptyList(),
         /**
-         * The most recently updated manga on the viewer's list, for Home's Manga
-         * shortcut.
+         * Recently updated manga on the viewer's list, for Home's Manga shortcut.
          *
-         * A single node fetched by its own one-row query. The Library deliberately
-         * waits until the Manga tab is opened before downloading the manga
-         * collection, so reusing that here would make the Home shortcut cost a
-         * full list download for one cover. Null is an answer - no manga on the
-         * account, or the preview query has not landed yet - and the card draws a
-         * themed manga placeholder instead of a hole.
+         * A small page fetched by its own one-request query, not the whole manga
+         * collection: the Library deliberately waits until the Manga tab is opened
+         * before downloading that, so reusing it here would make the Home shortcut
+         * cost a full list download for a strip of covers. Empty is an answer - no
+         * manga on the account, or the preview query has not landed yet - and the
+         * card draws a themed manga placeholder instead of a hole.
+         *
+         * More than one node so the card can show a different cover each visit;
+         * one poster forever made it look like a fixed illustration rather than a
+         * door into the reader's own shelf.
          */
-        val mangaPreview: com.anisequel.data.model.MediaNode? = null,
+        val mangaPreviews: List<com.anisequel.data.model.MediaNode> = emptyList(),
         /**
          * What the activity widget's tile counts and names.
          *
