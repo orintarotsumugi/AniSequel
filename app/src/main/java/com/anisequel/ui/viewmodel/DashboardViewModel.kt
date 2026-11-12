@@ -414,8 +414,8 @@ class DashboardViewModel(
     private var cardPreviewCache: List<MediaListEntryItem> = emptyList()
     private var cardPreviewSource: MediaListCollection? = null
 
-    /** The one-row manga cover for Home's shortcut; null until asked for. */
-    private var cachedMangaPreview: MediaNode? = null
+    /** A few manga covers for Home's shortcut; empty until asked for. */
+    private var cachedMangaPreviews: List<MediaNode> = emptyList()
     private var mangaPreviewRequested = false
 
     /**
@@ -681,7 +681,7 @@ class DashboardViewModel(
     private suspend fun loadDemoData() {
         cachedViewer = aniListRepository.getDemoProfile()
         cachedCollection = aniListRepository.getDemoAnimeList()
-        cachedMangaPreview = null
+        cachedMangaPreviews = emptyList()
         // Cleared here for the same reason as a real load: the demo list is a
         // different collection from whatever was loaded before it, and the
         // detail cache is keyed by media id. This path used to skip the clear,
@@ -809,7 +809,7 @@ class DashboardViewModel(
             totalMissedCount = work.visible.size,
             recentActivity = work.recentActivity,
             continueWatching = work.continueWatching,
-            mangaPreview = cachedMangaPreview,
+            mangaPreviews = cachedMangaPreviews,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
@@ -1002,7 +1002,7 @@ class DashboardViewModel(
     }
 
     /**
-     * Fetches the one-row manga cover for Home's Manga shortcut.
+     * Fetches a few manga covers for Home's Manga shortcut.
      *
      * Called only while the new look is showing. The classic dashboard has no
      * Manga shortcut, and asking on every dashboard load would spend one of
@@ -1018,12 +1018,12 @@ class DashboardViewModel(
         val viewerId = cachedViewer?.id ?: return
         mangaPreviewRequested = true
         viewModelScope.launch {
-            aniListRepository.getUserMangaPreview(viewerId).fold(
-                onSuccess = { preview ->
-                    cachedMangaPreview = preview
+            aniListRepository.getUserMangaPreviews(viewerId).fold(
+                onSuccess = { previews ->
+                    cachedMangaPreviews = previews
                     val current = _uiState.value as? DashboardUiState.Success ?: return@fold
-                    if (current.mangaPreview != preview) {
-                        _uiState.value = current.copy(mangaPreview = preview)
+                    if (current.mangaPreviews != previews) {
+                        _uiState.value = current.copy(mangaPreviews = previews)
                     }
                 },
                 onFailure = {

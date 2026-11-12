@@ -103,6 +103,12 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val searchTab by mainTabPreferences.searchTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
+    )
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
+    )
     val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
     )
@@ -159,13 +165,42 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
         // available would be understood as cosmetic.
         SwitchRow(
             title = "Search tab",
-            subtitle = "Search every anime and manga on AniList. The top-bar shortcut " +
-                "also opens this page; turn both off to remove direct shortcuts.",
+            subtitle = "Search the AniList catalogue. The top-bar shortcut also " +
+                "opens this page; turn both off to remove direct shortcuts.",
             checked = searchTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setSearchTab(enabled) }
             },
             modifier = Modifier.testTag("search_tab_switch")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Separate namespaces, separate switches. The page asks one at a time,
+        // and this is where a reader says which halves exist on their device at
+        // all. Both off also hides the tab (see `enabledMainTabs`), because a
+        // search page with no catalogue to search is an empty room.
+        SwitchRow(
+            title = "Anime search",
+            subtitle = "Offer the anime half of the catalogue on the Search page.",
+            checked = searchAnimeEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setSearchAnimeEnabled(enabled) }
+            },
+            modifier = Modifier.testTag("search_anime_switch")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SwitchRow(
+            title = "Manga search",
+            subtitle = "Offer the manga half of the catalogue on the Search page. " +
+                "Turning both halves off hides the Search tab and its shortcut.",
+            checked = searchMangaEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setSearchMangaEnabled(enabled) }
+            },
+            modifier = Modifier.testTag("search_manga_switch")
         )
     }
 }

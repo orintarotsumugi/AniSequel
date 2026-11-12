@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.9.3",
+      "entries": [
+        {
+          "title": "The palette lives on the title page",
+          "detail": "A palette button on a title's Info page opens a full-height appearance editor over the page itself. A miniature of the page updates as you pick a backdrop, blur and tint, so you are choosing by looking at the result instead of a swatch in Settings. The same editor is reachable from the docked bar once the hero has scrolled away, and every choice still lives in Settings > Theme."
+        },
+        {
+          "title": "Anime and manga search are separate",
+          "detail": "The Search page now asks one namespace at a time, with an Anime/Manga switch under the field. Settings > Library > Bottom bar has independent Anime search and Manga search switches; turning one off removes it from the page, and turning both off hides the Search tab and its top-bar shortcut rather than opening an empty page. This also keeps anime id 1 and manga id 1 from sharing a result card."
+        },
+        {
+          "title": "Home shows a cover from your own shelf",
+          "detail": "The Anime List card now takes its artwork from your own in-progress or recently updated anime, and the Manga List card draws from a small page of your most recently updated manga instead of one fixed poster. Each visit can show a different cover, and the existing list query supplies it - no extra request."
+        },
+        {
+          "title": "A tint for the title page",
+          "detail": "The Info page backdrop gained a Natural/Tinted choice. Tinted blends the active theme accent into the blurred artwork below the legibility scrim, so a grey or brown key visual still belongs to the app around it. It sits beside Backdrop and Softness in both the in-page editor and Settings > Theme."
+        },
+        {
+          "title": "The bottom bar switches stay honest",
+          "detail": "The catalogue controls are now one set of rules: the Search tab, its top-bar shortcut and the two namespace switches all agree, so the bar cannot keep a search page that has no catalogue half left to ask."
+        }
+      ]
+    },
+    {
       "version": "1.9.2",
       "entries": [
         {

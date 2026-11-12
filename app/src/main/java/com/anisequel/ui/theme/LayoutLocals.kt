@@ -70,5 +70,15 @@ val LocalConfirmPlanningAdd = staticCompositionLocalOf { true }
 /** Optional direct catalogue shortcut shown beside the Nova/classic top-bar actions. */
 val LocalSearchTopBarShortcut = staticCompositionLocalOf { false }
 
+/**
+ * Which namespaces the catalogue page may search.
+ *
+ * Read by the Search page and written only by Settings, so the chips and the
+ * actual request cannot disagree. Both default on: the page keeps the combined
+ * search a fresh install has always had until the reader narrows it.
+ */
+val LocalSearchAnimeEnabled = staticCompositionLocalOf { true }
+val LocalSearchMangaEnabled = staticCompositionLocalOf { true }
+
 /** Optional direct tier-list shortcut shown beside the Nova/classic top-bar actions. */
 val LocalTierTopBarShortcut = staticCompositionLocalOf { false }

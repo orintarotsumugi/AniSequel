@@ -55,6 +55,8 @@ import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
 import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
+import com.anisequel.ui.theme.LocalSearchAnimeEnabled
+import com.anisequel.ui.theme.LocalSearchMangaEnabled
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
@@ -99,6 +101,21 @@ object AppRoutes {
 
 /** A state that never emits a real dashboard, for when there is no session VM. */
 private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
+
+/**
+ * Whether the top bar may offer catalogue search.
+ *
+ * The shortcut needs both answers, not just its own switch: a reader who leaves
+ * the shortcut on but turns both catalogue halves off would otherwise get a
+ * magnifier into an empty page. Kept out of [AppNavigation] so the host's own
+ * composition stays a routing function rather than one more place a pair of
+ * booleans is combined by hand.
+ */
+private fun catalogueShortcutOffered(
+    shortcutEnabled: Boolean,
+    searchAnimeEnabled: Boolean,
+    searchMangaEnabled: Boolean
+): Boolean = shortcutEnabled && (searchAnimeEnabled || searchMangaEnabled)
 
 @Composable
 fun AppNavigation(
@@ -209,6 +226,12 @@ fun AppNavigation(
     val searchTab by mainTabPreferences.searchTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
+    )
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
+    )
     val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
     )
@@ -254,7 +277,14 @@ fun AppNavigation(
     // Derived from the enum, filtered by the setting - see [enabledMainTabs].
     // Remembered on the flag so the bar's list is the same instance across
     // recompositions; it is an index table for `MainBar`, not state.
-    val mainTabs = remember(tierListTab, searchTab) { enabledMainTabs(tierListTab, searchTab) }
+    val mainTabs = remember(tierListTab, searchTab, searchAnimeEnabled, searchMangaEnabled) {
+        enabledMainTabs(
+            tierListTab = tierListTab,
+            searchTab = searchTab,
+            searchAnimeEnabled = searchAnimeEnabled,
+            searchMangaEnabled = searchMangaEnabled
+        )
+    }
 
     // Whether the tier list has a board open, which is the one thing that hides the
     // bar on a page that is otherwise one of its own. It lives here because the bar
@@ -570,8 +600,17 @@ fun AppNavigation(
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,
             LocalMainBarLift provides interfaceSettings.mainBarLift,
             LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds,
-            LocalSearchTopBarShortcut provides searchTopBar,
-            LocalTierTopBarShortcut provides tierTopBar
+            // Both halves off means the search page has no question left to ask,
+            // so neither it nor its shortcut should still be offered. One half on
+            // is enough for both: the page is still useful.
+            LocalSearchTopBarShortcut provides catalogueShortcutOffered(
+                shortcutEnabled = searchTopBar,
+                searchAnimeEnabled = searchAnimeEnabled,
+                searchMangaEnabled = searchMangaEnabled
+            ),
+            LocalTierTopBarShortcut provides tierTopBar,
+            LocalSearchAnimeEnabled provides searchAnimeEnabled,
+            LocalSearchMangaEnabled provides searchMangaEnabled
         ) {
             // Opaque, and that is the point.
             //

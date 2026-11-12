@@ -65,11 +65,23 @@ enum class MainTab {
  */
 internal fun enabledMainTabs(
     tierListTab: Boolean,
-    searchTab: Boolean = false
+    searchTab: Boolean = false,
+    /**
+     * Whether either namespace is searchable.
+     *
+     * The tab switch and the two type switches are two separate answers, and the
+     * bar needs both: a reader can leave the Search tab on while turning manga
+     * off and still want the anime page, but when both halves are off there is
+     * no question the page can answer at all. Hiding it then is what makes the
+     * two switches mean something rather than leaving a tab that opens onto a
+     * sentence saying it has nothing to show.
+     */
+    searchAnimeEnabled: Boolean = true,
+    searchMangaEnabled: Boolean = true
 ): List<MainTab> = MainTab.entries.filter { tab ->
     when (tab) {
         MainTab.TIERS -> tierListTab
-        MainTab.SEARCH -> searchTab
+        MainTab.SEARCH -> searchTab && (searchAnimeEnabled || searchMangaEnabled)
         else -> true
     }
 }

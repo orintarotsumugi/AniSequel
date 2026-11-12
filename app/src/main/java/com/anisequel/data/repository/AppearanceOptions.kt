@@ -151,3 +151,28 @@ enum class InfoBackdropBlur(
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }
 }
+
+/**
+ * Whether an opened title's page lets the active theme colour into its artwork.
+ *
+ * [NATURAL] keeps the cover's own pixels; [TINTED] washes the scheme's primary
+ * over the blur so a title with a brown or grey key visual still belongs to the
+ * app around it. The wash is below the legibility scrim, not above it - a tint
+ * that lightened the text's background would trade one readability problem for
+ * another.
+ *
+ * A separate control from the blur because they answer different questions: the
+ * blur decides how much detail survives, the tint decides whose colour the page
+ * wears. The reference app exposes them side by side for the same reason.
+ */
+enum class InfoBackdropTint(val storageValue: String, val displayName: String) {
+    NATURAL("natural", "Natural"),
+    TINTED("tinted", "Tinted");
+
+    companion object {
+        val DEFAULT = NATURAL
+
+        fun fromStorage(value: String?): InfoBackdropTint =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}

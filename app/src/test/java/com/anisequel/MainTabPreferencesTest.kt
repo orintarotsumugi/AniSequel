@@ -88,6 +88,25 @@ class MainTabPreferencesTest {
     }
 
     @Test
+    fun `the two catalogue halves default on and round-trip independently`() = runTest {
+        val preferences = preferences()
+
+        assertTrue(preferences.searchAnimeEnabled.first())
+        assertTrue(preferences.searchMangaEnabled.first())
+
+        preferences.setSearchMangaEnabled(false)
+        assertTrue(
+            "turning manga off must not take anime with it; the two switches are " +
+                "the point",
+            preferences.searchAnimeEnabled.first()
+        )
+        assertFalse(preferences.searchMangaEnabled.first())
+
+        preferences.setSearchAnimeEnabled(false)
+        assertFalse(preferences.searchAnimeEnabled.first())
+    }
+
+    @Test
     fun `reset brings the tab back to hidden`() = runTest {
         val preferences = preferences()
         preferences.setTierListTab(true)

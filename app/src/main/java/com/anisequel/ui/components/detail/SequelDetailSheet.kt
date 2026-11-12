@@ -24,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,17 +41,22 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.CoverColorRepository
+import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropSource
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
+import com.anisequel.ui.components.detail.info.InfoAppearanceEditor
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
+import kotlinx.coroutines.launch
 
 /**
  * The sheet that shows one title's Info page.
@@ -299,6 +305,12 @@ fun SequelDetailSheet(
         var destination by rememberSaveable(subject.mediaId, subject.media.type) {
             mutableIntStateOf(0)
         }
+        // The palette's destination. Boolean rather than a third `AnimatedContent`
+        // index: it is an overlay over the page, not a peer of Info and My Entry,
+        // so the bottom capsule keeps saying which of its two pages is behind it.
+        var showAppearance by rememberSaveable(subject.mediaId, subject.media.type) {
+            mutableStateOf(false)
+        }
         val destinations = buildList {
             add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
             if (entryEditor != null) {
@@ -378,11 +390,13 @@ fun SequelDetailSheet(
                         onOpenCharacter = onOpenCharacter,
                         onOpenStaff = onOpenStaff,
                         onEditEntry = { if (entryEditor != null) destination = 1 },
+                        onOpenAppearance = { showAppearance = true },
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
                         bottomContentPadding = navClearance,
                         infoBackdropSource = themeSettings.infoBackdropSource,
-                        infoBackdropBlur = themeSettings.infoBackdropBlur
+                        infoBackdropBlur = themeSettings.infoBackdropBlur,
+                        infoBackdropTint = themeSettings.infoBackdropTint
                     )
                 }
             }
@@ -395,6 +409,41 @@ fun SequelDetailSheet(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
+                )
+            }
+
+            // Last, so it covers the capsule as well as the page: while the
+            // appearance editor is open there is one way back, and a bar that
+            // still switched pages underneath it would be a second.
+            //
+            // The editor writes the same preferences the page reads, so moving a
+            // chip changes the entire page behind this overlay and the miniature
+            // in front of it at the same time. That is the live preview: it is
+            // the page, not a copy of it.
+            if (showAppearance) {
+                InfoAppearanceEditor(
+                    media = media,
+                    source = themeSettings.infoBackdropSource,
+                    blur = themeSettings.infoBackdropBlur,
+                    tint = themeSettings.infoBackdropTint,
+                    onSelectSource = { chosen ->
+                        scope.launch { themePreferences.setInfoBackdropSource(chosen) }
+                    },
+                    onSelectBlur = { chosen ->
+                        scope.launch { themePreferences.setInfoBackdropBlur(chosen) }
+                    },
+                    onSelectTint = { chosen ->
+                        scope.launch { themePreferences.setInfoBackdropTint(chosen) }
+                    },
+                    onReset = {
+                        scope.launch {
+                            themePreferences.setInfoBackdropSource(InfoBackdropSource.DEFAULT)
+                            themePreferences.setInfoBackdropBlur(InfoBackdropBlur.DEFAULT)
+                            themePreferences.setInfoBackdropTint(InfoBackdropTint.DEFAULT)
+                        }
+                    },
+                    onClose = { showAppearance = false },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.InfoBackdropBlur
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.RetainedTint
 import com.anisequel.data.repository.ThemeMode
@@ -149,10 +150,16 @@ class ThemePreferencesTest {
 
         assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
         assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
+        assertEquals(
+            "natural is the default: the cover's own colour is the title's, and a " +
+                "tint is a choice rather than something a fresh page imposes",
+            InfoBackdropTint.NATURAL,
+            settings.infoBackdropTint
+        )
     }
 
     @Test
-    fun `every info backdrop source and blur round-trips through storage`() = runTest {
+    fun `every info backdrop source, blur and tint round-trips through storage`() = runTest {
         val preferences = preferences()
 
         InfoBackdropSource.entries.forEach { source ->
@@ -172,6 +179,15 @@ class ThemePreferencesTest {
                 preferences.settings.first().infoBackdropBlur
             )
         }
+
+        InfoBackdropTint.entries.forEach { tint ->
+            preferences.setInfoBackdropTint(tint)
+            assertEquals(
+                "$tint must survive a round trip",
+                tint,
+                preferences.settings.first().infoBackdropTint
+            )
+        }
     }
 
     @Test
@@ -179,12 +195,14 @@ class ThemePreferencesTest {
         val preferences = preferences()
         preferences.setInfoBackdropSource(InfoBackdropSource.OFF)
         preferences.setInfoBackdropBlur(InfoBackdropBlur.HEAVY)
+        preferences.setInfoBackdropTint(InfoBackdropTint.TINTED)
 
         preferences.reset()
 
         val settings = preferences.settings.first()
         assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
         assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
+        assertEquals(InfoBackdropTint.NATURAL, settings.infoBackdropTint)
     }
 
     /**
@@ -209,6 +227,10 @@ class ThemePreferencesTest {
         assertEquals(InfoBackdropBlur.SOFT, InfoBackdropBlur.fromStorage("sepia"))
         assertTrue(InfoBackdropBlur.CRISP.radiusDp < InfoBackdropBlur.SOFT.radiusDp)
         assertTrue(InfoBackdropBlur.SOFT.radiusDp < InfoBackdropBlur.HEAVY.radiusDp)
+
+        assertEquals("natural", InfoBackdropTint.NATURAL.storageValue)
+        assertEquals("tinted", InfoBackdropTint.TINTED.storageValue)
+        assertEquals(InfoBackdropTint.NATURAL, InfoBackdropTint.fromStorage("sepia"))
     }
 
     @Test

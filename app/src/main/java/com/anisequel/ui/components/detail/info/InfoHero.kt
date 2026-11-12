@@ -73,6 +73,7 @@ import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.statusLabel
 import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
+import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -166,6 +167,14 @@ fun InfoHero(
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
     /** Which artwork the hero draws: the banner, the cover, or the cover as a fallback. */
     backdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
+    /** Natural or tinted; the same choice the page below the hero draws with. */
+    tint: InfoBackdropTint = InfoBackdropTint.DEFAULT,
+    /**
+     * Opens the in-page appearance editor, or null on a host that cannot write
+     * one. Null removes the palette button rather than drawing one that does
+     * nothing, which is the rule the studio credits follow.
+     */
+    onOpenAppearance: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -255,6 +264,17 @@ fun InfoHero(
             posterUrl = media.posterUrl,
             collapse = collapse
         )
+
+        // The same tint as the page under it, on the same side of the scrim. A
+        // hero that stayed natural above a tinted page read as two different
+        // titles stitched together at the first card.
+        if (tint == InfoBackdropTint.TINTED) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+            )
+        }
 
         // The whole backdrop is the tap target for the full-screen artwork.
         //
@@ -350,6 +370,19 @@ fun InfoHero(
                             openExternalUrlOrCopy(context, media.pageUrl)
                         }
                     )
+                    if (onOpenAppearance != null) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(22.dp)
+                                .background(Color.White.copy(alpha = 0.18f))
+                        )
+                        HeroIconButton(
+                            icon = AppVectorIcons.SectionAppearance,
+                            label = "Page appearance",
+                            onClick = onOpenAppearance
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .width(1.dp)

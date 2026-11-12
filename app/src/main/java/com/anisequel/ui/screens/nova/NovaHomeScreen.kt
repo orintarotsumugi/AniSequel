@@ -13,6 +13,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -100,8 +101,26 @@ fun NovaHomeScreen(
     // fallback for a demo fixture, whose stats object is empty.
     val animeCount = viewer.statistics?.anime?.count ?: state.totalWatchedCount
     val mangaCount = viewer.statistics?.manga?.count ?: 0
-    val animeCover = state.cardPreview.firstOrNull()?.media?.posterUrl
-    val mangaCover = state.mangaPreview?.posterUrl
+
+    // A cover from the reader's own shelf, not the first row of a query. Both
+    // lists are already in the state - the Continue rail's covers and the three
+    // card-preview entries - so this costs no request; and remembering on the
+    // list identity means a search keystroke does not reshuffle the artwork under
+    // the reader's thumb, while a refresh that actually changes the list can.
+    val animeCovers = remember(state.viewer.id, state.cardPreview, state.continueWatching) {
+        (state.continueWatching.mapNotNull { it.media.posterUrl } +
+            state.cardPreview.mapNotNull { it.media.posterUrl })
+            .distinct()
+    }
+    val animeCover = remember(animeCovers) { animeCovers.randomOrNull() }
+
+    // The manga preview is its own small page of rows rather than the whole
+    // collection the Library defers, so this is still one image per visit from a
+    // request the page was already making for the card.
+    val mangaCovers = remember(state.viewer.id, state.mangaPreviews) {
+        state.mangaPreviews.mapNotNull { it.posterUrl }.distinct()
+    }
+    val mangaCover = remember(mangaCovers) { mangaCovers.randomOrNull() }
 
     val maxWidth = 640.dp
 

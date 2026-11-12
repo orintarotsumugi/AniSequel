@@ -117,9 +117,10 @@ class ThemePreferences(context: Context) {
         /** How fast a title too long for its row scrolls, in dp per second. */
         val TITLE_SCROLL_VELOCITY = floatPreferencesKey("title_scroll_velocity_dp")
 
-        /** Which artwork sits behind the Info page, and how soft it is. */
+        /** Which artwork sits behind the Info page, how soft it is, and its tint. */
         val INFO_BACKDROP_SOURCE = stringPreferencesKey("info_backdrop_source")
         val INFO_BACKDROP_BLUR = stringPreferencesKey("info_backdrop_blur")
+        val INFO_BACKDROP_TINT = stringPreferencesKey("info_backdrop_tint")
     }
 
     /**
@@ -199,6 +200,7 @@ class ThemePreferences(context: Context) {
          */
         val infoBackdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
         val infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
+        val infoBackdropTint: InfoBackdropTint = InfoBackdropTint.DEFAULT,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     ) {
@@ -264,6 +266,9 @@ class ThemePreferences(context: Context) {
             ),
             infoBackdropBlur = InfoBackdropBlur.fromStorage(
                 preferences[Keys.INFO_BACKDROP_BLUR]
+            ),
+            infoBackdropTint = InfoBackdropTint.fromStorage(
+                preferences[Keys.INFO_BACKDROP_TINT]
             ),
             isLoaded = true
         )
@@ -373,6 +378,13 @@ class ThemePreferences(context: Context) {
     suspend fun setInfoBackdropBlur(blur: InfoBackdropBlur) {
         appContext.themeDataStore.edit { preferences ->
             preferences[Keys.INFO_BACKDROP_BLUR] = blur.storageValue
+        }
+    }
+
+    /** Natural or tinted; see [InfoBackdropTint]. */
+    suspend fun setInfoBackdropTint(tint: InfoBackdropTint) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.INFO_BACKDROP_TINT] = tint.storageValue
         }
     }
 
@@ -607,6 +619,7 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.APP_BACKGROUND_COLOR)
             preferences.remove(Keys.INFO_BACKDROP_SOURCE)
             preferences.remove(Keys.INFO_BACKDROP_BLUR)
+            preferences.remove(Keys.INFO_BACKDROP_TINT)
             // Back to the bars, which is the default this app ships with.
             // The reading font, size and title scroll are their own page's choices
             // and are reset there, not by "Reset appearance".
