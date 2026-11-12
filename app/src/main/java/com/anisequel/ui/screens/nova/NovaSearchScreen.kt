@@ -259,181 +259,33 @@ fun NovaSearchScreen(
                 .navigationBarsPadding()
                 .testTag("nova_search_screen")
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 10.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .bouncyPress(pressedScale = 0.9f)
-                        .testTag("nova_search_back")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Search",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when {
-                            activeType == null -> "Both catalogue halves are off"
-                            enabledTypes.size == 1 -> "The ${activeLabel ?: "catalogue"} " +
-                                "catalogue on AniList"
-                            else -> "Anime and manga, one catalogue at a time"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (enabledTypes.size > 1 && activeType != null) {
-                ExpressivePolygonSegmentedBar(
-                    options = enabledTypes.map { SegmentedOption(label = it.displayName) },
-                    selectedIndex = enabledTypes.indexOf(activeType),
-                    onSelect = { index ->
-                        enabledTypes.getOrNull(index)?.let { chosen ->
-                            if (chosen != activeType) typeName = chosen.name
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 4.dp)
-                        .testTag("catalogue_search_type_row")
-                )
-            }
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .testTag("nova_search_input"),
-                placeholder = {
-                    Text(
-                        text = when (activeType) {
-                            MediaSearchType.MANGA -> "Search the manga catalogue"
-                            MediaSearchType.ANIME -> "Search the anime catalogue"
-                            null -> "Turn a catalogue half on in Settings"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                singleLine = true,
-                shape = ExpressiveShapes.pill,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                ),
-                leadingIcon = {
-                    Icon(
-                        imageVector = AppVectorIcons.Search,
-                        contentDescription = null,
-                        modifier = Modifier.size(19.dp)
-                    )
-                },
-                trailingIcon = {
-                    when {
-                        // Keep the results that are already on screen while the next
-                        // answer is on the wire. Replacing the grid with the skeleton
-                        // on every keystroke tore down a whole screen of cards after
-                        // the debounce started and rebuilt it when it ended, which is
-                        // what made typing feel like the page was reloading.
-                        isSearching && results.isNotEmpty() -> {
-                            ExpressiveLoadingIndicator(
-                                modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        query.isNotEmpty() -> {
-                            IconButton(
-                                onClick = { query = "" },
-                                modifier = Modifier.testTag("nova_search_clear")
-                            ) {
-                                Icon(
-                                    imageVector = AppVectorIcons.Close,
-                                    contentDescription = "Clear search",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+            CatalogueSearchHeader(
+                activeType = activeType,
+                enabledTypes = enabledTypes,
+                activeLabel = activeLabel,
+                onBack = onBack,
+                onSelectType = { chosen -> typeName = chosen.name }
             )
-
-            Box(
+            CatalogueSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                activeType = activeType,
+                isSearching = isSearching,
+                hasResults = results.isNotEmpty()
+            )
+            CatalogueSearchBody(
+                activeType = activeType,
+                activeLabel = activeLabel,
+                query = query,
+                results = results,
+                searchedTerm = searchedTerm,
+                isSearching = isSearching,
+                error = error,
+                onOpenMedia = { selectedMedia = it },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-            ) {
-                when {
-                    activeType == null -> SearchNote(
-                        text = "Anime search and manga search are both off. Turn one " +
-                            "on in Settings > Library > Bottom bar to bring this page back."
-                    )
-
-                    query.trim().length < SEARCH_MIN_LENGTH -> SearchNote(
-                        text = "Type at least $SEARCH_MIN_LENGTH characters to search " +
-                            "the ${activeLabel ?: "catalogue"} catalogue. Your list " +
-                            "only changes after you edit a title's entry."
-                    )
-
-                    isSearching && results.isEmpty() -> SearchSkeleton()
-
-                    error != null -> SearchNote(
-                        text = "Couldn't search AniList - $error"
-                    )
-
-                    results.isEmpty() -> SearchNote(
-                        text = "No ${activeLabel ?: "catalogue"} title matches " +
-                            "\"$searchedTerm\"."
-                    )
-
-                    else -> LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag("nova_search_results"),
-                        contentPadding = PaddingValues(
-                            start = 14.dp,
-                            end = 14.dp,
-                            top = 6.dp,
-                            bottom = mainBarClearance() + 20.dp
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            items = results,
-                            key = { media -> "${media.type}_${media.id}" },
-                            contentType = { "search_result" }
-                        ) { media ->
-                            SearchResultCard(
-                                media = media,
-                                onOpen = { selectedMedia = media }
-                            )
-                        }
-                    }
-                }
-            }
+            )
         }
     }
 
@@ -468,6 +320,219 @@ fun NovaSearchScreen(
         )
     }
     profiles.Sheet { appearance -> selectedMedia = appearance.toMediaNode() }
+}
+
+/**
+ * The page's title, back action and namespace picker.
+ *
+ * Extracted from [NovaSearchScreen] rather than left inline: the page's state and
+ * its request logic already fill a screenful, and CodeFactor was right that the
+ * combination crossed its complexity line. Splitting the three controls that only
+ * read state also makes each one previewable without a repository.
+ */
+@Composable
+private fun CatalogueSearchHeader(
+    activeType: MediaSearchType?,
+    enabledTypes: List<MediaSearchType>,
+    activeLabel: String?,
+    onBack: () -> Unit,
+    onSelectType: (MediaSearchType) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 10.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .bouncyPress(pressedScale = 0.9f)
+                .testTag("nova_search_back")
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back"
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column {
+            Text(
+                text = "Search",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = when {
+                    activeType == null -> "Both catalogue halves are off"
+                    enabledTypes.size == 1 -> "The ${activeLabel ?: "catalogue"} " +
+                        "catalogue on AniList"
+                    else -> "Anime and manga, one catalogue at a time"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    if (enabledTypes.size > 1 && activeType != null) {
+        ExpressivePolygonSegmentedBar(
+            options = enabledTypes.map { SegmentedOption(label = it.displayName) },
+            selectedIndex = enabledTypes.indexOf(activeType),
+            onSelect = { index ->
+                enabledTypes.getOrNull(index)
+                    ?.takeIf { it != activeType }
+                    ?.let(onSelectType)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 4.dp)
+                .testTag("catalogue_search_type_row")
+        )
+    }
+}
+
+/** The field, including the indicator that does not replace the results below it. */
+@Composable
+private fun CatalogueSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    activeType: MediaSearchType?,
+    isSearching: Boolean,
+    hasResults: Boolean
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .testTag("nova_search_input"),
+        placeholder = {
+            Text(
+                text = when (activeType) {
+                    MediaSearchType.MANGA -> "Search the manga catalogue"
+                    MediaSearchType.ANIME -> "Search the anime catalogue"
+                    null -> "Turn a catalogue half on in Settings"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        singleLine = true,
+        shape = ExpressiveShapes.pill,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        ),
+        leadingIcon = {
+            Icon(
+                imageVector = AppVectorIcons.Search,
+                contentDescription = null,
+                modifier = Modifier.size(19.dp)
+            )
+        },
+        trailingIcon = {
+            when {
+                // Keep the results that are already on screen while the next
+                // answer is on the wire. Replacing the grid with the skeleton
+                // on every keystroke tore down a whole screen of cards after
+                // the debounce started and rebuilt it when it ended, which is
+                // what made typing feel like the page was reloading.
+                isSearching && hasResults -> {
+                    ExpressiveLoadingIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                query.isNotEmpty() -> {
+                    IconButton(
+                        onClick = { onQueryChange("") },
+                        modifier = Modifier.testTag("nova_search_clear")
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Close,
+                            contentDescription = "Clear search",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+    )
+}
+
+/** The one of five answers the page has for the current field and request. */
+@Composable
+private fun CatalogueSearchBody(
+    activeType: MediaSearchType?,
+    activeLabel: String?,
+    query: String,
+    results: List<MediaNode>,
+    searchedTerm: String,
+    isSearching: Boolean,
+    error: String?,
+    onOpenMedia: (MediaNode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        when {
+            activeType == null -> SearchNote(
+                text = "Anime search and manga search are both off. Turn one " +
+                    "on in Settings > Library > Bottom bar to bring this page back."
+            )
+
+            query.trim().length < SEARCH_MIN_LENGTH -> SearchNote(
+                text = "Type at least $SEARCH_MIN_LENGTH characters to search " +
+                    "the ${activeLabel ?: "catalogue"} catalogue. Your list " +
+                    "only changes after you edit a title's entry."
+            )
+
+            isSearching && results.isEmpty() -> SearchSkeleton()
+
+            error != null -> SearchNote(
+                text = "Couldn't search AniList - $error"
+            )
+
+            results.isEmpty() -> SearchNote(
+                text = "No ${activeLabel ?: "catalogue"} title matches " +
+                    "\"$searchedTerm\"."
+            )
+
+            else -> LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("nova_search_results"),
+                contentPadding = PaddingValues(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = 6.dp,
+                    bottom = mainBarClearance() + 20.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = results,
+                    key = { media -> "${media.type}_${media.id}" },
+                    contentType = { "search_result" }
+                ) { media ->
+                    SearchResultCard(
+                        media = media,
+                        onOpen = { onOpenMedia(media) }
+                    )
+                }
+            }
+        }
+    }
 }
 
 /** One catalogue title as a complete, tappable poster card. */

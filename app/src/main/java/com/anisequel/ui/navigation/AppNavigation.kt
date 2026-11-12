@@ -102,6 +102,21 @@ object AppRoutes {
 /** A state that never emits a real dashboard, for when there is no session VM. */
 private val EmptyDashboardState = MutableStateFlow<DashboardUiState?>(null)
 
+/**
+ * Whether the top bar may offer catalogue search.
+ *
+ * The shortcut needs both answers, not just its own switch: a reader who leaves
+ * the shortcut on but turns both catalogue halves off would otherwise get a
+ * magnifier into an empty page. Kept out of [AppNavigation] so the host's own
+ * composition stays a routing function rather than one more place a pair of
+ * booleans is combined by hand.
+ */
+private fun catalogueShortcutOffered(
+    shortcutEnabled: Boolean,
+    searchAnimeEnabled: Boolean,
+    searchMangaEnabled: Boolean
+): Boolean = shortcutEnabled && (searchAnimeEnabled || searchMangaEnabled)
+
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -588,8 +603,11 @@ fun AppNavigation(
             // Both halves off means the search page has no question left to ask,
             // so neither it nor its shortcut should still be offered. One half on
             // is enough for both: the page is still useful.
-            LocalSearchTopBarShortcut provides
-                (searchTopBar && (searchAnimeEnabled || searchMangaEnabled)),
+            LocalSearchTopBarShortcut provides catalogueShortcutOffered(
+                shortcutEnabled = searchTopBar,
+                searchAnimeEnabled = searchAnimeEnabled,
+                searchMangaEnabled = searchMangaEnabled
+            ),
             LocalTierTopBarShortcut provides tierTopBar,
             LocalSearchAnimeEnabled provides searchAnimeEnabled,
             LocalSearchMangaEnabled provides searchMangaEnabled
