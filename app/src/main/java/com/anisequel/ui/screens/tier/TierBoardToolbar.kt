@@ -9,6 +9,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.bouncyPress
 import kotlin.math.roundToInt
 
 /**
@@ -152,12 +155,18 @@ internal fun TierZoomControls(
             onClick = onZoomOut,
             modifier = Modifier.testTag("tier_zoom_out")
         )
+        val resetSource = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .width(44.dp)
                 .height(36.dp)
                 .clip(RoundedCornerShape(percent = 50))
-                .clickable(role = Role.Button, onClick = onResetZoom)
+                .bouncyPress(pressedScale = 0.92f, interactionSource = resetSource)
+                .clickable(
+                    interactionSource = resetSource,
+                    role = Role.Button,
+                    onClick = onResetZoom
+                )
                 .testTag("tier_zoom_reset"),
             contentAlignment = Alignment.Center
         ) {
@@ -215,12 +224,19 @@ private fun LockTierButton(
         label = "tier_lock_tint"
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .size(36.dp)
             .clip(RoundedCornerShape(percent = 50))
+            // Press layer outside the fill; see `CompactTierButton`.
+            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
             .background(container)
-            .clickable(role = Role.Button, onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                role = Role.Button,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         AnimatedContent(
@@ -289,12 +305,26 @@ private fun CompactTierButton(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "tier_tool_container"
     )
+    // The same press spring every other control on the screen has. These are the
+    // smallest targets on the board and the ones a thumb lands on most often, so
+    // a button that did not move under it read as disabled even when it was not.
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .size(36.dp)
             .clip(RoundedCornerShape(percent = 50))
+            // `bouncyPress` before the fill. A draw modifier written above the
+            // `graphicsLayer` it holds paints at the unscaled size, so the
+            // circular background would stay put while the glyph shrank - the
+            // one arrangement that makes a press look broken rather than tactile.
+            .bouncyPress(pressedScale = 0.9f, interactionSource = interactionSource)
             .background(container)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            .clickable(
+                interactionSource = interactionSource,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(

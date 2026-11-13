@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 
 /**
@@ -170,6 +172,11 @@ internal fun TierBoardHeader(
 /** The compact "add titles" action in the header. */
 @Composable
 private fun AddTitlesPill(onClick: () -> Unit, enabled: Boolean) {
+    // A press spring, shared with the clickable so the spring cancels when the
+    // gesture turns into a scroll. The pill was the one control on the screen
+    // that answered a finger with nothing at all, which made a live "Add" and a
+    // disabled one feel like the same piece of artwork.
+    val interactionSource = remember { MutableInteractionSource() }
     val container by animateColorAsState(
         targetValue = if (enabled) {
             MaterialTheme.colorScheme.primaryContainer
@@ -189,8 +196,19 @@ private fun AddTitlesPill(onClick: () -> Unit, enabled: Boolean) {
         modifier = Modifier
             .defaultMinSize(minHeight = 48.dp)
             .clip(ExpressiveShapes.pill)
+            // The press layer wraps the background, not the other way round: a
+            // draw modifier written before `graphicsLayer` paints outside the
+            // layer, so the pill's fill would stay at full size while its
+            // contents shrank. `ExpressiveStateChip` and the segmented bar put
+            // these in the same order for the same reason.
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .background(container)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick
+            )
             .padding(horizontal = 14.dp)
             .testTag("tier_add_button"),
         verticalAlignment = Alignment.CenterVertically
