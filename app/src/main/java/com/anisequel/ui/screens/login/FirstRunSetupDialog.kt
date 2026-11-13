@@ -1,14 +1,8 @@
 package com.anisequel.ui.screens.login
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +10,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,19 +18,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -61,9 +51,6 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
-import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.screens.settings.AppLayoutPreviews
 import com.anisequel.ui.screens.settings.SectionCard
@@ -104,14 +91,14 @@ internal fun shouldShowFirstRunSetup(completed: Boolean, authState: AuthUiState)
  * below: each step asks about a different part of the app, and the same glyph the
  * Settings section wears is the fastest way to say which part.
  */
-private data class SetupStep(
+internal data class SetupStep(
     val label: String,
     val title: String,
     val subtitle: String,
     val icon: ImageVector
 )
 
-private val SETUP_STEPS = listOf(
+internal val SETUP_STEPS = listOf(
     SetupStep(
         label = "Welcome",
         title = "Make AniSequel yours",
@@ -188,6 +175,10 @@ fun FirstRunSetupDialog(
     mainTabPreferences: MainTabPreferences
 ) {
     val scope = rememberCoroutineScope()
+    // Shared with the Back button's own interaction source so the press spring
+    // reads the platform's press state rather than a second pointer loop, and the
+    // same spring the primary button beside it uses.
+    val backSource = remember { MutableInteractionSource() }
     var layout by rememberSaveable { mutableStateOf(AppLayout.DEFAULT.storageValue) }
     var theme by rememberSaveable { mutableStateOf(ThemeMode.SYSTEM.storageValue) }
     var motion by rememberSaveable { mutableStateOf(MotionStyle.DEFAULT.storageValue) }
@@ -197,7 +188,11 @@ fun FirstRunSetupDialog(
     var tiersShortcut by rememberSaveable { mutableStateOf(false) }
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
 
-    fun saveChoices() {
+    val finishWithDefaults: () -> Unit = {
+        scope.launch { onboardingPreferences.setCompleted(true) }
+    }
+
+    val saveChoices: () -> Unit = {
         scope.launch {
             interfacePreferences.setLayout(AppLayout.fromStorage(layout))
             themePreferences.setThemeMode(ThemeMode.fromStorage(theme))
@@ -210,16 +205,7 @@ fun FirstRunSetupDialog(
         }
     }
 
-    fun finishWithDefaults() {
-        scope.launch { onboardingPreferences.setCompleted(true) }
-    }
-
     val isLast = stepIndex == SETUP_STEPS.lastIndex
-    val stepProgress by animateFloatAsState(
-        targetValue = (stepIndex + 1f) / SETUP_STEPS.size,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "onboarding_progress"
-    )
     // One value for the page's choice controls. The page is a separate composable
     // so the six-way "which question is this" branch is not counted as part of
     // the wizard's own control flow, and the draft keeps its parameter list down
@@ -269,156 +255,26 @@ fun FirstRunSetupDialog(
                     .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
-                Row(
+                SetupHeader(onSkip = finishWithDefaults)
+
+                SetupProgressBar(step = stepIndex)
+
+                SetupPage(
+                    stepIndex = stepIndex,
+                    draft = draft,
+                    onDraftChange = onDraftChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.AnimeSparkle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "AniSequel setup",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(
-                        onClick = ::finishWithDefaults,
-                        modifier = Modifier.testTag("onboarding_defaults")
-                    ) {
-                        Text("Skip")
-                    }
-                }
+                        .weight(1f)
+                )
 
-                // Capsule track rather than a `LinearProgressIndicator`: this is a
-                // six-page walk, not a download, and the shape is the app's own.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .height(4.dp)
-                        .clip(ExpressiveShapes.pill)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(stepProgress)
-                            .fillMaxHeight()
-                            .clip(ExpressiveShapes.pill)
-                            .background(MaterialTheme.colorScheme.primary)
-                    )
-                }
-
-                AnimatedContent(
-                    targetState = stepIndex.coerceIn(0, SETUP_STEPS.lastIndex),
-                    transitionSpec = {
-                        val forward = targetState > initialState
-                        val enter = slideInHorizontally(
-                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                        ) { width -> if (forward) width / 4 else -width / 4 } +
-                            fadeIn(animationSpec = ExpressiveMotion.FastEffects)
-                        val exit = slideOutHorizontally(
-                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                        ) { width -> if (forward) -width / 4 else width / 4 } +
-                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                        enter togetherWith exit using null
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    label = "onboarding_step"
-                ) { index ->
-                    val page = SETUP_STEPS[index]
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp)
-                    ) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = page.icon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(17.dp)
-                            )
-                            Spacer(modifier = Modifier.width(7.dp))
-                            Text(
-                                text = "${index + 1} of ${SETUP_STEPS.size} · ${page.label}",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = page.title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = page.subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        SetupStepChoices(
-                            index = index,
-                            draft = draft,
-                            onDraftChange = onDraftChange
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-                    }
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (stepIndex > 0) {
-                        OutlinedButton(
-                            onClick = { stepIndex -= 1 },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                                .testTag("onboarding_back")
-                        ) {
-                            Text("Back")
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                    ExpressivePrimaryButton(
-                        text = if (isLast) "Finish" else "Next",
-                        onClick = {
-                            if (isLast) saveChoices() else stepIndex += 1
-                        },
-                        modifier = Modifier.weight(1.4f),
-                        icon = if (isLast) AppVectorIcons.CheckCircle else AppVectorIcons.SequelArrow,
-                        testTag = if (isLast) "onboarding_save" else "onboarding_next"
-                    )
-                }
+                SetupFooter(
+                    isFirst = stepIndex == 0,
+                    isLast = isLast,
+                    backSource = backSource,
+                    onBack = { stepIndex -= 1 },
+                    onContinue = { if (isLast) saveChoices() else stepIndex += 1 }
+                )
             }
         }
     }
@@ -427,14 +283,14 @@ fun FirstRunSetupDialog(
 /**
  * One question's controls, and the welcome page at index zero.
  *
- * Extracted for a reason worth writing down: the guide counts the six-way `when`
- * as branches of whatever function contains it, and the wizard that also owns
- * Back, Skip and the progress track crossed its complexity threshold. Passing the
- * draft as one object rather than seven delegated variables keeps the extraction
- * from trading a complexity finding for a long-parameter one.
+ * The six-way `when` lives here, in its own function: six branches of a page
+ * dispatcher are not the wizard's control flow, and the wizard is the method the
+ * complexity gate measures. Passing the draft as one object rather than seven
+ * delegated variables keeps the extraction from trading a complexity finding for
+ * a long-parameter one.
  */
 @Composable
-private fun SetupStepChoices(
+internal fun SetupStepChoices(
     index: Int,
     draft: SetupDraft,
     onDraftChange: (SetupDraft) -> Unit
@@ -530,7 +386,7 @@ private fun SetupStepChoices(
 }
 
 /** The wizard's choices, bundled so one page can receive all seven in one value. */
-private data class SetupDraft(
+internal data class SetupDraft(
     val layout: String,
     val theme: String,
     val motion: String,
