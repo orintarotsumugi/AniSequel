@@ -123,14 +123,14 @@ fun ExpressivePrimaryButton(
                 // animation to the finished transition; `AnimatedContent` itself
                 // has no `sizeTransform` parameter in the Compose version this
                 // repo pins - the box animation lives on the content transform.
-                (fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
                     initialScale = 0.82f,
                     animationSpec = ExpressiveMotion.FastSpatial
-                )) togetherWith
-                    (fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                ) togetherWith
+                    fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
                         targetScale = 0.82f,
                         animationSpec = ExpressiveMotion.FastSpatial
-                    )) using SizeTransform(clip = false) { _, _ ->
+                    ) using SizeTransform(clip = false) { _, _ ->
                     ExpressiveMotion.FastSpatialSize
                 }
             },
