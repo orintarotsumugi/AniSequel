@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.9.5",
+      "entries": [
+        {
+          "title": "The palette editor no longer closes the title",
+          "detail": "Back inside the title page's appearance editor used to dismiss the whole page and drop you on the list you came from. It now closes only the editor, the same as its own Back button, so you can keep adjusting the live preview. The editor's header clears the status bar, its Done button clears the gesture bar, and every chip updates the page behind it as you pick."
+        },
+        {
+          "title": "Your manga shelf finally has a count",
+          "detail": "Home read the anime statistics block and nothing else, so the Manga card said \"0 items\" beside a full shelf. The viewer query now asks for the manga count too, and the card shows how many manga entries the account actually has."
+        },
+        {
+          "title": "Cast cards share one size",
+          "detail": "Characters and voice actors now sit on a fixed 128dp card instead of sizing themselves to their contents, so the rail's bottom edge is straight. The actor gets a round portrait and a favourites pill, and the voice line uses the app's microphone mark."
+        },
+        {
+          "title": "The profile banner runs edge to edge",
+          "detail": "The banner is 320dp and reaches both screen edges, with only its bottom corners rounded. The avatar sits on its edge and the name, dates and stat tiles stay on the page's 16dp grid."
+        },
+        {
+          "title": "The greeting types itself in",
+          "detail": "The username is highlighted in the accent colour, there are twice as many greetings, and the second line types on with a caret instead of appearing all at once. Screen readers get the finished sentence rather than the half-drawn one."
+        },
+        {
+          "title": "Find any title from the tier board",
+          "detail": "The tier bar has a search button of its own: a full-height sheet with a name field and pages of nine posters, swiped sideways three at a time. The plus on a poster opens the tier chooser for it. The bar itself is a 52dp capsule with its own grouped actions, and the search glyph now searches instead of opening the zoom slider."
+        },
+        {
+          "title": "Settings starts with your account",
+          "detail": "The AniList account and the connection check moved to the top of Settings, Library has its own shelf icon, and Device Manager is a phone rather than the refresh glyph it shared with the refresh setting."
+        }
+      ]
+    },
+    {
       "version": "1.9.4",
       "entries": [
         {
