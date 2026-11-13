@@ -65,6 +65,8 @@ import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DialogImmersiveEffect
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
 import kotlinx.coroutines.launch
@@ -218,6 +220,7 @@ fun SequelDetailSheet(
             useDynamicColor = false
         )
     )
+    val immersive = LocalImmersiveMode.current
 
     // The page's scroll position is hoisted out of `AnimatedContent`, and so is the
     // in-progress edit below, for the same reason: `AnimatedContent` disposes the
@@ -383,7 +386,13 @@ fun SequelDetailSheet(
             }
         }
         val selected = destination.coerceIn(0, destinations.lastIndex)
-        val navClearance = if (destinations.size > 1) 112.dp else 28.dp
+        // The page previously consumed navigation insets on its outer shell and
+        // again on the floating bar. That double reservation made the last card
+        // stop too high on devices with a gesture bar. Keep one content clearance,
+        // and add only a small physical lift when immersive mode makes the system
+        // inset report zero.
+        val navClearance = (if (destinations.size > 1) 112.dp else 28.dp) +
+            if (immersive) 12.dp else 0.dp
 
         Box(
             modifier = Modifier
@@ -436,6 +445,7 @@ fun SequelDetailSheet(
                             // the bottom of a full-screen page now, not in a sheet
                             // that the platform already resized.
                             .statusBarsPadding()
+                            .immersiveDisplayInsets(immersive)
                             .imePadding()
                             .padding(horizontal = 20.dp)
                             .padding(top = 8.dp, bottom = navClearance)
@@ -514,6 +524,7 @@ fun SequelDetailSheet(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = if (immersive) 12.dp else 0.dp)
                 )
             }
 

@@ -38,6 +38,7 @@ fun SequelCardDetails(
 ) {
     val style = LocalMediaCardStyle.current
     val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
+    val titleHidden = style.titlePlacement == CardTitlePlacement.HIDDEN
     // The rating the chip row shows today, as the number the banner needs.
     val scoreValue = sequel.sequelMedia.averageScore
 
@@ -49,7 +50,7 @@ fun SequelCardDetails(
         // Skipped when the style lays the name over the artwork instead: the poster
         // already draws it, and a card that says its own title twice is not showing
         // the reader a style, it is showing a bug.
-        if (!titleOverlaid) {
+        if (!titleOverlaid && !titleHidden) {
             MarqueeText(
                 text = sequel.sequelTitle,
                 style = MaterialTheme.typography.titleMedium,
@@ -62,7 +63,7 @@ fun SequelCardDetails(
         // rather than to the chip row: it is the width of the card, not one of its
         // facts, and it is drawn where the title used to leave off.
         if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE && scoreValue != null) {
-            Spacer(modifier = Modifier.height(if (titleOverlaid) 0.dp else 6.dp))
+            Spacer(modifier = Modifier.height(if (titleOverlaid || titleHidden) 0.dp else 6.dp))
             ScoreBanner(score = scoreValue)
         }
 

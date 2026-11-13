@@ -55,7 +55,12 @@ fun JokeLineText(
     animate: Boolean = true
 ) {
     val instant = ExpressiveMotion.speed == MotionStyle.INSTANT
-    when (val resolved = if (animate && !instant) effect else JokeTextEffect.NONE) {
+    val resolved = if (animate && !instant) effect else JokeTextEffect.NONE
+    // The effect is part of the identity. Without this key, switching from a
+    // typewriter to a word writer could retain the old reveal counter and show a
+    // half-finished sentence under the new setting.
+    androidx.compose.runtime.key(resolved, line) {
+        when (resolved) {
         JokeTextEffect.NONE -> Text(text = line, modifier = modifier, style = style)
 
         JokeTextEffect.TYPEWRITER -> TypewriterLine(
@@ -83,6 +88,7 @@ fun JokeLineText(
             modifier = modifier,
             style = style
         )
+        }
     }
 }
 

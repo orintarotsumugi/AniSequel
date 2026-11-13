@@ -180,8 +180,15 @@ internal fun TierSearchSheet(
                 pages.isEmpty() -> Text(
                     // The copy names what was searched rather than saying "no
                     // results": the pool is the viewer's own list, and a title
-                    // they have not added to AniList cannot be found here.
-                    text = "Nothing in your ${mediaType.libraryLabel} list matches “$query”.",
+                    // they have not added to AniList cannot be found here. A blank
+                    // query on an unloaded pool is its own sentence: quoting an
+                    // empty string read as "nothing matches ””".
+                    text = if (query.isBlank() && candidates.isEmpty()) {
+                        "Your ${mediaType.libraryLabel} list has not loaded yet, so " +
+                            "there is nothing to find."
+                    } else {
+                        "Nothing in your ${mediaType.libraryLabel} list matches “$query”."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 28.dp)
@@ -245,9 +252,20 @@ private fun CloseSearchButton(onDismiss: () -> Unit) {
 /** Nine candidates, three across and three down, every cell the same size. */
 @Composable
 private fun SearchPage(page: List<TierCandidate>, onPick: (TierCandidate) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Centred rather than pinned to the leading edge. A 3x3 grid of 92dp cells is
+    // 292dp wide while a 360dp phone leaves 320dp after the pager's 20dp gutters,
+    // so the old left-aligned grid carried a 28dp hole on one side and read as a
+    // column that had failed to fill. Each row gets the same treatment, including
+    // the padded last row, so the columns stay aligned.
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         page.chunked(3).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+            ) {
                 row.forEach { candidate ->
                     SearchPoster(candidate = candidate, onPick = onPick)
                 }

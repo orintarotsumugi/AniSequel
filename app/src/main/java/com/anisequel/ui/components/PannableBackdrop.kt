@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -132,13 +133,15 @@ fun PannableBackdrop(
     // the slack check is what keeps a square banner from running an infinite
     // transition whose answer is always zero - the one thing AGENTS.md §3 says an
     // indefinite animation may not be.
+    val resumed = rememberIsResumed()
     val drifting = drift &&
+        resumed &&
         zoom <= BACKDROP_MIN_ZOOM &&
         backdropHorizontalLimit(
             containerWidth, containerHeight, imageSize.width, imageSize.height, zoom, fit
         ) > 0f
 
-    val driftPhase: Float
+    val driftPhase: State<Float>?
     if (drifting) {
         val transition = rememberInfiniteTransition(label = "backdrop_drift")
         driftPhase = transition.animateFloat(
@@ -151,26 +154,10 @@ fun PannableBackdrop(
                 repeatMode = RepeatMode.Reverse
             ),
             label = "backdrop_drift_phase"
-        ).value
+        )
     } else {
-        driftPhase = 0f
+        driftPhase = null
     }
-
-    // Re-clamped every recomposition, and *written* rather than assigned: the
-    // previous version did `translation = clamped` during composition, which is a
-    // state write in the composition phase. Here the clamp only ever runs when a
-    // gesture or a measurement actually changes something.
-    val transform = backdropTransform(
-        containerWidth = containerWidth,
-        containerHeight = containerHeight,
-        imageWidth = imageSize.width,
-        imageHeight = imageSize.height,
-        zoom = zoom,
-        offsetX = offsetX,
-        offsetY = offsetY,
-        drift = driftPhase,
-        fit = fit
-    )
 
     // `transformable` rather than a `pointerInput` with
     // `detectTransformGestures`, for one reason: the gesture detector consumes
@@ -245,6 +232,21 @@ fun PannableBackdrop(
                     // the behaviour a pinch expects - and the overflow is symmetric,
                     // which is what makes the pan bounds below simple.
                     .graphicsLayer {
+                        // The drift phase is read in the draw phase. Reading
+                        // `.value` above made every frame recompose this backdrop
+                        // and rebuild the transform; the image only needs its layer
+                        // invalidated while the sweep is moving.
+                        val transform = backdropTransform(
+                            containerWidth = containerWidth,
+                            containerHeight = containerHeight,
+                            imageWidth = imageSize.width,
+                            imageHeight = imageSize.height,
+                            zoom = zoom,
+                            offsetX = offsetX,
+                            offsetY = offsetY,
+                            drift = driftPhase?.value ?: 0f,
+                            fit = fit
+                        )
                         transformOrigin = TransformOrigin(0.5f, 0.5f)
                         scaleX = transform.scale
                         scaleY = transform.scale

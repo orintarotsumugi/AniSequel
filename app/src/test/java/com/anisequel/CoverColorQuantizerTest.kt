@@ -100,6 +100,23 @@ class CoverColorQuantizerTest {
         assertEquals(2, histogram.values.first())
     }
 
+    @Test
+    fun `equal scoring colour bins choose a stable winner`() {
+        // Alpha is ignored by HCT, so these bins have exactly the same score
+        // while still carrying different ARGB keys. Reversing insertion order
+        // used to reverse the winner too.
+        val opaqueRed = 0xFFD32F2F.toInt()
+        val translucentRed = 0x80D32F2F.toInt()
+        val first = mapOf(opaqueRed to 100, translucentRed to 100)
+        val reversed = mapOf(translucentRed to 100, opaqueRed to 100)
+
+        assertEquals(
+            "accent selection must not depend on HashMap iteration order",
+            CoverColorQuantizer.score(first),
+            CoverColorQuantizer.score(reversed)
+        )
+    }
+
     private fun solid(argb: Int, count: Int): IntArray = IntArray(count) { argb }
 
     private fun angularDistance(a: Double, b: Double): Double {

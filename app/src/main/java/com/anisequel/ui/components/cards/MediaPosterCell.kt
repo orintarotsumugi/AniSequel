@@ -120,6 +120,7 @@ fun MediaPosterCell(
     val scoreOnTop = score != null && scoreCornerOf(style) == PosterCorner.TOP_START
     val scoreOnBottom = score != null && scoreCornerOf(style) == PosterCorner.BOTTOM_END
     val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
+    val titleHidden = style.titlePlacement == CardTitlePlacement.HIDDEN
 
     Column(modifier = modifier) {
         PosterArtwork(
@@ -137,7 +138,7 @@ fun MediaPosterCell(
             overlay = overlay
         )
 
-        if (!titleOverlaid) {
+        if (!titleOverlaid && !titleHidden) {
             Spacer(modifier = Modifier.height(5.dp))
             // The title in the body is the accessible name for the whole cell, which
             // is why the image above is handed a null description here: the grid would
@@ -150,7 +151,7 @@ fun MediaPosterCell(
             )
         }
 
-        if (score != null && scoreCornerOf(style) == null) {
+        if (score != null && scoreCornerOf(style) == null && !titleHidden) {
             Spacer(modifier = Modifier.height(if (titleOverlaid) 6.dp else 1.dp))
             if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE) {
                 ScoreBanner(score = score)

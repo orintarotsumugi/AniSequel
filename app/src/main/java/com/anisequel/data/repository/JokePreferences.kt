@@ -58,6 +58,7 @@ class JokePreferences(private val context: Context) {
         val SPEAKER_NAME = stringPreferencesKey("jokes_speaker_name")
         val STAMP = stringPreferencesKey("jokes_stamp")
         val TEXT_EFFECT = stringPreferencesKey("jokes_text_effect")
+        val GOLDEN_ENABLED = booleanPreferencesKey("jokes_golden_enabled")
         val COMPACT = booleanPreferencesKey("jokes_compact")
     }
 
@@ -79,6 +80,7 @@ class JokePreferences(private val context: Context) {
             speakerName = preferences[Keys.SPEAKER_NAME] ?: DEFAULT_SPEAKER_NAME,
             stamp = preferences[Keys.STAMP] ?: DEFAULT_STAMP,
             textEffect = JokeTextEffect.fromStorage(preferences[Keys.TEXT_EFFECT]),
+            goldenJokesEnabled = preferences[Keys.GOLDEN_ENABLED] ?: false,
             compact = preferences[Keys.COMPACT] ?: false
         )
     }
@@ -139,6 +141,12 @@ class JokePreferences(private val context: Context) {
     suspend fun setTextEffect(effect: JokeTextEffect) {
         context.jokeDataStore.edit { preferences ->
             preferences[Keys.TEXT_EFFECT] = effect.storageValue
+        }
+    }
+
+    suspend fun setGoldenJokesEnabled(enabled: Boolean) {
+        context.jokeDataStore.edit { preferences ->
+            preferences[Keys.GOLDEN_ENABLED] = enabled
         }
     }
 
@@ -235,6 +243,7 @@ class JokePreferences(private val context: Context) {
             preferences.remove(Keys.SPEAKER_NAME)
             preferences.remove(Keys.STAMP)
             preferences.remove(Keys.TEXT_EFFECT)
+            preferences.remove(Keys.GOLDEN_ENABLED)
             preferences.remove(Keys.COMPACT)
         }
     }

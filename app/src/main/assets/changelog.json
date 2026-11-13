@@ -1,6 +1,71 @@
 {
   "versions": [
     {
+      "version": "1.9.6",
+      "entries": [
+        {
+          "title": "Settings previews now show the real choices",
+          "detail": "Interface settings preview the bottom bar lift with spring motion, the new library views, the expanded Home sequel styles and the cover-only card style. First-run setup now recommends the New look, System theme, normal jokes and catalogue search while keeping every choice editable."
+        },
+        {
+          "title": "Library and Home have more ways to browse",
+          "detail": "The Library adds Big cards and Shelf views, and Home adds Banners and Shelf cards for missed sequels. Each choice uses the same data and quick actions as the existing layouts, so changing the presentation does not change what a title can do."
+        },
+        {
+          "title": "Info actions fit narrow screens",
+          "detail": "AniList and Add to Planning stack into full-width controls when the title page is narrow, preventing the planning button's label and confirmation face from being clipped beside the external link."
+        },
+        {
+          "title": "Info pages fit edge-to-edge screens",
+          "detail": "The title banner stays full-bleed while hero actions, the docked capsule and the appearance editor clear cutouts in immersive mode. The list no longer consumes the navigation inset twice, so the last card and bottom controls stop at the right place."
+        },
+        {
+          "title": "Golden jokes are opt-in and unmistakable",
+          "detail": "A toggleable one-in-a-thousand golden draw adds intentionally harsh lines behind a clear warning. Golden toasts use a gold Material surface, a vector star and a longer dwell, while ordinary jokes keep their existing tone filters and shuffle bag."
+        },
+        {
+          "title": "Jokes, greetings and reveals have more range",
+          "detail": "The dark-joke and welcome pools are larger, text effects restart cleanly when their mode changes, and the toast renderer now lives separately from its scheduling logic so a replacement line cannot inherit stale reveal state."
+        },
+        {
+          "title": "Font imports show their work",
+          "detail": "Font loading now uses the Material 3 Expressive indicator with animated loading and error surfaces, and a cancelled import releases the disabled state instead of leaving the picker stuck."
+        },
+        {
+          "title": "Cover colours choose stable accents",
+          "detail": "Equal-scoring cover colour bins now resolve deterministically instead of depending on histogram iteration order, so the same artwork keeps the same Material 3 accent after a restart."
+        },
+        {
+          "title": "Ambient motion stops when it cannot be seen",
+          "detail": "The empty-state orb now stops its morph when it scrolls outside the window, and the pannable backdrop stops its drift when the app is paused. The backdrop phase is consumed in the draw layer, so a sweep repaints the image without recomposing its surrounding page on every frame."
+        },
+        {
+          "title": "Bound sliders follow external resets safely",
+          "detail": "Material 3 slider state now applies preference and Reset-button writes after composition, keeping the thumb bound to the value without mutating snapshot state while the UI is being composed."
+        },
+        {
+          "title": "Profile chart bars animate without rebuilding the row",
+          "detail": "Stats bars now keep their animated width in the draw phase, so a count update paints the springing bar without recomposing the labels and semantics around it on every frame."
+        },
+        {
+          "title": "Top-bar shortcuts and tabs are separate switches",
+          "detail": "Settings kept both answers in one card called Bottom bar, and turning a top-bar shortcut on also added its tab - turning that tab off then took the shortcut away. Top bar now holds the two shortcuts and Bottom bar holds the two tabs, and each switch changes only its own surface. A page opened by a shortcut whose tab is hidden still opens, and Search has its own card for the anime and manga halves."
+        },
+        {
+          "title": "The bar no longer highlights Home on a tab-less page",
+          "detail": "Opening Tiers or Search from a top-bar shortcut with the matching tab switched off used to draw the bottom bar with Home selected, because a missing tab was coerced to the first one. The bar now draws no selected tab on a page that is not one of its destinations, and its hold-and-swipe still finds the nearest tab as the finger travels."
+        },
+        {
+          "title": "The tier board's search says why it is empty",
+          "detail": "A blank query on a board whose library had not loaded used to report that nothing matched an empty pair of quotes. It now says the list has not loaded, so there is nothing to find yet."
+        },
+        {
+          "title": "The tier search grid sits in the middle",
+          "detail": "The nine-poster search pages were pinned to the leading edge, leaving a strip of dead space on one side of a phone. Each row is centred now, including a short last row, so the three columns stay aligned and the grid reads as one block."
+        }
+      ]
+    },
+    {
       "version": "1.9.5",
       "entries": [
         {

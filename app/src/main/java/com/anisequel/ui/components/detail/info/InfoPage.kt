@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -40,6 +39,8 @@ import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import kotlinx.coroutines.launch
 
@@ -169,6 +170,7 @@ fun AnimeInfoPage(
 ) {
     val media = subject.media
     val context = LocalContext.current
+    val immersive = LocalImmersiveMode.current
 
     val themeSongs by rememberThemeSongs(media)
     val collapse = rememberInfoCollapse(listState)
@@ -213,12 +215,6 @@ fun AnimeInfoPage(
     Box(
         modifier = modifier
             .fillMaxSize()
-            // The page is its own window now, and its hero is deliberately drawn
-            // under the status bar. The list's last card still has to clear the
-            // gesture bar, so the inset is taken here - where it moves only the
-            // bottom of the page - rather than on the shell, where it would push
-            // the artwork away from the top of the screen.
-            .navigationBarsPadding()
     ) {
         // Behind the list, not inside it: the artwork stays put while the cards
         // scroll over it, which is what makes it read as a page backdrop rather
@@ -307,6 +303,10 @@ fun AnimeInfoPage(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
+                // Hidden system bars report zero to statusBarsPadding(). Keep the
+                // docked actions below the camera cutout in immersive mode without
+                // shrinking the artwork or the list viewport.
+                .immersiveDisplayInsets(immersive)
         )
     }
 }

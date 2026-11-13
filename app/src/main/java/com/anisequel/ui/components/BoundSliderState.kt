@@ -3,6 +3,7 @@ package com.anisequel.ui.components
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.rememberSliderState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 
 /**
@@ -41,6 +42,15 @@ internal fun rememberBoundSliderState(
     trackRange: ClosedFloatingPointRange<Float> = 0f..1f
 ): SliderState {
     val state = key(steps, trackRange) { rememberSliderState(value, steps, trackRange) }
-    state.value = value
+    // SliderState is owned by Material after it is remembered, but this helper is
+    // deliberately a controlled boundary: Reset buttons and preference updates can
+    // change the value without a drag. Applying that write in the composition body
+    // mutates snapshot state while Compose is still reading it, which can cause an
+    // extra restart and made a fast Reset occasionally leave the thumb one frame
+    // behind. SideEffect runs after composition commits and keeps the slider bound
+    // without writing from inside composition.
+    SideEffect {
+        if (state.value != value) state.value = value
+    }
     return state
 }

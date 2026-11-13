@@ -59,6 +59,8 @@ import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 
 /**
  * The Info page's appearance, edited on the page it changes.
@@ -99,6 +101,7 @@ internal fun InfoAppearanceEditor(
     modifier: Modifier = Modifier
 ) {
     val backdropOn = source != InfoBackdropSource.OFF
+    val immersive = LocalImmersiveMode.current
 
     Surface(
         modifier = modifier
@@ -116,6 +119,7 @@ internal fun InfoAppearanceEditor(
                     // status-bar clock - the two rows were fighting for the same
                     // pixels.
                     .statusBarsPadding()
+                    .immersiveDisplayInsets(immersive)
                     .padding(start = 10.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -162,6 +166,7 @@ internal fun InfoAppearanceEditor(
                     // than to the button so the last control can still scroll
                     // clear of it.
                     .navigationBarsPadding()
+                    .padding(bottom = if (immersive) 12.dp else 0.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 24.dp)

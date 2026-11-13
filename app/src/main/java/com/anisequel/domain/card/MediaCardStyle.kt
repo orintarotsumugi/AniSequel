@@ -12,7 +12,10 @@ enum class CardTitlePlacement {
     BELOW_POSTER,
 
     /** Over the poster's bottom edge, on a gradient scrim. */
-    OVERLAY_BOTTOM
+    OVERLAY_BOTTOM,
+
+    /** No caption: the artwork is the whole card. */
+    HIDDEN
 }
 
 /**
@@ -149,6 +152,15 @@ enum class MediaCardStyle(
         scorePlacement = CardScorePlacement.POSTER_TOP_START,
         bordered = false,
         glowing = false
+    ),
+    COVER_ONLY(
+        storageValue = "cover_only",
+        displayName = "Cover only",
+        blurb = "Bigger artwork with no repeated title underneath.",
+        titlePlacement = CardTitlePlacement.HIDDEN,
+        scorePlacement = CardScorePlacement.POSTER_BOTTOM_END,
+        bordered = false,
+        glowing = true
     );
 
     /**

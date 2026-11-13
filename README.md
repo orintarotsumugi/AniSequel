@@ -10,7 +10,7 @@ Planning list.
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-12%2B%20(API%2031)-3DDC84?logo=android&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-131%20JVM%20classes-6E56CF)
+![Tests](https://img.shields.io/badge/tests-187%20JVM%20classes-6E56CF)
 
 Not on the Play Store. Every release is a signed universal APK on
 [GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with a
@@ -23,58 +23,105 @@ middleman server.
 
 ---
 
+## What's new - 1.9.2
+
+A first launch you can shape, a catalogue you can browse, and a title page that can change your list.
+
+- **Five first-run choices, without locking the door.** A first launch can pick the app layout, theme, motion feel, joke frequency and top-bar shortcuts in one skippable setup. Every choice stays available in Settings.
+- **A catalogue you can browse and open.** Search waits for typing to settle and ignores stale replies, then lays results out as a three-column poster gallery with anime/manga, format, score and year. Tap any full card to open its in-app title page.
+- **The title page can change your list.** When a title is already on your AniList, its Info page offers a direct route to the full entry editor - any status, progress, score, dates, or delete. It works the same for a title opened from search.
+- **Search stays put while you type.** Results already on screen stay there while the next answer is on the wire, with a small spinner in the field instead of replacing the grid with a skeleton on every keystroke.
+- **Your Home says hello in more than one way.** Nova Home chooses from a larger set of greetings, and both greeting lines and the sentence under them fade as one piece.
+- **A bar you can lift.** The main bar's height is a slider with a live mini-layout beside it, so the shape is chosen by looking at it rather than by naming it.
+
+The full block-by-block notes live in
+[`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
+and the GitHub release body read.
+
+---
+
 ## Features
 
 ### Find what you missed
 
+- **Franchise traversal, not title matching.** A show's `relations` graph is
   walked in both directions, so renamed continuations, films and side stories are
   found even when the title gives nothing away.
+- **A dashboard of what is due.** Missed sequels, what is arriving (one row by
   default, or the **Airing now** and **Upcoming** groups in Settings), recent
-  activity, lists and stats.
-  score and episode floors, a name search, and hidden titles with undo.
+  activity, lists and stats - plus a **Schedule** page for what airs next.
+- **A catalogue you can browse.** Word-by-word search with a debounce and a stale
+  response guard, result cards that report type, format, score and year, and any
+  full card opening its in-app title page.
+- **Filters that narrow without lying.** Relation type, status, genre (collapsible),
+  score and episode floors, a name search, a status/genre/studio sheet for the
+  tier pool, and hidden titles with undo.
+- **Your profile, or anybody's.** Scan a public AniList username without signing
   in. Read-only, and the UI says so before a write can fail.
 
 ### Read a title completely
 
+- **One page per title**: synopsis, categories, themes, cast, crew, studios,
   openings and endings, the rest of the franchise, friends' progress, and an entry
   editor on a second capsule.
+- **Studios and people are destinations too.** Every credit opens the studio's
   filmography; every face opens the character, staff or voice-actor sheet.
+- **Long titles scroll** instead of being cut, on cards, captions and activity rows.
 
 ### Keep your list
 
-  hold-to-swipe gesture; Tiers is opt-in for the bar and also reachable from the
-  Library trophy and the profile.
-  or swipe to start watching, from any recommendation or title page.
+- **Home, Library, Search, Tiers, Profile.** One shared bottom bar - lifted from a
+  slider with a live preview - holding a hold-to-swipe gesture. Search and Tiers
+  are opt-in for the bar and also reachable from the top bar and the Library trophy.
+- **One-tap Planning.** OAuth against your own AniList account. Tap to plan, hold
+  or swipe to start watching, from any recommendation or title page - and a title
+  already on a list shows its status instead, because AniList's add mutation
+  overwrites the entry.
+- **A tier list you build your own way.** Rows are yours to rename, recolour,
   add, remove and reorder - the S/A/B/C/D/F template is a default, not a cage -
   and each row carries an editable AniList score band, so one tap seeds the
   whole board from your own scores. Anime and manga rank on separate shelves,
   because AniList numbers them independently and id 1 is both *Cowboy Bebop*
   and *Monster*.
+- **Ranking is physical.** A tray of your unranked titles sits under the board;
   dragging a poster names a row *and* a position, with a caret marking the seam
   it lands on and edge-scroll reaching past the screen - and dropping it back on
   the tray un-ranks it. Sheets do the same job one-handed, word search and
   status/genre/studio filters narrow the pool, every edit undoes and redoes, and
   a lock turns the board into read-only browsing that still scrolls and zooms.
+- **Zoom and share the board.** Pinch it from 35% to 200%, choose whether
   captions sit under or on the covers, and export one full-board PNG at up to
   4K - rendered from the same layout the screen drew, not a screenshot of the
   viewport, with the heading's own show/size/font controls and a lossless SVG
   renderer behind it. The lists save as local projects in a library that offers
   to resume the last one you opened.
-  followers, and an inbox you can reply from - or dismiss a row out of, and come back to find
-  what arrived since you last read marked as new.
+- **Stats and social.** Score distribution, heatmaps, weekly charts, favourites,
+  followers, and a comment thread you can quote, attach photos to, and search GIFs
+  in - with an inbox you can reply from or dismiss a row out of, and what arrived
+  since you last read marked as new.
 
 ### Make it yours
 
+- **Nova or Classic, chosen by looking at it.** First-run setup picks the layout,
+  theme, motion feel, joke frequency and top-bar shortcuts from previews drawn by
+  the same cells the app uses - and every one of them stays in Settings.
+- **Material 3 Expressive throughout** - spring physics, expressive shapes, a
   blurred key visual behind every title, and a theme that can follow the cover you
   are looking at.
-  palettes, Material You, true black, and background canvases.
-  included), and optional typewriter / word-by-word / fade-up reveals - all off
-  unless asked for.
-  a seasonal sky you can pace: how often it moves is its own setting, and it only
-  offers the rates this screen reports.
-  a Device management card that says what this phone reports and lets you choose how
-  much disk the cover art may take - 256 MB up to 5 GB.
-  off until you turn it on.
+- **Five motion styles**, each with its own glyph and a preview that travels and
+  presses; type size (80-140%) and an imported font of your own; five palettes,
+  Material You, true black, and background canvases.
+- **Ani-chan**, the joke pill: name, stamp, compact mode, five tones (dark
+  included), opt-in moments for app open, tab change and refresh, and optional
+  typewriter / word-by-word / fade-up reveals - all off unless asked for.
+- **A seasonal sky you can pace**: spring sakura and clover, summer dandelion,
+  autumn maple, oak and ginkgo, winter snow - with density, size, speed and a
+  quality tier decided per phone.
+- **Device management.** What this screen runs at and can be set to, and how much
+  disk the cover art may take - 256 MB up to 5 GB.
+- **Full screen on request**, cutout-safe, with the bars one edge-swipe away.
+- **Four home-screen widgets**, a resumable updater with signature checks, and a
+  crash-report flow that is off until you turn it on.
 
 ### Deliberate non-goals
 
@@ -126,6 +173,7 @@ domain/      use cases, tier list, profile layout, motion  (pure Kotlin, no Andr
 data/        Retrofit + GraphQL, repositories, snapshots, updater
 ```
 
+- **Three layers, one rule.** `ui/` is Compose screens plus `StateFlow` and
   ViewModels; the one place it is not Compose is `ui/widget/`, which the launcher
   inflates in its own process. `domain/` is pure Kotlin - the use cases
   (`FindMissedSequelsUseCase`, `FindArrivingEntriesUseCase`,
@@ -133,21 +181,29 @@ data/        Retrofit + GraphQL, repositories, snapshots, updater
   the motion geometry - with no Android imports. `data/` is Retrofit, Moshi,
   OkHttp, `AniListApiService` with its query strings in `GraphQLQueries.kt`,
   `AuthRepository` and the OAuth token in DataStore, and `SnapshotStore`.
+- **One backend, and it is AniList's.** No AniSequel server. AniList speaks only
   GraphQL, so every "endpoint" is a POST to `/graphql` with a query string body.
   `AuthInterceptor` adds the OAuth token; `RateLimitInterceptor` absorbs AniList's
   burst limiter; `RequestCoalescer` collapses identical in-flight queries. The
   update manifest gets its own `OkHttpClient`, so the AniList interceptor can
   never attach a bearer token to a public file.
+- **The list is expensive and goes stale.** One `MediaListCollection` is the
   biggest request the app makes against an API of roughly thirty a minute. The
   repository reuses it for the interval chosen in Settings, and
   `ListFreshnessWatch` re-checks on every resume and every return to the
   dashboard - never in the background, because WorkManager cannot run that often
   and would burn the request budget on a list nobody is reading.
+- **Closing the app does not throw the list away.** `SnapshotStore` keeps one
   atomic JSON file per kind, with the window that kind deserves: thirty minutes
   for the viewer, the refresh interval for lists, a day for a title's facts. A
   mutation or a sign-out takes the disk copy with it.
+- **The updater is its own small system**: manifest from a release asset, a
   resumable `.part` download, and three checks - zip magic, package name,
   signature - before anything reaches the installer. See [UPDATER.md](UPDATER.md).
+- **Two things the geometry earns.** Every capsule is `RoundedCornerShape(percent =
+  50)` rather than a `MaterialShapes` polygon, because a polygon stretched to a
+  120x44 tab draws an ellipse; and every spring lives in `ExpressiveMotion.kt` as a
+  named token, so six screens cannot drift into six copies of one feel.
 
 The long versions are [ARCHITECTURE.md](ARCHITECTURE.md) (the spec) and
 [NOTES.md](NOTES.md) (the odd decisions, and the failures behind them).
@@ -188,7 +244,7 @@ AniSequel/
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
 │       │   ├── assets/            changelog.json
 │       │   └── res/               the widget XML, adaptive icon, strings
-│       └── test/                  131 JVM test classes (there is no androidTest/)
+│       └── test/                  187 JVM test classes (there is no androidTest/)
 ├── gradle/libs.versions.toml      every version, with its reasoning inline
 ├── update.json                    what the updater reads from the release asset
 ├── LICENSE                        MIT - use it, keep the notice
@@ -224,22 +280,16 @@ Adding notes and bumping the version are **one change**, not two -
 
 ## Release signing
 
-> **Rotating the release key permanently breaks updates for every existing
-> install.** Android refuses to install over an app signed with a different key
-> (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`) and there is no undo.
+The release key is **not in this repository**. It exists only as the
+`KEYSTORE_BASE64`, `STORE_PASSWORD` and `KEY_PASSWORD` repository secrets, and CI
+verifies the APK's signature before publishing it.
 
-The key is **not in this repository**. It lives only in the `KEYSTORE_BASE64`,
-`STORE_PASSWORD` and `KEY_PASSWORD` repository secrets, and CI verifies the built
-APK with `apksigner verify --print-certs` against the pinned certificate:
+Rotating that key permanently breaks updates for every existing install: Android
+refuses to install over an app signed with a different key, and there is no undo.
+For the same reason `applicationId` cannot change - see [Project
+layout](#project-layout).
 
-```
-SHA-256 01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82
-```
-
-The key rotated on 2026-10-05; installs from v1.0.16 and earlier cannot update in
-place. Git history is deliberately not rewritten - the old key is already
-compromised, and hiding it would not un-compromise it. The full history, the three
-verification layers and the local signing recipe are in
+Local signing, the pinned certificate and the full history are in
 [BUILDING.md Release signing](BUILDING.md#release-signing).
 
 ---

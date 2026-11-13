@@ -1,5 +1,7 @@
 package com.anisequel.ui.components
 
+import com.anisequel.domain.jokes.GOLDEN_JOKE_ROLLS
+import com.anisequel.domain.jokes.JokeDraw
 import com.anisequel.domain.jokes.JokeTone
 import kotlin.random.Random
 
@@ -58,6 +60,9 @@ data class Joke(val text: String, val tone: JokeTone)
  * by the words rather than by a face.
  */
 object AppJokes {
+
+    /** The deliberately unfiltered, opt-in pool. It never dilutes the normal bag. */
+    val goldenLines: List<String> = JokeLinesGolden.lines
 
     /**
      * Every line, in one list, tagged once.
@@ -170,7 +175,34 @@ object AppJokes {
         last: String,
         tones: Set<JokeTone> = JokeTone.entries.toSet(),
         random: Random = Random.Default
-    ): String {
+    ): String = drawJoke(
+        seen = seen,
+        last = last,
+        tones = tones,
+        allowGolden = false,
+        random = random
+    ).text
+
+    /**
+     * Draws an ordinary line or, once in [GOLDEN_JOKE_ROLLS], an opt-in golden one.
+     *
+     * The roll happens here rather than in the composable host so the probability
+     * is one testable rule. Golden lines are outside the shuffle bag: they are a
+     * surprise layer, not a sixth tone that can starve the reader's chosen pool.
+     */
+    fun drawJoke(
+        seen: MutableSet<String>,
+        last: String,
+        tones: Set<JokeTone> = JokeTone.entries.toSet(),
+        allowGolden: Boolean = false,
+        random: Random = Random.Default
+    ): JokeDraw {
+        if (allowGolden && isGoldenRoll(random.nextInt(GOLDEN_JOKE_ROLLS))) {
+            return JokeDraw(
+                text = goldenLines[random.nextInt(goldenLines.size)],
+                isGolden = true
+            )
+        }
         val candidates = poolFor(tones)
         if (candidates.all { it.text in seen }) {
             seen.clear()
@@ -178,8 +210,11 @@ object AppJokes {
         }
         val drawn = pickUnseen(seen, tones, random)
         seen += drawn
-        return drawn
+        return JokeDraw(text = drawn)
     }
+
+    /** Kept separate so a seeded test can pin the exact one-in-a-thousand rule. */
+    fun isGoldenRoll(roll: Int): Boolean = roll == 0
 
     /**
      * One line that is not in [seen], or a fresh pick once the pool is spent.

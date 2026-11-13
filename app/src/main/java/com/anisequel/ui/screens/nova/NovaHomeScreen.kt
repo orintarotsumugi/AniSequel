@@ -273,8 +273,8 @@ fun NovaHomeScreen(
                             fadeInSpec = ExpressiveMotion.ListItemFadeIn,
                             fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                         )
-                    if (sequelStyle == HomeSequelStyle.CARDS) {
-                        NovaSequelCard(
+                    when (sequelStyle) {
+                        HomeSequelStyle.CARDS -> NovaSequelCard(
                             sequel = sequel,
                             onOpen = { onOpenSequel(sequel) },
                             onAddToPlanning = { onAddToPlanning(sequel) },
@@ -284,8 +284,27 @@ fun NovaHomeScreen(
                             swipeEnabled = quickAddSettings.swipeEnabled,
                             modifier = entryModifier
                         )
-                    } else {
-                        NovaSequelRow(
+                        HomeSequelStyle.BANNER -> NovaSequelBanner(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                        HomeSequelStyle.SHELF -> NovaSequelShelfCard(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                        HomeSequelStyle.ROWS -> NovaSequelRow(
                             sequel = sequel,
                             onOpen = { onOpenSequel(sequel) },
                             onAddToPlanning = { onAddToPlanning(sequel) },

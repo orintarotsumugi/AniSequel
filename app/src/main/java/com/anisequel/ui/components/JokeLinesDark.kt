@@ -16,6 +16,21 @@ package com.anisequel.ui.components
 internal object JokeLinesDark {
 
     val lines = listOf(
+        "The sequel is coming eventually, which is industry code for please stop asking.",
+        "The cliffhanger has outlived three phones and still has no resolution.",
+        "Your favourite ship sailed. The author set it on fire at the harbour.",
+        "The final volume is delayed until morale improves. Morale has left the building.",
+        "The character got a redemption arc. The production schedule did not.",
+        "The fandom says the ending is open to interpretation. The budget says otherwise.",
+        "The trailer promised answers. The trailer was the most complete version.",
+        "The villain survived the finale. The animation team did not survive the deadline.",
+        "The studio called it a soft reboot because hard reboot sounded expensive.",
+        "The missing episode is available nowhere, which is its strongest worldbuilding.",
+        "The character's last words were cut for time. The recap kept the merch shot.",
+        "The sequel has a release window. The window opens onto another hiatus.",
+        "The plot armour cracked. Somebody had to pay for the replacement.",
+        "The series ended with hope, a sunrise and no second cour.",
+        "The manga is finished, the anime is not, and your patience has been cancelled.",
         "The author is on hiatus. The author has been on hiatus since the last console.",
         "The manga is still running. The anime is not. The fandom runs anyway.",
         "Your favourite character died in a chapter the anime never adapted.",
