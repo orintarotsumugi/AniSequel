@@ -220,6 +220,28 @@ fun FirstRunSetupDialog(
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "onboarding_progress"
     )
+    // One value for the page's choice controls. The page is a separate composable
+    // so the six-way "which question is this" branch is not counted as part of
+    // the wizard's own control flow, and the draft keeps its parameter list down
+    // to the one object those controls read.
+    val draft = SetupDraft(
+        layout = layout,
+        theme = theme,
+        motion = motion,
+        jokesEnabled = jokesEnabled,
+        jokeFrequency = jokeFrequency,
+        searchShortcut = searchShortcut,
+        tiersShortcut = tiersShortcut
+    )
+    val onDraftChange: (SetupDraft) -> Unit = { updated ->
+        layout = updated.layout
+        theme = updated.theme
+        motion = updated.motion
+        jokesEnabled = updated.jokesEnabled
+        jokeFrequency = updated.jokeFrequency
+        searchShortcut = updated.searchShortcut
+        tiersShortcut = updated.tiersShortcut
+    }
 
     Dialog(
         // Back is the previous page, not a dismissal. The setup is not "closed"
@@ -305,17 +327,15 @@ fun FirstRunSetupDialog(
                     targetState = stepIndex.coerceIn(0, SETUP_STEPS.lastIndex),
                     transitionSpec = {
                         val forward = targetState > initialState
-                        (
-                            slideInHorizontally(
-                                animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                            ) { width -> if (forward) width / 4 else -width / 4 } +
-                                fadeIn(animationSpec = ExpressiveMotion.FastEffects)
-                            ) togetherWith (
-                            slideOutHorizontally(
-                                animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                            ) { width -> if (forward) -width / 4 else width / 4 } +
-                                fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                            ) using null
+                        val enter = slideInHorizontally(
+                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
+                        ) { width -> if (forward) width / 4 else -width / 4 } +
+                            fadeIn(animationSpec = ExpressiveMotion.FastEffects)
+                        val exit = slideOutHorizontally(
+                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
+                        ) { width -> if (forward) -width / 4 else width / 4 } +
+                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                        enter togetherWith exit using null
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -359,94 +379,11 @@ fun FirstRunSetupDialog(
                         )
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        when (index) {
-                            0 -> WelcomePerks()
-                            1 -> SectionCard(
-                                title = "Interface",
-                                icon = AppVectorIcons.ViewGrid,
-                                subtitle = "Drawn with the same previews Settings uses"
-                            ) {
-                                AppLayoutPreviews(
-                                    selected = AppLayout.fromStorage(layout),
-                                    entries = emptyList(),
-                                    onSelect = { layout = it.storageValue },
-                                    modifier = Modifier.testTag("onboarding_layout")
-                                )
-                            }
-                            2 -> SectionCard(
-                                title = "Theme",
-                                icon = AppVectorIcons.ThemeDark
-                            ) {
-                                ChoiceChips(
-                                    values = listOf(
-                                        ThemeMode.SYSTEM.storageValue to "System",
-                                        ThemeMode.LIGHT.storageValue to "Light",
-                                        ThemeMode.DARK.storageValue to "Dark"
-                                    ),
-                                    selected = theme,
-                                    onSelect = { theme = it },
-                                    tag = "onboarding_theme"
-                                )
-                            }
-                            3 -> SectionCard(
-                                title = "Motion",
-                                icon = AppVectorIcons.SectionMotion
-                            ) {
-                                ChoiceChips(
-                                    values = MotionStyle.entries.map {
-                                        it.storageValue to it.displayName
-                                    },
-                                    selected = motion,
-                                    onSelect = { motion = it },
-                                    tag = "onboarding_motion"
-                                )
-                            }
-                            4 -> SectionCard(
-                                title = "Jokes",
-                                icon = AppVectorIcons.Star
-                            ) {
-                                SwitchRow(
-                                    title = "Ani-chan's jokes",
-                                    subtitle = "Keep the app's occasional one-liners on.",
-                                    checked = jokesEnabled,
-                                    onCheckedChange = { jokesEnabled = it },
-                                    modifier = Modifier.testTag("onboarding_jokes_switch")
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                if (jokesEnabled) {
-                                    ChoiceChips(
-                                        values = JokeFrequency.entries.map {
-                                            it.storageValue to it.displayName
-                                        },
-                                        selected = jokeFrequency,
-                                        onSelect = { jokeFrequency = it },
-                                        tag = "onboarding_joke_frequency"
-                                    )
-                                }
-                            }
-                            else -> SectionCard(
-                                title = "Top-bar shortcuts",
-                                icon = AppVectorIcons.Search
-                            ) {
-                                SwitchRow(
-                                    title = "Catalogue search",
-                                    subtitle = "Add a Search tab and a magnifier shortcut in " +
-                                        "both layouts.",
-                                    checked = searchShortcut,
-                                    onCheckedChange = { searchShortcut = it },
-                                    modifier = Modifier.testTag("onboarding_search_shortcut")
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                SwitchRow(
-                                    title = "Tier lists",
-                                    subtitle = "Add a Tiers tab and a trophy shortcut in both " +
-                                        "layouts.",
-                                    checked = tiersShortcut,
-                                    onCheckedChange = { tiersShortcut = it },
-                                    modifier = Modifier.testTag("onboarding_tiers_shortcut")
-                                )
-                            }
-                        }
+                        SetupStepChoices(
+                            index = index,
+                            draft = draft,
+                            onDraftChange = onDraftChange
+                        )
 
                         Spacer(modifier = Modifier.height(20.dp))
                     }
@@ -486,6 +423,122 @@ fun FirstRunSetupDialog(
         }
     }
 }
+
+/**
+ * One question's controls, and the welcome page at index zero.
+ *
+ * Extracted for a reason worth writing down: the guide counts the six-way `when`
+ * as branches of whatever function contains it, and the wizard that also owns
+ * Back, Skip and the progress track crossed its complexity threshold. Passing the
+ * draft as one object rather than seven delegated variables keeps the extraction
+ * from trading a complexity finding for a long-parameter one.
+ */
+@Composable
+private fun SetupStepChoices(
+    index: Int,
+    draft: SetupDraft,
+    onDraftChange: (SetupDraft) -> Unit
+) {
+    when (index) {
+        0 -> WelcomePerks()
+        1 -> SectionCard(
+            title = "Interface",
+            icon = AppVectorIcons.ViewGrid,
+            subtitle = "Drawn with the same previews Settings uses"
+        ) {
+            AppLayoutPreviews(
+                selected = AppLayout.fromStorage(draft.layout),
+                entries = emptyList(),
+                onSelect = { onDraftChange(draft.copy(layout = it.storageValue)) },
+                modifier = Modifier.testTag("onboarding_layout")
+            )
+        }
+        2 -> SectionCard(
+            title = "Theme",
+            icon = AppVectorIcons.ThemeDark
+        ) {
+            ChoiceChips(
+                values = listOf(
+                    ThemeMode.SYSTEM.storageValue to "System",
+                    ThemeMode.LIGHT.storageValue to "Light",
+                    ThemeMode.DARK.storageValue to "Dark"
+                ),
+                selected = draft.theme,
+                onSelect = { onDraftChange(draft.copy(theme = it)) },
+                tag = "onboarding_theme"
+            )
+        }
+        3 -> SectionCard(
+            title = "Motion",
+            icon = AppVectorIcons.SectionMotion
+        ) {
+            ChoiceChips(
+                values = MotionStyle.entries.map {
+                    it.storageValue to it.displayName
+                },
+                selected = draft.motion,
+                onSelect = { onDraftChange(draft.copy(motion = it)) },
+                tag = "onboarding_motion"
+            )
+        }
+        4 -> SectionCard(
+            title = "Jokes",
+            icon = AppVectorIcons.Star
+        ) {
+            SwitchRow(
+                title = "Ani-chan's jokes",
+                subtitle = "Keep the app's occasional one-liners on.",
+                checked = draft.jokesEnabled,
+                onCheckedChange = { onDraftChange(draft.copy(jokesEnabled = it)) },
+                modifier = Modifier.testTag("onboarding_jokes_switch")
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            if (draft.jokesEnabled) {
+                ChoiceChips(
+                    values = JokeFrequency.entries.map {
+                        it.storageValue to it.displayName
+                    },
+                    selected = draft.jokeFrequency,
+                    onSelect = { onDraftChange(draft.copy(jokeFrequency = it)) },
+                    tag = "onboarding_joke_frequency"
+                )
+            }
+        }
+        else -> SectionCard(
+            title = "Top-bar shortcuts",
+            icon = AppVectorIcons.Search
+        ) {
+            SwitchRow(
+                title = "Catalogue search",
+                subtitle = "Add a Search tab and a magnifier shortcut in " +
+                    "both layouts.",
+                checked = draft.searchShortcut,
+                onCheckedChange = { onDraftChange(draft.copy(searchShortcut = it)) },
+                modifier = Modifier.testTag("onboarding_search_shortcut")
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SwitchRow(
+                title = "Tier lists",
+                subtitle = "Add a Tiers tab and a trophy shortcut in both " +
+                    "layouts.",
+                checked = draft.tiersShortcut,
+                onCheckedChange = { onDraftChange(draft.copy(tiersShortcut = it)) },
+                modifier = Modifier.testTag("onboarding_tiers_shortcut")
+            )
+        }
+    }
+}
+
+/** The wizard's choices, bundled so one page can receive all seven in one value. */
+private data class SetupDraft(
+    val layout: String,
+    val theme: String,
+    val motion: String,
+    val jokesEnabled: Boolean,
+    val jokeFrequency: String,
+    val searchShortcut: Boolean,
+    val tiersShortcut: Boolean
+)
 
 /**
  * The welcome page's three promises.
