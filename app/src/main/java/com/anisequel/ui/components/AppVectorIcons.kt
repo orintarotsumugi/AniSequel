@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
@@ -299,7 +300,7 @@ object AppVectorIcons {
      * on a page that is about the device, not about reloading. A device is what
      * the page is.
      */
-    val DevicePhone = Icons.Default.Smartphone
+    val DevicePhone = Icons.Default.Phone
     val SectionAppearance = Icons.Outlined.ColorLens
     val SectionAniList = Icons.Outlined.Api
     val SectionAbout = Icons.Outlined.Contrast
