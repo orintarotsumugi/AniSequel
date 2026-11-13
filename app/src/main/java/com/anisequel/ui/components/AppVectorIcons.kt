@@ -299,7 +299,7 @@ object AppVectorIcons {
      * on a page that is about the device, not about reloading. A device is what
      * the page is.
      */
-    val DevicePhone = Icons.Outlined.Smartphone
+    val DevicePhone = Icons.Default.Smartphone
     val SectionAppearance = Icons.Outlined.ColorLens
     val SectionAniList = Icons.Outlined.Api
     val SectionAbout = Icons.Outlined.Contrast
