@@ -287,7 +287,10 @@ internal fun TierBoardScreen(
                 title = document.name,
                 filterActive = !filter.isDefault,
                 onLeave = onLeave,
-                onZoom = { sheets.zooming = true },
+                // Search is a way into the placement sheet, so a locked board
+                // does not open it either: "view only" would otherwise mean
+                // "view only unless you found the title by name".
+                onSearch = { whenEditable { sheets.searching = true } },
                 onFilter = { sheets.filtering = true },
                 onDisplay = { sheets.displaying = true },
                 // Gated like every other edit path: the manage sheet can empty a
@@ -593,8 +596,6 @@ internal fun TierBoardScreen(
             // Through the local value the stepper writes, so reset cannot lose a
             // race with the debounced write of the zoom it replaced.
             onResetZoom = { zoom = 1f },
-            onZoomChange = { value -> zoom = clampTierZoom(value) },
-            onZoomLockChange = { locked -> setLocked(locked) },
             onClearPlacements = onClearPlacements
         )
     )
