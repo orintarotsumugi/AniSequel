@@ -617,7 +617,7 @@ internal fun previewTitle(entry: MediaListEntryItem?): String =
 internal fun BottomBarLiftPreview(liftDp: Int) {
     val lift by animateDpAsState(
         targetValue = liftDp.coerceIn(0, 24).dp,
-        animationSpec = ExpressiveMotion.FastSpatial,
+        animationSpec = ExpressiveMotion.FastSpatialDp,
         label = "bottom_bar_lift_preview"
     )
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -645,3 +645,4 @@ internal fun BottomBarLiftPreview(liftDp: Int) {
             }
         }
     }
+}

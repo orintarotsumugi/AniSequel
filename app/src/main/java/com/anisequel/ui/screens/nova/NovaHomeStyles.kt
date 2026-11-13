@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.posterColor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.cards.toCoverColorOrNull

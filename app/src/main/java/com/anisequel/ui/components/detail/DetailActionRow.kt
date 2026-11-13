@@ -240,6 +240,8 @@ private fun DetailQuickAdd(
             swipeEnabled = swipeEnabled,
             modifier = modifier
         )
+    } else {
+        Unit
     }
 }
 
