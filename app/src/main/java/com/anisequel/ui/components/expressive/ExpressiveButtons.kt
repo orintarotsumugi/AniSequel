@@ -119,18 +119,20 @@ fun ExpressivePrimaryButton(
             targetState = loading,
             transitionSpec = {
                 // `togetherWith` binds looser than `+`, so each enter/exit pair
-                // groups without parentheses around it.
-                fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                // groups without parentheses around it. `using` attaches the box
+                // animation to the finished transition; `AnimatedContent` itself
+                // has no `sizeTransform` parameter in the Compose version this
+                // repo pins - the box animation lives on the content transform.
+                (fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
                     initialScale = 0.82f,
                     animationSpec = ExpressiveMotion.FastSpatial
-                ) togetherWith
-                    fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                )) togetherWith
+                    (fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
                         targetScale = 0.82f,
                         animationSpec = ExpressiveMotion.FastSpatial
-                    )
-            },
-            sizeTransform = SizeTransform(clip = false) { _, _ ->
-                ExpressiveMotion.FastSpatialSize
+                    )) using SizeTransform(clip = false) { _, _ ->
+                    ExpressiveMotion.FastSpatialSize
+                }
             },
             label = "button_loading"
         ) { busy ->

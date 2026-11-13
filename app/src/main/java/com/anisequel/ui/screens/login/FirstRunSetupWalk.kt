@@ -8,7 +8,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -234,7 +234,7 @@ internal fun SetupPage(
 internal fun SetupFooter(
     isFirst: Boolean,
     isLast: Boolean,
-    backSource: InteractionSource,
+    backSource: MutableInteractionSource,
     onBack: () -> Unit,
     onContinue: () -> Unit
 ) {
