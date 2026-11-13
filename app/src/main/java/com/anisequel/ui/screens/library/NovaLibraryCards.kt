@@ -48,6 +48,7 @@ import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.nova.NovaProgressPill
 import com.anisequel.ui.components.nova.NovaSurface
 import com.anisequel.ui.navigation.mainBarClearance
@@ -106,15 +107,14 @@ internal fun NovaLibraryList(
 internal fun NovaLibraryGrid(
     visible: List<MediaListEntryItem>,
     isManga: Boolean,
-    columns: Int,
-    compact: Boolean,
+    viewMode: LibraryViewMode,
     awaitingAnime: Boolean,
     scopedError: String?,
     gridState: LazyGridState,
     onOpenDetail: (MediaNode) -> Unit
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
+        columns = GridCells.Fixed(viewMode.columns),
         modifier = Modifier
             .fillMaxSize()
             .testTag("nova_library_grid"),
@@ -145,7 +145,10 @@ internal fun NovaLibraryGrid(
             NovaPoster(
                 entry = entry,
                 isManga = isManga,
-                compact = compact,
+                compact = viewMode == LibraryViewMode.COMPACT ||
+                    viewMode == LibraryViewMode.SHELF,
+                showTitle = viewMode != LibraryViewMode.SHELF,
+                large = viewMode == LibraryViewMode.CARDS,
                 onClick = { onOpenDetail(entry.media) },
                 modifier = Modifier.animateItem(
                     placementSpec = ExpressiveMotion.DefaultSpatialOffset,
@@ -188,6 +191,8 @@ private fun NovaPoster(
     entry: MediaListEntryItem,
     isManga: Boolean,
     compact: Boolean,
+    showTitle: Boolean,
+    large: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -214,7 +219,7 @@ private fun NovaPoster(
                 // or four, so the same card is measured at two widths - and a
                 // height literal would turn the wider one into a portrait and the
                 // narrower into a strip.
-                .aspectRatio(0.68f)
+                .aspectRatio(if (large) 0.74f else 0.68f)
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
                 .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
         ) {
@@ -235,19 +240,33 @@ private fun NovaPoster(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(5.dp))
-        Text(
-            text = media.displayName,
-            style = if (compact) {
-                MaterialTheme.typography.labelSmall
-            } else {
-                MaterialTheme.typography.labelMedium
-            },
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (showTitle) {
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = media.displayName,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall
+                } else {
+                    MaterialTheme.typography.labelMedium
+                },
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = if (large) 3 else 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (large) {
+                Text(
+                    text = listOfNotNull(
+                        ListStatuses.label(entry.status, isManga),
+                        libraryProgressLabel(entry)
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 

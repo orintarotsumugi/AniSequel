@@ -324,8 +324,7 @@ private fun NovaLibraryBody(
             else -> NovaLibraryGrid(
                 visible = visible,
                 isManga = isManga,
-                columns = viewMode.columns,
-                compact = viewMode == LibraryViewMode.COMPACT,
+                viewMode = viewMode,
                 awaitingAnime = awaitingAnime,
                 scopedError = scopedError,
                 gridState = gridState,

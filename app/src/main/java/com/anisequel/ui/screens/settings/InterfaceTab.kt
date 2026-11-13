@@ -166,6 +166,8 @@ fun InterfaceTab(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(10.dp))
+            BottomBarLiftPreview(liftDp = liftDraft.roundToInt())
 
             Spacer(modifier = Modifier.height(8.dp))
             SwitchRow(

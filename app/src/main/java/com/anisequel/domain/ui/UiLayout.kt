@@ -56,6 +56,18 @@ enum class HomeSequelStyle(
         displayName = "Cards",
         blurb = "A large cover with the details underneath - one title at a time.",
         showsPoster = true
+    ),
+    BANNER(
+        storageValue = "banner",
+        displayName = "Banners",
+        blurb = "Wide artwork with a compact action strip for quick scanning.",
+        showsPoster = true
+    ),
+    SHELF(
+        storageValue = "shelf",
+        displayName = "Shelf",
+        blurb = "A poster shelf for browsing several missed sequels at once.",
+        showsPoster = true
     );
 
     companion object {
@@ -97,6 +109,18 @@ enum class LibraryViewMode(
         displayName = "List",
         blurb = "One title per row, with progress, status and score.",
         columns = 1
+    ),
+    CARDS(
+        storageValue = "cards",
+        displayName = "Big cards",
+        blurb = "Two larger posters with status and progress easy to scan.",
+        columns = 2
+    ),
+    SHELF(
+        storageValue = "shelf",
+        displayName = "Shelf",
+        blurb = "Five compact covers across for fast visual browsing.",
+        columns = 5
     );
 
     companion object {

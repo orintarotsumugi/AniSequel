@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -109,65 +109,45 @@ fun DetailActionRow(
     )
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedButton(
-                onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(subject.media.pageUrl))
-                        )
-                    }
-                },
-                modifier = Modifier
-                    // **Weighted only when it shares the row.** It used to hold
-                    // `weight(1f)` unconditionally, so a title with no quick-add drew a
-                    // single bordered button across the full width of the page - which
-                    // reads as a primary call to action for what is a link out to
-                    // AniList, and as a row that failed to lay out rather than as a row
-                    // with one control in it.
-                    .then(
-                        if (state.sharesRow) Modifier.weight(1f) else Modifier
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val stackActions = maxWidth < 380.dp
+            if (stackActions) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AniListLinkButton(context, subject, Modifier.fillMaxWidth())
+                    DetailQuickAdd(
+                        subject = subject,
+                        state = state,
+                        quickAddStatus = quickAddStatus,
+                        canWriteToAniList = canWriteToAniList,
+                        onAddMediaToPlanning = onAddMediaToPlanning,
+                        onAddMediaToWatching = onAddMediaToWatching,
+                        onAddToPlanning = onAddToPlanning,
+                        onAddToWatching = onAddToWatching,
+                        holdDurationSeconds = holdDurationSeconds,
+                        swipeEnabled = swipeEnabled,
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    // 48dp, the platform minimum. 44 was the Material 2 button
-                    // height, and on the one row a reader reaches for at the bottom
-                    // of the sheet the shortfall was felt rather than merely linted.
-                    .height(48.dp)
-                    .bouncyPress(pressedScale = 0.96f),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.OpenInBrowser,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("AniList", maxLines = 1)
-            }
-
-            if (sequel != null) {
-                SequelQuickAdd(
-                    sequel = sequel,
-                    canWriteToAniList = canWriteToAniList,
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled
-                )
-            } else if (state.showMediaAction) {
-                MediaQuickAdd(
-                    media = media,
-                    isPlanned = state.isPlanned,
-                    isWatching = state.isWatching,
-                    canWriteToAniList = canWriteToAniList,
-                    status = quickAddStatus,
-                    onAddToPlanning = onAddMediaToPlanning,
-                    onAddToWatching = onAddMediaToWatching,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled
-                )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AniListLinkButton(context, subject, Modifier.weight(1f))
+                    DetailQuickAdd(
+                        subject = subject,
+                        state = state,
+                        quickAddStatus = quickAddStatus,
+                        canWriteToAniList = canWriteToAniList,
+                        onAddMediaToPlanning = onAddMediaToPlanning,
+                        onAddMediaToWatching = onAddMediaToWatching,
+                        onAddToPlanning = onAddToPlanning,
+                        onAddToWatching = onAddToWatching,
+                        holdDurationSeconds = holdDurationSeconds,
+                        swipeEnabled = swipeEnabled,
+                        modifier = Modifier.weight(1.3f)
+                    )
+                }
             }
         }
 
@@ -197,6 +177,73 @@ fun DetailActionRow(
 }
 
 @Composable
+private fun AniListLinkButton(
+    context: Context,
+    subject: AnimeDetailSubject,
+    modifier: Modifier
+) {
+    OutlinedButton(
+        onClick = {
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(subject.media.pageUrl)))
+            }
+        },
+        modifier = modifier
+            .height(48.dp)
+            .bouncyPress(pressedScale = 0.96f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.OpenInBrowser,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("AniList", maxLines = 1)
+    }
+}
+
+@Composable
+private fun DetailQuickAdd(
+    subject: AnimeDetailSubject,
+    state: DetailActionState,
+    quickAddStatus: QuickAddStatus,
+    canWriteToAniList: Boolean,
+    onAddMediaToPlanning: (MediaNode) -> Unit,
+    onAddMediaToWatching: (MediaNode) -> Unit,
+    onAddToPlanning: (MissedSequel) -> Unit,
+    onAddToWatching: (MissedSequel) -> Unit,
+    holdDurationSeconds: Int,
+    swipeEnabled: Boolean,
+    modifier: Modifier
+) {
+    subject.sequel?.let { sequel ->
+        SequelQuickAdd(
+            sequel = sequel,
+            canWriteToAniList = canWriteToAniList,
+            onAddToPlanning = onAddToPlanning,
+            onAddToWatching = onAddToWatching,
+            holdDurationSeconds = holdDurationSeconds,
+            swipeEnabled = swipeEnabled,
+            modifier = modifier
+        )
+    } ?: if (state.showMediaAction) {
+        MediaQuickAdd(
+            media = subject.media,
+            isPlanned = state.isPlanned,
+            isWatching = state.isWatching,
+            canWriteToAniList = canWriteToAniList,
+            status = quickAddStatus,
+            onAddToPlanning = onAddMediaToPlanning,
+            onAddToWatching = onAddMediaToWatching,
+            holdDurationSeconds = holdDurationSeconds,
+            swipeEnabled = swipeEnabled,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
 private fun EntryStatusEditAction(
     visible: Boolean,
     label: String,
@@ -221,16 +268,20 @@ private fun EntryStatusEditAction(
 
 /** The dashboard recommendation's own path, unchanged: its write moves the card. */
 @Composable
-private fun RowScope.SequelQuickAdd(
+private fun SequelQuickAdd(
     sequel: MissedSequel,
     canWriteToAniList: Boolean,
     onAddToPlanning: (MissedSequel) -> Unit,
     onAddToWatching: (MissedSequel) -> Unit,
     holdDurationSeconds: Int,
-    swipeEnabled: Boolean
+    swipeEnabled: Boolean,
+    modifier: Modifier
 ) {
     if (!canWriteToAniList && !sequel.isSavedToList) {
-        SignInToAddButton(onClick = { onAddToPlanning(sequel) })
+        SignInToAddButton(
+            onClick = { onAddToPlanning(sequel) },
+            modifier = modifier
+        )
     } else {
         HoldAndSwipePlanningButton(
             sequel = sequel,
@@ -238,7 +289,7 @@ private fun RowScope.SequelQuickAdd(
             onAddToWatching = { onAddToWatching(sequel) },
             holdDurationSeconds = holdDurationSeconds,
             swipeEnabled = swipeEnabled,
-            modifier = Modifier.weight(1.3f)
+            modifier = modifier
         )
     }
 }
@@ -251,7 +302,7 @@ private fun RowScope.SequelQuickAdd(
  * is what tells a signed-out reader *why* they cannot do it.
  */
 @Composable
-private fun RowScope.MediaQuickAdd(
+private fun MediaQuickAdd(
     media: MediaNode,
     isPlanned: Boolean,
     isWatching: Boolean,
@@ -260,10 +311,14 @@ private fun RowScope.MediaQuickAdd(
     onAddToPlanning: (MediaNode) -> Unit,
     onAddToWatching: (MediaNode) -> Unit,
     holdDurationSeconds: Int,
-    swipeEnabled: Boolean
+    swipeEnabled: Boolean,
+    modifier: Modifier
 ) {
     if (!canWriteToAniList && !isPlanned && !isWatching) {
-        SignInToAddButton(onClick = { onAddToPlanning(media) })
+        SignInToAddButton(
+            onClick = { onAddToPlanning(media) },
+            modifier = modifier
+        )
         return
     }
 
@@ -276,18 +331,18 @@ private fun RowScope.MediaQuickAdd(
         onAddToWatching = { onAddToWatching(media) },
         holdDurationSeconds = holdDurationSeconds,
         swipeEnabled = swipeEnabled,
-        modifier = Modifier.weight(1.3f)
+        modifier = modifier
     )
 }
 
 @Composable
-private fun RowScope.SignInToAddButton(
-    onClick: () -> Unit
+private fun SignInToAddButton(
+    onClick: () -> Unit,
+    modifier: Modifier
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = Modifier
-            .weight(1.3f)
+        modifier = modifier
             // Matches the AniList button beside it; see the note there.
             .height(48.dp)
             .bouncyPress(pressedScale = 0.96f)

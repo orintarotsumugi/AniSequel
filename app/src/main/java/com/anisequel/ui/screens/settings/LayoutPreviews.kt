@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +49,6 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
-import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -474,6 +475,48 @@ internal fun SequelStylePreview(
                                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.38f))
                         )
                     }
+                    HomeSequelStyle.BANNER -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        MiniCover(
+                            entry = entries.getOrNull(0),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
+                                    )
+                                )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(10.dp)
+                        ) {
+                            MiniBar(0.42f, 5.dp, Color.White.copy(alpha = 0.86f))
+                            Spacer(modifier = Modifier.height(5.dp))
+                            MiniBar(0.28f, 4.dp, Color.White.copy(alpha = 0.5f))
+                        }
+                    }
+                    HomeSequelStyle.SHELF -> Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        repeat(4) { index ->
+                            MiniCover(
+                                entry = entries.getOrNull(index),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -531,121 +574,7 @@ private fun MiniBar(fraction: Float, height: Dp, color: Color) {
 }
 
 @Composable
-internal fun LibraryViewPreview(
-    mode: LibraryViewMode,
-    entries: List<MediaListEntryItem>,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Preview · ${mode.displayName}",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(168.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(10.dp)
-                .testTag("library_view_preview")
-        ) {
-            Crossfade(
-                targetState = mode,
-                animationSpec = ExpressiveMotion.FastEffects,
-                label = "library_view_preview_mode"
-            ) { current ->
-                when (current) {
-                    LibraryViewMode.GRID -> MiniGrid(entries = entries, columns = 3, showTitle = true)
-                    LibraryViewMode.COMPACT -> MiniGrid(entries = entries, columns = 4, showTitle = false)
-                    LibraryViewMode.LIST -> MiniList(entries = entries)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniGrid(
-    entries: List<MediaListEntryItem>,
-    columns: Int,
-    showTitle: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        repeat(columns) { index ->
-            Column(modifier = Modifier.weight(1f)) {
-                MiniCover(
-                    entry = entries.getOrNull(index),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(0.68f)
-                )
-                if (showTitle) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = previewTitle(entries.getOrNull(index)),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniList(entries: List<MediaListEntryItem>) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        repeat(3) { index ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                MiniCover(
-                    entry = entries.getOrNull(index),
-                    modifier = Modifier
-                        .width(34.dp)
-                        .fillMaxHeight()
-                )
-                Column(modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Text(
-                        text = previewTitle(entries.getOrNull(index)),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.48f)
-                            .height(4.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniCover(
+internal fun MiniCover(
     entry: MediaListEntryItem?,
     modifier: Modifier = Modifier
 ) {
@@ -681,5 +610,38 @@ private fun MiniCover(
     }
 }
 
-private fun previewTitle(entry: MediaListEntryItem?): String =
+internal fun previewTitle(entry: MediaListEntryItem?): String =
     entry?.media?.displayName ?: "Dandadan"
+
+@Composable
+internal fun BottomBarLiftPreview(liftDp: Int) {
+    val lift by animateDpAsState(
+        targetValue = liftDp.coerceIn(0, 24).dp,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "bottom_bar_lift_preview"
+    )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "Preview · bottom bar",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = lift)
+                    .fillMaxWidth(0.78f)
+            ) {
+                MiniBottomBar()
+            }
+        }
+    }

@@ -179,12 +179,15 @@ fun FirstRunSetupDialog(
     // reads the platform's press state rather than a second pointer loop, and the
     // same spring the primary button beside it uses.
     val backSource = remember { MutableInteractionSource() }
-    var layout by rememberSaveable { mutableStateOf(AppLayout.DEFAULT.storageValue) }
+    // Nova + system theme + normal jokes is the recommended first-run path: it
+    // shows the app's current strengths without hiding any existing data, while
+    // every choice remains editable in Settings.
+    var layout by rememberSaveable { mutableStateOf(AppLayout.NOVA.storageValue) }
     var theme by rememberSaveable { mutableStateOf(ThemeMode.SYSTEM.storageValue) }
     var motion by rememberSaveable { mutableStateOf(MotionStyle.DEFAULT.storageValue) }
     var jokesEnabled by rememberSaveable { mutableStateOf(true) }
     var jokeFrequency by rememberSaveable { mutableStateOf(JokeFrequency.NORMAL.storageValue) }
-    var searchShortcut by rememberSaveable { mutableStateOf(false) }
+    var searchShortcut by rememberSaveable { mutableStateOf(true) }
     var tiersShortcut by rememberSaveable { mutableStateOf(false) }
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
 

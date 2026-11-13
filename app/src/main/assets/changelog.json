@@ -4,6 +4,18 @@
       "version": "1.9.6",
       "entries": [
         {
+          "title": "Settings previews now show the real choices",
+          "detail": "Interface settings preview the bottom bar lift with spring motion, the new library views, the expanded Home sequel styles and the cover-only card style. First-run setup now recommends the New look, System theme, normal jokes and catalogue search while keeping every choice editable."
+        },
+        {
+          "title": "Library and Home have more ways to browse",
+          "detail": "The Library adds Big cards and Shelf views, and Home adds Banners and Shelf cards for missed sequels. Each choice uses the same data and quick actions as the existing layouts, so changing the presentation does not change what a title can do."
+        },
+        {
+          "title": "Info actions fit narrow screens",
+          "detail": "AniList and Add to Planning stack into full-width controls when the title page is narrow, preventing the planning button's label and confirmation face from being clipped beside the external link."
+        },
+        {
           "title": "Info pages fit edge-to-edge screens",
           "detail": "The title banner stays full-bleed while hero actions, the docked capsule and the appearance editor clear cutouts in immersive mode. The list no longer consumes the navigation inset twice, so the last card and bottom controls stop at the right place."
         },
