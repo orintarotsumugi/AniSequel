@@ -80,7 +80,6 @@ import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.SequelDetailSheet
-import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -158,7 +157,6 @@ fun NovaSearchScreen(
     val quickAdd by quickAddPreferences.settings.collectAsState(
         initial = QuickAddPreferences.QuickAddSettings()
     )
-    val detailSheetState = rememberFullHeightSheetState()
 
     val enabledTypes = remember(searchAnimeEnabled, searchMangaEnabled) {
         buildList {
@@ -295,7 +293,6 @@ fun NovaSearchScreen(
         )
         SequelDetailSheet(
             subject = subject,
-            sheetState = detailSheetState,
             onDismiss = { selectedMedia = null },
             onAddToPlanning = {},
             onAddToWatching = {},

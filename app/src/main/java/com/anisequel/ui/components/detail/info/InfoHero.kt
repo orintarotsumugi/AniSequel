@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -299,8 +300,23 @@ fun InfoHero(
                 )
         )
 
+        // The page runs under the status bar now, so the top of the artwork has to
+        // carry the system icons. This is a separate, short scrim rather than a
+        // stronger stop on the one below: darkening the whole top fifth to fix one
+        // 24dp band would turn the banner into a tinted panel.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.38f),
+                        0.12f to Color.Transparent
+                    )
+                )
+        )
+
         // Ends on `surface`, not on black: the hero has to hand over to the page
-        // body without a visible seam, and the sheet's own container is `surface`.
+        // body without a visible seam, and the page's own container is `surface`.
         //
         // Weighted for artwork that is **sharp**. This scrim used to be written for
         // a blurred backdrop and was far too light for a sharp one: the top stop was
@@ -327,6 +343,7 @@ fun InfoHero(
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .statusBarsPadding()
                 .padding(12.dp)
         ) {
             Surface(

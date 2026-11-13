@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,10 +44,11 @@ import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.domain.studio.StudioYearShelf
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ReadingPositions
 import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.components.rememberStudioReadingState
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
-import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.toMediaNode
 import com.anisequel.ui.components.detail.SequelDetailSheet
@@ -149,12 +149,38 @@ fun StudioScreen(
     val quickAddStatuses by planningAdd.statuses.collectAsState()
 
     val context = LocalContext.current
-    val listState = rememberLazyListState()
+    val success = state as? StudioViewModel.StudioUiState.Success
+    // Resumed where this studio was left. A studio page is a destination that can
+    // be popped and pushed again, and `rememberSaveable` does not outlive the
+    // destination - see `ReadingPositions` for why this is process memory.
+    //
+    // Captured before the state can start saving: the first emission from a
+    // loading page is a clamped index, and this value is what the restore below
+    // scrolls to once there are films to scroll through.
+    val rememberedPosition = remember(studioId) { ReadingPositions.studioPosition(studioId) }
+    val listState = rememberStudioReadingState(studioId, enabled = success != null)
+    var restoredScroll by remember(studioId) { mutableStateOf(false) }
+    LaunchedEffect(success != null) {
+        if (success != null && !restoredScroll) {
+            restoredScroll = true
+            rememberedPosition?.let { position ->
+                listState.scrollToItem(
+                    position.firstVisibleItemIndex,
+                    position.firstVisibleItemScrollOffset
+                )
+            }
+        }
+    }
     // Two ways to read a filmography: the year shelves the page shipped with, and
-    // one packed wall with the years dropped. The choice is this visit's, not a
-    // preference - a studio is browsed by mood, and the layout follows the mood.
-    var wallLayout by rememberSaveable { mutableStateOf(false) }
-    val sheetState = rememberFullHeightSheetState()
+    // one packed wall with the years dropped. The choice follows the studio rather
+    // than the visit: a reader who reads Shaft as a wall opens Shaft as a wall, and
+    // a different studio still gets the shelf it shipped with.
+    var wallLayout by rememberSaveable(studioId) {
+        mutableStateOf(ReadingPositions.studioWallLayout(studioId))
+    }
+    LaunchedEffect(studioId, wallLayout) {
+        ReadingPositions.saveStudioWallLayout(studioId, wallLayout)
+    }
 
     // The title the sheet is showing, as the shelf's own node so the sheet has
     // something to draw on the first frame; the fetched detail takes over as soon
@@ -163,7 +189,6 @@ fun StudioScreen(
 
     LaunchedEffect(Unit) { viewModel.loadFirstPage() }
 
-    val success = state as? StudioViewModel.StudioUiState.Success
     val name = success?.studio?.name ?: initialName?.takeIf { it.isNotBlank() } ?: "Studio"
 
     // Paging is driven by the *end of the list coming into view* rather than by a
@@ -379,7 +404,6 @@ fun StudioScreen(
         )
         SequelDetailSheet(
             subject = subject,
-            sheetState = sheetState,
             onDismiss = { selectedMedia = null },
             // A relation replaces the subject rather than stacking a sheet; see
             // `InfoRelationsSection`.

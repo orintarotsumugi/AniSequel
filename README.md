@@ -17,30 +17,9 @@ Not on the Play Store. Every release is a signed universal APK on
 self-contained updater in the app - no Play Services, no AniSequel account, no
 middleman server.
 
-**Jump to:** [What's new](#whats-new---178) | [Features](#features) | [Install](#install) |
+**Jump to:** [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
-
----
-
-## What's new - 1.7.8
-
-One sheet for messages and comments, a bar that stops navigating on a hold, and a GIF search that types the way you do.
-
-- **A message opens in the comment thread.** Tapping a message, or the Message button on a friend, opens that comment thread with the message itself as the first row - so every line can be replied to and quoted, including the message. The old bubbles-and-reply-box sheet is only used to write the first message of a conversation.
-- **A thread keeps the place you were reading.** Loading older comments no longer slides the conversation out from under you, quoting and cancelling no longer teleports you to the newest message, and the scroll after you post lands on your comment. The header has a Refresh button and says when the thread was last checked.
-- **Holding the navigation bar goes nowhere.** A hold exists to start a swipe; letting go of Profile no longer jumps to Messages.
-- **The GIF search types forwards.** The field rebuilt its value on every keystroke and put the caret at the start, so typing `cat` searched `tac`.
-- **A GIF search finds the show, not just the tag.** A series name is asked three ways before it is called a miss - your words, your whole phrase as one tag, then your first word as a prefix - because the catalogue files a show under a tag nobody types, and an empty search hands over two rows of tags that are known to answer.
-- **A cancelled photo upload actually stops.** The transfer is cancellable now, and the composer cannot be left stuck on Uploading by an upload that was thrown away.
-- **Photos attach again while catbox is paused.** Its anonymous uploads are off, so the file falls back to imgbb.com first and pomf.lain.la after that - no account on any of them, and in that order because pomf's files are the ones AniList cannot load.
-- **A photo can go in small, centred, or behind a spoiler.** The size and framing row that the GIF pane already had now covers photos picked from the device too, so a screenshot does not have to be a full-width block.
-- **The controls under a comment fit.** Heart, Reply, Quote and manage wrap instead of hiding off the edge of a phone, Reply and Quote read as capsules, and the like count animates to its new number.
-- **A quote keeps what it quoted** - blank lines survive and a spoiler no longer prints its own `~!...!~` tags, and quoting threads the reply under the person it answers instead of at the root.
-
-The full block-by-block notes live in
-[`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
-and the GitHub release body read.
 
 ---
 

@@ -2,7 +2,6 @@ package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +46,7 @@ import com.anisequel.data.model.VoiceActorCredit
 import com.anisequel.data.model.VoicedCharacter
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.rememberPersonReadingScroll
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
@@ -243,12 +243,18 @@ private fun LoadedPersonProfile(
     // the context of a @Composable function". This is the same trap the cast row
     // documents; the fix is the same, and it is the only place the read is legal.
     val context = LocalContext.current
+    // The sheet's body, resumed per person. A voice actor opened from a character
+    // replaces the page under the same sheet, and the reader who taps back expects
+    // the character's biography to still be where they left it rather than at the
+    // top. Keyed on kind and id because `Character(1)` and `Staff(1)` are two
+    // different people.
+    val bodyScroll = rememberPersonReadingScroll(state.kind, state.id)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = PROFILE_SHEET_MAX_HEIGHT)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(bodyScroll)
     ) {
         // The cover bleeds to the sheet's own edges, so the inset everything under it
         // needs is applied there rather than here - a full-bleed header inside a

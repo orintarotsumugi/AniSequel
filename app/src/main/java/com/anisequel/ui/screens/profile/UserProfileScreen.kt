@@ -59,7 +59,6 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.StateCrossfade
 import com.anisequel.ui.components.detail.EntryEditor
 import com.anisequel.ui.components.detail.SequelDetailSheet
-import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
@@ -281,7 +280,6 @@ fun UserProfileScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
-    val detailSheetState = rememberFullHeightSheetState()
 
     // `rememberSaveable` keys its registry entry on the *composition slot*, not on
     // the value passed here, so an unkeyed call shares one saved tab between every
@@ -624,7 +622,6 @@ fun UserProfileScreen(
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
-            sheetState = detailSheetState,
             onDismiss = { selectedMedia = null },
             // A relation replaces the subject rather than stacking a sheet: see
             // `InfoRelationsSection`. The summary is kept alongside the fetched

@@ -7,6 +7,7 @@ import com.anisequel.data.model.UserAvatar
 import com.anisequel.data.model.progressLabel
 import com.anisequel.data.model.scoreLabel
 import com.anisequel.data.model.sortedForDisplay
+import com.anisequel.data.model.statusLabel
 import com.anisequel.data.model.toMediaFriend
 import com.anisequel.data.network.GraphQLQueries
 import org.junit.Assert.assertEquals
@@ -17,7 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The "friends who watched this" card's query and its mapping.
+ * The "friends on this title" card's query and its mapping.
  *
  * ## Why the query is asserted rather than just the mapping
  *
@@ -36,8 +37,9 @@ import org.junit.Test
  * None of the three can be caught by a screenshot, and the app has no network in
  * its tests, so the document itself is the thing to pin.
  *
- * The mapping half pins the two rules that decide whether a friend is drawn at
- * all, and the ordering the card reads top to bottom.
+ * The mapping half pins what decides whether a friend is drawn at all - an entry
+ * with no owner is the only one dropped now that planning and dropping stay - and
+ * the ordering the card reads left to right.
  */
 class MediaFriendsTest {
 
@@ -59,14 +61,16 @@ class MediaFriendsTest {
         name: String = "Mika",
         score: Double? = null,
         progress: Int = 0,
-        userId: Int = 1
+        userId: Int = 1,
+        status: String? = null
     ) = MediaFriend(
         userId = userId,
         name = name,
         avatarUrl = null,
         score = score,
         progress = progress,
-        progressVolumes = null
+        progressVolumes = null,
+        status = status
     )
 
     @Test
@@ -112,19 +116,49 @@ class MediaFriendsTest {
     }
 
     @Test
-    fun `planning is not the same as having watched it`() {
-        assertNull(
-            "a plan is the answer \"no, not yet\" with an avatar on it",
-            entry(status = "PLANNING").toMediaFriend()
-        )
+    fun `planning and dropped friends stay in the row, and are named`() {
+        // The row used to drop plans because it only answered "has anyone seen
+        // this". It now answers what the people the reader follows are doing with
+        // the title, and a plan or a drop is part of that answer.
+        val planning = entry(status = "PLANNING").toMediaFriend()
+        assertNotNull(planning)
+        assertEquals("Planning", planning!!.statusLabel(isManga = false))
         // The status is a raw string off the wire, and the rest of the app compares
-        // AniList's enums case-insensitively; a lower-case plan must not slip past
-        // the filter and draw an avatar for a title the friend has not opened.
-        assertNull(entry(status = "planning").toMediaFriend())
-        // Everything else means the friend has seen some of it, including the two
-        // statuses that sound like they do not.
-        assertNotNull(entry(status = "DROPPED").toMediaFriend())
-        assertNotNull(entry(status = "PAUSED").toMediaFriend())
+        // AniList's enums case-insensitively; a lower-case plan has to be named the
+        // same way rather than falling through to "On their list".
+        assertEquals(
+            "Planning",
+            entry(status = "planning").toMediaFriend()!!.statusLabel(isManga = true)
+        )
+
+        assertEquals(
+            "Dropped",
+            entry(status = "DROPPED").toMediaFriend()!!.statusLabel(isManga = false)
+        )
+        assertEquals(
+            "Paused",
+            entry(status = "PAUSED").toMediaFriend()!!.statusLabel(isManga = false)
+        )
+    }
+
+    @Test
+    fun `the two namespaces spell an active entry differently`() {
+        assertEquals(
+            "Watching",
+            entry(status = "CURRENT").toMediaFriend()!!.statusLabel(isManga = false)
+        )
+        assertEquals(
+            "Reading",
+            entry(status = "CURRENT").toMediaFriend()!!.statusLabel(isManga = true)
+        )
+        assertEquals(
+            "Rewatching",
+            entry(status = "REPEATING").toMediaFriend()!!.statusLabel(isManga = false)
+        )
+        assertEquals(
+            "Rereading",
+            entry(status = "REPEATING").toMediaFriend()!!.statusLabel(isManga = true)
+        )
     }
 
     @Test
@@ -137,6 +171,17 @@ class MediaFriendsTest {
         assertNull(friend(score = 0.0).scoreLabel)
         assertEquals("8", friend(score = 8.0).scoreLabel)
         assertEquals("8.5", friend(score = 8.5).scoreLabel)
+    }
+
+    @Test
+    fun `an active entry leads a plan even when the plan is rated higher`() {
+        val sorted = listOf(
+            friend(name = "Planning", score = 10.0, status = "PLANNING", userId = 1),
+            friend(name = "Dropped", score = 9.5, status = "DROPPED", userId = 2),
+            friend(name = "Watching", score = 6.0, progress = 3, status = "CURRENT", userId = 3)
+        ).sortedForDisplay()
+
+        assertEquals(listOf("Watching", "Dropped", "Planning"), sorted.map { it.name })
     }
 
     @Test
