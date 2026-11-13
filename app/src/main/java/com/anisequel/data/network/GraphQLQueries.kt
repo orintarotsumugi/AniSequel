@@ -70,6 +70,11 @@ object GraphQLQueries {
                 episodesWatched
                 minutesWatched
               }
+              manga {
+                count
+                chaptersRead
+                volumesRead
+              }
             }
           }
         }

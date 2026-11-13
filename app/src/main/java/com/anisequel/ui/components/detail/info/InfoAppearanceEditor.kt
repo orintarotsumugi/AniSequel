@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -108,6 +110,12 @@ internal fun InfoAppearanceEditor(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    // The editor is a full-screen overlay inside a dialog whose
+                    // window draws under the system bars. Without this, the Back
+                    // control and the "Details page" title were painted over the
+                    // status-bar clock - the two rows were fighting for the same
+                    // pixels.
+                    .statusBarsPadding()
                     .padding(start = 10.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -149,6 +157,11 @@ internal fun InfoAppearanceEditor(
             Column(
                 modifier = Modifier
                     .weight(1f)
+                    // The Done button at the bottom of this scroll was drawn under
+                    // the gesture bar; the inset belongs to the viewport rather
+                    // than to the button so the last control can still scroll
+                    // clear of it.
+                    .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp)
                     .padding(bottom = 24.dp)
