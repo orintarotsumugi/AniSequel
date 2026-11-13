@@ -98,8 +98,12 @@ class AnimeCoverThemeWiringTest {
         val sheet = source(
             "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
         )
+        // The page is a full-screen dialog now, not a modal sheet; the boundary is
+        // its own `Dialog(` call. A stale boundary here would make this assertion
+        // read the whole rest of the file and pass on text that is not the dismiss
+        // path at all.
         val dismiss = sheet.substringAfter("val handleDismiss")
-            .substringBefore("ModalBottomSheet(")
+            .substringBefore("Dialog(")
 
         assertTrue(
             "a retained colour has to end the live layer (the retained marker is " +

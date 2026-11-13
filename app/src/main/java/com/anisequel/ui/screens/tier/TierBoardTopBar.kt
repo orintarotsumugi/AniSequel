@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.tier
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -15,14 +16,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.bouncyPress
 
 /**
  * The bar over the board: the list's name, and the four ways to change what the
@@ -57,36 +61,27 @@ internal fun TierBoardTopBar(
             )
         },
         navigationIcon = {
-            IconButton(
+            TierBarAction(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Your tier lists",
                 onClick = onLeave,
-                modifier = Modifier.testTag("tier_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Your tier lists"
-                )
-            }
+                testTag = "tier_back_button"
+            )
         },
         actions = {
-            IconButton(
+            TierBarAction(
+                icon = AppVectorIcons.Search,
+                contentDescription = "Zoom",
                 onClick = onZoom,
-                modifier = Modifier.testTag("tier_zoom_button")
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Search,
-                    contentDescription = "Zoom"
-                )
-            }
+                testTag = "tier_zoom_button"
+            )
             Box {
-                IconButton(
+                TierBarAction(
+                    icon = AppVectorIcons.Filter,
+                    contentDescription = "Filters",
                     onClick = onFilter,
-                    modifier = Modifier.testTag("tier_filter_button")
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Filter,
-                        contentDescription = "Filters"
-                    )
-                }
+                    testTag = "tier_filter_button"
+                )
                 // A dot rather than a count: the number of hidden statuses
                 // is not a number anybody acts on, but "a filter is on" is
                 // the thing that explains a short board.
@@ -101,32 +96,55 @@ internal fun TierBoardTopBar(
                     )
                 }
             }
-            IconButton(
+            TierBarAction(
+                icon = AppVectorIcons.SectionAppearance,
+                contentDescription = "Display options",
                 onClick = onDisplay,
-                modifier = Modifier.testTag("tier_display_button")
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.SectionAppearance,
-                    contentDescription = "Display options"
-                )
-            }
+                testTag = "tier_display_button"
+            )
             // An icon rather than a "Tiers" text button. Four actions and
             // a back arrow have to fit a 360dp bar; the word cost ~92dp
             // and left the list's own name with about a hundred, which is
             // not enough for the one piece of text that says which list
             // is open.
-            IconButton(
+            TierBarAction(
+                icon = AppVectorIcons.Tune,
+                contentDescription = "Manage tiers",
                 onClick = onManage,
-                modifier = Modifier.testTag("tier_manage_button")
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.Tune,
-                    contentDescription = "Manage tiers"
-                )
-            }
+                testTag = "tier_manage_button"
+            )
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     )
+}
+
+/**
+ * One action in the board's bar: an icon button with the app's press spring.
+ *
+ * The five actions were plain `IconButton`s, so pressing one of them was the only
+ * place in the tier screen that answered a finger with nothing. The same glyph in
+ * `AniTopAppBar` springs, and a control that does not move under a thumb reads as
+ * disabled next to the ones that do. The interaction source is shared with the
+ * clickable so a gesture that turns into a scroll cancels the press instead of
+ * leaving the icon squashed for the whole fling.
+ */
+@Composable
+private fun TierBarAction(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .bouncyPress(interactionSource = interactionSource)
+            .testTag(testTag),
+        interactionSource = interactionSource
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription)
+    }
 }

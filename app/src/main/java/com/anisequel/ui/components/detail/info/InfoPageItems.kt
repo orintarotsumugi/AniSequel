@@ -139,14 +139,23 @@ internal fun LazyListScope.infoPageItems(
 
     // Right after the viewer's own progress: "has anyone I follow seen this" is
     // the same question the progress card answers about the viewer, and it is
-    // worth more before the synopsis than after the credits. Hidden entirely when
-    // empty - see [InfoFriendsCard].
+    // worth more before the synopsis than after the credits. Shown while the
+    // first answer is in flight too - the card then says it is checking rather
+    // than leaving a hole where a row will appear. Hidden once both the request
+    // and the row are empty - see [InfoFriendsCard].
     cardItem(
         key = "friends",
         index = 4,
         entranceKey = revealKey,
-        visible = friends.isNotEmpty()
-    ) { InfoFriendsCard(friends = friends, media = media, modifier = it) }
+        visible = friends.isNotEmpty() || isDetailLoading
+    ) {
+        InfoFriendsCard(
+            friends = friends,
+            media = media,
+            modifier = it,
+            isLoading = isDetailLoading
+        )
+    }
 
     cardItem(
         key = "streaming",

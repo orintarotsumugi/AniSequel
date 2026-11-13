@@ -41,13 +41,16 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  * same full-bleed treatment, so the two images the sheet can receive look like
  * two versions of the same backdrop rather than two different components.
  *
- * ## Why both images share a branch
+ * ## Why the poster is underneath and the banner is on top
  *
- * The dissolve is what matters, not where each image came from: the summary node
- * arrives without a banner, so the first frame draws the poster and the detail
- * response crossfades the banner in over it. A `Crossfade` whose content is the
- * same drawing on both states is exactly that dissolve, and it is one
- * `AsyncImage` instead of two that could drift.
+ * The summary node arrives without a banner, so the first frame draws the poster;
+ * the detail response then crossfades the banner in over it. That used to be one
+ * `Crossfade` whose target was `banner ?: posterUrl`, which meant the poster was
+ * *replaced* rather than covered: a banner whose image failed to decode, or one
+ * still in flight, left the hero on its placeholder tint even though the artwork
+ * was already in memory from the card behind the page. Two layers make the banner
+ * an enhancement - the poster always paints, and a null banner simply fades back
+ * to it.
  *
  * ## The parallax
  *
@@ -64,12 +67,49 @@ internal fun BoxScope.InfoHeroBackdrop(
     posterUrl: String?,
     collapse: () -> Float
 ) {
+    // One transform for both layers, so the poster and the banner cannot drift
+    // apart during the parallax.
+    val fullBleed = Modifier
+        .matchParentSize()
+        .graphicsLayer {
+            val scroll = collapse()
+            translationY = scroll * PARALLAX_TRAVEL.toPx()
+            val zoom = FULL_BLEED_OVERDRAW + scroll * PARALLAX_ZOOM
+            scaleX = zoom
+            scaleY = zoom
+            alpha = 1f - scroll * BACKDROP_HANDOFF
+        }
+        .unseamedCover()
+
+    // The key visual is the base layer, always. It is the artwork the reader just
+    // tapped, it is already in Coil's memory from the card behind this page, and
+    // it paints on the first frame. The banner used to be the only layer once the
+    // detail landed, so a banner URL that failed to decode - or one still on the
+    // wire - emptied the top of the page back to its placeholder tint. The wide
+    // image is an enhancement over the poster now, not a replacement for it.
+    if (posterUrl != null) {
+        AsyncImage(
+            model = posterUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            // Top-anchored for the same reason as the banner: a cover's faces and
+            // title sit near the top, and a centre crop makes a portrait poster into
+            // a band of clothing.
+            alignment = Alignment.TopCenter,
+            modifier = fullBleed
+        )
+    }
+
+    // The banner dissolves over the poster when it arrives, and dissolves away
+    // again if the detail answer has none - which is the same crossfade in both
+    // directions, and the reason the target is the nullable banner rather than
+    // `banner ?: posterUrl`.
     Crossfade(
-        targetState = banner ?: posterUrl,
+        targetState = banner,
         animationSpec = ExpressiveMotion.FastEffects,
-        label = "hero_backdrop",
-        // The whole fix: without this the Crossfade is measured from children
-        // that all use `matchParentSize`, which contributes no size of its own.
+        label = "hero_banner",
+        // Without this the Crossfade is measured from children that all use
+        // `matchParentSize`, which contributes no size of its own.
         modifier = Modifier.matchParentSize()
     ) { backdrop ->
         if (backdrop != null) {
@@ -77,20 +117,8 @@ internal fun BoxScope.InfoHeroBackdrop(
                 model = backdrop,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                // Top-anchored, because a wide banner's most useful pixels are its
-                // top edge and a centre crop would cut the same faces twice.
                 alignment = Alignment.TopCenter,
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        val scroll = collapse()
-                        translationY = scroll * PARALLAX_TRAVEL.toPx()
-                        val zoom = FULL_BLEED_OVERDRAW + scroll * PARALLAX_ZOOM
-                        scaleX = zoom
-                        scaleY = zoom
-                        alpha = 1f - scroll * BACKDROP_HANDOFF
-                    }
-                    .unseamedCover()
+                modifier = fullBleed
             )
         }
     }

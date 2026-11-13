@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "1.9.4",
+      "entries": [
+        {
+          "title": "The title page is a full-screen page",
+          "detail": "Opening a title no longer raises a draggable sheet. The Info page fills the screen, with its banner running under the status bar, a spring entrance, the palette editor as an overlay and My Entry on the capsule. Close and Back are the only ways out, and the editor has its own close control."
+        },
+        {
+          "title": "Friends who plan, drop or pause sit beside the ones watching",
+          "detail": "The friends row now keeps every status AniList records and names it: Watching, Reading, Planning, Paused, Dropped, Completed, Rewatching. Active entries lead, and a plan or a drop sits in the same row instead of being filtered away."
+        },
+        {
+          "title": "First-run setup is a six-page walk",
+          "detail": "Setup is now a full-screen walk of five questions - interface, theme, motion, jokes and shortcuts - with Back, Skip and Next or Finish, a capsule progress bar and a spring that slides each page in from the side."
+        },
+        {
+          "title": "A studio and a face remember where you were",
+          "detail": "Studio pages resume their scroll position and their shelf-or-wall layout, and character and staff profiles resume the body scroll of that exact person. The memory lasts for the open app, and nothing is written into Settings."
+        },
+        {
+          "title": "The synopsis clamps inside a quote too",
+          "detail": "A collapsed synopsis now clamps quoted paragraphs as well as plain ones, so a quoted blurb no longer prints in full under a Read more button with nothing left to reveal. The friends card also says when it is checking your follows rather than appearing suddenly."
+        },
+        {
+          "title": "A long board only builds the posters you can see",
+          "detail": "The tier board still places every poster, so drops, scrolling and the exported image are unchanged - but a poster far outside the visible slab is no longer built or downloaded. On a list of a few hundred titles, opening and scrolling the board now costs a screenful of covers instead of the whole list."
+        },
+        {
+          "title": "A loading button morphs instead of blinking",
+          "detail": "Buttons that start a request now cross-fade their label into the loading indicator and animate their width, and the loader keeps its contrast on the primary colour instead of fading into the disabled tint. The tier board's bar and floating controls take the same press spring as the rest of the app, and the first-run progress bar animates without re-measuring the page under it."
+        }
+      ]
+    },
+    {
       "version": "1.9.3",
       "entries": [
         {

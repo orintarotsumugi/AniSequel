@@ -94,7 +94,20 @@ fun RenderHeader(header: MarkdownNode.Header) {
 fun RenderBlockquote(
     quote: MarkdownNode.Blockquote,
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap(),
-    entityPreviews: Map<EntityPreviewKey, EntityPreview> = emptyMap()
+    entityPreviews: Map<EntityPreviewKey, EntityPreview> = emptyMap(),
+    /**
+     * The enclosing document's line clamp.
+     *
+     * A quote is part of the synopsis or bio around it, and it used to be the one
+     * block the collapsed renderer did not reach: an AniList description whose
+     * first paragraph is a quoted blurb printed the whole blurb under a "Read
+     * more" button that had nothing left to reveal. The clamp is threaded through
+     * rather than re-derived here, so the card and the quote agree about how much
+     * of the document is showing.
+     */
+    maxLines: Int = Int.MAX_VALUE,
+    /** The enclosing card's overflow listener; see [RenderParagraph] for why. */
+    onOverflowChange: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
     Row(
@@ -120,14 +133,27 @@ fun RenderBlockquote(
                         onLinkClick = { openExternalUrlOrCopy(context, it) }
                     ),
                     style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = maxLines,
+                    overflow = if (maxLines < Int.MAX_VALUE) {
+                        TextOverflow.Ellipsis
+                    } else {
+                        TextOverflow.Clip
+                    },
+                    onTextLayout = { result ->
+                        if (onOverflowChange != null && maxLines < Int.MAX_VALUE) {
+                            onOverflowChange(result.hasVisualOverflow)
+                        }
+                    }
                 )
             }
             if (quote.blocks.isNotEmpty()) {
                 AniListMarkdownView(
                     nodes = quote.blocks,
+                    maxLines = maxLines,
                     mediaCovers = mediaCovers,
-                    entityPreviews = entityPreviews
+                    entityPreviews = entityPreviews,
+                    onOverflowChange = onOverflowChange
                 )
             }
         }

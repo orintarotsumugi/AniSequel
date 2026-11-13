@@ -299,8 +299,10 @@ private fun TierContinueCard(list: TierListDocument, onOpen: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
             .clip(RoundedCornerShape(ExpressiveShapes.MediumCorner))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            // Outside the fill, or the card's container paints at the unscaled
+            // size while its contents shrink.
             .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .clickable(interactionSource = interactionSource, onClick = onOpen)
             .padding(16.dp)
             .testTag("tier_continue_card")

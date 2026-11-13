@@ -1,10 +1,18 @@
 package com.anisequel.ui.components.expressive
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -12,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -78,30 +87,74 @@ fun ExpressivePrimaryButton(
 
     Button(
         onClick = onClick,
+        // Disabled while a request is in flight, so a second press cannot start a
+        // second one. Its *colours* stay the primary pair while loading: the
+        // default disabled container is a pale `onSurface` tint, and the loader
+        // is drawn in `onPrimary` - white on near-white in the light theme, which
+        // is indistinguishable from no loader at all. This was wrong before the
+        // content swap was animated, and the animation only made it obvious.
         enabled = enabled && !loading,
         modifier = modifier
             .height(48.dp)
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .testTag(testTag),
         shape = RoundedCornerShape(cornerRadius),
-        interactionSource = interactionSource
-    ) {
-        if (loading) {
-            ExpressiveContainedLoadingIndicator(
-                modifier = Modifier.size(22.dp),
-                containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f),
-                indicatorColor = MaterialTheme.colorScheme.onPrimary
+        colors = if (loading) {
+            ButtonDefaults.buttonColors(
+                disabledContainerColor = MaterialTheme.colorScheme.primary,
+                disabledContentColor = MaterialTheme.colorScheme.onPrimary
             )
         } else {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+            ButtonDefaults.buttonColors()
+        },
+        interactionSource = interactionSource
+    ) {
+        // A crossfade with a scale, the same two-state swap the refresh control
+        // and the board's lock use. The label and the loader are one control in
+        // two states; before this they swapped in a single frame, so a button
+        // that started a request visibly blinked, and a non-full-width one lost
+        // its width in the same frame. `AnimatedContent` animates its own box,
+        // which is what carries the width from the label to the 22dp loader.
+        AnimatedContent(
+            targetState = loading,
+            transitionSpec = {
+                // `togetherWith` binds looser than `+`, so each enter/exit pair
+                // groups without parentheses around it. `using` attaches the box
+                // animation to the finished transition; `AnimatedContent` itself
+                // has no `sizeTransform` parameter in the Compose version this
+                // repo pins - the box animation lives on the content transform.
+                fadeIn(ExpressiveMotion.FastEffects) + scaleIn(
+                    initialScale = 0.82f,
+                    animationSpec = ExpressiveMotion.FastSpatial
+                ) togetherWith
+                    fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                        targetScale = 0.82f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) using SizeTransform(clip = false) { _, _ ->
+                    ExpressiveMotion.FastSpatialSize
+                }
+            },
+            label = "button_loading"
+        ) { busy ->
+            if (busy) {
+                ExpressiveContainedLoadingIndicator(
+                    modifier = Modifier.size(22.dp),
+                    containerColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f),
+                    indicatorColor = MaterialTheme.colorScheme.onPrimary
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (icon != null) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(text, fontWeight = FontWeight.Bold)
+                }
             }
-            Text(text, fontWeight = FontWeight.Bold)
         }
     }
 }

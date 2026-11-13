@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
@@ -35,7 +36,10 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressLabel
 import com.anisequel.data.model.scoreLabel
 import com.anisequel.data.model.spokenLabel
+import com.anisequel.data.model.statusLabel
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import java.util.Locale
 
 /**
  * The friends who have this title on their list: avatar, rating, progress.
@@ -65,9 +69,19 @@ import com.anisequel.ui.components.AppVectorIcons
 fun InfoFriendsCard(
     friends: List<MediaFriend>,
     media: MediaNode,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Whether the follow-up request is still in flight.
+     *
+     * Used only when [friends] is empty: a card that waits for its first row in
+     * silence loses the reader to the next section, and this one sits directly
+     * under the progress bar on purpose. Once one row is here the list is the
+     * answer, and a spinner beside it would only say "there may be more" about a
+     * request AniList caps at fifty entries anyway.
+     */
+    isLoading: Boolean = false
 ) {
-    if (friends.isEmpty()) return
+    if (friends.isEmpty() && !isLoading) return
     val isManga = media.isManga
     // The friend's entry carries no length; the media does. Unknown reads as
     // "12 eps" rather than "12 / null".
@@ -75,23 +89,56 @@ fun InfoFriendsCard(
 
     InfoCard(
         modifier = modifier.testTag("info_friends_card"),
-        title = if (isManga) "Friends who read this" else "Friends who watched this",
-        icon = AppVectorIcons.ProfileSocial
+        // "watched" was wrong as soon as a plan or a drop was drawn here: neither
+        // is watching, and the card is no longer only about people who have seen
+        // it. The neutral wording is the same promise for every status.
+        title = "Friends on this title",
+        icon = AppVectorIcons.ProfileSocial,
+        trailing = if (friends.isEmpty()) {
+            null
+        } else {
+            {
+                Text(
+                    text = friends.size.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     ) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            items(friends, key = { it.userId }) { friend ->
-                FriendEntry(friend = friend, isManga = isManga, total = total)
+        if (friends.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 6.dp)
+            ) {
+                ExpressiveLoadingIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Checking who you follow…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                items(friends, key = { it.userId }) { friend ->
+                    FriendEntry(friend = friend, isManga = isManga, total = total)
+                }
             }
         }
     }
 }
 
 /**
- * One friend, as a column: face, name, rating, progress.
+ * One friend, as a column: face, what they are doing with the title, name, rating,
+ * progress.
  *
- * The whole column is one semantics node. Read as its three `Text`s, TalkBack
+ * The whole column is one semantics node. Read as its `Text`s, TalkBack
  * announces "Mika, 8.5, 12 / 24 eps" - a slash and a pile of fragments - so
  * [spokenLabel] replaces them with one sentence, and the avatar (which is
  * decorative next to the name) stays silent.
@@ -109,9 +156,20 @@ private fun FriendEntry(
 ) {
     val rating = friend.scoreLabel
 
+    // Watching leads, a plan is a quieter promise, and a dropped entry is the one
+    // the row should not make look like a failure of the title - it is a fact
+    // about that friend. `error` is a role, not a verdict, and it is the only tone
+    // in the scheme that reads as "this one stopped" at label size.
+    val statusColor = when (friend.status?.uppercase(Locale.ROOT)) {
+        "CURRENT", "REPEATING" -> MaterialTheme.colorScheme.primary
+        "PLANNING" -> MaterialTheme.colorScheme.secondary
+        "DROPPED" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Column(
         modifier = Modifier
-            .width(88.dp)
+            .width(92.dp)
             .clearAndSetSemantics {
                 contentDescription = friend.spokenLabel(isManga, total)
             },
@@ -136,6 +194,16 @@ private fun FriendEntry(
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
         )
         Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = friend.statusLabel(isManga),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = statusColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(1.dp))
         Text(
             text = friend.name,
             style = MaterialTheme.typography.labelMedium,

@@ -79,8 +79,60 @@ data class MediaFriend(
     /** Episodes watched, or chapters read. Never negative. */
     val progress: Int,
     /** Volumes read, manga only. Null when the friend has not tracked any. */
-    val progressVolumes: Int?
+    val progressVolumes: Int?,
+    /**
+     * AniList's own `MediaListStatus` word for this entry - `CURRENT`, `PLANNING`,
+     * `DROPPED` and so on.
+     *
+     * Kept on the drawable friend rather than only used to filter it, because the
+     * row's whole point changed: a friend who is planning a title is not a friend
+     * who has watched it, but "three people I follow plan to watch this" is exactly
+     * the kind of answer this card exists to give. Without the status the row would
+     * have to present an unstarted entry and a dropped one as the same kind of fact.
+     *
+     * Null for an entry AniList sent no status for; [statusLabel] says "On their
+     * list" rather than inventing one.
+     */
+    val status: String? = null
 )
+
+/**
+ * How the row names this friend's relation to the title.
+ *
+ * `CURRENT` is the one status AniList spells differently for the two namespaces -
+ * a reader is watching an anime and reading a manga - and `REPEATING` has the same
+ * split. Planning, pausing, dropping and finishing are the same word either way.
+ */
+fun MediaFriend.statusLabel(isManga: Boolean): String =
+    when (status?.uppercase(Locale.ROOT)) {
+        "CURRENT" -> if (isManga) "Reading" else "Watching"
+        "PLANNING" -> "Planning"
+        "COMPLETED" -> "Completed"
+        "REPEATING" -> if (isManga) "Rereading" else "Rewatching"
+        "PAUSED" -> "Paused"
+        "DROPPED" -> "Dropped"
+        else -> "On their list"
+    }
+
+/**
+ * Where a status sits in the row, best answer first.
+ *
+ * Someone watching the show today answers "has anyone I follow seen this" more
+ * directly than someone who finished it years ago, so `CURRENT` and `REPEATING`
+ * lead. Planning and dropping stay in the same row - they are the two statuses a
+ * reader most wants to see *beside* the active ones, because they say what the
+ * people they follow are about to do or gave up on - but they follow the entries
+ * that are actually in progress.
+ */
+private fun MediaFriend.statusRank(): Int =
+    when (status?.uppercase(Locale.ROOT)) {
+        "CURRENT", "REPEATING" -> 0
+        "COMPLETED" -> 1
+        "PAUSED" -> 2
+        "DROPPED" -> 3
+        "PLANNING" -> 4
+        else -> 5
+    }
 
 /**
  * The rating as the row prints it - "8.5", "8" - or null when there is none.
@@ -122,6 +174,7 @@ fun MediaFriend.progressLabel(isManga: Boolean, total: Int?): String {
  */
 fun MediaFriend.spokenLabel(isManga: Boolean, total: Int?): String {
     val noun = if (isManga) "chapter" else "episode"
+    val statusText = statusLabel(isManga).lowercase(Locale.ROOT)
     val knownTotal = total?.takeIf { it > 0 }
     val progressText = when {
         knownTotal != null -> "$progress of $knownTotal ${noun}s"
@@ -133,41 +186,49 @@ fun MediaFriend.spokenLabel(isManga: Boolean, total: Int?): String {
         ?.let { ", $it ${if (it == 1) "volume" else "volumes"}" }
         .orEmpty()
     val rating = scoreLabel?.let { "rated $it" } ?: "not rated"
-    return "$name, $rating, $progressText$volumesText"
+    return "$name, $statusText, $rating, $progressText$volumesText"
 }
 
 /**
  * A wire entry as a drawable friend, or null when the row should not be drawn.
  *
- * `PLANNING` is the one status that means the friend has *not* watched or read
- * the title yet - the card exists to answer "has anyone I follow seen this", and
- * a plan is the answer "no, not yet" with an avatar on it. Every other status,
- * including `DROPPED` and `PAUSED`, means they did watch some of it and that is
- * worth knowing.
+ * Every status is kept, including `PLANNING`. It used to be filtered out on the
+ * reasoning that a plan is "no, not yet" with an avatar on it - and that is true
+ * of the question the card answered then. The card now answers a slightly wider
+ * one, the same one the reference client answers: *what are the people I follow
+ * doing with this title?* A friend planning to start it and a friend who dropped
+ * it are both useful answers beside the friend who is on episode three, and the
+ * status is carried through so the row can say which is which rather than drawing
+ * three identical faces.
+ *
+ * [MediaFriendEntry.user] stays nullable: a list entry whose owner has since been
+ * deleted comes back with no user at all, and there is nothing to draw.
  */
 fun MediaFriendEntry.toMediaFriend(): MediaFriend? {
     val person = user ?: return null
-    if (status.equals("PLANNING", ignoreCase = true)) return null
     return MediaFriend(
         userId = person.id,
         name = person.name,
         avatarUrl = person.avatar?.large ?: person.avatar?.medium,
         score = score,
         progress = (progress ?: 0).coerceAtLeast(0),
-        progressVolumes = progressVolumes
+        progressVolumes = progressVolumes,
+        status = status
     )
 }
 
 /**
- * Best rating first, then furthest through, then by name.
+ * What the friend is doing first, then best rating, then furthest through, then name.
  *
  * Client-side because the connection's sort argument is not one this app has
  * verified against the live API, and because the ordering is a display decision:
- * the reader wants the friend whose taste they trust at the front, not whatever
- * order the list happens to be stored in.
+ * the friend who is watching today is the most direct answer to the question the
+ * row asks, and within one status the reader wants the taste they trust at the
+ * front rather than whatever order the list happens to be stored in.
  */
 fun List<MediaFriend>.sortedForDisplay(): List<MediaFriend> = sortedWith(
-    compareByDescending<MediaFriend> { it.score?.takeIf { score -> score > 0.0 } ?: -1.0 }
+    compareBy<MediaFriend> { it.statusRank() }
+        .thenByDescending { it.score?.takeIf { score -> score > 0.0 } ?: -1.0 }
         .thenByDescending { it.progress }
         .thenBy { it.name.lowercase(Locale.ROOT) }
 )

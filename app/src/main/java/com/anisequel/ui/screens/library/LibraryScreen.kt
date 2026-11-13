@@ -54,7 +54,6 @@ import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.expressive.ExpressiveCountBadge
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.profile.ProfileErrorView
 import com.anisequel.ui.screens.profile.ProfileLibraryTab
@@ -131,7 +130,6 @@ fun LibraryScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
-    val detailSheetState = rememberFullHeightSheetState()
 
     // One-tap Planning for a title the sheet shows. The host writes through the
     // same repository the rest of the page reads, and is only handed a session
@@ -422,7 +420,6 @@ fun LibraryScreen(
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
-            sheetState = detailSheetState,
             onDismiss = { selectedMedia = null },
             onAddToPlanning = {},
             onAddToWatching = {},

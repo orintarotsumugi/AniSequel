@@ -137,7 +137,6 @@ fun DashboardScreen(
     val filterCriteria by dashboardViewModel.filterCriteria.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val filterSheetState = rememberFullHeightSheetState()
-    val detailSheetState = rememberFullHeightSheetState()
 
     // Collected unconditionally. The old form short-circuited on a nullable
     // parameter (`prefs?.settings?.collectAsState(...) ?: remember { ... }`),
@@ -494,7 +493,6 @@ fun DashboardScreen(
         }
         SequelDetailSheet(
             subject = selectedSubject,
-            sheetState = detailSheetState,
             onDismiss = closeSheet,
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },

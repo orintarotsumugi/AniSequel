@@ -64,7 +64,6 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaBackdrop
 import com.anisequel.ui.components.nova.NovaSectionHeading
 import com.anisequel.ui.components.nova.NovaSurface
-import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
@@ -102,7 +101,6 @@ fun NovaScheduleScreen(
     val airing = remember(entries) { entries.filter { it.isAiring } }
     val upcoming = remember(entries) { entries.filterNot { it.isAiring } }
 
-    val detailSheetState = rememberFullHeightSheetState()
     val details by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val friends by detailHost.friends.collectAsStateWithLifecycle()
@@ -231,7 +229,6 @@ fun NovaScheduleScreen(
     selectedSubject?.let { subject ->
         SequelDetailSheet(
             subject = subject,
-            sheetState = detailSheetState,
             onDismiss = { selectedMedia = null },
             onAddToPlanning = {},
             onAddToWatching = {},

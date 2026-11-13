@@ -17,6 +17,7 @@ import com.anisequel.ui.screens.tier.tierCoverDecodePx
 import com.anisequel.ui.screens.tier.tierDropCaret
 import com.anisequel.ui.screens.tier.tierDropPlacement
 import com.anisequel.ui.screens.tier.tierDropTarget
+import com.anisequel.ui.screens.tier.tierDrawWindow
 import com.anisequel.ui.screens.tier.tierItemAt
 import com.anisequel.ui.screens.tier.tierLibrarySubtitle
 import com.anisequel.ui.screens.tier.tierListCardStatus
@@ -539,6 +540,104 @@ class TierScreenLogicTest {
         val layout = board()
 
         assertEquals(layout.items, visibleTierItems(layout.items, 9999))
+    }
+
+    // ---- The slab of the board that gets composed --------------------------
+
+    @Test
+    fun `a tall board composes a window around the viewport rather than all of it`() {
+        // The board lays all of itself out - the export and the drag both need
+        // every position - but a cover outside this window used to exist as a
+        // composed `AsyncImage` anyway, and Coil was asked for all three hundred
+        // of them on a list that shows about forty.
+        val window = tierDrawWindow(
+            boardTopPx = 0f,
+            viewportTopPx = 0f,
+            viewportBottomPx = 2400f,
+            boardHeightDp = 6000f,
+            density = 3f,
+            zoom = 1f
+        )
+
+        assertNotNull("a measured viewport produced no window", window)
+        val measured = window!!
+        // 2400 px at 3x is 800 layout dp, and the buffer has to reach past it.
+        assertTrue("the visible band is not inside the window", measured.bottom >= 800f)
+        assertTrue("the window is the whole board again", measured.bottom < 6000f)
+    }
+
+    @Test
+    fun `the window follows the scroll`() {
+        val window = tierDrawWindow(
+            // The board has moved 3000 px up, which is 1000 layout dp at 3x -
+            // past the first quantisation bucket, so the window has to have moved.
+            boardTopPx = -3000f,
+            viewportTopPx = 0f,
+            viewportBottomPx = 2400f,
+            boardHeightDp = 6000f,
+            density = 3f,
+            zoom = 1f
+        )!!
+
+        assertTrue("the band the reader is looking at was cut off", window.bottom >= 1800f)
+        assertTrue("the window did not move with the scroll", window.top > 0f)
+    }
+
+    @Test
+    fun `zooming out widens the window`() {
+        // The layout width is divided by the zoom, so the same screen covers more
+        // layout dp at 35% - the overview has to keep showing the wall of covers
+        // the zoom button promises, not a window sized for 100%.
+        fun windowBottom(zoom: Float) = tierDrawWindow(
+            boardTopPx = 0f,
+            viewportTopPx = 0f,
+            viewportBottomPx = 2400f,
+            boardHeightDp = 6000f,
+            density = 3f,
+            zoom = zoom
+        )!!.bottom
+
+        assertTrue(windowBottom(0.35f) > windowBottom(1f))
+    }
+
+    @Test
+    fun `an unmeasured viewport asks for the whole board rather than nothing`() {
+        // Null is the caller's cue to draw everything. A first frame that drew
+        // nothing would flash an empty board over a list that already has rows.
+        assertNull(
+            tierDrawWindow(
+                boardTopPx = 0f,
+                viewportTopPx = 0f,
+                viewportBottomPx = 0f,
+                boardHeightDp = 6000f,
+                density = 3f,
+                zoom = 1f
+            )
+        )
+        assertNull(
+            tierDrawWindow(
+                boardTopPx = 0f,
+                viewportTopPx = 0f,
+                viewportBottomPx = 2400f,
+                boardHeightDp = 0f,
+                density = 3f,
+                zoom = 1f
+            )
+        )
+    }
+
+    @Test
+    fun `a board scrolled entirely out of view composes nothing`() {
+        val window = tierDrawWindow(
+            boardTopPx = -20000f,
+            viewportTopPx = 0f,
+            viewportBottomPx = 2400f,
+            boardHeightDp = 6000f,
+            density = 3f,
+            zoom = 1f
+        )!!
+
+        assertTrue("an off-screen board still built posters", !window.intersects(0f, 128f))
     }
 
     // ---- Colour ------------------------------------------------------------

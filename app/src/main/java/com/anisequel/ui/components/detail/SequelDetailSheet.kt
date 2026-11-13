@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -8,16 +9,21 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,9 +37,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
@@ -54,25 +64,42 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
+import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
 import kotlinx.coroutines.launch
 
 /**
- * The sheet that shows one title's Info page.
+ * One title's page, full screen.
  *
- * Two destinations, switched from a floating capsule: the page, and the viewer's own
- * entry when the sheet has write access to it. The sheet used to be three tabs -
- * story, specs, entry - which split one title's information across two of them and
- * left the reader to hold the halves in their head; the page is now one scroll (see
- * [AnimeInfoPage]) and the capsule switches between *reading* and *editing*, which is
- * the only distinction left that means anything.
+ * ## Why this is a dialog rather than a bottom sheet
+ *
+ * It used to be a `ModalBottomSheet`, and the drag handle was a promise the page
+ * could not keep: a reader halfway down a long synopsis could pull the whole thing
+ * away by accident, and the page never owned the top of the screen - it opened
+ * under the status bar with the activity's bar behind it. A title is a destination,
+ * not a peek: it has its own hero, its own artwork and its own way out, and the
+ * reference client opens it as a page. The dialog draws the same content edge to
+ * edge, with the hero under the status bar, and the only ways out are the explicit
+ * close control and Back.
+ *
+ * It stays a dialog rather than a navigation route because six hosts own the
+ * subject they open and none of them has a route to hand it to; a route would mean
+ * moving that state, and the detail store, into navigation for a cosmetic win.
+ * The dialog is still its own window, which is what lets a person profile or the
+ * appearance editor stack above it without tearing it down.
+ *
+ * ## Two destinations, switched from a floating capsule
+ *
+ * The page, and the viewer's own entry when the page has write access to it. The
+ * page used to be three tabs - story, specs, entry - which split one title's
+ * information across two of them and left the reader to hold the halves in their
+ * head; it is now one scroll (see [AnimeInfoPage]) and the capsule switches between
+ * *reading* and *editing*, which is the only distinction left that means anything.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SequelDetailSheet(
     subject: AnimeDetailSubject?,
-    sheetState: SheetState,
     onDismiss: () -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
     /**
@@ -94,12 +121,14 @@ fun SequelDetailSheet(
     onLoadFriends: (Int, String?) -> Unit = { _, _ -> },
     isDetailLoading: Boolean,
     /**
-     * The followed users who have this title on their list, best rating first.
+     * The followed users who have this title on their list: active entries first,
+     * then best rating - every status, including planning and dropped.
      *
-     * Already filtered and sorted by the repository - see
-     * [com.anisequel.data.model.MediaFriend]. Empty draws no card at all rather
-     * than an empty one, and it is empty for the ordinary reason as well: a
-     * viewer who follows nobody, or a title nobody they follow has opened.
+     * Already mapped and sorted by the repository - see
+     * [com.anisequel.data.model.MediaFriend]. Empty with the detail still loading
+     * draws the card's checking row rather than a hole; empty once it has loaded
+     * draws no card at all. Empty is also the ordinary answer: a viewer who follows
+     * nobody, or a title nobody they follow has opened.
      */
     friends: List<MediaFriend> = emptyList(),
     canWriteToAniList: Boolean,
@@ -294,12 +323,38 @@ fun SequelDetailSheet(
         onDismiss()
     }
 
-    ModalBottomSheet(
+    // The page's own entrance. A dialog window appears in one frame, which reads as
+    // a cut after the tap; fading and lifting the content is what makes the title
+    // feel like it grew out of the card. Keyed on the title, so walking a franchise
+    // is a new page arriving rather than the old one reanimating.
+    val entrance = remember(subject.mediaId, subject.media.type) { Animatable(0f) }
+    LaunchedEffect(subject.mediaId, subject.media.type) {
+        entrance.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+    }
+
+    Dialog(
         onDismissRequest = handleDismiss,
-        sheetState = sheetState,
-        modifier = modifier.testTag("sequel_detail_sheet"),
-        containerColor = MaterialTheme.colorScheme.surface
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            // A tap beside the page is not a way out of it: the page is the whole
+            // screen, so there is no "beside", and a stray tap on the dim edge used
+            // to close the sheet the reader had just scrolled.
+            dismissOnClickOutside = false,
+            // The artwork is meant to reach the status bar. Everything that must
+            // stay clear of the bars applies its own inset; the shell does not.
+            decorFitsSystemWindows = false
+        )
     ) {
+        // A dialog is its own window, so the activity's immersive setting has to be
+        // applied here too - see `DialogImmersiveEffect`.
+        DialogImmersiveEffect()
+        Surface(
+            modifier = modifier
+                .fillMaxSize()
+                .testTag("sequel_detail_sheet"),
+            color = MaterialTheme.colorScheme.surface
+        ) {
         // The page is destination zero and stays at index zero, so a saved tab index
         // cannot reopen the sheet on a destination that is not there any more.
         var destination by rememberSaveable(subject.mediaId, subject.media.type) {
@@ -320,7 +375,14 @@ fun SequelDetailSheet(
         val selected = destination.coerceIn(0, destinations.lastIndex)
         val navClearance = if (destinations.size > 1) 112.dp else 28.dp
 
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = entrance.value
+                    translationY = (1f - entrance.value) * 18.dp.toPx()
+                }
+        ) {
             AnimatedContent(
                 targetState = selected,
                 transitionSpec = {
@@ -358,9 +420,42 @@ fun SequelDetailSheet(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            // The editor has no hero to sit behind, so it takes the
+                            // status-bar inset the Info page gets from its artwork,
+                            // and it lifts for the keyboard - the Notes field is at
+                            // the bottom of a full-screen page now, not in a sheet
+                            // that the platform already resized.
+                            .statusBarsPadding()
+                            .imePadding()
                             .padding(horizontal = 20.dp)
                             .padding(top = 8.dp, bottom = navClearance)
                     ) {
+                        // The edit destination has no hero, so it needs the close
+                        // control the hero carries on the Info destination. Back
+                        // still works, but a page whose only visible exit is a
+                        // system gesture is a page that reads as a trap.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "My Entry",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = handleDismiss,
+                                modifier = Modifier.testTag("detail_edit_close")
+                            ) {
+                                Icon(
+                                    imageVector = AppVectorIcons.Close,
+                                    contentDescription = "Close"
+                                )
+                            }
+                        }
                         DetailEditTab(
                             media = media,
                             editor = entryEditor,
@@ -446,6 +541,7 @@ fun SequelDetailSheet(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
         }
     }
 }

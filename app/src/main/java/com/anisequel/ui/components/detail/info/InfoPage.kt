@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -208,7 +210,16 @@ fun AnimeInfoPage(
         )
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            // The page is its own window now, and its hero is deliberately drawn
+            // under the status bar. The list's last card still has to clear the
+            // gesture bar, so the inset is taken here - where it moves only the
+            // bottom of the page - rather than on the shell, where it would push
+            // the artwork away from the top of the screen.
+            .navigationBarsPadding()
+    ) {
         // Behind the list, not inside it: the artwork stays put while the cards
         // scroll over it, which is what makes it read as a page backdrop rather
         // than as a very tall hero.
@@ -291,7 +302,11 @@ fun AnimeInfoPage(
             onOpenAniList = openOnAniList,
             onOpenAppearance = onOpenAppearance,
             onClose = onClose,
-            modifier = Modifier.align(Alignment.TopCenter)
+            // The docked bar is the page's only way out once the hero has gone,
+            // so it stays clear of the status bar instead of floating under it.
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
         )
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -35,6 +36,7 @@ import com.anisequel.domain.tier.TierDisplay
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierListLayout
 import com.anisequel.domain.tier.layoutTierList
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
 
 /**
@@ -185,6 +187,29 @@ private fun TierBoard(
             title = listName,
             options = options
         )
+    }
+
+    // The slab of the board that is near the viewport; see [tierDrawWindow] for
+    // why the board, which lays all of itself out, only builds the posters a
+    // reader can see. The seed covers the top of the list until the first
+    // measured frame replaces it, so opening a list does not build a hundred
+    // posters in the frame before the viewport is known.
+    var drawWindow by remember { mutableStateOf(TierDrawWindow(0f, TIER_DRAW_SEED_DP)) }
+    LaunchedEffect(viewport, arrangement, zoom, density) {
+        snapshotFlow {
+            tierDrawWindow(
+                boardTopPx = viewport.boardTop,
+                viewportTopPx = viewport.viewportTop,
+                viewportBottomPx = viewport.visibleBottom,
+                boardHeightDp = arrangement.height,
+                density = density.density,
+                zoom = zoom
+            )
+        }
+            .distinctUntilChanged()
+            // A null answer is "not measured yet", not an empty band: keeping the
+            // last known window is safer than falling back to the whole board.
+            .collect { window -> if (window != null) drawWindow = window }
     }
 
     // Any of these keys changing replaces the drag pointer handler, and a replaced
@@ -407,6 +432,7 @@ private fun TierBoard(
             hoveredTierId = hoveredTierId,
             dropCaret = caret,
             skipMediaId = drag.mediaId,
+            drawWindow = drawWindow,
             editable = editable,
             onItemTap = onItemTap
         )
@@ -477,13 +503,19 @@ private fun TierGeometry(
     hoveredTierId: String?,
     dropCaret: TierCaret?,
     skipMediaId: Int?,
+    drawWindow: TierDrawWindow?,
     editable: Boolean,
     onItemTap: (Int) -> Unit
 ) {
     // The one tile list the whole layout is built from, so the emitted children
-    // and the positions they are measured against cannot drift apart.
-    val drawnItems = remember(arrangement, skipMediaId) {
+    // and the positions they are measured against cannot drift apart. The draw
+    // window only removes posters that are outside the visible slab: rows, the
+    // arrangement's height and every hit test still see the whole board, so a
+    // drag can be resolved past the edge of the screen and the auto-scroll
+    // brings the row into the window as it arrives.
+    val drawnItems = remember(arrangement, skipMediaId, drawWindow) {
         visibleTierItems(arrangement.items, skipMediaId)
+            .filter { box -> drawWindow == null || drawWindow.intersects(box.y, box.bottom) }
     }
     // How many posters each row holds, for the count under its label. Counted
     // from `arrangement.items` rather than `drawnItems` so the number does not
