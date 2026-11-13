@@ -84,11 +84,11 @@ object CoverColorQuantizer {
 
         val huePopulation = IntArray(360)
         var populationSum = 0.0
-        val candidates = ArrayList<Hct>(histogram.size)
+        val candidates = ArrayList<Pair<Hct, Int>>(histogram.size)
         for ((argb, population) in histogram) {
             if (population <= 0) continue
             val hct = Hct.fromInt(argb)
-            candidates += hct
+            candidates += hct to population
             val hue = floor(hct.hue).toInt().coerceIn(0, 359)
             huePopulation[hue] += population
             populationSum += population
@@ -111,8 +111,7 @@ object CoverColorQuantizer {
         var bestScore = Double.NEGATIVE_INFINITY
         var bestPopulation = -1
         var bestArgb = Int.MAX_VALUE
-        for (candidate in candidates) {
-            val hct = candidate
+        for ((hct, population) in candidates) {
             if (hct.chroma < CUTOFF_CHROMA) continue
             val hue = sanitizeDegreesInt(hct.hue.roundToInt())
             val proportion = excitedProportion[hue]
