@@ -9,6 +9,8 @@ import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierLayoutOptions
 import com.anisequel.domain.tier.TierRowBox
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
@@ -359,6 +361,106 @@ internal fun visibleTierItems(
     skipMediaId: Int?
 ): List<TierItemBox> =
     if (skipMediaId == null) items else items.filterNot { it.mediaId == skipMediaId }
+
+// ---------------------------------------------------------------------------
+// Only the slab of the board near the viewport is composed
+// ---------------------------------------------------------------------------
+
+/**
+ * A horizontal slab of the board, in the layout's own dp units.
+ *
+ * A range rather than a list of visible ids: the layout is absolute and every
+ * tile's box is known, so "is this poster within this band" is two comparisons
+ * and needs no bookkeeping that could go stale against an edit.
+ */
+internal data class TierDrawWindow(val top: Float, val bottom: Float) {
+    /** Whether a box spanning [top]..[bottom] intersects this slab. */
+    fun intersects(top: Float, bottom: Float): Boolean =
+        bottom >= this.top && top <= this.bottom
+}
+
+/**
+ * How coarsely the window is quantised, in layout dp.
+ *
+ * The window has to change as the board scrolls, but it must not change on every
+ * frame of a fling: writing the window invalidates the board's content, and a
+ * window that followed the scroll pixel for pixel would put a recomposition on
+ * every frame of the one gesture this optimisation exists to make smooth. Rounded
+ * up and down to this grid, the window changes once per ~640dp of travel, which is
+ * a few rows rather than a few frames.
+ */
+internal const val TIER_DRAW_BUCKET_DP = 640f
+
+/**
+ * How far past the visible band a tile is still composed, in layout dp.
+ *
+ * Slack at both ends so a row that is half on screen is already built when it
+ * finishes arriving, and so Coil starts the cover before the poster is needed
+ * rather than the moment it appears. Roughly three rows above and below.
+ */
+internal const val TIER_DRAW_BUFFER_DP = 384f
+
+/**
+ * The band the board composes before its viewport has been measured.
+ *
+ * The board is entered at the top of the list (its scroll state is not restored),
+ * and this covers about a phone screen and a half at 100%, or a screen at the 35%
+ * overview. It is a seed, not a limit: the first measured frame replaces it before
+ * the reader can have moved anywhere.
+ */
+internal const val TIER_DRAW_SEED_DP = 2400f
+
+/**
+ * The slab of a board worth composing at the current scroll position, or null when
+ * the measurements are not usable and the caller should draw everything.
+ *
+ * ## Why the board needs this at all
+ *
+ * The rows live in a plain `Layout`, not a lazy list: the geometry has to be the
+ * same arrangement the SVG exporter reads, and a lazy row could not agree with it
+ * about where the fourth poster of a wrapped row begins. The price was that every
+ * poster existed as a composed node - a three-hundred-title board built three
+ * hundred `AsyncImage`s and asked Coil for three hundred covers, for a screen that
+ * shows at most about forty. A title-ranked board is usually a few hundred titles,
+ * so this was the feature's largest cost and it was paid before the first frame
+ * settled.
+ *
+ * Positions are not affected: the layout still places the whole arrangement and
+ * still reports its full height, so scrollbars, drop hit-testing and the export are
+ * unchanged. Only the children that are nowhere near the viewport are not built.
+ *
+ * [zoom] divides the layout's width rather than scaling a finished canvas, so the
+ * visible band in layout units is the viewport in layout units divided by the
+ * zoomed pixel scale - zooming out widens the window, which is why the overview
+ * still shows the wall of covers it promises.
+ */
+internal fun tierDrawWindow(
+    boardTopPx: Float,
+    viewportTopPx: Float,
+    viewportBottomPx: Float,
+    boardHeightDp: Float,
+    density: Float,
+    zoom: Float
+): TierDrawWindow? {
+    if (boardHeightDp <= 0f || density <= 0f || zoom <= 0f) return null
+    if (!viewportBottomPx.isFinite() || viewportBottomPx <= viewportTopPx) return null
+
+    val scale = density * zoom
+    val top = (viewportTopPx - boardTopPx) / scale
+    val bottom = (viewportBottomPx - boardTopPx) / scale
+
+    // The board is entirely above or below the viewport. An inverted band is the
+    // empty window: no tile box has a negative top, so nothing intersects it.
+    // Returning null here would mean "not measured yet" and compose the whole
+    // board, which is the cost being removed.
+    if (bottom < 0f || top > boardHeightDp) return TierDrawWindow(0f, -1f)
+
+    val from = (floor(top / TIER_DRAW_BUCKET_DP) * TIER_DRAW_BUCKET_DP - TIER_DRAW_BUFFER_DP)
+        .coerceIn(0f, boardHeightDp)
+    val to = (ceil(bottom / TIER_DRAW_BUCKET_DP) * TIER_DRAW_BUCKET_DP + TIER_DRAW_BUFFER_DP)
+        .coerceIn(0f, boardHeightDp)
+    return TierDrawWindow(from, to)
+}
 
 // ---------------------------------------------------------------------------
 // Dragging near the edge of the screen
