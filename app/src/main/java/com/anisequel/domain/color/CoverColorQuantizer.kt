@@ -29,6 +29,11 @@ import kotlin.math.abs
  */
 object CoverColorQuantizer {
 
+    private data class ColorCandidate(
+        val hct: Hct,
+        val population: Int
+    )
+
     private const val TARGET_CHROMA = 48.0
     private const val WEIGHT_PROPORTION = 0.7
     private const val WEIGHT_CHROMA_ABOVE = 0.3
@@ -80,68 +85,83 @@ object CoverColorQuantizer {
      * histogram instead of a bitmap.
      */
     fun score(histogram: Map<Int, Int>): Int? {
-        if (histogram.isEmpty()) return null
+        val candidates = colorCandidates(histogram)
+        val excitedProportion = excitedProportions(candidates) ?: return null
+        return bestCandidate(candidates, excitedProportion)?.hct?.argb
+    }
+
+    private fun colorCandidates(histogram: Map<Int, Int>): List<ColorCandidate> =
+        histogram.mapNotNull { (argb, population) ->
+            if (population <= 0) return@mapNotNull null
+            ColorCandidate(Hct.fromInt(argb), population)
+        }
+
+    /** Builds the M3 neighbourhood score without making candidate ranking stateful. */
+    private fun excitedProportions(candidates: List<ColorCandidate>): DoubleArray? {
+        if (candidates.isEmpty()) return null
 
         val huePopulation = IntArray(360)
-        var populationSum = 0.0
-        val candidates = ArrayList<Pair<Hct, Int>>(histogram.size)
-        for ((argb, population) in histogram) {
-            if (population <= 0) continue
-            val hct = Hct.fromInt(argb)
-            candidates += hct to population
-            val hue = floor(hct.hue).toInt().coerceIn(0, 359)
-            huePopulation[hue] += population
-            populationSum += population
+        for (candidate in candidates) {
+            val hue = floor(candidate.hct.hue).toInt().coerceIn(0, 359)
+            huePopulation[hue] += candidate.population
         }
+        val populationSum = huePopulation.sum().toDouble()
         if (populationSum <= 0.0) return null
 
-        // How much of the image sits within 15 degrees of each hue. This is the
-        // "neighbourhood" part of M3's score: without it, a smooth gradient is
-        // split across many bins and loses to a flat patch of equal total area.
-        val excitedProportion = DoubleArray(360)
-        for (hue in 0 until 360) {
+        val excited = DoubleArray(360)
+        for (hue in huePopulation.indices) {
             val proportion = huePopulation[hue] / populationSum
             if (proportion == 0.0) continue
             for (neighbour in hue - 15..hue + 15) {
-                excitedProportion[sanitizeDegreesInt(neighbour)] += proportion
+                excited[sanitizeDegreesInt(neighbour)] += proportion
             }
         }
+        return excited
+    }
 
-        var best: Hct? = null
+    private fun bestCandidate(
+        candidates: List<ColorCandidate>,
+        excitedProportion: DoubleArray
+    ): ColorCandidate? {
+        var best: ColorCandidate? = null
         var bestScore = Double.NEGATIVE_INFINITY
-        var bestPopulation = -1
-        var bestArgb = Int.MAX_VALUE
-        for ((hct, population) in candidates) {
+        for (candidate in candidates) {
+            val hct = candidate.hct
             if (hct.chroma < CUTOFF_CHROMA) continue
             val hue = sanitizeDegreesInt(hct.hue.roundToInt())
             val proportion = excitedProportion[hue]
             if (proportion <= CUTOFF_EXCITED_PROPORTION) continue
 
-            val proportionScore = proportion * 100.0 * WEIGHT_PROPORTION
-            val chromaWeight = if (hct.chroma < TARGET_CHROMA) {
-                WEIGHT_CHROMA_BELOW
-            } else {
-                WEIGHT_CHROMA_ABOVE
-            }
-            val chromaScore = (hct.chroma - TARGET_CHROMA) * chromaWeight
-            val score = proportionScore + chromaScore
-
-            // Histogram iteration is intentionally not part of the colour
-            // result. Equal-scoring bins used to win by HashMap order, so the
-            // same cover could pick a different accent after a process restart.
-            val tied = abs(score - bestScore) < 0.0000001
-            if (
-                score > bestScore ||
-                (tied && population > bestPopulation) ||
-                (tied && population == bestPopulation && hct.argb < bestArgb)
-            ) {
+            val score = scoreCandidate(hct, proportion)
+            if (isBetter(score, candidate, bestScore, best)) {
                 bestScore = score
-                bestPopulation = population
-                bestArgb = hct.argb
-                best = hct
+                best = candidate
             }
         }
-        return best?.argb
+        return best
+    }
+
+    private fun scoreCandidate(hct: Hct, proportion: Double): Double {
+        val proportionScore = proportion * 100.0 * WEIGHT_PROPORTION
+        val chromaWeight = if (hct.chroma < TARGET_CHROMA) {
+            WEIGHT_CHROMA_BELOW
+        } else {
+            WEIGHT_CHROMA_ABOVE
+        }
+        return proportionScore + (hct.chroma - TARGET_CHROMA) * chromaWeight
+    }
+
+    /** Equal scores use population and ARGB, never HashMap iteration order. */
+    private fun isBetter(
+        score: Double,
+        candidate: ColorCandidate,
+        bestScore: Double,
+        best: ColorCandidate?
+    ): Boolean {
+        if (score > bestScore) return true
+        if (abs(score - bestScore) >= 0.0000001 || best == null) return false
+        return candidate.population > best.population ||
+            (candidate.population == best.population && candidate.hct.argb < best.hct.argb)
     }
 
     private fun sanitizeDegreesInt(degrees: Int): Int {

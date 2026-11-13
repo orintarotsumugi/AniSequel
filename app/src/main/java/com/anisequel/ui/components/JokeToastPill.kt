@@ -48,6 +48,13 @@ import com.anisequel.domain.jokes.JokeDwell
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 
+private data class JokeToastPalette(
+    val container: Color,
+    val content: Color,
+    val accent: Color,
+    val border: Color
+)
+
 /**
  * The pill itself.
  *
@@ -75,22 +82,7 @@ internal fun JokeToastPill(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val darkGold = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val containerColor = if (golden) {
-        if (darkGold) Color(0xFF5B4300) else Color(0xFFFFE39A)
-    } else {
-        MaterialTheme.colorScheme.secondaryContainer
-    }
-    val contentColor = if (golden) {
-        if (darkGold) Color(0xFFFFE9A3) else Color(0xFF3E2D00)
-    } else {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    }
-    val accentColor = if (golden) {
-        if (darkGold) Color(0xFFFFC107) else Color(0xFF986500)
-    } else {
-        MaterialTheme.colorScheme.primary
-    }
+    val palette = jokeToastPalette(golden)
     AnimatedVisibility(
         visible = visible,
         // The slide's spec is an `IntOffset` one - `slideInVertically` takes
@@ -103,11 +95,11 @@ internal fun JokeToastPill(
         // chose to open.
         enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
             slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
-                if (fromBottom) height / 2 else -height / 2
+                toastOffset(fromBottom, height)
             },
         exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
             slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
-                if (fromBottom) height / 2 else -height / 2
+                toastOffset(fromBottom, height)
             },
         modifier = modifier
     ) {
@@ -122,15 +114,15 @@ internal fun JokeToastPill(
         val scale by transition.animateFloat(
             transitionSpec = { ExpressiveMotion.FastSpatial },
             label = "joke_toast_scale"
-        ) { state -> if (state == EnterExitState.Visible) 1f else 0.92f }
+        ) { state -> toastScale(state) }
 
         Surface(
             // Tapping dismisses it early. No scrim and no modal: it is a remark,
             // not a decision, and the page underneath must stay usable.
             onClick = onDismiss,
             shape = MaterialTheme.shapes.large,
-            color = containerColor,
-            contentColor = contentColor,
+            color = palette.container,
+            contentColor = palette.content,
             // Higher than the 3dp it shipped with. The toast lands over a
             // scrolling list of poster artwork, and a `secondaryContainer` pill
             // with a faint tint on it is not reliably separable from a busy
@@ -140,11 +132,7 @@ internal fun JokeToastPill(
             // than a patch of the poster done in a different colour.
             border = BorderStroke(
                 width = 1.dp,
-                color = if (golden) {
-                    accentColor.copy(alpha = 0.78f)
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                }
+                color = palette.border
             ),
             modifier = Modifier
                 .testTag("joke_toast")
@@ -152,7 +140,7 @@ internal fun JokeToastPill(
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    transformOrigin = TransformOrigin(0.5f, if (fromBottom) 1f else 0f)
+                    transformOrigin = toastTransformOrigin(fromBottom)
                 }
                 // A surface that appears by itself, with no tap and no focus
                 // change to announce it, is invisible to a screen reader. Polite
@@ -163,8 +151,8 @@ internal fun JokeToastPill(
             JokeToastBody(
                 joke = joke,
                 golden = golden,
-                accentColor = accentColor,
-                contentColor = contentColor,
+                accentColor = palette.accent,
+                contentColor = palette.content,
                 speakerName = speakerName,
                 stamp = stamp,
                 textEffect = textEffect,
@@ -175,6 +163,45 @@ internal fun JokeToastPill(
                 staysUntilDismissed = dwell.staysUntilDismissed
             )
         }
+    }
+}
+
+private fun toastOffset(fromBottom: Boolean, height: Int): Int =
+    if (fromBottom) height / 2 else -height / 2
+
+private fun toastScale(state: EnterExitState): Float =
+    if (state == EnterExitState.Visible) 1f else 0.92f
+
+private fun toastTransformOrigin(fromBottom: Boolean): TransformOrigin =
+    TransformOrigin(0.5f, if (fromBottom) 1f else 0f)
+
+@Composable
+private fun jokeToastPalette(golden: Boolean): JokeToastPalette {
+    val colors = MaterialTheme.colorScheme
+    if (!golden) {
+        return JokeToastPalette(
+            container = colors.secondaryContainer,
+            content = colors.onSecondaryContainer,
+            accent = colors.primary,
+            border = colors.outlineVariant.copy(alpha = 0.5f)
+        )
+    }
+
+    val darkGold = colors.surface.luminance() < 0.5f
+    return if (darkGold) {
+        JokeToastPalette(
+            container = Color(0xFF5B4300),
+            content = Color(0xFFFFE9A3),
+            accent = Color(0xFFFFC107),
+            border = Color(0xFFFFC107).copy(alpha = 0.78f)
+        )
+    } else {
+        JokeToastPalette(
+            container = Color(0xFFFFE39A),
+            content = Color(0xFF3E2D00),
+            accent = Color(0xFF986500),
+            border = Color(0xFF986500).copy(alpha = 0.78f)
+        )
     }
 }
 
