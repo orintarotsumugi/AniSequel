@@ -364,6 +364,37 @@ private fun SettingsRoot(
         ) {
             SettingsHubHeader(onClose = onClose)
 
+            // The account leads now. It is the one row whose answer changes what
+            // every page below it is looking at - demo list or real AniList list -
+            // and it used to sit fourth, under two sections a signed-out reader
+            // would walk past on the way to "am I signed in?".
+            SettingsSectionLabel("AniList")
+            SettingsHubGroup(
+                entries = listOf(
+                    SettingsPage.ACCOUNT.entry(
+                        AppVectorIcons.SectionAniList,
+                        "settings_row_account",
+                        onOpen,
+                        // The one live fact on the shelf: whether this session is a
+                        // real AniList account or the built-in demo list. Everything
+                        // else the row could say is already on the page it opens.
+                        subtitle = viewer?.let { "Signed in as ${it.name}" }
+                            ?: "Not signed in - browsing the demo list"
+                    ),
+                    // `SignalOn`, not `BrokenHeart`: this row asks a question. A
+                    // broken heart beside "connection" claims the answer before the
+                    // check has run, on a screen where the answer is usually fine.
+                    SettingsHubEntry(
+                        icon = AppVectorIcons.SignalOn,
+                        title = "Connection check",
+                        subtitle = "Ask AniList whether it is reachable",
+                        onClick = onCheckConnection,
+                        testTag = "settings_row_connection"
+                    )
+                ),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+
             SettingsSectionLabel("Personalisation")
             SettingsHubGroup(
                 entries = listOf(
@@ -400,7 +431,7 @@ private fun SettingsRoot(
             SettingsHubGroup(
                 entries = listOf(
                     SettingsPage.LIBRARY.entry(
-                        AppVectorIcons.Tune,
+                        AppVectorIcons.Library,
                         "settings_row_library",
                         onOpen
                     )
@@ -412,7 +443,7 @@ private fun SettingsRoot(
             SettingsHubGroup(
                 entries = listOf(
                     SettingsPage.DEVICE.entry(
-                        AppVectorIcons.Refresh,
+                        AppVectorIcons.DevicePhone,
                         "settings_row_device",
                         onOpen
                     )
@@ -422,35 +453,8 @@ private fun SettingsRoot(
 
             // The connection check used to sit under a "Network" label of its own,
             // which is a whole section heading for one row - and a heading that
-            // names the transport rather than the thing being checked. It is the
-            // same AniList the account row is about, so it lives here, second.
-            SettingsSectionLabel("AniList")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.ACCOUNT.entry(
-                        AppVectorIcons.SectionAniList,
-                        "settings_row_account",
-                        onOpen,
-                        // The one live fact on the shelf: whether this session is a
-                        // real AniList account or the built-in demo list. Everything
-                        // else the row could say is already on the page it opens.
-                        subtitle = viewer?.let { "Signed in as ${it.name}" }
-                            ?: "Not signed in - browsing the demo list"
-                    ),
-                    // `SignalOn`, not `BrokenHeart`: this row asks a question. A
-                    // broken heart beside "connection" claims the answer before the
-                    // check has run, on a screen where the answer is usually fine.
-                    SettingsHubEntry(
-                        icon = AppVectorIcons.SignalOn,
-                        title = "Connection check",
-                        subtitle = "Ask AniList whether it is reachable",
-                        onClick = onCheckConnection,
-                        testTag = "settings_row_connection"
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-
+            // names the transport rather than the thing being checked. It lives
+            // with the account row at the top, because it is the same AniList.
             SettingsSectionLabel("About")
             SettingsHubGroup(
                 entries = listOf(

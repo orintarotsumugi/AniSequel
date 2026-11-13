@@ -9,15 +9,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -30,7 +37,15 @@ private val greetings = listOf(
     "Hi again" to "where should we pick up?",
     "The next story starts here" to "what are we in the mood for?",
     "Back for more" to "your watchlist missed you.",
-    "A new day, a new episode" to "let's see what's waiting."
+    "A new day, a new episode" to "let's see what's waiting.",
+    "There you are" to "I kept the good ones for you.",
+    "Missed you" to "the queue did not move without you.",
+    "Evening, watcher" to "shall we continue where we stopped?",
+    "Fresh page" to "one more chapter never hurt anyone.",
+    "You made it" to "the shelf has been waiting.",
+    "Look who's back" to "there is always room for one more.",
+    "Ready when you are" to "the next episode is already queued.",
+    "Another day, another arc" to "let's see how this one ends."
 )
 
 /**
@@ -80,20 +95,28 @@ fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "${current.first}, $viewerName",
+                    // The name is the one word on this screen that belongs to
+                    // the reader, so it is the one word in the accent colour
+                    // rather than another run of body text.
+                    text = buildAnnotatedString {
+                        append("${current.first}, ")
+                        withStyle(
+                            SpanStyle(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        ) { append(viewerName) }
+                    },
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Text(
+                TypewriterLine(
                     text = current.second,
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -106,6 +129,48 @@ fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/**
+ * The greeting's second line, typed on one character step per frame.
+ *
+ * One state change per frame rather than one per letter: the text is a `String`
+ * slice, and a 60fps reveal needs 60 recompositions of a single `Text`, which is
+ * cheaper than a per-letter `AnimatedContent` and does not animate the block's
+ * width. Two characters per frame keeps a long line under a second.
+ *
+ * The caret is part of the drawn string so the space it occupies does not collapse
+ * the line while the text is still arriving.
+ *
+ * A screen reader gets the finished sentence through semantics: it cannot meaningfully
+ * follow a glyph-by-glyph reveal, and reading a partial sentence aloud and then
+ * restarting it is worse than reading the answer once.
+ */
+@Composable
+private fun TypewriterLine(
+    text: String,
+    style: androidx.compose.ui.text.TextStyle,
+    color: androidx.compose.ui.graphics.Color
+) {
+    var shown by remember(text) { mutableIntStateOf(0) }
+    LaunchedEffect(text) {
+        shown = 0
+        while (shown < text.length) {
+            withFrameNanos { }
+            shown = (shown + 2).coerceAtMost(text.length)
+        }
+    }
+    val typing = shown < text.length
+    Text(
+        text = text.take(shown) + if (typing) "▏" else "",
+        style = style,
+        fontWeight = FontWeight.Bold,
+        color = color,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = text }
+    )
 }
 
 /** Advances the greeting without repeating the one on the previous app visit. */

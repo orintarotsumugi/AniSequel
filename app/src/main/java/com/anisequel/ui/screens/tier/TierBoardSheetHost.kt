@@ -25,11 +25,11 @@ import com.anisequel.domain.tier.TierMediaType
  */
 internal class TierBoardSheetState {
     var placingMediaId by mutableStateOf<Int?>(null)
+    var searching by mutableStateOf(false)
     var addingTitles by mutableStateOf(false)
     var managingTiers by mutableStateOf(false)
     var filtering by mutableStateOf(false)
     var displaying by mutableStateOf(false)
-    var zooming by mutableStateOf(false)
     var exporting by mutableStateOf(false)
     var coloringTierId by mutableStateOf<String?>(null)
     var bandTierId by mutableStateOf<String?>(null)
@@ -39,11 +39,11 @@ private val TierBoardSheetStateSaver: Saver<TierBoardSheetState, Any> = mapSaver
     save = { state ->
         mapOf(
             "placing" to state.placingMediaId,
+            "searching" to state.searching,
             "adding" to state.addingTitles,
             "managing" to state.managingTiers,
             "filtering" to state.filtering,
             "displaying" to state.displaying,
-            "zooming" to state.zooming,
             "exporting" to state.exporting,
             "coloring" to state.coloringTierId,
             "band" to state.bandTierId
@@ -52,11 +52,11 @@ private val TierBoardSheetStateSaver: Saver<TierBoardSheetState, Any> = mapSaver
     restore = { saved ->
         TierBoardSheetState().apply {
             placingMediaId = saved["placing"] as Int?
+            searching = saved["searching"] as Boolean? ?: false
             addingTitles = saved["adding"] as Boolean? ?: false
             managingTiers = saved["managing"] as Boolean? ?: false
             filtering = saved["filtering"] as Boolean? ?: false
             displaying = saved["displaying"] as Boolean? ?: false
-            zooming = saved["zooming"] as Boolean? ?: false
             exporting = saved["exporting"] as Boolean? ?: false
             coloringTierId = saved["coloring"] as String?
             bandTierId = saved["band"] as String?
@@ -104,8 +104,6 @@ internal class TierBoardSheetActions(
     val onFilterChange: (TierFilter) -> Unit,
     val onDisplayChange: (TierDisplay) -> Unit,
     val onResetZoom: () -> Unit,
-    val onZoomChange: (Float) -> Unit,
-    val onZoomLockChange: (Boolean) -> Unit,
     val onClearPlacements: () -> Unit
 )
 
@@ -140,6 +138,23 @@ internal fun TierBoardSheetsHost(
                 state.placingMediaId = null
             },
             onDismiss = { state.placingMediaId = null }
+        )
+    }
+
+    if (state.searching) {
+        TierSearchSheet(
+            // The whole pool, not the filtered one: the search is how a reader
+            // finds a title a filter is currently hiding, and searching only
+            // what is already visible is a second filter.
+            candidates = data.candidates,
+            mediaType = data.mediaType,
+            onPick = { candidate ->
+                // The picker hands the choice to the same placement sheet a tap
+                // on a poster opens, so there is one way a title gets a tier.
+                state.searching = false
+                state.placingMediaId = candidate.mediaId
+            },
+            onDismiss = { state.searching = false }
         )
     }
 
@@ -190,17 +205,6 @@ internal fun TierBoardSheetsHost(
             // cannot lose a race with the debounced write of the zoom it replaced.
             onResetZoom = actions.onResetZoom,
             onDismiss = { state.displaying = false }
-        )
-    }
-
-    if (state.zooming) {
-        TierZoomSheet(
-            zoom = data.zoom,
-            locked = data.boardLocked,
-            onZoomChange = actions.onZoomChange,
-            onLockChange = actions.onZoomLockChange,
-            onResetZoom = actions.onResetZoom,
-            onDismiss = { state.zooming = false }
         )
     }
 

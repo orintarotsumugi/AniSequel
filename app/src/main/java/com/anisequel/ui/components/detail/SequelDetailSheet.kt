@@ -332,8 +332,20 @@ fun SequelDetailSheet(
         entrance.animateTo(1f, ExpressiveMotion.DefaultSpatial)
     }
 
+    // The palette's destination, hoisted above the dialog so the dialog's own
+    // dismiss request can see it. It used to live inside the dialog content,
+    // where `onDismissRequest` could not read it, so Back in the appearance
+    // editor dismissed the *whole title page* and dropped the reader back on
+    // the list they opened it from. Back now closes the editor first, exactly
+    // like its own Back control; only the next Back leaves the title.
+    var showAppearance by rememberSaveable(subject.mediaId, subject.media.type) {
+        mutableStateOf(false)
+    }
+
     Dialog(
-        onDismissRequest = handleDismiss,
+        onDismissRequest = {
+            if (showAppearance) showAppearance = false else handleDismiss()
+        },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnBackPress = true,
@@ -360,12 +372,10 @@ fun SequelDetailSheet(
         var destination by rememberSaveable(subject.mediaId, subject.media.type) {
             mutableIntStateOf(0)
         }
-        // The palette's destination. Boolean rather than a third `AnimatedContent`
+        // The palette's destination is hoisted above the dialog - see the note
+        // beside its declaration. Boolean rather than a third `AnimatedContent`
         // index: it is an overlay over the page, not a peer of Info and My Entry,
         // so the bottom capsule keeps saying which of its two pages is behind it.
-        var showAppearance by rememberSaveable(subject.mediaId, subject.media.type) {
-            mutableStateOf(false)
-        }
         val destinations = buildList {
             add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
             if (entryEditor != null) {

@@ -83,7 +83,6 @@ fun ProfileHeaderCard(
         modifier = modifier
             .widthIn(max = maxWidth)
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .testTag("profile_header")
     ) {
         Box(
@@ -127,10 +126,19 @@ fun ProfileHeaderCard(
             )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        // The banner is the page's first surface and it bleeds to both edges,
+        // exactly as the reference clients draw one: a 16dp gutter around a
+        // picture the reader chose made it a card among cards. Everything that
+        // identifies the account stays on the 16dp grid below it.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(4.dp))
 
-        Text(
-            text = state.username,
+            Text(
+                text = state.username,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
@@ -175,6 +183,7 @@ fun ProfileHeaderCard(
         Spacer(modifier = Modifier.height(10.dp))
 
         HeaderSummaryStrip(state = state)
+        }
     }
 }
 
@@ -283,8 +292,17 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
             // chose for themselves, and at 260dp a 16:9 banner is cropped to its
             // middle band. The drift below is what makes that crop survivable: the
             // artwork reaches its own edges without anyone asking.
-            .height(300.dp)
-            .clip(MaterialTheme.shapes.extraLarge)
+            // 320 rather than 300 now that the width is the whole screen: a
+            // 16:9 banner at full bleed needs the extra height to keep its own
+            // aspect instead of being cropped to a strip. Only the bottom edge
+            // is rounded, so the artwork meets the status bar cleanly.
+            .height(320.dp)
+            .clip(
+                RoundedCornerShape(
+                    bottomStart = ExpressiveShapes.LargeCorner,
+                    bottomEnd = ExpressiveShapes.LargeCorner
+                )
+            )
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         val banner = state.bannerUrl

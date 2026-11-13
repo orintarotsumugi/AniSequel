@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -129,8 +132,15 @@ private fun CharacterCard(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        // One size for every card, because the row is read as a row: the old
+        // cards sized themselves to their contents, so a character with an alias
+        // and an actor stood 30dp taller than the one beside them and the rail's
+        // bottom edge was a staircase. 128dp is the tallest ordinary card - two
+        // name lines, the alias, role, facts and the actor line - and the empty
+        // space a shorter card has now is what gives every card the same grid.
         modifier = Modifier
-            .width(268.dp)
+            .width(288.dp)
+            .height(128.dp)
             // Opens the character's own page *inside the app*, the way a studio credit
             // opens a studio page. It handed off to the browser before, which was the
             // one thing on this page that did: the reader left the app to read three
@@ -146,7 +156,9 @@ private fun CharacterCard(
             )
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AsyncImage(
@@ -156,14 +168,25 @@ private fun CharacterCard(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(64.dp)
+                    .width(62.dp)
+                    .height(100.dp)
                     .clip(MaterialTheme.shapes.medium)
                     .background(placeholder)
             )
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            // Grows to the card's full inner height so the actor line can sit on
+            // the bottom edge instead of floating wherever the optional lines
+            // above it happened to end. That is the difference between a card
+            // that holds the same five facts and one that looks like it does.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
                 Text(
                     text = character?.name?.full ?: "Unknown character",
                     style = MaterialTheme.typography.bodyMedium,
@@ -213,13 +236,17 @@ private fun CharacterCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                }
+                // Outside the text column on purpose: `SpaceBetween` has to see
+                // two children for the actor line to land on the card's bottom
+                // edge. Nested inside it, the card grew with the text and the
+                // fixed height simply cut the line off.
                 if (actor?.name?.full != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = AppVectorIcons.FavouriteStaff,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            imageVector = AppVectorIcons.Mic,
+                            contentDescription = "Voiced by",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(5.dp))
@@ -234,15 +261,22 @@ private fun CharacterCard(
                 }
             }
 
-            Column(horizontalAlignment = Alignment.End) {
+            // The actor's portrait and the character's favourite count share one
+            // fixed column, so the figures line up across the whole rail even
+            // when a card has no actor at all.
+            Column(
+                modifier = Modifier.width(56.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
                 if (actor?.image?.bestUrl != null) {
                     AsyncImage(
                         model = actor.image.bestUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(MaterialTheme.shapes.medium)
+                            .size(46.dp)
+                            .clip(CircleShape)
                             .background(placeholder)
                     )
                 }
@@ -251,21 +285,28 @@ private fun CharacterCard(
                 // supporting character with four thousand favourites is visibly a
                 // different proposition from one with nine.
                 character?.favourites?.takeIf { it > 0 }?.let { favourites ->
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = AppVectorIcons.Star,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(11.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = compactCount(favourites),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
+                    Surface(
+                        shape = ExpressiveShapes.pill,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Star,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = compactCount(favourites),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
@@ -292,6 +293,14 @@ object AppVectorIcons {
     // Settings section headers. All from the extended set, which R8 prunes to
     // whatever is actually reachable - adding names here costs nothing in the
     // release APK, and it keeps every Settings header in one reviewable list.
+    /**
+     * The phone in the reader's hand, for the Device Manager row.
+     *
+     * The row used `Refresh` - the same glyph as the refresh interval above it -
+     * on a page that is about the device, not about reloading. A device is what
+     * the page is.
+     */
+    val DevicePhone = Icons.Default.Phone
     val SectionAppearance = Icons.Outlined.ColorLens
     val SectionAniList = Icons.Outlined.Api
     val SectionAbout = Icons.Outlined.Contrast
