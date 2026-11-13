@@ -84,6 +84,8 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
 
 /**
@@ -179,6 +181,7 @@ fun InfoHero(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val immersive = LocalImmersiveMode.current
     // The poster's bounds at the last layout pass. Captured here rather than in
     // the page because this is where the rectangle exists; the page only needs it
     // long enough to hand to the viewer.
@@ -344,12 +347,17 @@ fun InfoHero(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
+                // In immersive mode the system reports no status inset. The
+                // artwork stays edge-to-edge, while the action capsule gets a
+                // cutout-safe breathing room of its own.
+                .immersiveDisplayInsets(immersive)
                 .padding(12.dp)
         ) {
             Surface(
                 shape = ExpressiveShapes.pill,
                 color = Color.Black.copy(alpha = 0.42f),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+                shadowElevation = 8.dp,
                 modifier = Modifier.testTag("detail_hero_actions")
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -426,6 +434,7 @@ fun InfoHero(
                 slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
             modifier = Modifier
                 .align(Alignment.TopStart)
+                .immersiveDisplayInsets(immersive)
                 .padding(12.dp)
         ) {
             TitleCopiedPill()

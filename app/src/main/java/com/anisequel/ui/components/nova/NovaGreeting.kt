@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 
 private val greetings = listOf(
@@ -45,7 +46,21 @@ private val greetings = listOf(
     "You made it" to "the shelf has been waiting.",
     "Look who's back" to "there is always room for one more.",
     "Ready when you are" to "the next episode is already queued.",
-    "Another day, another arc" to "let's see how this one ends."
+    "Another day, another arc" to "let's see how this one ends.",
+    "The queue is awake" to "your sleep schedule is not.",
+    "Welcome to the next arc" to "the recap is optional. Probably.",
+    "Good timing" to "the plot is about to make a terrible decision.",
+    "The shelf is calling" to "it has opinions about your backlog.",
+    "You returned" to "the cliffhanger is still being dramatic.",
+    "Let us pretend it is one episode" to "we both know that is a lie.",
+    "A wild watcher appears" to "the watchlist has prepared a boss fight.",
+    "The opening is ready" to "your emotional damage can begin.",
+    "Welcome back, legend" to "there is still no finale date.",
+    "The next chapter waits" to "unlike the sequel announcement.",
+    "You brought taste" to "or at least a very committed opinion.",
+    "Good evening, protagonist" to "the filler arc has snacks.",
+    "Your backlog survived" to "somehow, it got longer.",
+    "The watchlist has spoken" to "it wants one more episode."
 )
 
 /**
@@ -152,8 +167,13 @@ private fun TypewriterLine(
     style: androidx.compose.ui.text.TextStyle,
     color: androidx.compose.ui.graphics.Color
 ) {
+    val instant = ExpressiveMotion.speed == MotionStyle.INSTANT
     var shown by remember(text) { mutableIntStateOf(0) }
-    LaunchedEffect(text) {
+    LaunchedEffect(text, instant) {
+        if (instant) {
+            shown = text.length
+            return@LaunchedEffect
+        }
         shown = 0
         while (shown < text.length) {
             withFrameNanos { }

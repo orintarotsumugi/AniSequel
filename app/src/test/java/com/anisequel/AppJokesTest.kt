@@ -179,4 +179,33 @@ class AppJokesTest {
             ordered.last()
         )
     }
+
+    @Test
+    fun `golden roll is exactly one in one thousand and stays opt in`() {
+        assertTrue(AppJokes.isGoldenRoll(0))
+        assertFalse(AppJokes.isGoldenRoll(1))
+        assertFalse(AppJokes.isGoldenRoll(999))
+
+        val draw = AppJokes.drawJoke(
+            seen = mutableSetOf(),
+            last = "",
+            allowGolden = true,
+            random = ZeroRandom
+        )
+        assertTrue(draw.isGolden)
+        assertTrue(draw.text in AppJokes.goldenLines)
+
+        val ordinary = AppJokes.drawJoke(
+            seen = mutableSetOf(),
+            last = "",
+            allowGolden = false,
+            random = ZeroRandom
+        )
+        assertFalse(ordinary.isGolden)
+        assertTrue(ordinary.text in AppJokes.lines)
+    }
+
+    private object ZeroRandom : Random() {
+        override fun nextBits(bitCount: Int): Int = 0
+    }
 }

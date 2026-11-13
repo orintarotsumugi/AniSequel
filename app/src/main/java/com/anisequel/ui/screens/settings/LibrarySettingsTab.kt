@@ -49,8 +49,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * How the saved list is read, how the dashboard presents it, and which pages the
- * bottom bar offers.
+ * How the saved list is read, how the dashboard presents it, and which pages are
+ * reachable from the top and bottom bars.
  *
  * These cards used to share a tab with the AniList Client ID, the app lock and the
  * sign-out button, under the heading "Edit" - a name that describes the source file
@@ -72,13 +72,65 @@ fun LibrarySettingsTab(
         ArrivingSectionCard(arrivingPreferences)
         // The hold-and-swipe card moved to Device Manager, which is where the rest
         // of the "what this phone does with a gesture" choices live.
+        TopBarSectionCard(mainTabPreferences)
         BottomBarSectionCard(mainTabPreferences)
+        SearchPageSectionCard(mainTabPreferences)
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 /**
- * The tier list's place on the bottom bar.
+ * The shortcuts beside Settings and Profile.
+ *
+ * This and [BottomBarSectionCard] used to be one card called "Bottom bar" that
+ * held both answers. That card was wrong twice: its title named one surface while
+ * half its switches changed the other, and each shortcut forced its matching tab
+ * on so a reader could not have one without the other. They are two cards now,
+ * and each switch writes only the surface it names.
+ */
+@Composable
+private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
+    val scope = rememberCoroutineScope()
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
+    )
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
+        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    )
+
+    SectionCard(
+        title = "Top bar",
+        icon = AppVectorIcons.Tune,
+        subtitle = "Shortcuts beside Settings and Profile"
+    ) {
+        SwitchRow(
+            title = "Tier lists shortcut",
+            subtitle = "Show the trophy in the top bar in both layouts. This does " +
+                "not add a Tiers tab; the two switches are separate.",
+            checked = tierTopBar,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setTierTopBar(enabled) }
+            },
+            modifier = Modifier.testTag("tier_list_top_bar_switch")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SwitchRow(
+            title = "Catalogue search shortcut",
+            subtitle = "Show the magnifier in the top bar in both layouts. This does " +
+                "not add a Search tab; the two switches are separate.",
+            checked = searchTopBar,
+            onCheckedChange = { enabled ->
+                scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
+            },
+            modifier = Modifier.testTag("search_top_bar_switch")
+        )
+    }
+}
+
+/**
+ * The pages the bottom bar switches between.
  *
  * A switch rather than a decision because the two kinds of reader are both real: the
  * tier list is the only page in the app that owns the whole screen, so a reader who
@@ -86,10 +138,9 @@ fun LibrarySettingsTab(
  * reader who ranks everything should not have to reach it through the Library every
  * time.
  *
- * The copy says what the switch does *not* do. It takes the tab off the bar; it does
- * not disable tier lists - the trophy in the Library and the row in the profile open
- * the same page either way. A switch called "Tier lists" that left the feature
- * working would be read as a broken switch.
+ * The copy says what each switch does *not* do. It takes the tab off the bar; it does
+ * not disable the page or its top-bar shortcut. A switch called "Tier lists" that
+ * left the feature working would be read as a broken switch.
  *
  * Off out of the box, so the switch's subtitle leads with what turning it on buys
  * rather than assuming the reader knows what "Tiers" would be a tab for.
@@ -103,18 +154,6 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val searchTab by mainTabPreferences.searchTab.collectAsState(
         initial = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
-    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
-    )
-    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
-    )
-    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
-    )
-    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
-    )
 
     SectionCard(
         title = "Bottom bar",
@@ -122,33 +161,9 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
         subtitle = "Which pages the bar switches between"
     ) {
         SwitchRow(
-            title = "Tier lists top-bar shortcut",
-            subtitle = "Show the trophy beside Settings and Profile in both layouts; this also adds the Tiers tab.",
-            checked = tierTopBar,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setTierTopBar(enabled) }
-            },
-            modifier = Modifier.testTag("tier_list_top_bar_switch")
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        SwitchRow(
-            title = "Catalogue search top-bar shortcut",
-            subtitle = "Show the magnifier beside Settings and Profile in both layouts; this also adds the Search tab.",
-            checked = searchTopBar,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
-            },
-            modifier = Modifier.testTag("search_top_bar_switch")
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        SwitchRow(
             title = "Tier lists tab",
-            subtitle = "Add Tiers between Library and Profile. Turning this off hides only " +
-                "the tab; the trophy shortcut and your lists remain available.",
+            subtitle = "Add Tiers between Library and Profile. Turning this off hides " +
+                "only the tab; the trophy shortcut and your lists remain available.",
             checked = tierListTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setTierListTab(enabled) }
@@ -165,21 +180,40 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
         // available would be understood as cosmetic.
         SwitchRow(
             title = "Search tab",
-            subtitle = "Search the AniList catalogue. The top-bar shortcut also " +
-                "opens this page; turn both off to remove direct shortcuts.",
+            subtitle = "Add Search to the bar. Turning this off hides only the tab; " +
+                "the top-bar shortcut still opens the page.",
             checked = searchTab,
             onCheckedChange = { enabled ->
                 scope.launch { mainTabPreferences.setSearchTab(enabled) }
             },
             modifier = Modifier.testTag("search_tab_switch")
         )
+    }
+}
 
-        Spacer(modifier = Modifier.height(8.dp))
+/**
+ * What the Search page is allowed to search.
+ *
+ * These two switches used to live under "Bottom bar" beside the tab switches, which
+ * made a card about navigation also own the page's contents. They are their own
+ * card now because the question is different: the bar switches decide *where* the
+ * page is reachable from, these decide what it can answer.
+ */
+@Composable
+private fun SearchPageSectionCard(mainTabPreferences: MainTabPreferences) {
+    val scope = rememberCoroutineScope()
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
+    )
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
+        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
+    )
 
-        // Separate namespaces, separate switches. The page asks one at a time,
-        // and this is where a reader says which halves exist on their device at
-        // all. Both off also hides the tab (see `enabledMainTabs`), because a
-        // search page with no catalogue to search is an empty room.
+    SectionCard(
+        title = "Search page",
+        icon = AppVectorIcons.Search,
+        subtitle = "What the catalogue search can find"
+    ) {
         SwitchRow(
             title = "Anime search",
             subtitle = "Offer the anime half of the catalogue on the Search page.",
@@ -192,6 +226,11 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Separate namespaces, separate switches. The page asks one at a time,
+        // and this is where a reader says which halves exist on their device at
+        // all. Both off also hides the tab and the shortcut (see `enabledMainTabs`
+        // and the host's composition local), because a search page with no
+        // catalogue to search is an empty room.
         SwitchRow(
             title = "Manga search",
             subtitle = "Offer the manga half of the catalogue on the Search page. " +

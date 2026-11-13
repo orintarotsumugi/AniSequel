@@ -23,7 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -320,7 +319,9 @@ internal fun BarRow(
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    val width by animateFloatAsState(
+    // The value only paints the bar. Keeping the State object and reading it in
+    // drawBehind avoids recomposing the whole chart row on every spring frame.
+    val width = animateFloatAsState(
         targetValue = row.share.coerceIn(MIN_BAR_SHARE, 1f),
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "bar_${row.label}"
@@ -356,7 +357,7 @@ internal fun BarRow(
                 .clip(RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner))
                 .background(trackColor)
                 .drawBehind {
-                    val barWidth = size.width * width
+                    val barWidth = size.width * width.value
                     if (barWidth > 0f) {
                         drawRoundRect(
                             color = color,

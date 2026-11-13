@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail.info
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -8,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -258,10 +261,17 @@ internal fun HeroIconButton(
     // the press and the ripple is not drawn by a second, competing pipeline - the
     // same pairing `SpoilerChip` and `HeroChip` use.
     val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressContainer by animateColorAsState(
+        targetValue = if (pressed) tint.copy(alpha = 0.18f) else Color.Transparent,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "hero_icon_press_container"
+    )
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
+            .background(pressContainer)
             .bouncyPress(pressedScale = 0.84f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,

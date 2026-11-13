@@ -2,6 +2,7 @@ package com.anisequel.domain.color
 
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /**
  * Picks a Material theme seed out of a cover image.
@@ -108,6 +109,8 @@ object CoverColorQuantizer {
 
         var best: Hct? = null
         var bestScore = Double.NEGATIVE_INFINITY
+        var bestPopulation = -1
+        var bestArgb = Int.MAX_VALUE
         for (candidate in candidates) {
             val hct = candidate
             if (hct.chroma < CUTOFF_CHROMA) continue
@@ -124,8 +127,18 @@ object CoverColorQuantizer {
             val chromaScore = (hct.chroma - TARGET_CHROMA) * chromaWeight
             val score = proportionScore + chromaScore
 
-            if (score > bestScore) {
+            // Histogram iteration is intentionally not part of the colour
+            // result. Equal-scoring bins used to win by HashMap order, so the
+            // same cover could pick a different accent after a process restart.
+            val tied = abs(score - bestScore) < 0.0000001
+            if (
+                score > bestScore ||
+                (tied && population > bestPopulation) ||
+                (tied && population == bestPopulation && hct.argb < bestArgb)
+            ) {
                 bestScore = score
+                bestPopulation = population
+                bestArgb = hct.argb
                 best = hct
             }
         }

@@ -109,6 +109,14 @@ data class NavigationDestination(
  * The selection *scale* and press *scale* are multiplied together in one
  * `graphicsLayer`, so both are draw-phase only and neither recomposes this bar -
  * it sits over a list that is being scrolled underneath it.
+ *
+ * ## A page can be on screen without being one of the tabs
+ *
+ * `selectedIndex` may be `-1`, which means "no tab on this bar is selected". The
+ * top-bar shortcut opens Search or Tiers even when their tab is switched off, and
+ * coerce-as-first drew Home as selected on a page that was not Home. With `-1` the
+ * bar draws icons only and no label; a hold-and-swipe still works, starting from
+ * the nearest destination the finger travels towards.
  */
 /**
  * How much of the bar's width the selected destination may claim.

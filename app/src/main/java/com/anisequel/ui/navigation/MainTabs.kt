@@ -289,12 +289,15 @@ internal fun MainBar(
     val destinations = remember(tabs, profileAvatarUrl) {
         mainTabDestinations(tabs, profileAvatarUrl)
     }
-    // `coerceAtLeast(0)` rather than an error: the bar is not drawn on the tier
-    // list, but it is still composed for a frame while it animates away from a
-    // screen whose tab may no longer be in the list (the reader can turn the tier
-    // tab off in Settings while a tier board is open). A bar with no selection for
-    // one frame beats a crash.
-    val selectedIndex = tabs.indexOf(selected).coerceAtLeast(0)
+    // `indexOf` without `coerceAtLeast(0)`: a page can be on screen without being
+    // one of the bar's tabs. The top-bar shortcut opens Search or Tiers even when
+    // the matching tab is switched off, and coercing the missing index to zero
+    // drew Home as the selected tab on a page that is not Home. -1 means exactly
+    // "this page is not on the bar", and the bar draws no selection for it. The
+    // bar still navigates and still supports the hold-and-swipe: from -1 a drag
+    // towards the later tabs steps into the first one, which is the nearest
+    // destination in that direction.
+    val selectedIndex = tabs.indexOf(selected)
 
     Box(
         modifier = modifier

@@ -68,8 +68,15 @@ class MainTabPreferencesTest {
         )
     }
 
+    /**
+     * The top bar and the bottom bar are separate answers.
+     *
+     * A shortcut used to force its tab on and a tab switched off used to clear its
+     * shortcut, so "trophy beside Settings, no fifth tab" was impossible. This pins
+     * both directions of that independence: each switch writes only its own key.
+     */
     @Test
-    fun `top bar shortcuts enable a matching tab and tabs can hide their shortcut`() = runTest {
+    fun `top bar shortcuts and tabs change independently`() = runTest {
         val preferences = preferences()
 
         preferences.setSearchTopBar(true)
@@ -77,14 +84,32 @@ class MainTabPreferencesTest {
 
         assertTrue(preferences.searchTopBar.first())
         assertTrue(preferences.tierTopBar.first())
+        assertFalse(
+            "a shortcut must not add a tab: the two switches are separate",
+            preferences.searchTab.first()
+        )
+        assertFalse(preferences.tierListTab.first())
+
+        preferences.setSearchTab(true)
+        preferences.setTierListTab(true)
         assertTrue(preferences.searchTab.first())
         assertTrue(preferences.tierListTab.first())
+        assertTrue(
+            "turning a tab on must not change the shortcut that was already chosen",
+            preferences.searchTopBar.first()
+        )
+        assertTrue(preferences.tierTopBar.first())
 
         preferences.setSearchTab(false)
         preferences.setTierListTab(false)
 
-        assertFalse(preferences.searchTopBar.first())
-        assertFalse(preferences.tierTopBar.first())
+        assertFalse(preferences.searchTab.first())
+        assertFalse(preferences.tierListTab.first())
+        assertTrue(
+            "turning a tab off must not take away the top-bar shortcut",
+            preferences.searchTopBar.first()
+        )
+        assertTrue(preferences.tierTopBar.first())
     }
 
     @Test

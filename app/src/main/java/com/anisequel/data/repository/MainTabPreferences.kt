@@ -35,6 +35,16 @@ private val Context.mainTabsDataStore: DataStore<Preferences> by preferencesData
  * Read through a [Flow] rather than a stored value so a flip in Settings reaches
  * the bar in the same session, without the app's root being rebuilt - the bar is
  * drawn by the host, and the host is what collects this.
+ *
+ * ## The top bar and the bottom bar are two answers, not one
+ *
+ * The shortcut switches and the tab switches used to write each other: turning a
+ * top-bar shortcut on also turned its tab on, and turning a tab off also took the
+ * shortcut away. A reader who wanted the trophy beside Settings without a fifth
+ * tab could not have it, and a reader who turned the tab off lost a shortcut they
+ * had chosen separately. They are independent surfaces and each switch now writes
+ * only its own key. A page opened by a shortcut whose tab is hidden is still a
+ * real page; the bottom bar simply draws no selected tab while it is on screen.
  */
 class MainTabPreferences(private val context: Context) {
 
@@ -62,7 +72,6 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setTierListTab(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.TIER_LIST_TAB] = enabled
-            if (!enabled) preferences[Keys.TIER_TOP_BAR] = false
         }
     }
 
@@ -84,7 +93,6 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setSearchTab(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.SEARCH_TAB] = enabled
-            if (!enabled) preferences[Keys.SEARCH_TOP_BAR] = false
         }
     }
 
@@ -128,7 +136,6 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setSearchTopBar(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.SEARCH_TOP_BAR] = enabled
-            if (enabled) preferences[Keys.SEARCH_TAB] = true
         }
     }
 
@@ -140,7 +147,6 @@ class MainTabPreferences(private val context: Context) {
     suspend fun setTierTopBar(enabled: Boolean) {
         context.mainTabsDataStore.edit { preferences ->
             preferences[Keys.TIER_TOP_BAR] = enabled
-            if (enabled) preferences[Keys.TIER_LIST_TAB] = true
         }
     }
 

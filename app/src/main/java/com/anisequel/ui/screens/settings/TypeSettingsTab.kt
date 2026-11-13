@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +48,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.LocalTitleMotion
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.rememberBoundSliderState
@@ -95,16 +97,21 @@ fun TypeSettingsTab(
         importError = null
         importing = true
         scope.launch {
-            CustomFontStore.import(context, uri).fold(
-                onSuccess = { font ->
-                    themePreferences.setCustomFont(path = font.path, name = font.name)
-                },
-                onFailure = { failure ->
-                    importError = failure.message
-                        ?: "That file could not be read as a font."
-                }
-            )
-            importing = false
+            try {
+                CustomFontStore.import(context, uri).fold(
+                    onSuccess = { font ->
+                        themePreferences.setCustomFont(path = font.path, name = font.name)
+                    },
+                    onFailure = { failure ->
+                        importError = failure.message
+                            ?: "That file could not be read as a font."
+                    }
+                )
+            } finally {
+                // Cancellation used to leave the button disabled forever if the
+                // Settings screen left composition during a large copy.
+                importing = false
+            }
         }
     }
 
@@ -144,21 +151,64 @@ fun TypeSettingsTab(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (importing) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "Importing\u2026",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
+            AnimatedVisibility(
+                visible = importing,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleIn(animationSpec = ExpressiveMotion.FastSpatial),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    scaleOut(animationSpec = ExpressiveMotion.FastSpatial)
+            ) {
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("font_import_loading")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ExpressiveLoadingIndicator(
+                            modifier = Modifier.testTag("font_import_indicator"),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Loading font",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "Checking the file and applying it to the preview.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
-            importError?.let { message ->
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
+            AnimatedVisibility(
+                visible = importError != null,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+            ) {
+                importError?.let { message ->
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("font_import_error")
+                    ) {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(14.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

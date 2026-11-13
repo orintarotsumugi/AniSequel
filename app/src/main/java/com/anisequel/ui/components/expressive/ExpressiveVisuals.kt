@@ -23,7 +23,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +36,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -163,21 +168,20 @@ fun ExpressiveLoadingOverlay(
  * sometimes owns a clock would change the shape of the composition every time the
  * motion style changed. The static path allocates no animation at all.
  *
- * ## The clock also stops when the app is not on screen
+ * ## The clock also stops when the orb is not on screen
  *
- * The cost the Instant branch could not cover was this one: the transition kept
- * ticking behind an orb on a stopped Activity, because a
- * `rememberInfiniteTransition` runs for as long as it is composed and an empty
+ * A `rememberInfiniteTransition` runs for as long as it is composed, and an empty
  * state is composed inside a plain `Column` - scrolling it away does not dispose
- * it, and neither does leaving the app. It is gated on `rememberIsResumed` now,
- * which is the same signal the joke toast's timer uses.
+ * it. The orb now checks both `rememberIsResumed` and its window bounds, so a
+ * stopped Activity and an orb scrolled outside the viewport both use the static
+ * branch.
  *
  * The branch joins the Instant one rather than wrapping the animation, so the
  * static composable is the *only* thing composed while the app is in the
- * background: no clock is allocated to be paused, which is the point. Because
- * both branches are the same pair of composables, resuming swaps one for the
- * other and the orb's silhouette restarts from the cookie - a shape change the
- * reader cannot see, since they were not looking at the screen a frame earlier.
+ * background or outside the viewport: no clock is allocated to be paused, which is
+ * the point. Because both branches are the same pair of composables, returning to
+ * the window swaps one for the other and the orb's silhouette restarts from the
+ * cookie - a shape change the reader cannot see while it is off-screen.
  */
 @Composable
 fun ExpressiveEmptyOrb(
@@ -187,6 +191,19 @@ fun ExpressiveEmptyOrb(
     iconTint: Color = MaterialTheme.colorScheme.onSurfaceVariant
 ) {
     val resumed = rememberIsResumed()
+    val hostView = LocalView.current
+    var visibleInWindow by remember { mutableStateOf(false) }
+    val visibilityModifier = Modifier.onGloballyPositioned { coordinates ->
+        if (!coordinates.isAttached || hostView.width <= 0 || hostView.height <= 0) {
+            return@onGloballyPositioned
+        }
+        val bounds = coordinates.boundsInWindow()
+        val visible = bounds.right > 0f &&
+            bounds.left < hostView.width &&
+            bounds.bottom > 0f &&
+            bounds.top < hostView.height
+        if (visibleInWindow != visible) visibleInWindow = visible
+    }
 
     // The container and the glyph change meaning with the empty state - a
     // filtered list is a grey search orb, the caught-up dashboard is a green
@@ -205,17 +222,17 @@ fun ExpressiveEmptyOrb(
         label = "empty_orb_tint"
     )
 
-    if (ExpressiveMotion.speed == MotionStyle.INSTANT || !resumed) {
+    if (ExpressiveMotion.speed == MotionStyle.INSTANT || !resumed || !visibleInWindow) {
         StaticEmptyOrb(
             icon = icon,
-            modifier = modifier,
+            modifier = modifier.then(visibilityModifier),
             containerColor = resolvedContainer,
             iconTint = resolvedTint
         )
     } else {
         MorphingEmptyOrb(
             icon = icon,
-            modifier = modifier,
+            modifier = modifier.then(visibilityModifier),
             containerColor = resolvedContainer,
             iconTint = resolvedTint
         )

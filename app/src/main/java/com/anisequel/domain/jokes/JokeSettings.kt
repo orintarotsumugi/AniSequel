@@ -271,6 +271,15 @@ enum class JokeTextEffect(
     }
 }
 
+/** The denominator for the opt-in golden-joke roll. */
+const val GOLDEN_JOKE_ROLLS = 1_000
+
+/** Golden lines get a little more reading time than an ordinary toast. */
+const val GOLDEN_JOKE_VISIBLE_MILLIS = 14_000L
+
+/** The result of a draw, including the presentation contract for a golden line. */
+data class JokeDraw(val text: String, val isGolden: Boolean = false)
+
 /**
  * Reveal cadence, in milliseconds, and the budget the writers share.
  *
@@ -316,6 +325,8 @@ data class JokeSettings(
     val stamp: String = DEFAULT_STAMP,
     /** How the line itself arrives. Off unless the reader asks for a reveal. */
     val textEffect: JokeTextEffect = JokeTextEffect.DEFAULT,
+    /** Opt-in because golden lines are intentionally harsh and may contain profanity. */
+    val goldenJokesEnabled: Boolean = false,
     /**
      * Draw the pill with the line and the heart only.
      *
@@ -364,6 +375,12 @@ data class JokeSettings(
      * tone set already answers, and the two would eventually disagree.
      */
     val isMixed: Boolean get() = activeTones.size == JokeTone.entries.size
+
+    /** Golden jokes keep the manual dismissal arm, but outstay every timed arm. */
+    fun visibleMillisFor(isGolden: Boolean): Long? {
+        val normal = dwell.visibleMillis ?: return null
+        return if (isGolden) maxOf(normal, GOLDEN_JOKE_VISIBLE_MILLIS) else normal
+    }
 }
 
 /**

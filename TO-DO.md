@@ -243,13 +243,13 @@ do whichever of the two you are about to edit anyway.
 
 ## 2. Animation and rendering
 
-### 2.1 `ExpressiveVisuals`' orb still animates while it is not visible
+### 2.1 `ExpressiveVisuals`' orb still animates while it is not visible — CLOSED
 
-`ExpressiveVisuals.kt` starts a `rememberInfiniteTransition` for the empty-state
-orb. It ticks for as long as the composable is in the tree, including when the
-orb is off-screen.
+`ExpressiveVisuals.kt` used to start a `rememberInfiniteTransition` for the
+empty-state orb for as long as the composable was in the tree, including when the
+orb was off-screen.
 
-Three of the four costs that used to be grouped under this entry are now gone:
+All four costs that used to be grouped under this entry are now gone:
 
 - The instant motion style no longer runs the clock at all - the orb branches to
   a static composable instead of animating a shape it then ignores.
@@ -264,18 +264,14 @@ Three of the four costs that used to be grouped under this entry are now gone:
   is the only one composed and no clock is allocated to be paused. That is the
   same signal the joke toast's timer uses.
 
-What is left is the transition ticking behind an orb that has been **scrolled out
-of view while the app is resumed**. That is the narrow case: an empty state sits
-in a plain `Column` rather than a lazy list, so scrolling it away does not dispose
-it. The shimmer loader had the same shape and is fixed - its phase clock is now
+The shimmer loader had the same shape and is fixed too - its phase clock is now
 hoisted and shared across every skeleton on screen.
 
-The fix is a visibility gate, not a lifecycle one: there is no visible-surface API
-in the Compose version being targeted, so it needs either an
-`onGloballyPositioned`-derived "is any of this on screen" check (cheap, but it
-runs a layout pass on every scroll) or an accept-and-measure decision. Do not
-replace the lifecycle gate with one of those without measuring - the lifecycle
-gate is the part that was free.
+The visibility gate is now an `onGloballyPositioned` callback on the orb, comparing
+its window bounds with the host view. It does not request another layout pass; the
+callback runs because the already-required placement changes while the column
+scrolls. The orb composes its static form outside the window, so the infinite
+transition is not allocated for pixels the reader cannot see.
 
 ### 2.2 No animation regression tests
 
@@ -712,14 +708,12 @@ gone, along with the commented-out Firebase/Room/Camera dependencies and their
 version catalog entries — which is why [§3.3](#33-dependency-currency) no longer
 lists Room.
 
-### Partial: the empty-state orb animates while off-screen
+### The empty-state orb animates while off-screen — CLOSED
 
-Three of the four costs are gone — the instant motion style no longer runs the
-clock at all, the morph progress is read while drawing rather than in composition,
-and a stopped Activity no longer drives it at all (`rememberIsResumed`). What
-remains is the transition ticking behind an orb that has been scrolled out of view
-*while the app is resumed*; it is still tracked as
-[§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
+The orb now switches to its static branch when its window bounds leave the host
+view, using the same placement callback that already tracks other window-bound
+layers. The infinite transition is therefore not composed for an off-screen orb;
+see [§2.1](#21-expressivevisuals-orb-still-animates-while-it-is-not-visible).
 
 ### The detail sheet's three tabs became one page
 

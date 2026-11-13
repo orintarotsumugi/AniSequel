@@ -199,7 +199,13 @@ fun FirstRunSetupDialog(
             themePreferences.setMotionStyle(MotionStyle.fromStorage(motion))
             jokePreferences.setEnabled(jokesEnabled)
             jokePreferences.setFrequency(JokeFrequency.fromStorage(jokeFrequency))
+            // The setup asks one question per page ("add this page to the bar"),
+            // and the preference layer now keeps the tab and the top-bar shortcut
+            // independent. Write both here so the wizard still means what its
+            // switches say; Settings is where the two are separated.
+            mainTabPreferences.setSearchTab(searchShortcut)
             mainTabPreferences.setSearchTopBar(searchShortcut)
+            mainTabPreferences.setTierListTab(tiersShortcut)
             mainTabPreferences.setTierTopBar(tiersShortcut)
             onboardingPreferences.setCompleted(true)
         }
