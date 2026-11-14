@@ -1,5 +1,6 @@
 package com.anisequel.ui.theme
 
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
@@ -52,8 +53,15 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * leave one of the three describing a different position. Provided once at the
  * app root from [com.anisequel.data.repository.InterfacePreferences]; see
  * [com.anisequel.domain.ui.NavBarLift] for why the range is small.
+ *
+ * A *dynamic* local, unlike its neighbours here. The root animates this value on
+ * every frame of the spring between two lift settings, and a `staticCompositionLocalOf`
+ * recomposes the provider's entire content when it changes - the whole app, once
+ * per frame of an animation whose whole point is to look smooth. A dynamic local
+ * invalidates only the composables that read the lift, which is the bar and the
+ * handful of containers that reserve clearance for it.
  */
-val LocalMainBarLift = staticCompositionLocalOf { NavBarLift.DEFAULT_DP }
+val LocalMainBarLift = compositionLocalOf { NavBarLift.DEFAULT_DP }
 
 /**
  * Whether tapping "Add to Planning" asks for a tick or a cross first.

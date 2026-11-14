@@ -656,10 +656,16 @@ private fun NavigationItem(
         // the item's content colour, because it is a photograph rather than a
         // glyph; circle-clipped, because the bar's own shapes are pills and a
         // square picture inside one reads as a rendering mistake.
+        // An unselected destination draws its label away, which is exactly the
+        // state in which a screen reader has nothing left to read: the icon's own
+        // description is null because the glyph is decorative. Put the destination
+        // name on the picture only while the text is hidden, so a selected item is
+        // announced once rather than twice.
+        val iconDescription = if (selected) null else destination.label
         if (destination.iconUrl != null) {
             AsyncImage(
                 model = destination.iconUrl,
-                contentDescription = null,
+                contentDescription = iconDescription,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(22.dp)
@@ -669,7 +675,7 @@ private fun NavigationItem(
         } else {
             Icon(
                 imageVector = destination.icon,
-                contentDescription = null,
+                contentDescription = iconDescription,
                 tint = content,
                 modifier = Modifier.size(22.dp)
             )

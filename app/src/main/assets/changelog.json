@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.9.7",
+      "entries": [
+        {
+          "title": "Home shortcuts show real AniList artwork",
+          "detail": "The Anime List, Manga List and Other cards now use a full-height artwork panel with a count row and a chevron, matching the shelf they belong to. The anime and Other panels draw one popular title from AniList at random per session, with the existing local covers as the fallback when the request has not landed."
+        },
+        {
+          "title": "The greeting pool is nearly three times larger",
+          "detail": "Greetings now come from a much larger pool, never repeat the line already on screen, keep their choice through a rotation, and drop the comma when the viewer name has not loaded yet."
+        },
+        {
+          "title": "The main bar lift is animated, not snapped",
+          "detail": "Moving the bottom bar lift now springs the bar and every list clearance to their new positions instead of jumping, the value is clamped where it is read, and the slider keeps its draft through a rotation so dragging it no longer fights the stored preference."
+        },
+        {
+          "title": "The Library adds a Grouped view",
+          "detail": "A sixth view mode groups the list under one heading per status, with a count for each section and an Other section for tokens this build cannot classify. Big and compact grids also reduce their column count on narrow phones so a cover keeps a readable width."
+        },
+        {
+          "title": "Fixes across the new Library, Home and Settings",
+          "detail": "Icon-only bar destinations now carry their names for screen readers, narrow screens keep 48dp targets for the Library search, filter and type controls, hide buttons on the shelf and banner cards are real 48dp controls, filter pills no longer double-spring under a scrolling finger, the Manga List count falls back to the preview page instead of zero, empty libraries still draw both layout previews, and the bar-lift preview reads its range from one constant."
+        }
+      ]
+    },
+    {
       "version": "1.9.6",
       "entries": [
         {

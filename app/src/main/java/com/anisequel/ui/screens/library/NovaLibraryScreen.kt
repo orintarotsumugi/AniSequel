@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.library
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -37,7 +34,6 @@ import com.anisequel.domain.library.filterLibraryAdvanced
 import com.anisequel.domain.library.libraryReleaseYears
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.ShimmerBox
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.screens.nova.NovaEmptyNote
@@ -96,6 +92,12 @@ fun NovaLibraryScreen(
     val haptic = LocalHapticFeedback.current
 
     var choiceMade by rememberSaveable { mutableStateOf(false) }
+    // The type the page opened on, for the one case the grid state cannot tell
+    // apart: a *switch* from anime to manga must start at the top of the other
+    // list, while returning to the page must restore the position it had. A
+    // remembered snapshot of the initial value does the first without breaking
+    // the second, because re-entering the page re-creates it at the current type.
+    var settledType by remember { mutableStateOf<LibraryType?>(null) }
     var type by rememberSaveable {
         mutableStateOf(
             if (remembered.type == LibraryType.MANGA) LibraryType.MANGA else LibraryType.ANIME
@@ -160,6 +162,14 @@ fun NovaLibraryScreen(
 
     LaunchedEffect(type) {
         if (type == LibraryType.MANGA) onLoadManga()
+        val previous = settledType
+        if (previous != null && previous != type) {
+            // Otherwise switching to manga while scrolled halfway down the anime
+            // grid lands halfway down the manga list, which reads as the new
+            // list being mostly empty above the fold.
+            gridState.scrollToItem(0)
+        }
+        settledType = type
     }
 
     val chooseType: (LibraryType) -> Unit = { chosen ->
@@ -315,6 +325,13 @@ private fun NovaLibraryBody(
                 isManga = isManga
             )
             viewMode == LibraryViewMode.LIST -> NovaLibraryList(
+                visible = visible,
+                isManga = isManga,
+                awaitingAnime = awaitingAnime,
+                scopedError = scopedError,
+                onOpenDetail = onOpenDetail
+            )
+            viewMode == LibraryViewMode.GROUPED -> NovaLibraryGrouped(
                 visible = visible,
                 isManga = isManga,
                 awaitingAnime = awaitingAnime,

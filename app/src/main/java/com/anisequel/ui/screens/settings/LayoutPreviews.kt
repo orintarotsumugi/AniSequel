@@ -49,6 +49,7 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
+import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -158,8 +159,12 @@ private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
         Spacer(modifier = Modifier.height(7.dp))
         MiniStatStrip()
         Spacer(modifier = Modifier.height(7.dp))
-        entries.take(2).forEachIndexed { index, entry ->
-            MiniClassicRow(entry = entry, index = index)
+        // getOrNull rather than take(2): with an empty or one-entry library the
+        // preview used to shrink to one row or none, so the shape a reader is
+        // choosing disappeared precisely when they had no posters to demonstrate
+        // it with. A null entry draws the themed placeholder cover.
+        repeat(2) { index ->
+            MiniClassicRow(entry = entries.getOrNull(index), index = index)
             Spacer(modifier = Modifier.height(5.dp))
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -203,9 +208,9 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            entries.take(3).forEach { entry ->
+            repeat(3) { index ->
                 MiniCover(
-                    entry = entry,
+                    entry = entries.getOrNull(index),
                     modifier = Modifier
                         .weight(1f)
                         .height(38.dp)
@@ -616,7 +621,7 @@ internal fun previewTitle(entry: MediaListEntryItem?): String =
 @Composable
 internal fun BottomBarLiftPreview(liftDp: Int) {
     val lift by animateDpAsState(
-        targetValue = liftDp.coerceIn(0, 24).dp,
+        targetValue = NavBarLift.clamp(liftDp).dp,
         animationSpec = ExpressiveMotion.FastSpatialDp,
         label = "bottom_bar_lift_preview"
     )

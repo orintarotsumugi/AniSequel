@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,12 +30,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -111,8 +117,11 @@ internal fun NovaLibraryHeader(
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSearchOpenChange(!searchOpen)
                     },
+                    // 48dp, not 38: this is a bare icon button in a header full
+                    // of other targets, and the platform's minimum is what makes
+                    // it findable without aiming. The glyph stays 19dp.
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
                         .background(
                             if (searchOpen) {
@@ -136,7 +145,7 @@ internal fun NovaLibraryHeader(
                             onOpenFilters()
                         },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(48.dp)
                             .clip(CircleShape)
                             .testTag("nova_library_filter_toggle")
                     ) {
@@ -311,9 +320,17 @@ private fun NovaTypeSwitch(
             Row(
                 modifier = Modifier
                     .weight(1f)
+                    .heightIn(min = 48.dp)
                     .clip(ExpressiveShapes.pill)
                     .background(container)
-                    .clickable { onSelect(option) }
+                    // One of two mutually exclusive types: a radio, not a pair
+                    // of unrelated buttons. The minimum height is what keeps the
+                    // control above the platform's touch target even though the
+                    // icon and label together are only about 20dp. The selected
+                    // flag is what makes the role a fact rather than a label:
+                    // TalkBack announces "selected" for the active half.
+                    .semantics { this.selected = option == type }
+                    .clickable(role = Role.RadioButton) { onSelect(option) }
                     .padding(vertical = 8.dp)
                     .testTag("nova_library_type_${option.name.lowercase()}"),
                 horizontalArrangement = Arrangement.Center,
@@ -376,13 +393,22 @@ private fun NovaFilterPill(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
+    // Shared with bouncyPress so the press is cancelled the moment a horizontal
+    // drag claims the gesture. Without a source the fallback pointer loop kept
+    // the pill squashed under a finger that was actually scrolling the filter row.
+    val interactionSource = remember { MutableInteractionSource() }
 
     Row(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)
-            .bouncyPress(pressedScale = 0.94f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick
+            )
             .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
             .testTag(testTag),
         verticalAlignment = Alignment.CenterVertically

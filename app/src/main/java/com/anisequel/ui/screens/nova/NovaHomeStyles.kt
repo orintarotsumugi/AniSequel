@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -116,19 +117,36 @@ internal fun NovaSequelBanner(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            Icon(
-                imageVector = AppVectorIcons.Close,
-                contentDescription = "Not interested",
-                tint = Color.White,
+            // A real IconButton with a 48dp target rather than a 30dp boxed
+            // glyph: the close sits on artwork that is itself one big tap, so a
+            // fingertip that overshoots by a few dp dismisses a recommendation
+            // instead of opening it. The visual circle stays compact; the target
+            // around it is the platform minimum.
+            IconButton(
+                onClick = onHide,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .size(30.dp)
-                    .clip(ExpressiveShapes.pill)
-                    .background(Color.Black.copy(alpha = 0.36f))
-                    .clickable(onClick = onHide)
-                    .padding(7.dp)
-            )
+                    .padding(6.dp)
+                    .size(48.dp)
+                    .testTag("nova_sequel_banner_hide_${sequel.sequelId}")
+            ) {
+                // The target is 48dp; the dark disc stays 32dp, so the picture
+                // is not wearing a larger close button than it did before.
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(ExpressiveShapes.pill)
+                        .background(Color.Black.copy(alpha = 0.36f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Close,
+                        contentDescription = "Not interested",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -194,15 +212,19 @@ internal fun NovaSequelShelfCard(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            Icon(
-                imageVector = AppVectorIcons.Close,
-                contentDescription = "Not interested",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            IconButton(
+                onClick = onHide,
                 modifier = Modifier
-                    .size(26.dp)
-                    .clickable(onClick = onHide)
-                    .padding(5.dp)
-            )
+                    .size(48.dp)
+                    .testTag("nova_sequel_shelf_hide_${sequel.sequelId}")
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Close,
+                    contentDescription = "Not interested",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }

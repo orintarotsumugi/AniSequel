@@ -14,9 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,8 +106,13 @@ fun InterfaceTab(
     // this, not the preference, so dragging moves the mini bar immediately; the
     // preference is written once on release rather than on every tick, because a
     // DataStore write per frame would make the drag the thing that stutters.
-    var liftDraft by remember(interfaceSettings.mainBarLift) {
-        mutableFloatStateOf(interfaceSettings.mainBarLift.toFloat())
+    // Saved as well as keyed: a rotation while the thumb is down kept the
+    // preference but lost the draft, so the mini previews snapped back to the
+    // stored value under a finger that had not lifted. The key still resets the
+    // draft when an external write (Reset, or the preference after release)
+    // changes the stored value.
+    var liftDraft by rememberSaveable(interfaceSettings.mainBarLift) {
+        mutableStateOf(interfaceSettings.mainBarLift.toFloat())
     }
 
     SettingsScrollColumn(modifier) {
@@ -124,7 +130,7 @@ fun InterfaceTab(
                     }
                 },
                 modifier = Modifier.testTag("app_layout_row"),
-                barLift = liftDraft.roundToInt()
+                barLift = NavBarLift.clamp(liftDraft.roundToInt())
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -135,7 +141,7 @@ fun InterfaceTab(
             ) {
                 SettingsFieldLabel(text = "Bottom bar lift")
                 Text(
-                    text = "${liftDraft.roundToInt()} dp",
+                    text = "${NavBarLift.clamp(liftDraft.roundToInt())} dp",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -149,7 +155,8 @@ fun InterfaceTab(
                     // One tick every 2dp between 0 and 24. The divisor is the step,
                     // not a hand-written 11, so changing the range above keeps the
                     // ticks honest.
-                    steps = (NavBarLift.MAX_DP - NavBarLift.MIN_DP) / NavBarLift.STEP_DP - 1,
+                    steps = ((NavBarLift.MAX_DP - NavBarLift.MIN_DP) / NavBarLift.STEP_DP - 1)
+                        .coerceAtLeast(0),
                     trackRange = NavBarLift.MIN_DP.toFloat()..NavBarLift.MAX_DP.toFloat()
                 ),
                 onValueChange = { liftDraft = it },

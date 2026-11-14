@@ -1065,6 +1065,21 @@ class AniListRepositoryImpl(
         ).map { data -> data.page?.media.orEmpty() }
     }
 
+    override suspend fun getRandomAnimeArtwork(): Result<MediaNode?> {
+        // AniList has no random sort. A page in the first forty of a
+        // popularity-ordered catalogue is the cheap approximation: far enough in
+        // that the draw is not the same handful of front-page titles, and well
+        // inside the 50-page default so an empty page is not a normal answer.
+        val page = kotlin.random.Random.nextInt(1, 41)
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.RANDOM_ANIME,
+                variables = mapOf("page" to page)
+            ),
+            apiService::getRandomAnime
+        ).map { data -> data.page?.media?.firstOrNull() }
+    }
+
     override suspend fun getUserMangaPreviews(userId: Int): Result<List<MediaNode>> {
         mangaPreviewCache[userId]?.let { cached -> return Result.success(cached) }
         return execute(

@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -60,7 +61,66 @@ private val greetings = listOf(
     "You brought taste" to "or at least a very committed opinion.",
     "Good evening, protagonist" to "the filler arc has snacks.",
     "Your backlog survived" to "somehow, it got longer.",
-    "The watchlist has spoken" to "it wants one more episode."
+    "The watchlist has spoken" to "it wants one more episode.",
+    "One more, surely" to "the credits are not a stopping point.",
+    "The night is young" to "the next episode is not.",
+    "Back on the couch" to "the remote remembers you.",
+    "Rise and binge" to "the queue has been patient.",
+    "Your seat is warm" to "the next arc never waited.",
+    "The plot thickens" to "as if it needed help.",
+    "A familiar face" to "the watchlist kept your place.",
+    "Here again" to "the backlog has notes.",
+    "The story is waiting" to "it has been dramatic about it.",
+    "Ready for the next one" to "the cliffhanger is not going anywhere.",
+    "Same time, same arc" to "the recap will not watch itself.",
+    "Welcome to the queue" to "it has a very strict policy.",
+    "Another episode" to "we can stop whenever we want. Allegedly.",
+    "The shelf noticed" to "it is trying to look casual.",
+    "You are early" to "the opening song is still playing.",
+    "The episode dropped" to "so did your evening plans.",
+    "Good to have you" to "the next chapter is already impatient.",
+    "The playlist is ready" to "your watch history is judging you.",
+    "You have returned" to "the filler arc brought snacks.",
+    "Fresh episode energy" to "the fridge is on its own.",
+    "One more chapter" to "the 'just one' part is a formality.",
+    "A new arc awaits" to "the previous one left a mess.",
+    "The watchlist stretches" to "you are doing great. Probably.",
+    "Back for a visit" to "the stories kept the light on.",
+    "Your stories are here" to "and they have been talking about you.",
+    "Time to catch up" to "the spoilers are getting bold.",
+    "The next scene is ready" to "it has been waiting politely.",
+    "Anime o'clock" to "the obligations will have to wait.",
+    "Manga o'clock" to "the chapters will not read themselves.",
+    "The couch calls" to "the next episode answers.",
+    "Binge responsibly" to "the credits are lying about the ending.",
+    "Plot twist incoming" to "you are already holding the remote.",
+    "Welcome to the intermission" to "there is no intermission.",
+    "The season continues" to "your free time is leaving the chat.",
+    "Back in the groove" to "the openings are still absolute bangers.",
+    "The queue is flat" to "your standards are not.",
+    "Your true ending" to "is one episode away. Always is.",
+    "Ready for damage" to "this one is emotional, probably.",
+    "The watchlist winked" to "it has been reading ahead.",
+    "A quiet evening" to "the volume button disagrees.",
+    "The arc begins" to "the budget does too. Somewhere.",
+    "Soft launch into episode two" to "that is how it always starts.",
+    "You kept the seat" to "the next episode is still warm.",
+    "The recap has ended" to "the consequences have not.",
+    "Welcome back, reader" to "the bookmark held the place.",
+    "Ready for the reveal" to "it has been obvious for three episodes.",
+    "The finale approaches" to "and the sequel has not been announced.",
+    "Another world" to "same couch, better stakes.",
+    "The shelf applauds" to "quietly, the way shelves do.",
+    "You look prepared" to "for at least four more episodes.",
+    "The hiatus is over" to "so is your free time.",
+    "Back for the arc" to "it missed you more than it admits.",
+    "Nice to see you" to "the next chapter has been practicing.",
+    "Your eyes only" to "the next episode is already playing. Sorry.",
+    "A good day for it" to "whatever 'it' turns out to be.",
+    "The list survived" to "your sense of restraint did not.",
+    "Here for the good stuff" to "the queue has a few ideas.",
+    "Off the cliffhanger" to "and into another one.",
+    "The season is stacked" to "your sleep schedule is not."
 )
 
 /**
@@ -83,11 +143,19 @@ private val greetings = listOf(
  */
 @Composable
 fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
-    var greetingIndex by remember { mutableIntStateOf(greetings.indices.random()) }
+    // Saved rather than remembered: a rotation is not a new visit, and re-drawing
+    // a different greeting because the phone turned read as the app losing the
+    // line it had just shown. The pool is also walked without an immediate repeat
+    // - see [nextRandomGreeting] - because with a pool this size a sequential
+    // walk still spends the first few visits saying neighbouring jokes rather
+    // than showing the range.
+    var greetingIndex by rememberSaveable {
+        mutableStateOf(greetings.indices.random())
+    }
     var hasResumed by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) {
         if (hasResumed) {
-            greetingIndex = nextGreeting(greetingIndex)
+            greetingIndex = nextRandomGreeting(greetingIndex)
         } else {
             hasResumed = true
         }
@@ -114,13 +182,20 @@ fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
                     // the reader, so it is the one word in the accent colour
                     // rather than another run of body text.
                     text = buildAnnotatedString {
-                        append("${current.first}, ")
-                        withStyle(
-                            SpanStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        ) { append(viewerName) }
+                        // A name is the part of the greeting that belongs to the
+                        // reader; when the viewer query has not answered yet there
+                        // is no name, and "Hey, " with a dangling comma reads as a
+                        // broken string rather than as a greeting.
+                        append(current.first)
+                        if (viewerName.isNotBlank()) {
+                            append(", ")
+                            withStyle(
+                                SpanStyle(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            ) { append(viewerName) }
+                        }
                     },
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
@@ -197,4 +272,23 @@ private fun TypewriterLine(
 internal fun nextGreeting(currentIndex: Int, count: Int = greetings.size): Int {
     require(count > 0)
     return (currentIndex + 1).mod(count)
+}
+
+/**
+ * The next greeting, chosen from anywhere in the pool except the current line.
+ *
+ * "Anywhere" rather than the next index: on a resume the sequential walk is a
+ * fixed order, so the tenth visit is predictable from the first and every reader
+ * sees the same sequence. The offset excludes zero, which is the one thing a
+ * greeting on a new visit must not do - repeat the sentence still on screen.
+ */
+internal fun nextRandomGreeting(
+    currentIndex: Int,
+    count: Int = greetings.size,
+    random: kotlin.random.Random = kotlin.random.Random.Default
+): Int {
+    require(count > 0)
+    if (count == 1) return 0
+    val offset = random.nextInt(count - 1) + 1
+    return (currentIndex + offset).mod(count)
 }

@@ -62,6 +62,7 @@ internal fun LibraryViewPreview(
                     LibraryViewMode.GRID -> MiniGrid(entries, 3, true)
                     LibraryViewMode.COMPACT -> MiniGrid(entries, 4, false)
                     LibraryViewMode.LIST -> MiniList(entries)
+                    LibraryViewMode.GROUPED -> MiniGrouped(entries)
                     LibraryViewMode.CARDS -> MiniGrid(entries, 2, true)
                     LibraryViewMode.SHELF -> MiniGrid(entries, 5, false)
                 }
@@ -90,6 +91,56 @@ private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle:
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The grouped mode, drawn as two headings over two rows each.
+ *
+ * A miniature of the real thing: the heading carries the same weight and a
+ * count, so the choice is "a list with sections" rather than "another density of
+ * grid". The preview box is too short for all six statuses, and showing the first
+ * two is exactly what the first screen of the real list does.
+ */
+@Composable
+private fun MiniGrouped(entries: List<MediaListEntryItem>) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        listOf("Watching", "Completed").forEachIndexed { groupIndex, heading ->
+            Text(
+                text = "$heading · 2".uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = if (groupIndex == 0) 0.dp else 2.dp)
+            )
+            repeat(2) { rowIndex ->
+                val entry = entries.getOrNull(groupIndex * 2 + rowIndex)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MiniCover(
+                        entry = entry,
+                        modifier = Modifier.width(22.dp).fillMaxHeight()
+                    )
+                    Text(
+                        text = previewTitle(entry),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 7.dp)
                     )
                 }
             }

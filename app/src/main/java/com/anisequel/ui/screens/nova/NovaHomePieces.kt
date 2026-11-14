@@ -100,83 +100,71 @@ fun NovaShortcutCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(104.dp),
-            verticalAlignment = Alignment.CenterVertically
+                // 120dp, not the reference's wide-card ratio: two of these share
+                // a phone's width, so a card as wide as it is tall would eat half
+                // the page above the first sequel. The artwork is a full-height
+                // panel; the height is what keeps the pair a doorway rather than
+                // the whole room.
+                .height(120.dp)
+                .testTag("nova_shortcut_${title.lowercase(java.util.Locale.ROOT).replace(' ', '_')}")
         ) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 14.dp, end = 8.dp)
+                    .fillMaxHeight()
+                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
                         text = meta,
                         style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = AppVectorIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(13.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                // The label sits at the bottom of the card and the count at the
+                // top: the artwork is a full-height panel on the right, so the
+                // text has a column of its own rather than a row with a thumbnail
+                // bolted to the end of it.
                 Text(
                     text = title,
+                    // titleMedium rather than the reference's display size: two
+                    // cards share a 360dp phone, so the title column is about
+                    // 70dp of usable width. A 22sp word would ellipsize inside a
+                    // word ("ANIME" -> "ANIM…"), which is worse than a smaller
+                    // label that fits on two lines.
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
-            // One cover, not the collage the first draft stacked. Two slices of
-            // two different posters read as a rendering mistake at 44dp, and the
-            // card is a door to a list - the count and the label are the content.
-            if (coverUrl != null) {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .width(52.dp)
-                        .fillMaxHeight()
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(52.dp)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                    Color.Transparent
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.65f),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
+            ShortcutArtwork(
+                coverUrl = coverUrl,
+                icon = icon,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.38f)
+            )
         }
     }
 }
@@ -191,7 +179,9 @@ fun NovaShortcutCard(
 @Composable
 fun NovaOtherShortcut(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The wide artwork on the right; the AniList banner when one is available. */
+    coverUrl: String? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     NovaSurface(
@@ -206,34 +196,119 @@ fun NovaOtherShortcut(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .height(104.dp)
+                .testTag("nova_other_shortcut")
         ) {
-            Icon(
-                imageVector = AppVectorIcons.AnimeSparkle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 14.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = AppVectorIcons.AnimeSparkle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(17.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Calendar, tier lists and more",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        // The whole remainder of the column, so the chevron sits
+                        // at the far edge of the text block rather than riding
+                        // along after an ellipsized line.
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = AppVectorIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
                 Text(
                     text = "OTHER",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Calendar, tier lists and more",
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            Icon(
-                imageVector = AppVectorIcons.ExpandMore,
+            ShortcutArtwork(
+                coverUrl = coverUrl,
+                icon = AppVectorIcons.AnimeSparkle,
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.46f)
+            )
+        }
+    }
+}
+
+/**
+ * The artwork panel both Home shortcuts wear on their right edge.
+ *
+ * A full-height image rather than a 52dp strip: the two cards are doors, and a
+ * poster is what makes a door recognisable at a glance. The gradient is the
+ * card's own surface colour rather than a black scrim, so the title column and
+ * the artwork meet without a hard edge on either palette.
+ *
+ * No request is made here. The anime cover is the random AniList node the
+ * dashboard fetches for Home, the manga cover comes from the existing preview
+ * page, and the Other card borrows the same node's banner. A null URL is a real
+ * answer - the demo, or a response that has not landed - and draws the icon on a
+ * themed wash instead of an empty hole.
+ */
+@Composable
+private fun ShortcutArtwork(
+    coverUrl: String?,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.background(
+            Brush.linearGradient(
+                listOf(
+                    MaterialTheme.colorScheme.primaryContainer,
+                    MaterialTheme.colorScheme.tertiaryContainer
+                )
+            )
+        ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (coverUrl != null) {
+            AsyncImage(
+                model = coverUrl,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                                    .copy(alpha = 0.92f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier.size(28.dp)
             )
         }
     }

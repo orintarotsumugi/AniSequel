@@ -419,6 +419,17 @@ class DashboardViewModel(
     private var mangaPreviewRequested = false
 
     /**
+     * One randomly drawn popular anime for Home's shortcut artwork.
+     *
+     * Kept for the session rather than re-drawn on every recomposition: the draw
+     * is a request, and a cover that changed while the reader was looking at it
+     * would be motion with no meaning. The flag is released on failure so the
+     * next new-look visit can try again.
+     */
+    private var cachedRandomArtwork: MediaNode? = null
+    private var randomArtworkRequested = false
+
+    /**
      * The new Home's Continue rail, and the collection it was taken from.
      *
      * Same memo shape as [cardPreviewCache]: a search keystroke recomputes the
@@ -810,6 +821,7 @@ class DashboardViewModel(
             recentActivity = work.recentActivity,
             continueWatching = work.continueWatching,
             mangaPreviews = cachedMangaPreviews,
+            randomArtwork = cachedRandomArtwork,
             isRefreshing = false,
             isCached = showingCachedData,
             isDemoMode = isDemo,
@@ -1030,6 +1042,51 @@ class DashboardViewModel(
                     // A cover is decoration. Let the next new-look visit try
                     // again rather than pinning the placeholder for the session.
                     mangaPreviewRequested = false
+                }
+            )
+        }
+    }
+
+    /**
+     * Fetches one random popular anime's artwork for the new Home's shortcut cards.
+     *
+     * Called only while the new look is showing, for the same reason as
+     * [ensureMangaPreview]: the classic dashboard has no Anime List card, and one
+     * of AniList's thirty-a-minute requests is too much to spend on a page that
+     * cannot display the answer.
+     *
+     * The answer is patched into the current state rather than kept beside it, so
+     * a filter keystroke that lands while the draw is in flight cannot replace a
+     * newer list with an older one. A demo has no catalogue to draw from and the
+     * default repository method refuses; both are treated as "no artwork" rather
+     * than as an error the page should report.
+     */
+    fun ensureRandomAnimeArtwork() {
+        if (isDemo || randomArtworkRequested) return
+        randomArtworkRequested = true
+        viewModelScope.launch {
+            val result = try {
+                aniListRepository.getRandomAnimeArtwork()
+            } catch (_: UnsupportedOperationException) {
+                // A double that only serves the list has no catalogue. This is a
+                // decoration, not a page: let it stay absent.
+                randomArtworkRequested = false
+                return@launch
+            }
+            result.fold(
+                onSuccess = { artwork ->
+                    if (artwork == null) {
+                        randomArtworkRequested = false
+                        return@fold
+                    }
+                    cachedRandomArtwork = artwork
+                    val current = _uiState.value as? DashboardUiState.Success ?: return@fold
+                    if (current.randomArtwork != artwork) {
+                        _uiState.value = current.copy(randomArtwork = artwork)
+                    }
+                },
+                onFailure = {
+                    randomArtworkRequested = false
                 }
             )
         }
