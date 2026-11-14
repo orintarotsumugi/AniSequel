@@ -71,8 +71,6 @@ internal fun NovaLibraryHeader(
     avatarUrl: String?,
     searchOpen: Boolean,
     type: LibraryType,
-    animeCount: Int,
-    mangaCount: Int,
     isLoadingManga: Boolean,
     activeFilterCount: Int,
     onSearchOpenChange: (Boolean) -> Unit,
@@ -178,8 +176,6 @@ internal fun NovaLibraryHeader(
             Spacer(modifier = Modifier.height(10.dp))
             NovaTypeSwitch(
                 type = type,
-                animeCount = animeCount,
-                mangaCount = mangaCount,
                 isLoadingManga = isLoadingManga,
                 onSelect = onSelectType
             )
@@ -286,8 +282,6 @@ private fun sortLabel(
 @Composable
 private fun NovaTypeSwitch(
     type: LibraryType,
-    animeCount: Int,
-    mangaCount: Int,
     isLoadingManga: Boolean,
     onSelect: (LibraryType) -> Unit
 ) {
@@ -298,10 +292,7 @@ private fun NovaTypeSwitch(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(3.dp)
     ) {
-        listOf(
-            LibraryType.ANIME to animeCount,
-            LibraryType.MANGA to mangaCount
-        ).forEach { (option, count) ->
+        listOf(LibraryType.ANIME, LibraryType.MANGA).forEach { option ->
             val selected = option == type
             val container by animateColorAsState(
                 targetValue = if (selected) {
@@ -349,7 +340,13 @@ private fun NovaTypeSwitch(
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = when {
-                        option == LibraryType.MANGA && isLoadingManga && !selected -> "Manga..."
+                        // The selected half is the one whose spinner the reader is
+                        // waiting behind, so it says "Loading..." rather than
+                        // looking like a type switch that did nothing. The other
+                        // half keeps its name and a trailing ellipsis, so it does
+                        // not impersonate a label for a list that has not arrived.
+                        option == LibraryType.MANGA && isLoadingManga && selected -> "Loading..."
+                        option == LibraryType.MANGA && isLoadingManga -> "Manga..."
                         option == LibraryType.MANGA -> "Manga"
                         else -> "Anime"
                     },

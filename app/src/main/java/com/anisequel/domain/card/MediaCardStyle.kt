@@ -70,8 +70,15 @@ fun scoreCornerOf(style: MediaCardStyle): PosterCorner? = when (style.scorePlace
  * opposite end of the same edge.
  */
 fun metaCornerFor(style: MediaCardStyle): PosterCorner =
-    when (scoreCornerOf(style)) {
-        PosterCorner.TOP_START -> PosterCorner.BOTTOM_START
+    when {
+        // A style that draws the title over the poster's foot owns that strip. The
+        // pill cannot move to bottom-start in that case: it would sit on the title,
+        // which is a second collision of the same kind this function exists to
+        // prevent. The opposite end of the top edge is free in every style whose
+        // score is top-start (MODERN), because no style puts anything at top-end.
+        scoreCornerOf(style) == PosterCorner.TOP_START &&
+            style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM -> PosterCorner.TOP_END
+        scoreCornerOf(style) == PosterCorner.TOP_START -> PosterCorner.BOTTOM_START
         else -> PosterCorner.TOP_START
     }
 

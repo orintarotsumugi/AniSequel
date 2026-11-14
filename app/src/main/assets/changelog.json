@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "1.9.8",
+      "entries": [
+        {
+          "title": "Home shortcuts now fit the shelf",
+          "detail": "The Anime List, Manga List and Other doors are 80dp and 76dp rows instead of 120dp hero panels, with the count, the name and the artwork on one line. Two lists and Other no longer push Continue Watching off the first screen."
+        },
+        {
+          "title": "The bar-lift crash is fixed",
+          "detail": "The expressive spring overshoots below zero on its way back to the bottom edge, and a negative dp in padding threw IllegalArgumentException. Animated lift values are now clamped on every frame, at the app root and in both previews, so the bounce stays but the crash goes."
+        },
+        {
+          "title": "The bar-lift preview is a phone with a level",
+          "detail": "The old grey strip is replaced by a phone dummy: its own navigation bar floats above the gesture area, and a 0-24dp level beside it reads the lift as it moves. The slider still springs, and the number shown is the value the app stores."
+        },
+        {
+          "title": "Two new Library views, and every view now applies to Classic",
+          "detail": "Table puts cover, title, status, progress and score in aligned columns for triage. Cover wall is a large caption-free grid. Both also work in the classic layout, which used to ignore the Interface page's Library view setting entirely."
+        },
+        {
+          "title": "Covers and badges no longer lose their place",
+          "detail": "Preview slots cycle the reader's own covers instead of leaving empty gradients, the progress pill moves away from an overlaid title, Cover only stops drawing a stray format line, and the Continue rail shows a finished title's progress again. TalkBack also reads each rail card once rather than twice."
+        }
+      ]
+    },
+    {
       "version": "1.9.7",
       "entries": [
         {

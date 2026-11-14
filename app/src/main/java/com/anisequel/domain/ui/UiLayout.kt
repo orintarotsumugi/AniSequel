@@ -125,6 +125,35 @@ enum class LibraryViewMode(
         blurb = "A section per status, with the count for each one.",
         columns = 1
     ),
+    /**
+     * A dense table, the shape AniList's website and AniTrend use for triage.
+     *
+     * The row carries the four things a reader scanning a long backlog compares -
+     * cover, title, status/progress and score - in columns that line up down the
+     * page. It is deliberately not another version of [LIST]: a list is for
+     * reading a title, a table is for comparing twenty of them at once.
+     */
+    TABLE(
+        storageValue = "table",
+        displayName = "Table",
+        blurb = "Dense rows with status, progress and score lined up in columns.",
+        columns = 1
+    ),
+    /**
+     * A caption-free cover wall.
+     *
+     * The other five modes all spend vertical space on a name or a progress line.
+     * This one spends it on artwork and lets the cover's own typography do the
+     * identifying, the way AniList's grid and the reference clients' "covers" view
+     * do. Three across rather than [SHELF]'s five: the point is a large picture,
+     * not the most posters on a phone.
+     */
+    COVERS(
+        storageValue = "covers",
+        displayName = "Cover wall",
+        blurb = "Large caption-free covers with only the progress badge.",
+        columns = 3
+    ),
     CARDS(
         storageValue = "cards",
         displayName = "Big cards",

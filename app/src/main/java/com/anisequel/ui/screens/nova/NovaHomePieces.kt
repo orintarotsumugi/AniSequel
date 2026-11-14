@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,11 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,251 +66,6 @@ import com.anisequel.ui.navigation.mainBarClearance
  * shortcut card and a compact sequel row. The screen file then reads as the order
  * of its sections, which is the part a reader actually changes.
  */
-
-/**
- * One of the three doors on Home: a count, a name, and the art that belongs to it.
- *
- * The cover is one the dashboard already holds - the anime from `cardPreview`,
- * the manga from its one-row preview - so the card itself costs no request. One
- * image at the right edge, not a two-slice collage: at 44dp a pair of posters
- * reads as a clipping bug rather than as a stack.
- */
-@Composable
-fun NovaShortcutCard(
-    title: String,
-    meta: String,
-    icon: ImageVector,
-    coverUrl: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    NovaSurface(
-        modifier = modifier
-            .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        tonalElevation = true
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // 120dp, not the reference's wide-card ratio: two of these share
-                // a phone's width, so a card as wide as it is tall would eat half
-                // the page above the first sequel. The artwork is a full-height
-                // panel; the height is what keeps the pair a doorway rather than
-                // the whole room.
-                .height(120.dp)
-                .testTag("nova_shortcut_${title.lowercase(java.util.Locale.ROOT).replace(' ', '_')}")
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        text = meta,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Icon(
-                        imageVector = AppVectorIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(13.dp)
-                    )
-                }
-                // The label sits at the bottom of the card and the count at the
-                // top: the artwork is a full-height panel on the right, so the
-                // text has a column of its own rather than a row with a thumbnail
-                // bolted to the end of it.
-                Text(
-                    text = title,
-                    // titleMedium rather than the reference's display size: two
-                    // cards share a 360dp phone, so the title column is about
-                    // 70dp of usable width. A 22sp word would ellipsize inside a
-                    // word ("ANIME" -> "ANIM…"), which is worse than a smaller
-                    // label that fits on two lines.
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            ShortcutArtwork(
-                coverUrl = coverUrl,
-                icon = icon,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.38f)
-            )
-        }
-    }
-}
-
-/**
- * The full-width "Other" door, with its sparkle.
- *
- * Not a [NovaShortcutCard] with a different size: it goes somewhere that is not a
- * list, so it should not look like the two cards that do. The quieter surface is
- * the distinction.
- */
-@Composable
-fun NovaOtherShortcut(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    /** The wide artwork on the right; the AniList banner when one is available. */
-    coverUrl: String? = null
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    NovaSurface(
-        modifier = modifier
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(104.dp)
-                .testTag("nova_other_shortcut")
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 14.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = AppVectorIcons.AnimeSparkle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(17.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Calendar, tier lists and more",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        // The whole remainder of the column, so the chevron sits
-                        // at the far edge of the text block rather than riding
-                        // along after an ellipsized line.
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = AppVectorIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                }
-                Text(
-                    text = "OTHER",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            ShortcutArtwork(
-                coverUrl = coverUrl,
-                icon = AppVectorIcons.AnimeSparkle,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.46f)
-            )
-        }
-    }
-}
-
-/**
- * The artwork panel both Home shortcuts wear on their right edge.
- *
- * A full-height image rather than a 52dp strip: the two cards are doors, and a
- * poster is what makes a door recognisable at a glance. The gradient is the
- * card's own surface colour rather than a black scrim, so the title column and
- * the artwork meet without a hard edge on either palette.
- *
- * No request is made here. The anime cover is the random AniList node the
- * dashboard fetches for Home, the manga cover comes from the existing preview
- * page, and the Other card borrows the same node's banner. A null URL is a real
- * answer - the demo, or a response that has not landed - and draws the icon on a
- * themed wash instead of an empty hole.
- */
-@Composable
-private fun ShortcutArtwork(
-    coverUrl: String?,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.background(
-            Brush.linearGradient(
-                listOf(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    MaterialTheme.colorScheme.tertiaryContainer
-                )
-            )
-        ),
-        contentAlignment = Alignment.Center
-    ) {
-        if (coverUrl != null) {
-            AsyncImage(
-                model = coverUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surfaceContainerLow
-                                    .copy(alpha = 0.92f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                modifier = Modifier.size(28.dp)
-            )
-        }
-    }
-}
 
 /**
  * A horizontal poster rail of the entries the viewer is currently on.
@@ -360,6 +113,13 @@ private fun NovaContinueCard(
     val media = entry.media
     val isManga = media.isManga
     val total = if (isManga) media.chapters else media.episodes
+    // AniList leaves `progress` null on a completed entry, which is the common
+    // case rather than an edge: the rail therefore dropped its badge exactly when
+    // a title had been finished. The total is the honest number to show, and the
+    // library grid already falls back to it - this rail is the other surface that
+    // reads the same list, so it must not disagree with the shelf behind it.
+    val completed = entry.status.equals("COMPLETED", ignoreCase = true)
+    val progress = entry.progress ?: if (completed) total else null
     val interactionSource = remember { MutableInteractionSource() }
 
     Column(
@@ -369,6 +129,8 @@ private fun NovaContinueCard(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
+                onClickLabel = "Open ${media.displayName}",
                 onClick = onOpen
             )
             .testTag("nova_continue_card_${media.id}")
@@ -382,13 +144,15 @@ private fun NovaContinueCard(
         ) {
             AsyncImage(
                 model = media.posterUrl,
-                contentDescription = media.displayName,
+                // The caption below names the card; a description on the artwork
+                // too made TalkBack read every title twice in the rail.
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            if (entry.progress != null) {
+            if (progress != null) {
                 NovaProgressPill(
-                    progress = entry.progress,
+                    progress = progress,
                     total = total,
                     isManga = isManga,
                     modifier = Modifier
@@ -722,22 +486,34 @@ fun NovaHomeSkeleton(modifier: Modifier = Modifier) {
         }
 
         item(key = "skeleton_shortcuts") {
-            Row(
+            Column(
                 modifier = Modifier
                     .widthIn(max = maxWidth)
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                repeat(2) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(104.dp),
-                        shape = RoundedCornerShape(26.dp),
-                        phase = phase
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    repeat(2) {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(NovaShortcutHeight),
+                            shape = RoundedCornerShape(26.dp),
+                            phase = phase
+                        )
+                    }
                 }
+                // The Other door is part of the same block, so the skeleton must
+                // reserve it too - a two-row skeleton put the Continue rail 76dp
+                // too high and it jumped down when the real content arrived.
+                ShimmerBox(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(NovaOtherShortcutHeight),
+                    shape = RoundedCornerShape(26.dp),
+                    phase = phase
+                )
             }
         }
 

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -56,6 +57,7 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.matchesTitleQuery
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.MediaPosterCell
@@ -68,7 +70,12 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.screens.library.LibraryGroupHeading
+import com.anisequel.ui.screens.library.LibraryListRow
+import com.anisequel.ui.screens.library.LibraryTableHeader
+import com.anisequel.ui.screens.library.libraryColumns
 import com.anisequel.ui.theme.AniSequelTheme
+import com.anisequel.ui.theme.LocalLibraryViewMode
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -605,6 +612,22 @@ fun ProfileLibraryTab(
             sortAscending
         )
     }
+    // The Interface page's Library view applies here too. It used to be read only
+    // by the new look, so choosing "List" or "Shelf" changed the preview and
+    // nothing on the page a Classic reader actually browses. The grouping is the
+    // same status order the new Library uses, computed once per filtered list.
+    val viewMode = LocalLibraryViewMode.current
+    val grouped = remember(visible) {
+        ListStatuses.options.mapNotNull { option ->
+            val entries = visible.filter {
+                ListStatuses.normalize(it.status) == option.apiValue
+            }
+            if (entries.isEmpty()) null else option to entries
+        }
+    }
+    val unclassified = remember(visible) {
+        visible.filter { ListStatuses.normalize(it.status) == null }
+    }
 
     LaunchedEffect(type) {
         // Only the manga filter needs the network; the other two are already in
@@ -647,11 +670,16 @@ fun ProfileLibraryTab(
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize()
     ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    // The mode's own column count, narrowed only where the mode asks for a
+    // compact wall; the width comes from the constraint rather than from the
+    // device, so a split-screen window gets the same honest answer as a phone.
+    val columns = libraryColumns(viewMode, maxWidth)
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
         // the grid must not reflow when the window changes, because the person's
         // scroll position would no longer be the entry they were looking at.
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Fixed(columns),
         modifier = Modifier
             .fillMaxSize()
             .testTag("library_grid"),
@@ -740,37 +768,140 @@ fun ProfileLibraryTab(
                 )
             }
         } else {
-            items(
-                items = visible,
-                // The namespace and the id, because this grid is the merged one:
-                // `animeEntries + mangaEntries` under the ALL scope, and the two
-                // namespaces share their numbers. Two rows claiming one key is not a
-                // duplicated badge, it is the lazy layout failing on a duplicate key.
-                key = { it.media.namespaceKey },
-                contentType = { "library" }
-            ) { entry ->
-                LibraryPoster(
-                    entry = entry,
-                    isFavourite = entry.media.namespaceKey in favouriteIds,
-                    modifier = Modifier
-                        .widthIn(max = ProfileMaxContentWidth)
-                        .fillMaxWidth()
-                        // Filtering, sorting and searching all rewrite this grid in
-                        // place, so without this every poster jumped to its new cell
-                        // on the frame the choice was made. `animateItem` slides the
-                        // survivors on the spatial spring and fades the ones the new
-                        // filter removed, which is what makes a filter feel like a
-                        // rearrangement rather than a redraw. Spring tokens, not
-                        // durations, for the reason the rest of the app uses them.
-                        .animateItem(
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                        ),
-                    onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
-                )
+            when (viewMode) {
+                LibraryViewMode.TABLE -> {
+                    item(
+                        span = { GridItemSpan(maxLineSpan) },
+                        key = "library_table_header",
+                        contentType = "controls"
+                    ) {
+                        // `columns` is one in this mode, so the header spans the
+                        // single table column and its labels sit above the same
+                        // trailing numbers every row draws.
+                        LibraryTableHeader()
+                    }
+                    items(
+                        items = visible,
+                        key = { it.media.namespaceKey },
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = { "library_table_row" }
+                    ) { entry ->
+                        LibraryListRow(
+                            entry = entry,
+                            detailed = true,
+                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+                }
+                LibraryViewMode.LIST -> {
+                    items(
+                        items = visible,
+                        key = { it.media.namespaceKey },
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = { "library_list_row" }
+                    ) { entry ->
+                        LibraryListRow(
+                            entry = entry,
+                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+                }
+                LibraryViewMode.GROUPED -> {
+                    grouped.forEach { (option, entries) ->
+                        item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            key = "library_group_${option.apiValue}",
+                            contentType = "header"
+                        ) {
+                            LibraryGroupHeading(
+                                label = option.labelFor(type == LibraryType.MANGA),
+                                count = entries.size
+                            )
+                        }
+                        items(
+                            items = entries,
+                            key = { it.media.namespaceKey },
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_grouped_row" }
+                        ) { entry ->
+                            LibraryListRow(
+                                entry = entry,
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                modifier = Modifier.animateItem(
+                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                )
+                            )
+                        }
+                    }
+                    if (unclassified.isNotEmpty()) {
+                        item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            key = "library_group_other",
+                            contentType = "header"
+                        ) {
+                            LibraryGroupHeading(label = "Other", count = unclassified.size)
+                        }
+                        items(
+                            items = unclassified,
+                            key = { it.media.namespaceKey },
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_grouped_row" }
+                        ) { entry ->
+                            LibraryListRow(
+                                entry = entry,
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    items(
+                        items = visible,
+                        // The namespace and the id, because this grid is the merged one:
+                        // `animeEntries + mangaEntries` under the ALL scope, and the two
+                        // namespaces share their numbers. Two rows claiming one key is not a
+                        // duplicated badge, it is the lazy layout failing on a duplicate key.
+                        key = { it.media.namespaceKey },
+                        contentType = { "library_${viewMode.storageValue}" }
+                    ) { entry ->
+                        LibraryPoster(
+                            entry = entry,
+                            isFavourite = entry.media.namespaceKey in favouriteIds,
+                            showTitle = viewMode != LibraryViewMode.COVERS,
+                            modifier = Modifier
+                                .widthIn(max = ProfileMaxContentWidth)
+                                .fillMaxWidth()
+                                // Filtering, sorting and searching all rewrite this grid in
+                                // place, so without this every poster jumped to its new cell
+                                // on the frame the choice was made. `animateItem` slides the
+                                // survivors on the spatial spring and fades the ones the new
+                                // filter removed, which is what makes a filter feel like a
+                                // rearrangement rather than a redraw. Spring tokens, not
+                                // durations, for the reason the rest of the app uses them.
+                                .animateItem(
+                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                ),
+                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
+                        )
+                    }
+                }
             }
         }
+    }
     }
     }
 }
@@ -977,7 +1108,13 @@ private fun LibraryPoster(
     entry: MediaListEntryItem,
     isFavourite: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Cover wall hides the caption. It still draws the same cell, because the
+     * artwork, its tint and the chosen card style are what that mode is for - only
+     * the repeated name is removed.
+     */
+    showTitle: Boolean = true
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
@@ -997,6 +1134,7 @@ private fun LibraryPoster(
             title = title,
             score = score,
             style = style,
+            titleVisible = showTitle,
             modifier = Modifier.fillMaxWidth(),
             overlay = {
                 libraryProgressLabel(entry)?.let { label ->
@@ -1045,7 +1183,11 @@ private fun LibraryPoster(
         // no rating to put there. Only when it says something the title does not: a
         // second title-shaped string under a poster in a grid is the poster repeated,
         // not information.
-        if (score == null) {
+        // The format line lives under the caption. With the caption hidden there is
+        // no "under" for it to belong to, and Cover only promised no repeated label;
+        // it was still drawing "TV" beneath a captionless poster, which read as a
+        // stray fragment rather than as a card style.
+        if (showTitle && score == null && style.titlePlacement != com.anisequel.domain.card.CardTitlePlacement.HIDDEN) {
             val format = media.formatLabel.takeIf { it.isNotBlank() }
             if (format != null && !title.contains(format, ignoreCase = true)) {
                 Spacer(modifier = Modifier.height(1.dp))

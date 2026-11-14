@@ -37,7 +37,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
@@ -106,6 +105,59 @@ internal fun NovaLibraryList(
 }
 
 /**
+ * The Table mode: the same rows as List with the score and format columns added.
+ *
+ * A table is a triage surface, so it keeps the cover small, the title on one or
+ * two lines and every number in a column that lines up down the page. The header
+ * is a single row rather than a sticky bar: the list already scrolls under a fixed
+ * library header, and a second pinned row on a phone costs more than it explains.
+ */
+@Composable
+internal fun NovaLibraryTable(
+    visible: List<MediaListEntryItem>,
+    awaitingAnime: Boolean,
+    scopedError: String?,
+    onOpenDetail: (MediaNode) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 4.dp,
+            bottom = mainBarClearance() + 20.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
+            .forEach { note ->
+                item(key = "note_$note") {
+                    PendingDataNote(note)
+                }
+            }
+        item(key = "table_header") {
+            LibraryTableHeader()
+        }
+        items(
+            items = visible,
+            key = { it.media.namespaceKey },
+            contentType = { "library_table_row" }
+        ) { entry ->
+            LibraryListRow(
+                entry = entry,
+                detailed = true,
+                onClick = { onOpenDetail(entry.media) },
+                modifier = Modifier.animateItem(
+                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                )
+            )
+        }
+    }
+}
+
+/**
  * The same entries, grouped under the six status headings.
  *
  * The headings come from [ListStatuses.options] rather than from the entries:
@@ -155,7 +207,7 @@ internal fun NovaLibraryGrouped(
 
         groups.forEach { (option, entries) ->
             item(key = "group_${option.apiValue}") {
-                NovaGroupHeading(
+                LibraryGroupHeading(
                     label = option.labelFor(isManga),
                     count = entries.size
                 )
@@ -180,7 +232,7 @@ internal fun NovaLibraryGrouped(
 
         if (unclassified.isNotEmpty()) {
             item(key = "group_unclassified") {
-                NovaGroupHeading(label = "Other", count = unclassified.size)
+                LibraryGroupHeading(label = "Other", count = unclassified.size)
             }
             items(
                 items = unclassified,
@@ -193,37 +245,6 @@ internal fun NovaLibraryGrouped(
                     onClick = { onOpenDetail(entry.media) }
                 )
             }
-        }
-    }
-}
-
-/** The one line a grouped section is introduced by, with its count. */
-@Composable
-private fun NovaGroupHeading(label: String, count: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Surface(
-            shape = ExpressiveShapes.pill,
-            color = MaterialTheme.colorScheme.primaryContainer
-        ) {
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-            )
         }
     }
 }
@@ -284,7 +305,8 @@ internal fun NovaLibraryGrid(
                     isManga = isManga,
                     compact = viewMode == LibraryViewMode.COMPACT ||
                         viewMode == LibraryViewMode.SHELF,
-                    showTitle = viewMode != LibraryViewMode.SHELF,
+                    showTitle = viewMode != LibraryViewMode.SHELF &&
+                        viewMode != LibraryViewMode.COVERS,
                     large = viewMode == LibraryViewMode.CARDS,
                     onClick = { onOpenDetail(entry.media) },
                     modifier = Modifier.animateItem(
@@ -296,28 +318,6 @@ internal fun NovaLibraryGrid(
             }
         }
     }
-}
-
-/**
- * The requested column count, narrowed until a cover keeps a readable width.
- *
- * 68dp is deliberately below the 86dp the default grid gives a phone: this is a
- * floor for the two modes that ask for more columns, not a replacement for the
- * mode's own count. A width the mode already satisfies is returned untouched, so
- * nothing changes on hardware where the choice was made.
- */
-private fun libraryColumns(mode: LibraryViewMode, width: Dp): Int {
-    if (mode != LibraryViewMode.COMPACT && mode != LibraryViewMode.SHELF) {
-        return mode.columns.coerceAtLeast(1)
-    }
-    var columns = mode.columns
-    while (columns > 3) {
-        val gaps = 8.dp * (columns - 1).toFloat()
-        val cell = (width - 32.dp - gaps) / columns.toFloat()
-        if (cell >= 68.dp) break
-        columns -= 1
-    }
-    return columns
 }
 
 /**

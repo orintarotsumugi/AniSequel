@@ -200,8 +200,6 @@ fun NovaLibraryScreen(
             avatarUrl = avatarUrl,
             searchOpen = searchOpen,
             type = type,
-            animeCount = animeEntries.size,
-            mangaCount = mangaEntries.size,
             isLoadingManga = isLoadingManga,
             activeFilterCount = advancedFilters.activeCount,
             onSearchOpenChange = { searchOpen = it },
@@ -334,6 +332,12 @@ private fun NovaLibraryBody(
                 filter = filter,
                 advancedFiltersActive = advancedFiltersActive,
                 isManga = isManga
+            )
+            viewMode == LibraryViewMode.TABLE -> NovaLibraryTable(
+                visible = visible,
+                awaitingAnime = awaitingAnime,
+                scopedError = scopedError,
+                onOpenDetail = onOpenDetail
             )
             viewMode == LibraryViewMode.LIST -> NovaLibraryList(
                 visible = visible,

@@ -60,6 +60,11 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * per frame of an animation whose whole point is to look smooth. A dynamic local
  * invalidates only the composables that read the lift, which is the bar and the
  * handful of containers that reserve clearance for it.
+ *
+ * The provided value is clamped to [NavBarLift]'s range on **every animated
+ * frame**. A spring overshoots, and below zero dp Compose throws rather than
+ * drawing a smaller lift, so the provider cannot rely on the stored preference
+ * having been clamped at write time.
  */
 val LocalMainBarLift = compositionLocalOf { NavBarLift.DEFAULT_DP }
 

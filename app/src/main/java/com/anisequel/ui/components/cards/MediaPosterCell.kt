@@ -115,12 +115,22 @@ fun MediaPosterCell(
     aspect: Float = POSTER_ASPECT,
     contentDescription: String? = null,
     posterModifier: Modifier = Modifier,
+    /**
+     * Whether the caption is drawn at all.
+     *
+     * The Cover wall library view is the one caller that turns this off: it wants
+     * the artwork and the reader's chosen style, but not a repeated name under
+     * every cover. It is a separate flag from [style] rather than a fake
+     * `COVER_ONLY` style, because the wall must still honour the borders, glow and
+     * score placement the reader chose.
+     */
+    titleVisible: Boolean = true,
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
     val scoreOnTop = score != null && scoreCornerOf(style) == PosterCorner.TOP_START
     val scoreOnBottom = score != null && scoreCornerOf(style) == PosterCorner.BOTTOM_END
-    val titleOverlaid = style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
-    val titleHidden = style.titlePlacement == CardTitlePlacement.HIDDEN
+    val titleOverlaid = titleVisible && style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
+    val titleHidden = !titleVisible || style.titlePlacement == CardTitlePlacement.HIDDEN
 
     Column(modifier = modifier) {
         PosterArtwork(
