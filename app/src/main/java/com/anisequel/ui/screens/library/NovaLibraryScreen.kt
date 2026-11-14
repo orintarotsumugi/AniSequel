@@ -92,12 +92,6 @@ fun NovaLibraryScreen(
     val haptic = LocalHapticFeedback.current
 
     var choiceMade by rememberSaveable { mutableStateOf(false) }
-    // The type the page opened on, for the one case the grid state cannot tell
-    // apart: a *switch* from anime to manga must start at the top of the other
-    // list, while returning to the page must restore the position it had. A
-    // remembered snapshot of the initial value does the first without breaking
-    // the second, because re-entering the page re-creates it at the current type.
-    var settledType by remember { mutableStateOf<LibraryType?>(null) }
     var type by rememberSaveable {
         mutableStateOf(
             if (remembered.type == LibraryType.MANGA) LibraryType.MANGA else LibraryType.ANIME
@@ -160,17 +154,7 @@ fun NovaLibraryScreen(
         )
     }
 
-    LaunchedEffect(type) {
-        if (type == LibraryType.MANGA) onLoadManga()
-        val previous = settledType
-        if (previous != null && previous != type) {
-            // Otherwise switching to manga while scrolled halfway down the anime
-            // grid lands halfway down the manga list, which reads as the new
-            // list being mostly empty above the fold.
-            gridState.scrollToItem(0)
-        }
-        settledType = type
-    }
+    LoadTypeAndResetScroll(type = type, gridState = gridState, onLoadManga = onLoadManga)
 
     val chooseType: (LibraryType) -> Unit = { chosen ->
         if (chosen != type) {
@@ -277,6 +261,33 @@ fun NovaLibraryScreen(
             },
             onDismiss = { filterOpen = false }
         )
+    }
+}
+
+/**
+ * Loads the other list on a type switch and starts it at the top.
+ *
+ * The remembered snapshot of the type the page opened on is what tells a
+ * *switch* from a return: switching while scrolled halfway down the anime grid
+ * would otherwise land halfway down the manga list, which reads as the new list
+ * being mostly empty above the fold, while coming back to the page must keep
+ * the position it had. Re-entering the page re-creates this snapshot at the
+ * current type, so a restore does not reset.
+ */
+@Composable
+private fun LoadTypeAndResetScroll(
+    type: LibraryType,
+    gridState: LazyGridState,
+    onLoadManga: () -> Unit
+) {
+    var settledType by remember { mutableStateOf<LibraryType?>(null) }
+    LaunchedEffect(type) {
+        if (type == LibraryType.MANGA) onLoadManga()
+        val previous = settledType
+        if (previous != null && previous != type) {
+            gridState.scrollToItem(0)
+        }
+        settledType = type
     }
 }
 
