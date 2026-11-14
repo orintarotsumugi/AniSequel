@@ -110,6 +110,21 @@ enum class LibraryViewMode(
         blurb = "One title per row, with progress, status and score.",
         columns = 1
     ),
+    /**
+     * A list with a heading per status instead of one flat run of rows.
+     *
+     * The other modes answer "what is on my list"; this one answers "where is
+     * it" without a filter. AniList's own list page draws the same grouping, and
+     * a reader with a long backlog otherwise has to apply a status filter six
+     * times to see the same thing. [columns] is one because a heading is the
+     * layout: the grid arm is never used for this mode.
+     */
+    GROUPED(
+        storageValue = "grouped",
+        displayName = "Grouped",
+        blurb = "A section per status, with the count for each one.",
+        columns = 1
+    ),
     CARDS(
         storageValue = "cards",
         displayName = "Big cards",

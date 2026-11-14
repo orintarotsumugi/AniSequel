@@ -465,6 +465,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
         request: GraphQLRequest
     ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = notServed("searchMedia")
 
+    override suspend fun getRandomAnime(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = notServed("getRandomAnime")
+
     override suspend fun saveMediaListEntry(
         request: GraphQLRequest
     ): GraphQLResponse<SaveMediaListEntryData> = notServed("saveMediaListEntry")

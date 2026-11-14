@@ -64,6 +64,13 @@ interface AniListApiService {
         @Body request: GraphQLRequest
     ): GraphQLResponse<MangaPreviewData>
 
+    /** One randomly paged popular anime for Home's shortcut artwork. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getRandomAnime(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<MediaSearchData>
+
     @POST("/")
     @Headers("Content-Type: application/json", "Accept: application/json")
     suspend fun saveMediaListEntry(

@@ -206,12 +206,15 @@ fun DashboardScreen(
     val currentViewer = successState?.viewer
     val missedCount = successState?.totalMissedCount ?: 0
 
-    // The Manga shortcut's cover is only drawn by the new Home. Ask for it when
+    // The shortcut cards' artwork is only drawn by the new Home. Ask for it when
     // that page is actually on screen rather than on every dashboard load, so
-    // the classic layout never pays a request for a card it does not draw.
+    // the classic layout never pays a request for cards it does not draw. The
+    // random AniList draw is what makes the Anime List and Other panels a real
+    // piece of the catalogue rather than the same three local covers.
     LaunchedEffect(appLayout, currentViewer?.id) {
         if (appLayout == AppLayout.NOVA && currentViewer != null) {
             dashboardViewModel.ensureMangaPreview()
+            dashboardViewModel.ensureRandomAnimeArtwork()
         }
     }
 

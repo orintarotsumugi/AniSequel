@@ -107,6 +107,13 @@ class AniListErrorMappingTest {
             request: GraphQLRequest
         ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = GraphQLResponse(null)
 
+        // Home's shortcut artwork. It is a decoration, so an accidental call in
+        // these tests should fail loudly rather than invent a poster.
+        override suspend fun getRandomAnime(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> =
+            notServed("getRandomAnime")
+
         override suspend fun saveMediaListEntry(
             request: GraphQLRequest
         ): GraphQLResponse<SaveMediaListEntryData> = GraphQLResponse(null)
@@ -436,6 +443,13 @@ class RequestCoalescingPolicyTest {
         override suspend fun searchMedia(
             request: GraphQLRequest
         ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> = GraphQLResponse(null)
+
+        // Home's shortcut artwork. It is a decoration, so an accidental call in
+        // these tests should fail loudly rather than invent a poster.
+        override suspend fun getRandomAnime(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.MediaSearchData> =
+            notServed("getRandomAnime")
 
         override suspend fun getMediaDetail(request: GraphQLRequest): GraphQLResponse<MediaDetailData> =
             GraphQLResponse(null)

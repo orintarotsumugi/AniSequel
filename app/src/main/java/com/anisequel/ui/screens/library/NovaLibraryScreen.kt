@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.library
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -37,7 +34,6 @@ import com.anisequel.domain.library.filterLibraryAdvanced
 import com.anisequel.domain.library.libraryReleaseYears
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.ShimmerBox
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.screens.nova.NovaEmptyNote
@@ -158,9 +154,7 @@ fun NovaLibraryScreen(
         )
     }
 
-    LaunchedEffect(type) {
-        if (type == LibraryType.MANGA) onLoadManga()
-    }
+    LoadTypeAndResetScroll(type = type, gridState = gridState, onLoadManga = onLoadManga)
 
     val chooseType: (LibraryType) -> Unit = { chosen ->
         if (chosen != type) {
@@ -271,6 +265,33 @@ fun NovaLibraryScreen(
 }
 
 /**
+ * Loads the other list on a type switch and starts it at the top.
+ *
+ * The remembered snapshot of the type the page opened on is what tells a
+ * *switch* from a return: switching while scrolled halfway down the anime grid
+ * would otherwise land halfway down the manga list, which reads as the new list
+ * being mostly empty above the fold, while coming back to the page must keep
+ * the position it had. Re-entering the page re-creates this snapshot at the
+ * current type, so a restore does not reset.
+ */
+@Composable
+private fun LoadTypeAndResetScroll(
+    type: LibraryType,
+    gridState: LazyGridState,
+    onLoadManga: () -> Unit
+) {
+    var settledType by remember { mutableStateOf<LibraryType?>(null) }
+    LaunchedEffect(type) {
+        if (type == LibraryType.MANGA) onLoadManga()
+        val previous = settledType
+        if (previous != null && previous != type) {
+            gridState.scrollToItem(0)
+        }
+        settledType = type
+    }
+}
+
+/**
  * The scrolling half of the page: the resolving spinner, the empty state, and
  * the list or grid of posters.
  *
@@ -315,6 +336,13 @@ private fun NovaLibraryBody(
                 isManga = isManga
             )
             viewMode == LibraryViewMode.LIST -> NovaLibraryList(
+                visible = visible,
+                isManga = isManga,
+                awaitingAnime = awaitingAnime,
+                scopedError = scopedError,
+                onOpenDetail = onOpenDetail
+            )
+            viewMode == LibraryViewMode.GROUPED -> NovaLibraryGrouped(
                 visible = visible,
                 isManga = isManga,
                 awaitingAnime = awaitingAnime,

@@ -152,6 +152,24 @@ interface AniListRepository {
         unsupported("getUserMangaPreviews")
 
     /**
+     * One popular anime drawn from a random page of the catalogue, for Home.
+     *
+     * The Anime List card used to take its cover from the reader's own list, which
+     * meant the newest account saw the same three posters as the Settings preview
+     * and the card could be empty on a first load. This asks AniList for one node
+     * with both a portrait cover and a wide banner, so the Anime List and Other
+     * cards can share one request and still show a different piece of artwork on
+     * each visit.
+     *
+     * Null is an answer: a page past the end of the catalogue comes back empty,
+     * and the caller draws the themed placeholder rather than claiming a failure.
+     * A default that refuses, like every optional read here, because the demo and
+     * the test doubles have no catalogue to draw from.
+     */
+    suspend fun getRandomAnimeArtwork(): Result<MediaNode?> =
+        unsupported("getRandomAnimeArtwork")
+
+    /**
      * Description, banner and studio for one entry, fetched on demand because
      * the list query omits them (they are only rendered for the entry the user
      * opens, and asking for them up front makes AniList fail on large lists).

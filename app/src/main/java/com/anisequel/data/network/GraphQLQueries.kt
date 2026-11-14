@@ -108,6 +108,32 @@ object GraphQLQueries {
         }
     """.trimIndent()
 
+    /**
+     * One popular anime, drawn from a random page of AniList's catalogue.
+     *
+     * AniList has no random sort. Paging into a popularity-ordered catalogue is
+     * the honest approximation: the page number is chosen in the repository, and
+     * the result is one complete node with both the portrait cover the Anime List
+     * card draws and the wide banner the Other card draws. `isAdult: false` keeps
+     * a random draw from putting explicit artwork on a page that is not about it.
+     *
+     * The variables are a page number rather than a media id, so each resume can
+     * ask for a different poster without a second query shape.
+     */
+    val RANDOM_ANIME = """
+        query RandomAnime(${'$'}page: Int) {
+          Page(page: ${'$'}page, perPage: 1) {
+            media(type: ANIME, sort: POPULARITY_DESC, isAdult: false) {
+              id
+              type
+              title { english romaji native userPreferred }
+              coverImage { extraLarge large medium color }
+              bannerImage
+            }
+          }
+        }
+    """.trimIndent()
+
     val GET_USER_BY_NAME = """
         query GetUserByName(${'$'}userName: String) {
           User(name: ${'$'}userName) {

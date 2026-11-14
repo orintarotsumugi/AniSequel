@@ -2,6 +2,7 @@ package com.anisequel.ui.viewmodel
 
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.MediaListEntryItem
+import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListErrorKind
@@ -64,7 +65,17 @@ sealed interface DashboardUiState {
          * one poster forever made it look like a fixed illustration rather than a
          * door into the reader's own shelf.
          */
-        val mangaPreviews: List<com.anisequel.data.model.MediaNode> = emptyList(),
+        val mangaPreviews: List<MediaNode> = emptyList(),
+        /**
+         * One popular anime AniList drew for Home's shortcut artwork.
+         *
+         * A whole node rather than a URL because the two cards need two crops of
+         * it: the portrait cover behind Anime List and the wide banner behind
+         * Other. Null until the request lands, and on a demo or a failed draw -
+         * both of which fall back to the reader's own covers or a themed
+         * placeholder rather than to a blank panel.
+         */
+        val randomArtwork: MediaNode? = null,
         /**
          * What the activity widget's tile counts and names.
          *

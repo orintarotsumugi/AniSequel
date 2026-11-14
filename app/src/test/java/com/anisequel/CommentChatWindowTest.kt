@@ -7,6 +7,7 @@ import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.CommentWindow
 import com.anisequel.ui.viewmodel.CommentThreadStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -24,6 +25,7 @@ import org.junit.Test
  * that arrive are real comments, in order - and only an assertion on *which page
  * was asked for* says whether the sheet opened where a reader expects it.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CommentChatWindowTest {
 
     /**

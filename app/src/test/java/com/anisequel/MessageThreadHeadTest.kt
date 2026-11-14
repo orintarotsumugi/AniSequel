@@ -7,6 +7,7 @@ import com.anisequel.data.model.MessageNode
 import com.anisequel.data.model.asThreadHead
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.CommentThreadStore
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -25,6 +26,7 @@ import org.junit.Test
  * message's own fields, and that the head survives the window fetch rather than
  * being left behind by it.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class MessageThreadHeadTest {
 
     private val counterpart = FollowUser(id = 2, name = "holo", avatar = null)

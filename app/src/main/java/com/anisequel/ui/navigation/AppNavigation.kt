@@ -1,6 +1,7 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import android.net.Uri
@@ -46,6 +47,8 @@ import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
+import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.screens.login.FirstRunSetupHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
@@ -261,8 +264,22 @@ fun AppNavigation(
     // here and provided as composition locals rather than threaded through every
     // destination: the dashboard, the Library, the bar and the Settings preview
     // have to agree, and a parameter is one more place they can disagree.
+    // The bar's lift is the one preference that moves something the reader is
+    // already looking at. Writing the preference on release used to snap the bar
+    // and every list's bottom clearance in one frame - a jarring jump for a
+    // control whose whole point is a visible amount of daylight - so the stored
+    // value is interpolated once here, at the app root, and every reader of
+    // `LocalMainBarLift` (the bar and the lists that reserve clearance) follows
+    // the same spring. The Settings page keeps its own live draft for the thumb.
+    // Clamped again on this side: DataStore can hold a value written by an older
+    // build, and a lift outside 0..24 is not a layout this app draws.
     val interfaceSettings by interfacePreferences.settings.collectAsState(
         initial = InterfacePreferences.InterfaceSettings()
+    )
+    val animatedBarLift by animateIntAsState(
+        targetValue = NavBarLift.clamp(interfaceSettings.mainBarLift),
+        animationSpec = ExpressiveMotion.FastSpatialInt,
+        label = "main_bar_lift"
     )
 
     // The planning confirmation, read once at the root for the same reason. The
@@ -598,7 +615,7 @@ fun AppNavigation(
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,
-            LocalMainBarLift provides interfaceSettings.mainBarLift,
+            LocalMainBarLift provides animatedBarLift,
             LocalConfirmPlanningAdd provides quickAddSettings.confirmAdds,
             // Both halves off means the search page has no question left to ask,
             // so neither it nor its shortcut should still be offered. One half on

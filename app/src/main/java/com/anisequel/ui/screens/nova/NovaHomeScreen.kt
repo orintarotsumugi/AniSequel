@@ -100,7 +100,10 @@ fun NovaHomeScreen(
     // carries for both media types. The dashboard's watched count remains the
     // fallback for a demo fixture, whose stats object is empty.
     val animeCount = viewer.statistics?.anime?.count ?: state.totalWatchedCount
-    val mangaCount = viewer.statistics?.manga?.count ?: 0
+    // A viewer query without statistics is a demo fixture, and it has no manga
+    // count at all. `0 items` beside a real manga cover reads as a failure; the
+    // preview page is a smaller number, but it is a true one.
+    val mangaCount = viewer.statistics?.manga?.count ?: state.mangaPreviews.size
 
     // A cover from the reader's own shelf, not the first row of a query. Both
     // lists are already in the state - the Continue rail's covers and the three
@@ -112,7 +115,15 @@ fun NovaHomeScreen(
             state.cardPreview.mapNotNull { it.media.posterUrl })
             .distinct()
     }
-    val animeCover = remember(animeCovers) { animeCovers.randomOrNull() }
+    val localAnimeCover = remember(animeCovers) { animeCovers.randomOrNull() }
+    // One node from AniList when the draw has landed, otherwise the reader's own
+    // poster. Both are real answers; the second is what a failed or still-loading
+    // request looks like, and it is why the card never draws an empty panel.
+    val animeCover = state.randomArtwork?.posterUrl ?: localAnimeCover
+    // The wide card takes the same node's banner, which the portrait cover cannot
+    // supply; a title with no banner falls back to its cover cropped wide.
+    val otherCover = state.randomArtwork?.bannerImage?.takeIf { it.isNotBlank() }
+        ?: animeCover
 
     // The manga preview is its own small page of rows rather than the whole
     // collection the Library defers, so this is still one image per visit from a
@@ -171,7 +182,7 @@ fun NovaHomeScreen(
                     ) {
                         NovaShortcutCard(
                             title = "ANIME LIST",
-                            meta = "$animeCount items",
+                            meta = itemCountLabel(animeCount),
                             icon = AppVectorIcons.Tv,
                             coverUrl = animeCover,
                             onClick = onOpenAnimeList,
@@ -179,14 +190,14 @@ fun NovaHomeScreen(
                         )
                         NovaShortcutCard(
                             title = "MANGA LIST",
-                            meta = "$mangaCount items",
+                            meta = itemCountLabel(mangaCount),
                             icon = AppVectorIcons.SourceBook,
                             coverUrl = mangaCover,
                             onClick = onOpenMangaList,
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    NovaOtherShortcut(onClick = onOpenOther)
+                    NovaOtherShortcut(onClick = onOpenOther, coverUrl = otherCover)
                 }
             }
 
@@ -321,3 +332,7 @@ fun NovaHomeScreen(
         }
     }
 }
+
+/** "1 item", not "1 items": a count is the first thing the card says. */
+private fun itemCountLabel(count: Int): String =
+    if (count == 1) "1 item" else "$count items"

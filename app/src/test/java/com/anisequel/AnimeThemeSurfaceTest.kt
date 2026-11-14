@@ -150,8 +150,8 @@ class AnimeThemeSurfaceTest {
 
         surfaceRoles(brand).zip(surfaceRoles(tinted)).forEach { (brandRole, tintedRole) ->
             val role = brandRole.first
-            val brandLuminance = ColorUtils.calculateLuminance(brandRole.second.toArgb()).toDouble()
-            val tintedLuminance = ColorUtils.calculateLuminance(tintedRole.second.toArgb()).toDouble()
+            val brandLuminance = ColorUtils.calculateLuminance(brandRole.second.toArgb())
+            val tintedLuminance = ColorUtils.calculateLuminance(tintedRole.second.toArgb())
 
             assertEquals(
                 "$role: the tint moved the surface off the brand's tone ladder, which " +

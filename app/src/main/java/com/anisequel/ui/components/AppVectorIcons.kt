@@ -5,6 +5,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -168,6 +169,15 @@ object AppVectorIcons {
     val NewActivity = Icons.Default.Add
     val ExpandMore = Icons.Default.ExpandMore
     val ExpandLess = Icons.Default.ExpandLess
+
+    /**
+     * The small "this row opens something" mark on Home's shortcut cards.
+     *
+     * `KeyboardArrowRight` rather than [SequelArrow]: the arrow is the app's
+     * "go to the next title" control and this is a disclosure inside a card, so
+     * the two should not be the same drawing at 14dp.
+     */
+    val ChevronRight = Icons.AutoMirrored.Filled.KeyboardArrowRight
 
     // The entry editor's own controls. The stepper pair is named for the
     // direction it moves a number rather than for the glyph, so a redraw cannot
