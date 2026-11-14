@@ -71,6 +71,8 @@ internal fun NovaLibraryHeader(
     avatarUrl: String?,
     searchOpen: Boolean,
     type: LibraryType,
+    animeCount: Int,
+    mangaCount: Int,
     isLoadingManga: Boolean,
     activeFilterCount: Int,
     onSearchOpenChange: (Boolean) -> Unit,
@@ -176,6 +178,8 @@ internal fun NovaLibraryHeader(
             Spacer(modifier = Modifier.height(10.dp))
             NovaTypeSwitch(
                 type = type,
+                animeCount = animeCount,
+                mangaCount = mangaCount,
                 isLoadingManga = isLoadingManga,
                 onSelect = onSelectType
             )
@@ -282,6 +286,8 @@ private fun sortLabel(
 @Composable
 private fun NovaTypeSwitch(
     type: LibraryType,
+    animeCount: Int,
+    mangaCount: Int,
     isLoadingManga: Boolean,
     onSelect: (LibraryType) -> Unit
 ) {
@@ -292,7 +298,10 @@ private fun NovaTypeSwitch(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(3.dp)
     ) {
-        listOf(LibraryType.ANIME, LibraryType.MANGA).forEach { option ->
+        listOf(
+            LibraryType.ANIME to animeCount,
+            LibraryType.MANGA to mangaCount
+        ).forEach { (option, count) ->
             val selected = option == type
             val container by animateColorAsState(
                 targetValue = if (selected) {

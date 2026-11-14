@@ -200,6 +200,8 @@ fun NovaLibraryScreen(
             avatarUrl = avatarUrl,
             searchOpen = searchOpen,
             type = type,
+            animeCount = animeEntries.size,
+            mangaCount = mangaEntries.size,
             isLoadingManga = isLoadingManga,
             activeFilterCount = advancedFilters.activeCount,
             onSearchOpenChange = { searchOpen = it },
