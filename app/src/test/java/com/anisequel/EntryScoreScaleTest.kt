@@ -194,7 +194,7 @@ class EntryScoreScaleTest {
 
         assertEquals("POINT_100", data.viewer!!.mediaListOptions!!.scoreFormat)
 
-        val entry = data.entry!!.copy(scoreFormat = data.viewer!!.mediaListOptions!!.scoreFormat)
+        val entry = data.entry!!.copy(scoreFormat = data.viewer.mediaListOptions.scoreFormat)
         assertEquals(100, entry.toDraft().scoreMax)
     }
 }

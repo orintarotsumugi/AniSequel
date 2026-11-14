@@ -629,7 +629,7 @@ fun InfoParentCard(
                         .clickable(
                             role = Role.Button,
                             onClickLabel = "Open " + sequel.parentTitle
-                        ) { onOpenParent?.invoke() }
+                        ) { onOpenParent() }
                 } else {
                     Modifier
                 }

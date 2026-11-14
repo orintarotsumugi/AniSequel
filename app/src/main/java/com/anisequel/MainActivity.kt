@@ -615,7 +615,7 @@ class MainActivity : ComponentActivity() {
 private fun rateLimitMessage(retryAfterSeconds: Int?): String = when {
     retryAfterSeconds == null ->
         "AniList is busy — you're rate limited. Give it a minute and try again."
-    retryAfterSeconds != null && retryAfterSeconds <= 1 ->
+    retryAfterSeconds <= 1 ->
         "AniList is rate limiting. Try again now."
     else ->
         "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
