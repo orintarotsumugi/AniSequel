@@ -349,7 +349,13 @@ private fun NovaTypeSwitch(
                 Spacer(modifier = Modifier.width(5.dp))
                 Text(
                     text = when {
-                        option == LibraryType.MANGA && isLoadingManga && !selected -> "Manga..."
+                        // The selected half is the one whose spinner the reader is
+                        // waiting behind, so it says "Loading..." rather than
+                        // looking like a type switch that did nothing. The other
+                        // half keeps its name and a trailing ellipsis, so it does
+                        // not impersonate a label for a list that has not arrived.
+                        option == LibraryType.MANGA && isLoadingManga && selected -> "Loading..."
+                        option == LibraryType.MANGA && isLoadingManga -> "Manga..."
                         option == LibraryType.MANGA -> "Manga"
                         else -> "Anime"
                     },

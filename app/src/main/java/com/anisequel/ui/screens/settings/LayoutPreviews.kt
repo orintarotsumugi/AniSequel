@@ -1,7 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,7 +38,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -53,6 +51,7 @@ import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
+import kotlin.math.roundToInt
 
 /**
  * Previews for the two layout choices on the Interface page.
@@ -78,6 +77,17 @@ internal fun AppLayoutPreviews(
      */
     barLift: Int = 0
 ) {
+    // The mini layouts follow the slider on the same spring the real bar uses.
+    // Clamped on every frame: the spring overshoots below zero on the way down,
+    // and a negative dp reaches `.padding(bottom = ...)` as a crash. The preview
+    // is the first place the reader can see that spring, which is exactly why it
+    // has to survive its own bounce.
+    val animatedLift by animateFloatAsState(
+        targetValue = NavBarLift.clamp(barLift).toFloat(),
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "app_layout_preview_lift"
+    )
+    val liftedDp = NavBarLift.clampDp(animatedLift).roundToInt()
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -129,9 +139,9 @@ internal fun AppLayoutPreviews(
                             .padding(7.dp)
                     ) {
                         if (layout == AppLayout.NOVA) {
-                            NovaLayoutMini(entries = entries, barLift = barLift)
+                            NovaLayoutMini(entries = entries, barLift = liftedDp)
                         } else {
-                            ClassicLayoutMini(entries = entries, barLift = barLift)
+                            ClassicLayoutMini(entries = entries, barLift = liftedDp)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -164,7 +174,7 @@ private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
         // choosing disappeared precisely when they had no posters to demonstrate
         // it with. A null entry draws the themed placeholder cover.
         repeat(2) { index ->
-            MiniClassicRow(entry = entries.getOrNull(index), index = index)
+            MiniClassicRow(entry = previewEntry(entries, index), index = index)
             Spacer(modifier = Modifier.height(5.dp))
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -200,8 +210,8 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            MiniShortcut(entries.getOrNull(0))
-            MiniShortcut(entries.getOrNull(1))
+            MiniShortcut(previewEntry(entries, 0))
+            MiniShortcut(previewEntry(entries, 1))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -210,7 +220,7 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
         ) {
             repeat(3) { index ->
                 MiniCover(
-                    entry = entries.getOrNull(index),
+                    entry = previewEntry(entries, index),
                     modifier = Modifier
                         .weight(1f)
                         .height(38.dp)
@@ -443,18 +453,18 @@ internal fun SequelStylePreview(
                         // it from outside one - which is a compile error the first
                         // CI run after this preview was written.
                         MiniSequelRow(
-                            entry = entries.getOrNull(0),
+                            entry = previewEntry(entries, 0),
                             modifier = Modifier.weight(1f)
                         )
                         MiniSequelRow(
-                            entry = entries.getOrNull(1),
+                            entry = previewEntry(entries, 1),
                             modifier = Modifier.weight(1f)
                         )
                     }
 
                     HomeSequelStyle.CARDS -> Column(modifier = Modifier.fillMaxSize()) {
                         MiniCover(
-                            entry = entries.getOrNull(0),
+                            entry = previewEntry(entries, 0),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f)
@@ -487,7 +497,7 @@ internal fun SequelStylePreview(
                             .background(MaterialTheme.colorScheme.primaryContainer)
                     ) {
                         MiniCover(
-                            entry = entries.getOrNull(0),
+                            entry = previewEntry(entries, 0),
                             modifier = Modifier.fillMaxSize()
                         )
                         Box(
@@ -515,7 +525,7 @@ internal fun SequelStylePreview(
                     ) {
                         repeat(4) { index ->
                             MiniCover(
-                                entry = entries.getOrNull(index),
+                                entry = previewEntry(entries, index),
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
@@ -618,36 +628,19 @@ internal fun MiniCover(
 internal fun previewTitle(entry: MediaListEntryItem?): String =
     entry?.media?.displayName ?: "Dandadan"
 
-@Composable
-internal fun BottomBarLiftPreview(liftDp: Int) {
-    val lift by animateDpAsState(
-        targetValue = NavBarLift.clamp(liftDp).dp,
-        animationSpec = ExpressiveMotion.FastSpatialDp,
-        label = "bottom_bar_lift_preview"
-    )
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Preview · bottom bar",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = lift)
-                    .fillMaxWidth(0.78f)
-            ) {
-                MiniBottomBar()
-            }
-        }
-    }
-}
+/**
+ * One of the reader's entries for preview slot [index], cycling when there are
+ * fewer entries than slots.
+ *
+ * The Shelf preview used to draw `entries.getOrNull(4)` and showed two empty
+ * gradient slots whenever the dashboard held fewer than five covers - the mode
+ * looked broken at exactly the moment the reader had a small library, which is
+ * when they are most likely to be choosing a view. Repeating real covers is
+ * honest preview arithmetic, not invented content: every slot is a title they
+ * own, and an empty library still falls back to the themed placeholder.
+ */
+internal fun previewEntry(
+    entries: List<MediaListEntryItem>,
+    index: Int
+): MediaListEntryItem? =
+    if (entries.isEmpty()) null else entries[index % entries.size]

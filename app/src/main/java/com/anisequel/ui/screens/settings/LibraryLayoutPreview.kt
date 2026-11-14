@@ -65,6 +65,8 @@ internal fun LibraryViewPreview(
                     LibraryViewMode.GROUPED -> MiniGrouped(entries)
                     LibraryViewMode.CARDS -> MiniGrid(entries, 2, true)
                     LibraryViewMode.SHELF -> MiniGrid(entries, 5, false)
+                    LibraryViewMode.TABLE -> MiniTable(entries)
+                    LibraryViewMode.COVERS -> MiniCoverWall(entries)
                 }
             }
         }
@@ -80,13 +82,13 @@ private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle:
         repeat(columns) { index ->
             Column(modifier = Modifier.weight(1f)) {
                 MiniCover(
-                    entry = entries.getOrNull(index),
+                    entry = previewEntry(entries, index),
                     modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
                 )
                 if (showTitle) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = previewTitle(entries.getOrNull(index)),
+                        text = previewTitle(previewEntry(entries, index)),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -121,7 +123,7 @@ private fun MiniGrouped(entries: List<MediaListEntryItem>) {
                 modifier = Modifier.padding(top = if (groupIndex == 0) 0.dp else 2.dp)
             )
             repeat(2) { rowIndex ->
-                val entry = entries.getOrNull(groupIndex * 2 + rowIndex)
+                val entry = previewEntry(entries, groupIndex * 2 + rowIndex)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -148,6 +150,101 @@ private fun MiniGrouped(entries: List<MediaListEntryItem>) {
     }
 }
 
+/**
+ * A table miniature: one header and three aligned rows.
+ *
+ * The point of the mode is that the numbers line up, so the preview draws the
+ * header even at this size. Three rows is enough to see a column; a fourth would
+ * be a smudge at 168dp.
+ */
+@Composable
+private fun MiniTable(entries: List<MediaListEntryItem>) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(modifier = Modifier.width(24.dp))
+            Text(
+                text = "TITLE",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = "PROGRESS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        repeat(3) { index ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                MiniCover(
+                    entry = previewEntry(entries, index),
+                    modifier = Modifier.width(24.dp).fillMaxHeight()
+                )
+                Text(
+                    text = previewTitle(previewEntry(entries, index)),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 7.dp)
+                )
+                Text(
+                    text = "12/24",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Three captions-free covers, the cover wall's whole argument. */
+@Composable
+private fun MiniCoverWall(entries: List<MediaListEntryItem>) {
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        repeat(3) { index ->
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                MiniCover(
+                    entry = previewEntry(entries, index),
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "${(index + 1) * 4}/24",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun MiniList(entries: List<MediaListEntryItem>) {
     Column(
@@ -164,12 +261,12 @@ private fun MiniList(entries: List<MediaListEntryItem>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MiniCover(
-                    entry = entries.getOrNull(index),
+                    entry = previewEntry(entries, index),
                     modifier = Modifier.width(34.dp).fillMaxHeight()
                 )
                 Column(modifier = Modifier.padding(horizontal = 8.dp)) {
                     Text(
-                        text = previewTitle(entries.getOrNull(index)),
+                        text = previewTitle(previewEntry(entries, index)),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,

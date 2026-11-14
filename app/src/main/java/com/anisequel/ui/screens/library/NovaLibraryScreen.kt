@@ -335,6 +335,12 @@ private fun NovaLibraryBody(
                 advancedFiltersActive = advancedFiltersActive,
                 isManga = isManga
             )
+            viewMode == LibraryViewMode.TABLE -> NovaLibraryTable(
+                visible = visible,
+                awaitingAnime = awaitingAnime,
+                scopedError = scopedError,
+                onOpenDetail = onOpenDetail
+            )
             viewMode == LibraryViewMode.LIST -> NovaLibraryList(
                 visible = visible,
                 isManga = isManga,

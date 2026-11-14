@@ -24,4 +24,17 @@ object NavBarLift {
     const val STEP_DP: Int = 2
 
     fun clamp(value: Int): Int = value.coerceIn(MIN_DP, MAX_DP)
+
+    /**
+     * The same range as a float, for an *animated* value.
+     *
+     * The slider's spring overshoots its target - that is what makes the lift feel
+     * physical - and on the way back to zero an overshooting spring goes **below**
+     * zero before it settles. A negative dp is not a smaller lift: Compose rejects
+     * it (`Padding must be non-negative`) and the whole frame throws. The animated
+     * value therefore has to be clamped per frame, not only where the preference is
+     * written; [clamp] the target alone is what let the crash through.
+     */
+    fun clampDp(value: Float): Float =
+        value.coerceIn(MIN_DP.toFloat(), MAX_DP.toFloat())
 }

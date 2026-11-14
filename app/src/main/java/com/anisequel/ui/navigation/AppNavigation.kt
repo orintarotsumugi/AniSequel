@@ -276,11 +276,18 @@ fun AppNavigation(
     val interfaceSettings by interfacePreferences.settings.collectAsState(
         initial = InterfacePreferences.InterfaceSettings()
     )
-    val animatedBarLift by animateIntAsState(
+    val rawBarLift by animateIntAsState(
         targetValue = NavBarLift.clamp(interfaceSettings.mainBarLift),
         animationSpec = ExpressiveMotion.FastSpatialInt,
         label = "main_bar_lift"
     )
+    // Clamped per frame, not only at the target. The spatial spring overshoots,
+    // and on the way from 24 to 0 it spends a few frames below zero; that value
+    // fed `Modifier.padding(bottom = ...)` and every list's `contentPadding`, and
+    // Compose throws "Padding must be non-negative" on the frame it lands. A bar
+    // cannot float below the screen, so the drawn value is the stored range even
+    // while the spring is still moving.
+    val animatedBarLift = NavBarLift.clamp(rawBarLift)
 
     // The planning confirmation, read once at the root for the same reason. The
     // dashboard still collects this flow for its hold/swipe settings; this read is

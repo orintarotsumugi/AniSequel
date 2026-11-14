@@ -8,6 +8,7 @@ import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.domain.card.scoreCornerOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -89,10 +90,16 @@ class MediaCardStyleTest {
         assertEquals(PosterCorner.TOP_START, metaCornerFor(MediaCardStyle.EXOTIC))
         assertEquals(PosterCorner.TOP_START, metaCornerFor(MediaCardStyle.MINIMAL_EXOTIC))
         assertEquals(
-            "Modern puts the rating top-start, where the progress pill used to sit",
-            PosterCorner.BOTTOM_START,
+            "Modern puts the rating top-start and its title on the bottom edge, so " +
+                "the progress pill belongs at top-end",
+            PosterCorner.TOP_END,
             metaCornerFor(MediaCardStyle.MODERN)
         )
+        // Bottom-start was the old answer and it was wrong for the one style that
+        // overlays its title: the pill landed on the words it was meant to sit
+        // beside. Pinned so the simpler "opposite end of the same edge" rule does
+        // not come back.
+        assertNotEquals(PosterCorner.BOTTOM_START, metaCornerFor(MediaCardStyle.MODERN))
 
         MediaCardStyle.entries.forEach { style ->
             assertFalse(
