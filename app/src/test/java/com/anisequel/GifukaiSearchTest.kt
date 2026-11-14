@@ -133,8 +133,11 @@ class GifukaiSearchTest {
 
         assertEquals(listOf("frieren" to null), index.calls)
         assertEquals("the hand-off keeps the name index's own cursor", "2", page.next)
-        assertTrue("the answer must name the index that gave it: ${page.note}", page.note.contains("Klipy"))
-        assertTrue(page.note.contains("Gifukai"))
+        // A hand-off with no note is the failure the test is about: the reader
+        // searched Gifukai and got Klipy's tiles with nothing saying so.
+        val note = requireNotNull(page.note) { "a name hand-off must say where it went" }
+        assertTrue("the answer must name the index that gave it: $note", note.contains("Klipy"))
+        assertTrue(note.contains("Gifukai"))
     }
 
     @Test
@@ -148,12 +151,13 @@ class GifukaiSearchTest {
     fun `an empty hand-off says where to take the name next`() = runTest {
         val index = RecordingNameIndex { _, _ -> Result.success(GifPage(emptyList())) }
         val page = GifukaiGifs(nameSearch = index).search("frieren", null).getOrThrow()
-        assertTrue("an empty hand-off names the query: ${page.note}", page.note.contains("frieren"))
+        val note = requireNotNull(page.note) { "an empty hand-off must say where to take the name next" }
+        assertTrue("an empty hand-off names the query: $note", note.contains("frieren"))
         assertTrue(
-            "the miss belongs to the index that answered, not the recommendation: ${page.note}",
-            page.note.contains("Klipy took this search")
+            "the miss belongs to the index that answered, not the recommendation: $note",
+            note.contains("Klipy took this search")
         )
-        assertTrue("and names the tag index that can still answer: ${page.note}", page.note!!.contains("Safebooru"))
+        assertTrue("and names the tag index that can still answer: $note", note.contains("Safebooru"))
     }
 
     @Test
