@@ -34,98 +34,129 @@ object DiscordPresenceComposer {
         joke: String? = null
     ): DiscordPresence {
         val phrasing = settings.phrasingFor(activity.kind)
-        val knownTitle = activity.title?.takeIf { it.isNotBlank() }
-        val visibleTitle = knownTitle?.takeUnless { settings.hideTitles }
-        val subject = visibleTitle ?: activity.kind.anonymousSubject
-        val statsLine = if (settings.showStats) stats.line() else ""
-        // `jokesScheduled`, not `showJokes`: the interval's Off is also a way to
-        // say no jokes, and the host stops rotating on it. Using the switch alone
-        // left the last joke stuck in the presence after the reader chose Off.
-        val effectiveJoke = if (settings.jokesScheduled) {
-            joke?.trim()?.takeIf { it.isNotEmpty() }
-        } else {
-            null
-        }
+        val title = visibleTitle(settings, activity)
+        val lines = composeLines(
+            settings = settings,
+            activity = activity,
+            subject = title ?: activity.kind.anonymousSubject,
+            statsLine = statsLine(settings, stats),
+            joke = jokeLine(settings, joke),
+            detailsTemplate = detailsTemplate(settings, phrasing),
+            stateTemplate = phrasing.state
+        )
+        return presence(settings, activity, title, lines)
+    }
 
-        val detailsTemplate = if (settings.showActivity) {
-            phrasing.details
-        } else {
-            "Browsing AniSequel"
-        }
-        val detailsResolved = resolve(
-            template = detailsTemplate,
-            subject = subject,
-            activity = activity,
-            statsLine = statsLine,
-            joke = effectiveJoke
-        )
-        val stateResolved = resolve(
-            template = phrasing.state,
-            subject = subject,
-            activity = activity,
-            statsLine = statsLine,
-            joke = effectiveJoke
-        )
+    /**
+     * The title Discord is allowed to name.
+     *
+     * `hideTitles` is checked once here rather than at each of the four places a
+     * title is read (the two lines, the cover, the button), so the privacy switch
+     * cannot be honoured by three of them and forgotten by the fourth.
+     */
+    private fun visibleTitle(settings: DiscordSettings, activity: DiscordActivity): String? {
+        val title = activity.title
+        if (title.isNullOrBlank()) return null
+        return if (settings.hideTitles) null else title
+    }
+
+    private fun statsLine(settings: DiscordSettings, stats: DiscordStats): String =
+        if (settings.showStats) stats.line() else ""
+
+    private fun detailsTemplate(settings: DiscordSettings, phrasing: DiscordPhrasing): String =
+        if (settings.showActivity) phrasing.details else "Browsing AniSequel"
+
+    /**
+     * The joke that may appear, if any.
+     *
+     * `jokesScheduled`, not `showJokes`: the interval's Off is also a way to say
+     * no jokes, and the host stops rotating on it. Using the switch alone left the
+     * last joke stuck in the presence after the reader chose Off.
+     */
+    private fun jokeLine(settings: DiscordSettings, joke: String?): String? {
+        if (!settings.jokesScheduled) return null
+        return joke?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    /** The two lines, already cleaned and cut, plus the joke that made it in. */
+    private data class Lines(val first: String, val second: String, val joke: String?)
+
+    private fun composeLines(
+        settings: DiscordSettings,
+        activity: DiscordActivity,
+        subject: String,
+        statsLine: String,
+        joke: String?,
+        detailsTemplate: String,
+        stateTemplate: String
+    ): Lines {
+        var details = resolve(detailsTemplate, subject, activity, statsLine, joke)
+        var state = resolve(stateTemplate, subject, activity, statsLine, joke)
 
         // `$joke` in a template is the reader asking for the joke in that line.
         // When neither template mentions it, it goes on the state line - the
         // lower one - unless the reader moved it up. Two lines with the same joke
         // would be a wall of the same sentence on a friend's profile.
         val templateWantsJoke = detailsTemplate.contains(JOKE_PLACEHOLDER) ||
-            phrasing.state.contains(JOKE_PLACEHOLDER)
-        var details = detailsResolved
-        var state = stateResolved
-        if (effectiveJoke != null && !templateWantsJoke) {
+            stateTemplate.contains(JOKE_PLACEHOLDER)
+        if (joke != null && !templateWantsJoke) {
             if (settings.jokeInDetails) {
-                details = join(details, effectiveJoke)
+                details = join(details, joke)
             } else {
-                state = join(state, effectiveJoke)
+                state = join(state, joke)
             }
         }
 
-        details = clean(details).fitDiscord()
-        state = clean(state).fitDiscord()
+        return Lines(
+            first = clean(details).fitDiscord(),
+            second = clean(state).fitDiscord(),
+            joke = joke
+        )
+    }
 
-        val coverVisible = settings.showCover && visibleTitle != null
-        val buttons = if (settings.showButtons) {
-            buildList {
-                // The link follows *buttons*, not cover art. It used to require
-                // `showCover`, so turning off a picture also removed the way to
-                // open the title - two unrelated switches sharing one condition.
-                // A title is only absent here when `hideTitles` removed it, and
-                // that case is already covered by `visibleTitle`.
-                if (visibleTitle != null && activity.pageUrl != null) {
-                    add(
-                        DiscordButton(
-                            label = "View on AniList",
-                            url = activity.pageUrl.fit(DISCORD_BUTTON_URL_LIMIT)
-                        )
-                    )
-                }
-                add(
-                    DiscordButton(
-                        label = "AniSequel on GitHub",
-                        url = DISCORD_PROJECT_URL
-                    )
-                )
-            }
-        } else {
-            emptyList()
-        }
-
+    private fun presence(
+        settings: DiscordSettings,
+        activity: DiscordActivity,
+        title: String?,
+        lines: Lines
+    ): DiscordPresence {
+        val coverVisible = settings.showCover && title != null
         return DiscordPresence(
-            details = details,
-            state = state.takeIf { it.isNotBlank() },
+            details = lines.first,
+            state = lines.second.takeIf { it.isNotBlank() },
             largeImage = if (coverVisible) activity.coverUrl else null,
-            largeText = if (coverVisible) visibleTitle else null,
+            largeText = if (coverVisible) title else null,
             startTimestampSeconds = activity.startedAtMillis
                 .takeIf { it > 0L }
                 ?.div(1_000L),
-            buttons = buttons,
+            buttons = if (settings.showButtons) buttonsFor(activity, title) else emptyList(),
             kind = activity.kind,
-            joke = effectiveJoke
+            joke = lines.joke
         )
     }
+
+    private fun buttonsFor(activity: DiscordActivity, title: String?): List<DiscordButton> =
+        buildList {
+            // The link follows *buttons*, not cover art. It used to require
+            // `showCover`, so turning off a picture also removed the way to
+            // open the title - two unrelated switches sharing one condition.
+            // A title is only absent here when `hideTitles` removed it, and
+            // that case is already covered by `visibleTitle`.
+            if (title != null && activity.pageUrl != null) {
+                add(
+                    DiscordButton(
+                        label = "View on AniList",
+                        url = activity.pageUrl.fit(DISCORD_BUTTON_URL_LIMIT)
+                    )
+                )
+            }
+            add(
+                DiscordButton(
+                    label = "AniSequel on GitHub",
+                    url = DISCORD_PROJECT_URL
+                )
+            )
+        }
 
     /**
      * Resolves one template against the live values.

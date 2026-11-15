@@ -122,6 +122,32 @@ private fun catalogueShortcutOffered(
     searchMangaEnabled: Boolean
 ): Boolean = shortcutEnabled && (searchAnimeEnabled || searchMangaEnabled)
 
+/**
+ * Draws the launch screen and answers whether [AppNavigation] should stop here.
+ *
+ * The decision and the sentence it implies live together so the routing function
+ * keeps one branch instead of three: the gate waits for *both* stores, and which
+ * of the two is still unanswered is what the reader is told.
+ */
+@Composable
+private fun drawRestoringPlaceholder(
+    authState: AuthUiState,
+    onboardingCompleted: Boolean?,
+    modifier: Modifier
+): Boolean {
+    val message = when {
+        authState is AuthUiState.Restoring -> "Checking for a saved session\u2026"
+        onboardingCompleted == null -> "Reading your setup\u2026"
+        else -> return false
+    }
+    RestoringPlaceholder(modifier = modifier, message = message)
+    return true
+}
+
+/** The folded presence numbers, or none before the dashboard has answered. */
+private fun DashboardUiState?.discordStatsOrEmpty(): DiscordStats =
+    (this as? DashboardUiState.Success)?.discordStats ?: DiscordStats.Empty
+
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -388,15 +414,7 @@ fun AppNavigation(
     //
     // A splash for the few tens of milliseconds this takes is the honest thing
     // to draw while the answer is genuinely unknown. Guessing is not.
-    if (authState is AuthUiState.Restoring || onboardingCompleted == null) {
-        RestoringPlaceholder(
-            modifier = modifier,
-            message = if (authState is AuthUiState.Restoring) {
-                "Checking for a saved session\u2026"
-            } else {
-                "Reading your setup\u2026"
-            }
-        )
+    if (drawRestoringPlaceholder(authState, onboardingCompleted, modifier)) {
         return
     }
 
@@ -488,9 +506,7 @@ fun AppNavigation(
     // above: `uiState` is replaced per keystroke, and the presence host only needs
     // to hear when the folded value actually changes.
     val discordStats by remember(dashboardFlow) {
-        derivedStateOf {
-            (dashboardState as? DashboardUiState.Success)?.discordStats ?: DiscordStats.Empty
-        }
+        derivedStateOf { dashboardState.discordStatsOrEmpty() }
     }
 
     // The three entries Settings' card preview draws. Derived for the same reason

@@ -270,7 +270,7 @@ private fun PresenceButton(label: String) {
 internal fun formatElapsed(totalSeconds: Long): String {
     val safe = totalSeconds.coerceAtLeast(0L)
     val hours = safe / 3_600L
-    val minutes = (safe % 3_600L) / 60L
+    val minutes = safe % 3_600L / 60L
     val seconds = safe % 60L
     return if (hours > 0) {
         "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
