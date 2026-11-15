@@ -241,9 +241,13 @@ object ExpressiveMotion {
                 stiffness = Spring.StiffnessMediumLow
             )
             // The slow end of the scale: visibly softer than Chill, on purpose.
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -278,9 +282,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -327,9 +335,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -366,9 +378,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -390,9 +406,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessMedium
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -458,9 +478,13 @@ object ExpressiveMotion {
             )
             // Softer and slower than Chill on every axis, with a low bounce that
             // reads as floating rather than as a wobble.
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -493,9 +517,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = stiffness
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -524,9 +552,13 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = stiffness
             )
-            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 }
