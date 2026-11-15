@@ -2684,3 +2684,94 @@ build is release- or debug-signed. The Gradle guard also refuses to package a
 release without the real keystore: the old silent debug fallback produced the one
 APK that Play Protect distrusts *and* the updater rejects, with no line in the log
 saying why.
+
+## 2.1.1: the browser is the sign-in, and one Discord client
+
+The relay section above is history: 2.1.0 removed the relay and 2.1.1 finishes the
+job by taking the last in-app web surface out of the sign-in path.
+
+### AniList: `ACTION_VIEW`, not a Custom Tab
+
+Both are the system browser's engine, but only one is the browser the reader uses.
+AniList's consent screen is the one place in this app that receives a password, and
+a Custom Tab draws it in a window with no address bar of its own - visually part of
+AniSequel. `ACTION_VIEW` hands the URL to Chrome (or whatever the reader chose),
+where the host is visible, the password manager has the credential, and the session
+that already exists is the one that answers. The callback needed no change at all:
+`anisequel://oauth` is an intent filter, so any browser can return to it.
+
+The old helper also swallowed its own failure. A device with no browser threw into a
+`runCatching` that discarded the exception, so the connect button did nothing and
+said nothing. It now goes through `openExternalUrlOrCopy`, which puts the URL on the
+clipboard and says where it went.
+
+### Discord: a WebView that scraped its own login page is gone
+
+2.1.0's "official web login" was a `WebView` pointed at `discord.com/login`, with
+injected JavaScript polling the page's `localStorage` until a token appeared. Three
+problems, only one of which is about the token:
+
+1. **It is a login page the reader cannot inspect.** No address bar, no way to see
+   which host the password went to, inside an app that had just asked for an
+   account.
+2. **It is a whole Chromium renderer** created inside a dialog, in a build that
+   otherwise has no web engine at all. It had to wipe `WebStorage` on dismissal
+   because a renderer left behind is a leak, and the peak lands exactly when the
+   dialog opens.
+3. **It breaks without this repo changing.** Discord ships a new web client, the
+   chunk walk that finds `getToken` stops matching, and the button silently never
+   captures anything.
+
+So the page opens in the device browser, and the token field is how the account is
+linked. That is a smaller flow, not a nicer one: Discord hands no token to a browser,
+and asking the reader for the credential is more honest than an in-app page
+pretending to capture it. `DiscordLogin.BROWSER_LOGIN_URL` is one constant so the two
+cards cannot point at different pages, and a source test pins that no screen in
+`ui/` owns a `WebView` again.
+
+### One client, because the second one could not log out
+
+The Settings page built a `DiscordRpcClient` in a `remember` for the token check.
+The real socket belongs to `DiscordPresencePublisher` at the app root, so the page's
+`Log out` disconnected an instance that had never connected - the session it was
+meant to end kept publishing until the preference flow reached the publisher. Every
+visit also left an `OkHttpClient` pool and a supervision scope behind, because
+`remember` disposes neither. Both now use `DiscordRpcClient.shared`, and
+`teardown()` completes a pending READY wait. The follow-up round finished that
+argument: `disconnect()` used to take the same mutex the publish held across the
+READY wait, so it could not reach the teardown that released the waiter until the
+timeout had already elapsed. It now bumps a session epoch and tears down outside
+the lock; the connect checks that epoch once its deferred and socket exist, and
+`clear()` skips rather than queues behind a busy publish. The epoch also retires a
+reconnect's old listener: a failure delivered a second late used to null the *new*
+socket. `DiscordPresencePublisher` now waits for DataStore instead of acting on a
+default `DiscordSettings()`, which made every Activity recreation disconnect the
+process-wide client for one frame.
+
+The two version guards were fixed rather than only renumbered. The
+baseline-trails-release test compared patch digits, so it could not see a minor
+bump, and `ChangelogTest.sortKey()` folded three-digit components into the same
+number (1.0.100 and 1.1.0 both became 10100). The first now uses the changelog as
+the release ledger and allows one entry of slack; the second uses a wider base and
+fails loudly if a component outgrows it.
+
+### The tint ceiling, and the tone that asked the wrong question
+
+Two colour fixes that look unrelated and are the same argument. The anime layer's
+neutral chroma was capped at 12, about a fifth of a vivid cover's primary chroma, so
+the page read as grey with a coloured button on it; the cap is 16 now. Contrast was
+never at risk, because it comes from the tone ladder (surface 98/6 against text
+10/90), not from chroma - `MaterialColorSchemeTest` checks every AA pair at every
+seed.
+
+And the hero backdrop and the Settings swatch derived their accent at tone 40 or 80
+from `isSystemInDarkTheme()` while the scheme they sit in used the *stored* mode. A
+reader who forced Dark on a light phone got the light tone behind a dark page. They
+now read `LocalAppDarkTheme`, provided once by `AniSequelTheme` from the resolved
+mode, and `ThemeDarknessTest` pins that they keep doing it.
+
+The theme transition also stopped moving all 36 roles on one spring: accents use
+`ThemeColorEffects` and the large surfaces use the softer `SurfaceColorEffects`, so
+the recolour arrives accent-first with the page settling behind it. Both are springs,
+so an interrupted second recolour simply retargets - no delay to queue in the wrong
+order.

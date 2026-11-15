@@ -160,16 +160,34 @@ class VersionBaselineTest {
      */
     @Test
     fun `the baseline does not trail the newest published release`() {
-        val manifestPatch = updateManifestVersion()!!.substringAfterLast('.').toIntOrNull() ?: -1
-        val baselinePatch = gradleProperty("anisequelVersionName")!!
-            .substringAfterLast('.').toIntOrNull() ?: -1
+        val manifest = updateManifestVersion()!!
+        val baseline = gradleProperty("anisequelVersionName")!!
+        val published = Regex(""""version"\s*:\s*"([^"]+)"""")
+            .findAll(File(root, "app/src/main/assets/changelog.json").readText())
+            .map { it.groupValues[1] }
+            .sortedWith { a, b -> compareVersions(b, a) }
+            .toList()
 
+        val manifestIndex = published.indexOf(manifest)
+        val baselineIndex = published.indexOf(baseline)
+
+        // The changelog is the release ledger, newest first (ChangelogTest pins
+        // that order). Comparing patch digits, which this used to do, cannot tell
+        // one release of drift from six across a minor bump: a baseline one
+        // minor behind gave `0 - 0 <= 1`, so the guard passed
+        // while the whole minor went unseen. Position in the ledger is exact, and
+        // it still allows the one-release lag the manifest sync can leave behind.
         assertTrue(
-            "gradle.properties reports $baselinePatch but $manifestPatch is published - " +
-                "the baseline trails the newest release by more than the one version the " +
-                "manifest sync is allowed to be behind. Local builds and Settings > About " +
-                "will report a version that does not exist.",
-            manifestPatch - baselinePatch <= 1
+            "neither $baseline nor $manifest is in assets/changelog.json, so the " +
+                "baseline-ahead-of-release check cannot run",
+            manifestIndex >= 0 && baselineIndex >= 0
+        )
+        assertTrue(
+            "gradle.properties reports $baseline but $manifest is published - the " +
+                "baseline trails the newest release by more than the one version the " +
+                "manifest sync is allowed to be behind. Local builds and Settings > " +
+                "About will report a version that does not exist.",
+            manifestIndex - baselineIndex <= 1
         )
     }
 
@@ -193,14 +211,16 @@ class VersionBaselineTest {
      * patch alone breaks at a minor bump, and string comparison puts "1.0.10" before
      * "1.0.9". A missing component counts as zero, so "1.8" and "1.8.0" rank equal.
      */
-    private fun versionAtLeast(a: String, b: String): Boolean {
+    private fun versionAtLeast(a: String, b: String): Boolean = compareVersions(a, b) >= 0
+
+    private fun compareVersions(a: String, b: String): Int {
         val left = a.split('.').map { it.toIntOrNull() ?: -1 }
         val right = b.split('.').map { it.toIntOrNull() ?: -1 }
         for (index in 0 until maxOf(left.size, right.size)) {
             val l = left.getOrElse(index) { 0 }
             val r = right.getOrElse(index) { 0 }
-            if (l != r) return l > r
+            if (l != r) return l.compareTo(r)
         }
-        return true
+        return 0
     }
 }

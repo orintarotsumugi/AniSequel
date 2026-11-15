@@ -1,10 +1,12 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,6 +33,7 @@ import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LocalAppDarkTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -60,16 +65,23 @@ internal fun AnimeColourSection(
     settings: ThemePreferences.ThemeSettings,
     scope: CoroutineScope
 ) {
-    val dark = isSystemInDarkTheme()
+    // The app's resolved mode rather than the phone's. See [LocalAppDarkTheme]:
+    // the stored theme can outrank the system setting, and the swatch has to be
+    // the tone the scheme is actually using.
+    val dark = LocalAppDarkTheme.current
     // The colour the app is drawn with right now: the layer while a title is on
     // screen, otherwise whatever this feature kept as the accent. The hex is
     // printed as text and the *swatch* is the derived accent, so a dark poster
     // does not produce an unidentifiable black chip in a dark app.
     val liveHex = settings.animeThemeColorHex ?: settings.retainedAnimeColorHex
     val layerIsLive = settings.animeThemeColorHex != null
-    val swatch = remember(liveHex, dark) {
+    // Three tones rather than one flat pixel. The middle stop is the accent the
+    // scheme is using, so the chip still agrees with the buttons below it; the
+    // ends make it read as the show's colour instead of a single swatch that
+    // could be any one pixel of the cover.
+    val swatchRamp = remember(liveHex, dark) {
         DynamicThemeBuilder.parseHexColor(liveHex)?.let {
-            DynamicThemeBuilder.accentColor(it, dark = dark)
+            DynamicThemeBuilder.accentRamp(it, dark = dark)
         }
     }
 
@@ -82,7 +94,7 @@ internal fun AnimeColourSection(
     ) {
         // A live snapshot of the colour currently driving the scheme, so the
         // feature is never a mystery while it is active.
-        if (swatch != null) {
+        if (swatchRamp != null) {
             Surface(
                 shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -94,13 +106,19 @@ internal fun AnimeColourSection(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner),
-                        color = swatch,
+                        color = Color.Transparent,
                         border = BorderStroke(
                             1.dp,
                             MaterialTheme.colorScheme.outlineVariant
                         ),
                         modifier = Modifier.size(30.dp)
-                    ) {}
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Brush.linearGradient(swatchRamp))
+                        )
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

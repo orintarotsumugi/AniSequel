@@ -76,7 +76,20 @@ class UpdateController(
         // `.part` - two interleaved transfers in one file, which then failed
         // verification and was reported as a tampered release. The download owns the
         // state until it settles.
-        if (state is UpdateUiState.Checking || state is UpdateUiState.Downloading) return
+        //
+        // Nor over a release that is already downloaded. That is the same rotation,
+        // at the other end of the flow: the APK is on disk and the prompt says
+        // Install, then the new Activity's check runs and - offline, or with GitHub
+        // down - replaces the state with `Failed`. The file is still there, but the
+        // prompt, the Settings row and the installer button are gone until the
+        // reader finds "Check again" on a working connection. A ready install is a
+        // result, not a state to re-check from.
+        if (
+            state is UpdateUiState.Checking ||
+            state is UpdateUiState.Downloading ||
+            state is UpdateUiState.ReadyToInstall ||
+            state is UpdateUiState.NeedsInstallPermission
+        ) return
         state = UpdateUiState.Checking
 
         scope.launch {

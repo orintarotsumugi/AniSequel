@@ -1,6 +1,135 @@
 {
   "versions": [
     {
+      "version": "2.1.1",
+      "entries": [
+        {
+          "title": "Animation fixes across the app",
+          "detail": "Five motion defects: the number counter showed one value on both halves of its roll, so the old count never appeared; a sequel card's 6dp progress bar was forced to 10dp; the main bar's hold bounced as it lifted and landed flat as it settled; on Floaty and Dreamy the press-down spring took the style's bounce, so a press became indistinguishable from its release; and a page arriving as the tier board left still slid in sideways under it."
+        },
+        {
+          "title": "Dreamy motion style",
+          "detail": "A sixth motion style, Dreamy, joins Instant, Smooth, Snappy, Chill and Floaty: the softest setting, with very slow, very gentle movement and barely any bounce."
+        },
+        {
+          "title": "Two more card styles",
+          "detail": "The card picker gained Ribbon (title beneath the poster, rating as a coloured band) and Stamp (title over the poster's foot, rating stamped in its corner), taking the styles from eight to ten. Both reuse the same placement table as the rest, so the preview and the grid agree."
+        },
+        {
+          "title": "Cards keep the rating they were given",
+          "detail": "The dashboard handed a sequel's rating to its poster only when the score was at least 75, while the chip row beneath stepped aside for every style whose rating lives on the artwork - so a sequel rated 74, or anything below it, showed no rating at all. Which surface draws the number is now one answer on the style table, read by the poster and by the chip row, and a poster badge draws every score AniList returns rather than the top of the range."
+        },
+        {
+          "title": "Poster skeletons while the Library loads",
+          "detail": "The Library drew one small spinner on an otherwise empty page while its list was on the wire. It now holds the grid's own shape open: poster-sized skeletons at the column count it is about to use, with their own title and context lines, sweeping on the app's single shimmer clock - so the first row lands where the placeholders were instead of in a page that was never the size of a card."
+        },
+        {
+          "title": "Smoother poster cards",
+          "detail": "A sequel card measured its artwork on every frame it moved and wrote that rectangle into composition state, so scrolling a dashboard row recomposed every card on screen for a value that is only read when the cover viewer opens; the rectangle now lives outside the snapshot, and nothing recomposes for it. The title's wash and the row's scrims are built once instead of per card per frame, and the wash keeps three stops so the name stays readable over a bright cover without a hard band across the artwork."
+        },
+        {
+          "title": "Rows under Other slide with the rest",
+          "detail": "Every Library row and poster carried its own copy of the same list animation, and the rows under the Other heading had been given none of them, so they snapped into place while the groups above them slid. The animation is one modifier now, which is what makes the sixth call site impossible to forget."
+        },
+        {
+          "title": "Profile posters show the list's own score",
+          "detail": "Posters in a profile's Library took the community average for their rating badge even when the list carried a score, so the number the owner gave a title never appeared on their own grid. The badge now uses the entry's score when there is one and falls back to the average only for an unrated title, so the grid agrees with the list rows that already showed the owner's number."
+        },
+        {
+          "title": "Log out closes Discord at once",
+          "detail": "Disconnecting used to take the same lock a publish holds while it waits up to fifteen seconds for Discord's READY, so the teardown that would release that wait could not run until the wait had already timed out. The client now bumps a session epoch and tears the socket down outside the lock, and a clear that cannot get the lock returns instead of queueing - so Log out ends the session immediately, and a connect that started before the sign-out is abandoned rather than left publishing."
+        },
+        {
+          "title": "A failed old socket can no longer end the new one",
+          "detail": "After a reconnect, OkHttp can deliver the previous socket's failure on its own thread. That callback used to null and close whatever socket the client held by then - the replacement that had just connected - and the next publish started over. Each listener now carries the session epoch and socket it belongs to, so a late callback from a retired connection is ignored."
+        },
+        {
+          "title": "Rich Presence survives a rotation",
+          "detail": "The app-root host collected the settings with an initial default of \"disabled\", which is indistinguishable from the reader having turned Rich Presence off. An Activity recreation drew that default for one frame and disconnected the process-wide client before DataStore answered. The host now waits for the stored value before it publishes or disconnects anything."
+        },
+        {
+          "title": "A pasted Discord token loses every prefix",
+          "detail": "Bearer and Bot are stripped in either order, and a tab or other whitespace after the prefix counts. The old check looked for a literal space, so a copied header with a tab left \"BearereyJ...\" after whitespace removal - the right length and the wrong token."
+        },
+        {
+          "title": "Presence text and buttons stay inside Discord's limits",
+          "detail": "A custom activity name is trimmed to the 128-character text budget instead of being sent whole and rejected. A button URL longer than Discord's 512-character limit is dropped rather than truncated into a dead link, and a page URL has to be http(s) to become a button."
+        },
+        {
+          "title": "The connecting dot stops pulsing behind another app",
+          "detail": "The preview card's indefinite pulse is now gated on the window being resumed as well as on a connection in progress, so a connect that outlives the foreground no longer animates a dot nobody can see."
+        },
+        {
+          "title": "Theme text and surfaces travel together",
+          "detail": "During a recolour, on-surface and on-background text moved on the accent spring while their surfaces moved on the softer surface spring - so for a beat the page drew next-palette text on the previous palette's background. Each foreground now shares its surface's spring, keeping the contrast pair that the scheme promises for the whole animation."
+        },
+        {
+          "title": "A downloaded update survives a re-check",
+          "detail": "An Activity recreation runs the updater's once-per-launch check again. If the APK was already downloaded and GitHub was unreachable, that check replaced Ready to install with Failed and took the install prompt and Settings button off screen even though the verified file was still on disk. A check no longer runs over a release that is already downloaded."
+        },
+        {
+          "title": "The release guards compare whole versions",
+          "detail": "The baseline-trails-release test compared only the patch digit, so a baseline one minor behind a published release passed; it now uses the changelog as the release ledger and allows one entry of slack. The changelog order key folded versions in base 100, where 1.0.100 and 1.1.0 collided; it now uses a wider base and fails loudly if a component outgrows it."
+        },
+        {
+          "title": "The updater points at a release that exists",
+          "detail": "The manifest's release and download URLs named a tag that was never published, so the update dialog's release-page link and the download both pointed at nothing. They now name the v2.1.1 tag this version is published under."
+        },
+        {
+          "title": "Release notes come from the changelog",
+          "detail": "update.json's notes are regenerated from this file's 2.1.1 block, so the updater dialog, the What's new card and the release page describe the same release. The previous notes described a build that was never published."
+        },
+        {
+          "title": "The Discord card stops advertising the removed web login",
+          "detail": "The account card still said it offered an official web login inside the app. The web view was removed in this release, and the card now describes what the button actually does: link the account with a Discord token, with no relay server."
+        },
+        {
+          "title": "An unused updater constant is gone",
+          "detail": "UpdateManager carried a private APK MIME type that nothing read; the installer intent's type lives with the intent in UpdateInstallation. An unused constant in the update path invites a future edit to the copy that has no effect."
+        },
+        {
+          "title": "The version is 2.1.1 in every file",
+          "detail": "The release is 2.1.1: gradle.properties, the build script's fallback constants, update.json, the README, these notes and the code comments now agree, and the version code stays 623, one past 2.1.0's 622. AGENTS.md's patch-first rule is why this is a patch rather than a new minor line."
+        },
+        {
+          "title": "The baseline comment follows the patch rule",
+          "detail": "gradle.properties argued that the previous jump was deliberate and exempt from the patch-first rule, which contradicted the release policy the rest of the repo follows. The comment now records the 2.1.1 patch and why it is one."
+        },
+        {
+          "title": "Sign-in moves to your device's browser",
+          "detail": "AniList and Discord both open in the browser you already use instead of a page inside AniSequel. AniList returns straight to the app from any browser; Discord's sign-in page now opens in the real browser, with its address bar, password manager and your existing session, and the app no longer runs a web view at all. That removes a Chromium renderer from the download and a login page you could not inspect."
+        },
+        {
+          "title": "The official Discord mark",
+          "detail": "The Discord card, the log-in control and the preview dock draw Discord's published 24x24 brand glyph instead of a hand-drawn lookalike, so the badge on the button that asks for an account is the one that belongs there."
+        },
+        {
+          "title": "One Discord client, and a log-out that closes it",
+          "detail": "The Settings page used to build its own Discord client, so its Log out disconnected an instance that had never connected while the live socket kept publishing, and every visit left a client and its HTTP pool behind. Both now share one process-wide client: logging out ends the session immediately, and a slow connect can no longer leave the page saying Connecting for the full timeout."
+        },
+        {
+          "title": "The cover accent follows the app's theme, not the phone's",
+          "detail": "The title page's backdrop and the Now matching this anime swatch picked their accent tone from the system theme, so a reader who forced Dark on a light phone got the light tone behind a dark page. Both now read the mode the app is actually drawing."
+        },
+        {
+          "title": "Richer anime palettes",
+          "detail": "A vivid cover used to tint its page at about a fifth of the accent sitting above it, which is why the recolour read as a coloured button on a grey page. The tint ceiling is raised, so the surfaces carry more of the show's hue - and every text pair still comes from Material's tone ladder, so contrast is unchanged."
+        },
+        {
+          "title": "Accent gradients and a cascading recolour",
+          "detail": "The cover swatch is a three-tone gradient centred on the exact accent the scheme uses, and a theme change now moves the accent roles first while the large surfaces settle on a softer spring behind them. Opening a title reads as the app taking on its colour rather than as one image cross-fading into another."
+        },
+        {
+          "title": "Discord tokens paste cleanly",
+          "detail": "Bearer and Bot prefixes are stripped whatever case they arrive in. A lower-case bearer used to be stored as part of the token and refused by Discord, with nothing in the message pointing at the paste."
+        },
+        {
+          "title": "A timer that sleeps when the app is not on screen",
+          "detail": "The presence card's elapsed clock stops with the window instead of writing state every second behind another app, which also stops a recomposition of the card and its artwork once a second for nobody."
+        }
+      ]
+    },
+    {
       "version": "2.1.0",
       "entries": [
         {
@@ -1036,7 +1165,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
+          "detail": "An airing title with no next episode number now reads \"Airing \u00b7 12 eps\" instead of \"Airing \u00b7 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
         }
       ]
     },
@@ -1061,7 +1190,7 @@
         },
         {
           "title": "A creator's page introduces them properly",
-          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+          "detail": "The staff hero now leads with the creator's occupations - Director \u00b7 Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
         },
         {
           "title": "The library bar carries its number",
@@ -3155,7 +3284,7 @@
         },
         {
           "title": "Widgets stop naming shows they are not showing",
-          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to \u2026\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
         },
         {
           "title": "The activity tile shows your face",
@@ -3176,7 +3305,7 @@
         },
         {
           "title": "A Featured Sequel widget",
-          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe \u2014 a large poster, its title, what it is a sequel to and how many are waiting \u2014 so the recommendation is readable before you even open the app."
         },
         {
           "title": "See who liked an activity",
@@ -3193,11 +3322,11 @@
       "entries": [
         {
           "title": "In-app details from the Activity feed and Currently Arriving",
-          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet \u2014 synopsis, community scores, rankings, genres, specs and an AniList link \u2014 instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
         },
         {
           "title": "The detail sheet adapts to what it is showing",
-          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to \u2026\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
         }
       ]
     },
@@ -3206,7 +3335,7 @@
       "entries": [
         {
           "title": "Retain Anime Color keeps the colour",
-          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts \u2014 no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
         },
         {
           "title": "Theme tab, rebuilt around Material 3 Expressive",
@@ -3219,7 +3348,7 @@
       "entries": [
         {
           "title": "GIFs and images in bios and comments",
-          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence \u2014 like a GIF between two words \u2014 are embedded in the flow and animate inline."
         },
         {
           "title": "AniList links get a preview card",
@@ -3231,7 +3360,7 @@
         },
         {
           "title": "Theme screen, reorganised",
-          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+          "detail": "Settings > Theme is now grouped into clear sections \u2014 appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
         },
         {
           "title": "Theme switching is snappier",

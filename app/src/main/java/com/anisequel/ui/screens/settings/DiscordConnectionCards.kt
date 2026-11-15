@@ -1,11 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import android.annotation.SuppressLint
-import android.view.ViewGroup
-import android.webkit.CookieManager
-import android.webkit.WebStorage
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -17,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,21 +18,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,12 +40,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.anisequel.data.discord.DiscordAccount
 import com.anisequel.data.discord.DiscordRpcClient
@@ -63,7 +53,7 @@ import com.anisequel.data.discord.DiscordRuntimeState
 import com.anisequel.domain.discord.DiscordLogin
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.ui.components.AppVectorIcons
-import kotlinx.coroutines.delay
+import com.anisequel.ui.components.openExternalUrlOrCopy
 import kotlinx.coroutines.launch
 
 @Composable
@@ -129,7 +119,7 @@ fun DiscordConnectionCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    androidx.compose.material3.Icon(
+                    Icon(
                         imageVector = AppVectorIcons.Discord,
                         contentDescription = null,
                         tint = Color.White,
@@ -148,7 +138,7 @@ fun DiscordConnectionCard(
                     text = if (settings.linked && settings.token.isNotBlank()) {
                         "Token saved on this device · ${DiscordLogin.maskedToken(settings.token)}"
                     } else {
-                        "Use official web login or paste your Discord token"
+                        "Sign in with Discord in your browser, then paste your token"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -187,6 +177,25 @@ fun DiscordConnectionCard(
     }
 }
 
+/**
+ * Links a Discord account without an embedded browser.
+ *
+ * ## Why the web view is gone
+ *
+ * This dialog used to host a `WebView` pointed at `discord.com/login` and poll it
+ * with injected JavaScript until a token turned up in the page's storage. That is
+ * a full Chromium renderer, a login page rendered inside an app that the reader
+ * cannot inspect an address bar of, and a script reaching into another company's
+ * session - and every one of those was a way for this dialog to break without a
+ * line of this app changing. It also had to wipe `WebStorage` for the whole app
+ * profile on dismissal, because a renderer left behind is a leak.
+ *
+ * The sign-in page now opens in the device's own browser, where the reader can see
+ * the host, use the password manager, and close the tab. Discord gives a browser no
+ * way to hand a token back to an app, so the token field below is how the account
+ * is actually linked. That is a smaller flow, not a prettier one: it asks the reader
+ * for the credential instead of pretending an in-app page captured it silently.
+ */
 @Composable
 fun DiscordLoginDialog(
     settings: DiscordSettings,
@@ -197,8 +206,7 @@ fun DiscordLoginDialog(
     var token by remember { mutableStateOf(settings.token) }
     var error by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
-    var mode by remember { mutableStateOf(LoginMode.CHOICE) }
-    var webStatus by remember { mutableStateOf("Loading official Discord login…") }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     fun submitToken(candidate: String) {
@@ -228,97 +236,44 @@ fun DiscordLoginDialog(
         title = { Text(if (settings.linked) "Change Discord account" else "Log in to Discord") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                when (mode) {
-                    LoginMode.CHOICE -> {
-                        Text(
-                            text = "Choose how you want to connect. Web login opens Discord's official login page inside the app and captures your token locally after you sign in.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        SettingsButton(
-                            text = "Official web login",
-                            onClick = { mode = LoginMode.WEB },
-                            icon = AppVectorIcons.Discord,
-                            fillWidth = true
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        SettingsButton(
-                            text = "Paste token manually",
-                            onClick = { mode = LoginMode.TOKEN },
-                            variant = SettingsButtonVariant.Outlined,
-                            fillWidth = true
-                        )
-                    }
-
-                    LoginMode.WEB -> {
-                        Text(
-                            text = "Sign in on discord.com. Once login completes, AniSequel will detect your token on this device and verify it.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = webStatus,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            tonalElevation = 2.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(360.dp)
-                        ) {
-                            DiscordWebLoginView(
-                                onStatus = { webStatus = it },
-                                onToken = { found ->
-                                    if (!working) {
-                                        token = found
-                                        mode = LoginMode.TOKEN
-                                        submitToken(found)
-                                    }
-                                }
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { mode = LoginMode.TOKEN }, enabled = !working) {
-                            Text("Use token field instead")
-                        }
-                    }
-
-                    LoginMode.TOKEN -> {
-                        Text(
-                            text = "Paste your Discord token. It is verified directly with Discord and stored only on this device.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        SettingsFieldLabel("Discord token")
-                        Spacer(modifier = Modifier.height(4.dp))
-                        OutlinedTextField(
-                            value = token,
-                            onValueChange = {
-                                token = it
-                                error = null
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("discord_token_field"),
-                            placeholder = { Text("Paste your token") },
-                            singleLine = false,
-                            minLines = 2,
-                            maxLines = 4,
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { mode = LoginMode.WEB }, enabled = !working) {
-                            Text("Open official web login")
-                        }
-                    }
-                }
+                Text(
+                    text = "Sign in on Discord's own page, which opens in your device's " +
+                        "browser - not inside AniSequel. Discord does not hand a token back " +
+                        "to a browser, so the token field is what links the account. It is " +
+                        "verified with Discord directly and stored only on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                SettingsButton(
+                    text = "Open Discord in your browser",
+                    onClick = {
+                        openExternalUrlOrCopy(context, DiscordLogin.BROWSER_LOGIN_URL)
+                    },
+                    icon = AppVectorIcons.Discord,
+                    variant = SettingsButtonVariant.Outlined,
+                    fillWidth = true,
+                    testTag = "discord_browser_login"
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                SettingsFieldLabel("Discord token")
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = {
+                        token = it
+                        error = null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("discord_token_field"),
+                    placeholder = { Text("Paste your token") },
+                    singleLine = false,
+                    minLines = 2,
+                    maxLines = 4,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
 
                 AnimatedVisibility(visible = error != null) {
                     Column {
@@ -334,27 +289,15 @@ fun DiscordLoginDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    when (mode) {
-                        LoginMode.CHOICE -> mode = LoginMode.WEB
-                        LoginMode.WEB -> mode = LoginMode.TOKEN
-                        LoginMode.TOKEN -> submitToken(token)
-                    }
-                },
-                enabled = !working && (mode != LoginMode.TOKEN || token.isNotBlank())
+                onClick = { submitToken(token) },
+                enabled = !working && token.isNotBlank()
             ) {
                 if (working) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Verifying…")
                 } else {
-                    Text(
-                        when (mode) {
-                            LoginMode.CHOICE -> "Continue"
-                            LoginMode.WEB -> "I have the token"
-                            LoginMode.TOKEN -> "Verify & connect"
-                        }
-                    )
+                    Text("Verify & connect")
                 }
             }
         },
@@ -362,102 +305,4 @@ fun DiscordLoginDialog(
             TextButton(onClick = onDismiss, enabled = !working) { Text("Cancel") }
         }
     )
-}
-
-private enum class LoginMode { CHOICE, WEB, TOKEN }
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-private fun DiscordWebLoginView(
-    onStatus: (String) -> Unit,
-    onToken: (String) -> Unit
-) {
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var captured by remember { mutableStateOf(false) }
-    val tokenScript = remember {
-        """
-        (function() {
-          try {
-            var token = null;
-            try { token = window.localStorage.getItem('token'); } catch(e) {}
-            if (!token && window.webpackChunkdiscord_app) {
-              window.webpackChunkdiscord_app.push([
-                [Math.random()],
-                {},
-                req => {
-                  for (const m of Object.keys(req.c).map(x => req.c[x].exports).filter(x => x)) {
-                    if (m.default && m.default.getToken !== undefined) { token = m.default.getToken(); }
-                    if (m.getToken !== undefined) { token = m.getToken(); }
-                  }
-                }
-              ]);
-              window.webpackChunkdiscord_app.pop();
-            }
-            if (token) return String(token).replace(/^"|"$/g, '');
-          } catch(e) {}
-          return '';
-        })();
-        """.trimIndent()
-    }
-
-    // A WebView holds its activity's context, and this one is created inside a
-    // dialog that is opened and dismissed for every login attempt. Without the
-    // destroy the dialog leaked a renderer process each time, which is visible as
-    // the app getting heavier on a phone that had signed in twice.
-    DisposableEffect(Unit) {
-        onDispose {
-            webViewRef?.let { view ->
-                (view.parent as? ViewGroup)?.removeView(view)
-                runCatching { view.stopLoading() }
-                runCatching { WebStorage.getInstance().deleteAllData() }
-                runCatching { view.destroy() }
-            }
-            webViewRef = null
-        }
-    }
-
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { context ->
-            WebView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.databaseEnabled = true
-                settings.userAgentString = settings.userAgentString.replace("; wv", "")
-                CookieManager.getInstance().setAcceptCookie(true)
-                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        if (!captured) onStatus("Signed in? If not, complete login and AniSequel will detect the token.")
-                    }
-                }
-                loadUrl("https://discord.com/login")
-                webViewRef = this
-            }
-        },
-        update = { webViewRef = it }
-    )
-
-    LaunchedEffect(webViewRef, captured) {
-        val view = webViewRef ?: return@LaunchedEffect
-        while (!captured) {
-            view.evaluateJavascript(tokenScript) { value ->
-                if (captured) return@evaluateJavascript
-                val cleaned = value?.trim()?.trim('"')?.takeIf { it != "null" && it.isNotBlank() }
-                val normalized = cleaned?.let { DiscordLogin.normalizeToken(it) }
-                if (!normalized.isNullOrBlank() && DiscordLogin.looksLikeToken(normalized)) {
-                    captured = true
-                    onStatus("Token detected. Verifying with Discord…")
-                    runCatching { view.stopLoading() }
-                    onToken(normalized)
-                }
-            }
-            delay(1200L)
-        }
-    }
 }

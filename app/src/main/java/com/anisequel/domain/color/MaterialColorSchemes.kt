@@ -163,9 +163,18 @@ object MaterialColorSchemes {
      * The tinted surface ramp's chroma bounds: low enough that a grey cover still
      * gets a recognisably tinted page, high enough that a vivid one does not
      * repaint the containers as coloured cards.
+     *
+     * Raised from 8/12 in 2.1.1. At the old ceiling a vivid cover's page was a
+     * near-grey with a coloured button on it: `primaryChroma / 8` for a chroma-100
+     * cover was capped at 12, which is about a fifth of the accent sitting right
+     * above it, so the "the whole app takes on this show's colour" promise held for
+     * the controls and not for the page. The tone ladder is what carries contrast - 
+     * tone 6/98 surfaces against tone 90/10 text, for any chroma - so moving the
+     * ceiling up makes the page more coloured without touching a single contrast
+     * pair. `MaterialColorSchemeTest` still checks every AA pair at every seed.
      */
-    private const val MIN_TINTED_NEUTRAL_CHROMA: Double = 8.0
-    private const val MAX_TINTED_NEUTRAL_CHROMA: Double = 12.0
+    private const val MIN_TINTED_NEUTRAL_CHROMA: Double = 10.0
+    private const val MAX_TINTED_NEUTRAL_CHROMA: Double = 16.0
 
     /** WCAG AA for normal text; the tone ladder is designed around it. */
     private const val MIN_TEXT_CONTRAST: Double = 4.5
@@ -189,6 +198,30 @@ object MaterialColorSchemes {
      */
     fun accentFor(seedArgb: Int, dark: Boolean): Int =
         primaryPalette(Hct.fromInt(seedArgb)).tone(if (dark) PRIMARY_TONE_DARK else PRIMARY_TONE_LIGHT)
+
+    /**
+     * The accent as three tones of the seed's own palette, for a gradient.
+     *
+     * [accentFor] answers "what colour is this title?" with one tone. A gradient
+     * needs three, and they have to come from the same palette or the chip stops
+     * being a reading of the artwork at all. The middle stop is exactly
+     * [accentFor]'s tone, so this can be used where a flat accent was without the
+     * swatch disagreeing with the scheme's `primary` - the property
+     * `AnimeThemeSurfaceTest` pins.
+     *
+     * The ends are chosen in tone, not hue or chroma: a dark ramp runs from a
+     * brighter tone down through the primary, a light one from a deeper tone up
+     * through it. Contrast at the ends is not load-bearing - the foreground beside
+     * the swatch is drawn on the card, not on the gradient.
+     */
+    fun accentRamp(seedArgb: Int, dark: Boolean): IntArray {
+        val palette = primaryPalette(Hct.fromInt(seedArgb))
+        return if (dark) {
+            intArrayOf(palette.tone(90), palette.tone(PRIMARY_TONE_DARK), palette.tone(60))
+        } else {
+            intArrayOf(palette.tone(20), palette.tone(PRIMARY_TONE_LIGHT), palette.tone(60))
+        }
+    }
 
     /**
      * The primary palette for [seed] - the hue and chroma rules in one place, so

@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -795,11 +796,23 @@ object AppExtraVectors {
     /**
      * The Discord mark, for the presence settings and the preview card.
      *
-     * A deliberately simplified mascot rather than a traced brand asset: the
-     * outline, the two eyes and the little side flicks are what make the shape
-     * recognisable at 20dp, and every other line in this file is drawn the same
-     * way. It is stroked, with filled eyes, because at this size a solid body
-     * loses the eyes into the silhouette.
+     * The official 24x24 brand glyph, not a lookalike. The previous drawing was a
+     * simplified mascot - a stroked outline with two filled eyes - and the one
+     * thing a reader checks is whether the badge on "Log in to Discord" is
+     * actually Discord's. A shape that resembles it is the wrong answer on a
+     * button whose entire job is to be trusted with an account.
+     *
+     * Filled as one shape with `NonZero`: the official geometry draws the eyes as
+     * separate subpaths of the same mark, and the winding rule is what keeps them
+     * holes instead of two white blobs.
+     *
+     * Parsed with [addPathNodes] rather than expanded into `moveTo`/`curveTo`
+     * calls the way [GitHub] above was. The official path is drawn with arc (`a`)
+     * commands, and expanding thirty of them into `arcToRelative` calls by hand is
+     * thirty chances to misplace an eye - the one part of the mark a reader would
+     * notice. The result is still a pure Compose `ImageVector`; no SVG, PNG or
+     * drawable resource is involved. [OFFICIAL_DISCORD_PATH] at the bottom of this
+     * file is the verbatim asset and should not be reformatted.
      */
     val Discord: ImageVector by lazy {
         ImageVector.Builder(
@@ -809,53 +822,33 @@ object AppExtraVectors {
             viewportWidth = 24f,
             viewportHeight = 24f
         ).apply {
-            path(
-                stroke = SolidColor(Color.White),
-                strokeLineWidth = 1.7f,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round
-            ) {
-                // The face: a rounded body with a notch at the top for the fringe.
-                moveTo(9.0f, 6.4f)
-                curveTo(10.6f, 5.8f, 13.4f, 5.8f, 15.0f, 6.4f)
-                curveTo(17.6f, 7.3f, 19.4f, 9.4f, 19.7f, 12.4f)
-                curveTo(19.9f, 14.2f, 18.8f, 15.6f, 17.6f, 16.7f)
-                curveTo(16.3f, 17.9f, 14.2f, 18.4f, 12.0f, 18.4f)
-                curveTo(9.8f, 18.4f, 7.7f, 17.9f, 6.4f, 16.7f)
-                curveTo(5.2f, 15.6f, 4.1f, 14.2f, 4.3f, 12.4f)
-                curveTo(4.6f, 9.4f, 6.4f, 7.3f, 9.0f, 6.4f)
-                close()
-
-                // The two side flicks that read as ears/wings.
-                moveTo(4.5f, 9.8f)
-                lineTo(2.9f, 8.8f)
-                lineTo(3.4f, 11.9f)
-                moveTo(19.5f, 9.8f)
-                lineTo(21.1f, 8.8f)
-                lineTo(20.6f, 11.9f)
-            }
-            path(fill = SolidColor(Color.White)) {
-                // Left eye.
-                moveTo(9.4f, 9.9f)
-                curveToRelative(0.9f, 0f, 1.3f, 0.7f, 1.3f, 1.7f)
-                curveToRelative(0f, 1f, -0.4f, 1.7f, -1.3f, 1.7f)
-                curveToRelative(-0.9f, 0f, -1.3f, -0.7f, -1.3f, -1.7f)
-                curveToRelative(0f, -1f, 0.4f, -1.7f, 1.3f, -1.7f)
-                close()
-                // Right eye.
-                moveTo(13.6f, 9.9f)
-                curveToRelative(0.9f, 0f, 1.3f, 0.7f, 1.3f, 1.7f)
-                curveToRelative(0f, 1f, -0.4f, 1.7f, -1.3f, 1.7f)
-                curveToRelative(-0.9f, 0f, -1.3f, -0.7f, -1.3f, -1.7f)
-                curveToRelative(0f, -1f, 0.4f, -1.7f, 1.3f, -1.7f)
-                close()
-            }
+            addPath(
+                pathData = addPathNodes(OFFICIAL_DISCORD_PATH),
+                pathFillType = PathFillType.NonZero,
+                fill = SolidColor(Color.White)
+            )
         }.build()
     }
     /*
-     * Every glyph in this file is built the same way: a builder, one `path` per
-     * stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,
+     * Nearly every glyph in this file is built the same way: a builder, one `path`
+     * per stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,
      * because these shapes started as SVG snippets and `PathBuilder` has no
      * `horizontalTo`/`verticalTo` - a straight line names both ends here.
+     *
+     * [Discord] is the exception, and deliberately so: it is an official brand
+     * mark whose published geometry uses arcs, so it is parsed from the asset
+     * instead of imitated in the DSL.
      */
 }
+
+/**
+ * The published Discord mark, verbatim, at a 24x24 viewBox.
+ *
+ * Verbatim is the requirement, not a preference. Retyping or "tidying" a brand
+ * path is how a logo ends up subtly wrong, and the eyes are the part that shows.
+ * The string is therefore left as one unbroken literal: splitting it to fit a line
+ * length risks losing the space between two commands, which silently merges the
+ * end of one coordinate with the start of the next.
+ */
+private const val OFFICIAL_DISCORD_PATH =
+    "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"

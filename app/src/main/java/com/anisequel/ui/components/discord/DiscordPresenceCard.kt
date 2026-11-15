@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.rememberIsResumed
 import kotlinx.coroutines.delay
 
 @Composable
@@ -117,12 +118,15 @@ fun DiscordPresenceCard(
 
 @Composable
 private fun PresenceHeader(live: Boolean, connecting: Boolean, appName: String) {
-    // Only while connecting. The transition used to be built on every card and
-    // ticked forever, so a preview sitting on the settings page animated a dot
-    // nobody was looking at - the one indefinite animation in the app that was not
-    // gated on whether it could be seen. Conditional composition also stops the
-    // tick when the connection settles.
-    val alpha = if (connecting) {
+    // Only while connecting *and* on screen. The transition used to be built on
+    // every card and ticked forever, so a preview sitting on the settings page
+    // animated a dot nobody was looking at - the one indefinite animation in the
+    // app that was not gated on whether it could be seen. Conditional composition
+    // also stops the tick when the connection settles, and `rememberIsResumed`
+    // stops it while the app is behind another window even if a connect is still
+    // in flight.
+    val resumed = rememberIsResumed()
+    val alpha = if (connecting && resumed) {
         val pulse = rememberInfiniteTransition(label = "discord_live_pulse")
         val animated by pulse.animateFloat(
             initialValue = 0.45f,
@@ -237,7 +241,13 @@ private fun PresenceTimer(startTimestampSeconds: Long?) {
     var nowSeconds by remember {
         mutableLongStateOf(System.currentTimeMillis() / 1_000L)
     }
-    LaunchedEffect(startTimestampSeconds) {
+    // Gated on the window being visible, for the same reason every other clock in
+    // the app is: the card stays composed behind another app, and this writes
+    // state every second - a full recomposition of the presence card, its images
+    // and its timer, with nobody reading it.
+    val resumed = rememberIsResumed()
+    LaunchedEffect(startTimestampSeconds, resumed) {
+        if (!resumed) return@LaunchedEffect
         while (true) {
             nowSeconds = System.currentTimeMillis() / 1_000L
             delay(1_000L)

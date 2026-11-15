@@ -10,7 +10,7 @@ Planning list.
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-12%2B%20(API%2031)-3DDC84?logo=android&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-187%20JVM%20classes-6E56CF)
+![Tests](https://img.shields.io/badge/tests-197%20JVM%20classes-6E56CF)
 
 Not on the Play Store. Every release is a signed universal APK on
 [GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with a
@@ -23,16 +23,17 @@ middleman server.
 
 ---
 
-## What's new - 1.9.2
+## What's new - 2.1.1
 
-A first launch you can shape, a catalogue you can browse, and a title page that can change your list.
+Sign-in happens in your browser, the colour follows the show further, and the
+follow-up round fixes the Discord session, theme, updater and version-guard
+flaws the first pass left behind.
 
-- **Five first-run choices, without locking the door.** A first launch can pick the app layout, theme, motion feel, joke frequency and top-bar shortcuts in one skippable setup. Every choice stays available in Settings.
-- **A catalogue you can browse and open.** Search waits for typing to settle and ignores stale replies, then lays results out as a three-column poster gallery with anime/manga, format, score and year. Tap any full card to open its in-app title page.
-- **The title page can change your list.** When a title is already on your AniList, its Info page offers a direct route to the full entry editor - any status, progress, score, dates, or delete. It works the same for a title opened from search.
-- **Search stays put while you type.** Results already on screen stay there while the next answer is on the wire, with a small spinner in the field instead of replacing the grid with a skeleton on every keystroke.
-- **Your Home says hello in more than one way.** Nova Home chooses from a larger set of greetings, and both greeting lines and the sentence under them fade as one piece.
-- **A bar you can lift.** The main bar's height is a slider with a live mini-layout beside it, so the shape is chosen by looking at it rather than by naming it.
+- **The browser is the sign-in.** AniList and Discord both open in the browser you already use instead of a page inside the app. AniList still returns straight to AniSequel; Discord's page is now the real browser's, with its address bar and password manager. The app ships no web view at all.
+- **A Discord log-out that is immediate.** Log out no longer waits behind a slow gateway connect, a stale socket can no longer close the replacement that reconnected after it, and rotating the device no longer drops the live session before the stored settings arrive.
+- **The accent follows the app's theme.** The title page's backdrop and the cover swatch take their tone from the mode the app is drawing, not the phone's. During a recolour, text now travels on the same spring as the surface under it, so the pair is never momentarily mismatched.
+- **Richer palettes.** Surfaces carry more of the cover's hue, every text pair stays on Material's tone ladder, and the swatch is a three-tone gradient centred on the scheme's own accent.
+- **Updater and release guards.** A downloaded update is no longer replaced by an offline check on rotation, and the version tests now compare whole versions instead of a patch digit that could not see a minor bump.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
@@ -244,7 +245,7 @@ AniSequel/
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
 │       │   ├── assets/            changelog.json
 │       │   └── res/               the widget XML, adaptive icon, strings
-│       └── test/                  187 JVM test classes (there is no androidTest/)
+│       └── test/                  197 JVM test classes (there is no androidTest/)
 ├── gradle/libs.versions.toml      every version, with its reasoning inline
 ├── update.json                    what the updater reads from the release asset
 ├── LICENSE                        MIT - use it, keep the notice

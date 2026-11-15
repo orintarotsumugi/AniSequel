@@ -1,6 +1,6 @@
 package com.anisequel.ui.components.expressive
 
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -67,14 +67,15 @@ fun WavyProgressBar(
 ) {
     LinearWavyProgressIndicator(
         progress = progress,
-        // The default *before* the caller's modifier, not after it: a chain applies
-        // its last size constraint, so `.then`-ing a height here overrode every
-        // caller that sized the bar itself - the 6dp row in a sequel card silently
-        // became 10dp, and the wave is only legible above a few dp anyway, which is
-        // the one thing to negotiate rather than to have taken away.
-        modifier = Modifier
-            .height(10.dp)
-            .then(modifier)
+        // The default sits *inside* the caller's modifier and is expressed as a
+        // minimum rather than a fixed height, so a caller that sizes the bar keeps
+        // its size: a `.height(6.dp)` outside it fixes the row at 6dp, while a
+        // caller that passes no size still gets the 10dp the wave needs to be
+        // legible. The old chain was `.height(10.dp).then(modifier)` - a fixed
+        // default in *front* of the caller - and an outer size constraint is the
+        // one that wins, so the 6dp sequel row silently rendered at 10dp.
+        modifier = modifier
+            .heightIn(min = 10.dp)
             .testTag("${EXPRESSIVE_TAG}wavy_progress"),
         color = color,
         trackColor = trackColor

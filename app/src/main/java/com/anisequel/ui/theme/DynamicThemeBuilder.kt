@@ -63,6 +63,17 @@ object DynamicThemeBuilder {
     }
 
     /**
+     * The accent as a three-stop gradient, in the same tone the scheme uses.
+     *
+     * The middle stop is [accentColor], so a gradient swatch and a flat one are
+     * the same colour at the point the reader's eye lands. See
+     * [MaterialColorSchemes.accentRamp] for why the ends are tones of one palette
+     * rather than a computed light/dark pair.
+     */
+    fun accentRamp(seed: Color, dark: Boolean): List<Color> =
+        MaterialColorSchemes.accentRamp(seed.toArgb(), dark).map { Color(it) }
+
+    /**
      * Generates a light and a dark [ColorScheme] from [seed].
      *
      * [tintSurfaces] is the difference between an accent and a theme:

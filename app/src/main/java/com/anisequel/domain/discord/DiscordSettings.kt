@@ -166,10 +166,55 @@ data class DiscordSettings(
 
 /** Validation helpers for direct Discord login. */
 object DiscordLogin {
+
+    /**
+     * The page the device's browser is sent to when the reader asks to sign in.
+     *
+     * The app does not load this itself. It used to - a `WebView` hosted the page
+     * and polled it for a token - and that was a login page inside an app the
+     * reader could not check the address bar of. The browser is the version where
+     * the host is visible and the session belongs to the reader.
+     *
+     * Constant rather than a literal at the call site so a test can pin it, and so
+     * the two settings cards cannot end up pointing at different pages.
+     */
+    const val BROWSER_LOGIN_URL: String = "https://discord.com/login"
+
     private val whitespace = Regex("\\s+")
 
-    fun normalizeToken(raw: String): String =
-        raw.trim().removePrefix("Bot ").removePrefix("Bearer ").replace(whitespace, "")
+    /**
+     * A pasted token with any scheme prefix removed and no whitespace left.
+     *
+     * `Bot` and `Bearer` are the two prefixes Discord's own documentation uses, and
+     * a paste carries them in whatever case the source header had. The old version
+     * used `removePrefix`, which is case-sensitive - so `bearer eyJ...` kept the word,
+     * passed [looksLikeToken] on length alone once the space was stripped, and was
+     * stored as a token Discord refuses with nothing in the message to suggest the
+     * paste was the problem.
+     *
+     * The strip repeats until there is no prefix left, because a paste can carry
+     * both (`"Bot Bearer eyJ..."`). It also accepts a tab or any other whitespace
+     * between the prefix and the token: the old check was for a literal `"Bearer "`,
+     * so a copied header with a tab survived as `"BearereyJ..."` once all whitespace
+     * was removed - a value that is the right length and still the wrong token. A
+     * prefix only counts when it is followed by whitespace, so a token that happens
+     * to begin with the letters "bot" is left alone.
+     */
+    fun normalizeToken(raw: String): String {
+        var value = raw.trim()
+        var stripped = true
+        while (stripped) {
+            stripped = false
+            for (prefix in listOf("Bearer", "Bot")) {
+                if (!value.startsWith(prefix, ignoreCase = true)) continue
+                val rest = value.substring(prefix.length)
+                if (rest.isEmpty() || !rest.first().isWhitespace()) continue
+                value = rest.trimStart()
+                stripped = true
+            }
+        }
+        return value.replace(whitespace, "")
+    }
 
     fun looksLikeToken(raw: String): Boolean {
         val token = normalizeToken(raw)

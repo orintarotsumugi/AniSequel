@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MissedSequel
-import com.anisequel.domain.card.CardScorePlacement
+import com.anisequel.domain.card.CardScoreOwner
 import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.MarqueeText
@@ -41,6 +41,10 @@ fun SequelCardDetails(
     val titleHidden = style.titlePlacement == CardTitlePlacement.HIDDEN
     // The rating the chip row shows today, as the number the banner needs.
     val scoreValue = sequel.sequelMedia.averageScore
+    // Which of this column's two score drawings - band or chip - the style asks for.
+    // The poster's own badge is decided by the same table, so exactly one of the
+    // three surfaces draws the number and none of them can drop a low score.
+    val scoreOwner = style.scoreOwner
 
     Column(modifier = modifier) {
         // A marquee rather than a two-line ellipsis: the sequel's name is the one
@@ -62,7 +66,7 @@ fun SequelCardDetails(
         // The rating as a band is the one placement that belongs to this column
         // rather than to the chip row: it is the width of the card, not one of its
         // facts, and it is drawn where the title used to leave off.
-        if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE && scoreValue != null) {
+        if (scoreOwner == CardScoreOwner.BANNER && scoreValue != null) {
             Spacer(modifier = Modifier.height(if (titleOverlaid || titleHidden) 0.dp else 6.dp))
             ScoreBanner(score = scoreValue)
         }
@@ -84,10 +88,7 @@ fun SequelCardDetails(
             // The rating is drawn once. Two of the five styles put it on the artwork
             // and one stretches it across the card as a band, and in all three the
             // chip would be the same number a second time.
-            if (sequel.score != "N/A" &&
-                !style.scoreOnPoster &&
-                style.scorePlacement != CardScorePlacement.BANNER_BELOW_TITLE
-            ) {
+            if (sequel.score != "N/A" && scoreOwner == CardScoreOwner.CHIP) {
                 SequelInfoChip(
                     icon = AppVectorIcons.AnimeSparkle,
                     label = sequel.score

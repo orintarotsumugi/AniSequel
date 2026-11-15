@@ -5,29 +5,14 @@ import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.InfiniteRepeatableSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.InteractionSource
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -47,6 +32,12 @@ import androidx.compose.ui.unit.IntSize
  * with two different curves because neither was reading the shared token.
  *
  * New tokens are fine to add, but a call site that needs one should name it.
+ *
+ * The press gestures that read these tokens live in `PressModifiers.kt`: they are
+ * `Modifier` extensions rather than motion constants, and keeping them here put
+ * this file past the 700-line ceiling once the sixth style landed. They stayed in
+ * the same package on purpose, so every `import ...expressive.bouncyPress` still
+ * resolves and no call site had to move.
  */
 object ExpressiveMotion {
 
@@ -128,6 +119,27 @@ object ExpressiveMotion {
         colorEffects(stiffness = Spring.StiffnessLow)
 
     /**
+     * The colour transition for the large surfaces of a scheme.
+     *
+     * Slower than [ThemeColorEffects] on purpose. When the anime layer opens, the
+     * accent, the containers and the page all change at once; on one stiffness they
+     * arrive together, which reads as a cross-fade of a single flat image. The softer
+     * spring here lets the large areas trail the accent by a fraction of a second, so
+     * the recolour arrives as the app *taking on* the colour - accent first, then the
+     * page settling under it.
+     *
+     * No delay is involved, deliberately: a delay can arrive in the wrong order when a
+     * second recolour interrupts the first, while two springs simply settle at their
+     * own rates. [MotionStyle.INSTANT] still snaps both through [colorEffects], so a
+     * reader who asked for no motion gets one frame.
+     *
+     * `NoBouncy` for the same reason as [ThemeColorEffects]: an overshooting channel in
+     * a `Color` spring can leave the sRGB cube.
+     */
+    val SurfaceColorEffects: FiniteAnimationSpec<Color> get() =
+        colorEffects(stiffness = Spring.StiffnessVeryLow)
+
+    /**
      * The press spring shared by every press gesture below.
      *
      * One token rather than a literal per gesture, so `bouncyPress` and
@@ -154,6 +166,7 @@ object ExpressiveMotion {
      */
     val PressSpatialIn: FiniteAnimationSpec<Float> get() =
         spatial(
+            noOvershoot = true,
             expressiveDamping = Spring.DampingRatioNoBouncy,
             // `High`, not `Medium`: the press is the frame the finger is watching,
             // and at Medium the squash was still arriving after the touch had
@@ -184,9 +197,11 @@ object ExpressiveMotion {
      * thrown at the user, and a control that overshoots visibly on every tap is
      * tiring over a long session.
      *
-     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees either token —
-     * `SMOOTH` is `NoBouncy` by design and `INSTANT` snaps, so on those styles a
-     * press behaves exactly as it always has.
+     * `SMOOTH` and `SNAPPY` are `NoBouncy` by design and `INSTANT` snaps, so on
+     * those styles a press behaves exactly as it always has. `FLOATY` and `DREAMY`
+     * keep their softer stiffness but still answer [PressSpatialIn] with
+     * `NoBouncy` - see the `noOvershoot` argument of [spatial] for why that half
+     * cannot be allowed to take the style's bounce.
      */
     val PressSpatialOut: FiniteAnimationSpec<Float> get() =
         spatial(
@@ -224,6 +239,10 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
         }
 
     /**
@@ -260,6 +279,10 @@ object ExpressiveMotion {
             com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -310,6 +333,10 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
         }
 
     /**
@@ -349,6 +376,10 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
         }
 
     /**
@@ -372,6 +403,10 @@ object ExpressiveMotion {
             com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioLowBouncy,
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -413,8 +448,17 @@ object ExpressiveMotion {
      * styles are a single dial the whole app turns together, so a branch added here
      * changes every spring in the app at once, and a branch added at a call site is
      * the drift this file exists to prevent.
+     *
+     * [noOvershoot] is the one escape hatch, and only [PressSpatialIn] uses it. The
+     * softer styles would otherwise hand *every* spring their own `LowBouncy`, which
+     * made the press-down spring identical to the release spring - so the squash
+     * dipped below its target on the landing frame, and on Floaty the two halves of a
+     * press became the same motion. Keeping the style's stiffness while pinning its
+     * damping to `NoBouncy` is what lets a soft style stay soft without flickering
+     * under the finger.
      */
     private fun spatial(
+        noOvershoot: Boolean = false,
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
         expressiveStiffness: Float = Spring.StiffnessMedium
     ): FiniteAnimationSpec<Float> =
@@ -436,10 +480,23 @@ object ExpressiveMotion {
                 stiffness = expressiveStiffness
             )
             // Softer and slower than Chill on every axis, with a low bounce that
-            // reads as floating rather than as a wobble.
+            // reads as floating rather than as a wobble. `noOvershoot` keeps the
+            // slow stiffness and drops the bounce for the press-down half.
             com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
+                dampingRatio = if (noOvershoot) {
+                    Spring.DampingRatioNoBouncy
+                } else {
+                    Spring.DampingRatioLowBouncy
+                },
                 stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = if (noOvershoot) {
+                    Spring.DampingRatioNoBouncy
+                } else {
+                    Spring.DampingRatioLowBouncy
+                },
+                stiffness = Spring.StiffnessVeryLow
             )
         }
 
@@ -476,6 +533,10 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessLow
             )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
         }
 
     /**
@@ -507,6 +568,10 @@ object ExpressiveMotion {
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessLow
             )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
         }
 }
 
@@ -517,203 +582,3 @@ object ExpressiveMotion {
  */
 private const val OrbMorphRestMillis = 650
 private const val OrbMorphTravelMillis = 2650
-
-/**
- * Modifier that applies a tactile bouncy spring press animation in the Draw phase.
- * Does not trigger composition or layout passes for maximum 120fps smoothness.
- *
- * Applied at two dozen call sites, so this is the most widely instantiated
- * modifier in the app - which is why the animated value is read inside the
- * [graphicsLayer] block rather than passed to it. Reading a `State` inside the
- * layer block invalidates only the draw phase, so a press animates without
- * recomposing the composable it is attached to. That matters most on
- * `SequelCard`, where one of these sits on every row of a `LazyColumn`.
- *
- * The `composed {}` wrapper is what costs this its remaining recomposition: a
- * composable factory modifier is never skipped, so each call site gets a scope
- * that re-runs when its own state changes. Converting this to a
- * `ModifierNodeElement` would remove it, and is the single biggest remaining
- * animation win in the app - see TO-DO.md.
- *
- * ## Pass the `clickable`'s own `InteractionSource`, and this stops listening
- *
- * Two press sources were running at once. The `MutableInteractionSource` a
- * caller passes in is read through `collectIsPressedAsState`, but when no source
- * is passed the fallback was a source nothing ever emitted into - so
- * `isInteractionPressed` was permanently `false` and *all* of the press feedback
- * came from the raw `pointerInput` loop underneath. That loop tracked "is a
- * pointer down" and nothing else: it never asked whether the gesture had turned
- * into a scroll, so flicking a `LazyColumn` with a finger resting on a card left
- * that card squashed for the whole fling, and released only once every pointer
- * had lifted. It also cost a second pointer-input node per element - on
- * `ActivityCard`, one extra coroutine per row of a scrolling feed.
- *
- * So when a caller supplies its source, the loop is not installed at all: the
- * `clickable` that shares that source emits press on down and *cancels* it the
- * moment the gesture is claimed as a drag, which is the behaviour the loop was
- * approximating badly. The loop stays for the call sites that have no source to
- * share - a bare `Button` does not expose one - so their press feedback is
- * unchanged rather than silently lost.
- *
- * ## The loop's remaining flaw, and what it now does about it
- *
- * Without a source to read, the loop has to decide for itself whether a gesture
- * is still a press, and "a pointer is down" is the wrong answer. A fling into
- * the end of a list holds the pointer down for its whole length, so anything
- * under the finger stayed depressed and then sprang back - which reads as the
- * row reacting twice, once on the way in and once on the rebound. The loop now
- * releases the press the moment the pointer travels further than touch slop,
- * because past slop the gesture has become a drag and belongs to the scrollable.
- *
- * Touch slop rather than `isConsumed` on purpose: a `clickable` sitting on the
- * same element consumes its own events, so consumption cannot distinguish "this
- * became a scroll" from "this control handled it". A long press - the heart's
- * press-and-hold for the likers sheet - does not move, so it survives.
- */
-fun Modifier.bouncyPress(
-    pressedScale: Float = 0.94f,
-    interactionSource: InteractionSource? = null
-): Modifier = composed {
-    val ownedSource = remember { MutableInteractionSource() }
-    val effectiveSource = interactionSource ?: ownedSource
-    val isInteractionPressed by effectiveSource.collectIsPressedAsState()
-    val isPointerPressed = remember { mutableStateOf(false) }
-
-    // The fallback is only consulted on the no-source path. Reading a state that
-    // nothing writes is harmless, and keeping the allocation unconditional keeps
-    // this composable's `remember` calls in a fixed order.
-    val isPressed = isInteractionPressed || (interactionSource == null && isPointerPressed.value)
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) pressedScale else 1f,
-        // Two specs chosen by direction, not one.
-        //
-        // A single spring has to treat the press and the release identically, so
-        // the element squashed and then merely returned - which reads as a fade
-        // rather than as a button with weight. The asymmetry has to come from two
-        // specs, because a shared `dampingRatio` cannot express "no overshoot
-        // down, a little overshoot back", and the `bounce` parameter that would
-        // have said it does not exist in the Compose version this project pins
-        // (see `PressSpatialOut`). So the way down is tight and cannot flicker
-        // below the pressed scale, and the way back overshoots slightly past rest
-        // and settles.
-        animationSpec = if (isPressed) {
-            ExpressiveMotion.PressSpatialIn
-        } else {
-            ExpressiveMotion.PressSpatialOut
-        },
-        label = "bouncy_press_scale"
-    )
-
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
-        .then(
-            if (interactionSource == null) {
-                Modifier.pointerInput(Unit) {
-                    // A tap does not travel; a scroll starts by travelling. Watching
-                    // the pointer leave touch slop is therefore the cheapest honest
-                    // signal that the gesture stopped being a press, and it is what
-                    // stops the loop holding an element down for a whole fling.
-                    val touchSlop = viewConfiguration.touchSlop
-                    awaitPointerEventScope {
-                        while (true) {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            isPointerPressed.value = true
-                            try {
-                                // The loop follows the finger that started the press,
-                                // not "any pointer on screen". A second finger placed
-                                // elsewhere used to keep this loop alive after the
-                                // first had lifted, so the element stayed squashed
-                                // under a hand that was no longer touching it - and
-                                // the press only released once every finger was up.
-                                var trackedPressed = true
-                                while (trackedPressed) {
-                                    val event = awaitPointerEvent(PointerEventPass.Main)
-                                    val change = event.changes
-                                        .firstOrNull { it.id == down.id }
-                                        // The tracked pointer is gone from the event:
-                                        // treat it as lifted rather than waiting for a
-                                        // finger that will never report again.
-                                        ?: break
-                                    trackedPressed = change.pressed
-                                    // Squared distance against a squared slop: the
-                                    // comparison never needs the square root, and
-                                    // `Offset.getDistance` is an extension in a
-                                    // package this file does not otherwise import
-                                    // from.
-                                    val dx = change.position.x - down.position.x
-                                    val dy = change.position.y - down.position.y
-                                    if (dx * dx + dy * dy > touchSlop * touchSlop) {
-                                        // Past slop: this is a drag, so the
-                                        // scrollable has it now and this is no longer
-                                        // a press.
-                                        isPointerPressed.value = false
-                                    }
-                                }
-                            } finally {
-                                isPointerPressed.value = false
-                            }
-                        }
-                    }
-                }
-            } else {
-                Modifier
-            }
-        )
-}
-
-/**
- * Modifier that adds an expressive spring-physics press animation and triggers onHold on long press.
- *
- * Built on [bouncyPress] rather than repeating it, so the two press gestures
- * share one animation body and one spring token.
- */
-fun Modifier.expressiveHoldGesture(
-    onHold: () -> Unit,
-    onClick: (() -> Unit)? = null
-): Modifier = composed {
-    val haptic = LocalHapticFeedback.current
-    val isPressed = remember { mutableStateOf(false) }
-
-    // Read through state rather than captured by `pointerInput(Unit)`, which never
-    // restarts. A lazy slot reused for another title kept the lambda from its first
-    // composition, so holding a recycled card opened the media it used to show - the
-    // same hazard `InfoHero` documents for its title.
-    val currentOnHold by rememberUpdatedState(onHold)
-    val currentOnClick by rememberUpdatedState(onClick)
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed.value) 0.96f else 1f,
-        animationSpec = if (isPressed.value) {
-            ExpressiveMotion.PressSpatialIn
-        } else {
-            ExpressiveMotion.PressSpatialOut
-        },
-        label = "expressive_hold_scale"
-    )
-
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
-        .pointerInput(Unit) {
-            detectTapGestures(
-                onPress = {
-                    isPressed.value = true
-                    tryAwaitRelease()
-                    isPressed.value = false
-                },
-                onLongPress = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    currentOnHold()
-                },
-                onTap = {
-                    currentOnClick?.invoke()
-                }
-            )
-        }
-}

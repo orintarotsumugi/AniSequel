@@ -194,6 +194,24 @@ enum class MediaCardStyle(
         scorePlacement = CardScorePlacement.POSTER_BOTTOM_END,
         bordered = false,
         glowing = true
+    ),
+    RIBBON(
+        storageValue = "ribbon",
+        displayName = "Ribbon",
+        blurb = "Poster with the title beneath it and the rating as a coloured band.",
+        titlePlacement = CardTitlePlacement.BELOW_POSTER,
+        scorePlacement = CardScorePlacement.BANNER_BELOW_TITLE,
+        bordered = false,
+        glowing = false
+    ),
+    STAMP(
+        storageValue = "stamp",
+        displayName = "Stamp",
+        blurb = "Cover with the title overlaid at its foot and the rating stamped in the corner.",
+        titlePlacement = CardTitlePlacement.OVERLAY_BOTTOM,
+        scorePlacement = CardScorePlacement.POSTER_TOP_START,
+        bordered = true,
+        glowing = false
     );
 
     /**
@@ -207,6 +225,20 @@ enum class MediaCardStyle(
     val scoreOnPoster: Boolean
         get() = scorePlacement == CardScorePlacement.POSTER_TOP_START ||
             scorePlacement == CardScorePlacement.POSTER_BOTTOM_END
+
+    /**
+     * Which surface draws the rating for this style.
+     *
+     * The style decides, and it decides once: the poster badge, the band under the
+     * title and the chip row are three drawings of one fact, and a card that shows
+     * the same number twice is as wrong as a card that shows it nowhere.
+     */
+    val scoreOwner: CardScoreOwner
+        get() = when {
+            scoreOnPoster -> CardScoreOwner.POSTER
+            scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE -> CardScoreOwner.BANNER
+            else -> CardScoreOwner.CHIP
+        }
 
     companion object {
         /** The layout a build with nothing stored draws. */
@@ -223,3 +255,33 @@ enum class MediaCardStyle(
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT_STYLE
     }
 }
+
+/**
+ * Who draws a card's rating.
+ *
+ * This used to be answered separately at each surface with a different rule: the
+ * dashboard handed the poster rating only when the score was at least 75, while its
+ * chip row stepped aside for every style with a poster rating. A sequel rated 74 was
+ * therefore drawn by neither - the one place the number could have been was the one
+ * place that had been told not to draw it. One question, one answer.
+ */
+enum class CardScoreOwner {
+    /** A badge on the artwork. */
+    POSTER,
+
+    /** A band across the card under the title. */
+    BANNER,
+
+    /** A chip in the body's row of facts. */
+    CHIP
+}
+
+/**
+ * The rating the artwork draws, or null when this style keeps it off the poster.
+ *
+ * A score of zero means AniList has not rated the title, so there is no number to
+ * draw; every positive score is drawn, because a poster badge that quietly drops the
+ * weaker half of the list is a badge that cannot be trusted across two rows.
+ */
+fun posterScoreOf(style: MediaCardStyle, averageScore: Int?): Int? =
+    if (style.scoreOwner == CardScoreOwner.POSTER) averageScore?.takeIf { it > 0 } else null

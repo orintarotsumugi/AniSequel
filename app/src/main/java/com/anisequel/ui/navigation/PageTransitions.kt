@@ -213,7 +213,14 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.slideInPage(
     animationSpec = scale
 )
 
-/** A page arriving over the one before it. */
+/**
+ * A page arriving over the one before it, or under a leaving one.
+ *
+ * Two of the three branches are about the tier list, and both exist for the same
+ * reason: the board is the only page that travels vertically, so nothing else may
+ * slide sideways in the same frame. Arriving at it is its rise; leaving it is the
+ * destination's fade.
+ */
 internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
     from: String?,
     to: String?
@@ -235,6 +242,17 @@ internal fun AnimatedContentTransitionScope<NavBackStackEntry>.enterPage(
     ) + fadeIn(pageFade(from, to)) + scaleIn(
         initialScale = 0.96f,
         animationSpec = pageScale(from, to)
+    )
+} else if (isTierList(from)) {
+    // The board is leaving and this page is arriving - the same frame
+    // [popEnterPage] answers, and for the same reason. [exitPage] sends the board
+    // down the bottom edge, so a horizontal slide underneath it puts two directions
+    // in one frame. This branch used to be missing: a pop drew the fade, but any
+    // other move away from the board (a push out of it, a replaced route) still slid
+    // its destination in sideways under a board that was falling.
+    fadeIn(pageFade(from, to)) + scaleIn(
+        initialScale = 0.98f,
+        animationSpec = ExpressiveMotion.FastSpatial
     )
 } else {
     // `pageSlideSpring` still chooses the fast token for a tab switch and the

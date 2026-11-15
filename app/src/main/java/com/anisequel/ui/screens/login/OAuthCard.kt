@@ -1,8 +1,5 @@
 package com.anisequel.ui.screens.login
 
-import android.content.Context
-import android.net.Uri
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,6 +41,7 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.RedirectUrlHint
+import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.viewmodel.AuthUiState
 
 @Composable
@@ -163,7 +161,21 @@ fun OAuthCard(
                     // AniList consent screen - the single most likely outcome -
                     // disabled the only control that could restart the flow.
                     onRetry()
-                    openCustomTab(context, authUrl)
+                    // The device's own browser, not an in-app Custom Tab.
+                    //
+                    // AniList's consent screen is the one place a reader types
+                    // their password, and a browser they already trust - with
+                    // their password manager, their existing session and their
+                    // address bar - is both a faster sign-in and the only version
+                    // of this flow where the reader can see where the credentials
+                    // are going. AniList returns to `anisequel://oauth` from any
+                    // browser, so nothing about the callback needed to change.
+                    //
+                    // The shared helper rather than a bare intent: a device with
+                    // no browser used to throw into a `runCatching` that threw the
+                    // failure away, so the button did nothing and said nothing.
+                    // This copies the URL and says where it went.
+                    openExternalUrlOrCopy(context, authUrl)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -327,13 +339,3 @@ private fun FeatureRow(
     }
 }
 
-private fun openCustomTab(context: Context, url: String) {
-    runCatching {
-        val customTabsIntent = CustomTabsIntent.Builder().setShowTitle(true).build()
-        customTabsIntent.launchUrl(context, Uri.parse(url))
-    }.recoverCatching {
-        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-    }
-}

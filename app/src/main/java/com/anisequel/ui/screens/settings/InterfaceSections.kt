@@ -306,7 +306,7 @@ internal fun InterfaceCardStyleSection(
             Spacer(modifier = Modifier.height(8.dp))
 
             // A wrapping row, not a scrolling one: the same reason `MotionSection`
-            // gives - a picker that hides two of its five options off the edge reads
+            // gives - a picker that hides two of its ten options off the edge reads
             // as those options having been removed, because nothing about the row
             // says it scrolls.
             FlowRow(
@@ -327,7 +327,7 @@ internal fun InterfaceCardStyleSection(
                         },
                         // This picker is the primary control of its sub-page, not a
                         // filter beside a grid: a 30dp chip is a fingertip target
-                        // found by aiming, and the five options are the whole
+                        // found by aiming, and the ten options are the whole
                         // decision. Give it the platform's 48dp minimum.
                         minTouchTargetHeight = 48.dp,
                         // One style is active at a time, so this is a radio

@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.1.0"
-val BASELINE_VERSION_CODE = 622
+val BASELINE_VERSION_NAME = "2.1.1"
+val BASELINE_VERSION_CODE = 623
 
 plugins {
   alias(libs.plugins.android.application)
@@ -140,6 +140,15 @@ android {
       } else {
         signingConfigs.getByName("debugConfig")
       }
+      // F-Droid-friendly: no VCS provenance (`META-INF/version-control-info.textproto`)
+      // in the shipped APK, which keeps a release reproducible from the same tree.
+      //
+      // This belongs to the build type, not to the `android` block: `vcsInfo` is
+      // declared on `BuildType`, so the same two lines written one scope up do not
+      // resolve and the whole build script fails to compile - which is how it
+      // landed, and how CI caught it. The default is "on for release", so release
+      // is the only build type that needs it.
+      vcsInfo { include = false }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
@@ -246,7 +255,6 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.datastore.preferences)
-  implementation(libs.androidx.browser)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

@@ -77,7 +77,6 @@ okhttp = "4.12.0"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
 datastorePreferences = "1.1.7"
-browser = "1.8.0"
 robolectric = "4.16.1"
 
 
@@ -144,7 +143,6 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshiKotlin" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshiKotlinCodegen" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
-androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 

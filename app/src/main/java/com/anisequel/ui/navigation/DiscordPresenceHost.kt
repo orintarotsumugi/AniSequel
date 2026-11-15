@@ -35,8 +35,18 @@ fun DiscordPresenceHost(
     preferences: DiscordPreferences,
     stats: DiscordStats
 ) {
-    val settings by preferences.settings.collectAsState(initial = DiscordSettings())
+    // `null` until DataStore has answered, not `DiscordSettings()`.
+    //
+    // A default value here is indistinguishable from "the reader turned Rich
+    // Presence off", and the publisher acts on that: an Activity recreation - a
+    // rotation, a font-scale change - recomposes this host from scratch, and the
+    // first frame used to clear and disconnect the process-wide client before the
+    // stored settings arrived. The live presence dropped and reconnected on every
+    // rotation. No UI is drawn here, so waiting for the real value costs nothing.
+    val settings by preferences.settings.collectAsState(initial = null)
     val activity by DiscordActivityBus.activity.collectAsState()
+
+    val loadedSettings = settings ?: return
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
 
@@ -52,7 +62,7 @@ fun DiscordPresenceHost(
     // ago. Three is enough to stop the "it keeps saying the same thing" feeling
     // without making the pool predictable.
     var recentJokes by remember { mutableStateOf<List<String>>(emptyList()) }
-    val latestSettings by rememberUpdatedState(settings)
+    val latestSettings by rememberUpdatedState(loadedSettings)
 
     fun pickJoke(): String? {
         val next = DiscordJokes.next(latestSettings, recentJokes)
@@ -67,34 +77,36 @@ fun DiscordPresenceHost(
     }
 
     // Stabilize list/set keys so unrelated DataStore emissions don't restart rotation.
-    val jokeTonesKey = remember(settings.activeJokeTones) {
-        settings.activeJokeTones.map { it.storageValue }.sorted().joinToString("|")
+    val jokeTonesKey = remember(loadedSettings.activeJokeTones) {
+        loadedSettings.activeJokeTones.map { it.storageValue }.sorted().joinToString("|")
     }
-    val customJokesKey = remember(settings.customJokes) { settings.customJokes.joinToString("\u0000") }
+    val customJokesKey = remember(loadedSettings.customJokes) {
+        loadedSettings.customJokes.joinToString("\u0000")
+    }
 
     LaunchedEffect(
-        settings.showJokes,
-        settings.jokeInterval,
+        loadedSettings.showJokes,
+        loadedSettings.jokeInterval,
         jokeTonesKey,
         customJokesKey
     ) {
-        if (!settings.jokesScheduled) {
+        if (!loadedSettings.jokesScheduled) {
             joke = null
             recentJokes = emptyList()
             return@LaunchedEffect
         }
         joke = pickJoke()
-        if (!settings.jokeInterval.schedules) return@LaunchedEffect
+        if (!loadedSettings.jokeInterval.schedules) return@LaunchedEffect
         while (isActive) {
-            delay(settings.jokeInterval.minutes * 60_000L)
+            delay(loadedSettings.jokeInterval.minutes * 60_000L)
             // Re-read latest settings/tones/custom lines at tick time.
             joke = pickJoke()
         }
     }
 
-    val presence = remember(settings, activity, stats, joke) {
+    val presence = remember(loadedSettings, activity, stats, joke) {
         DiscordPresenceComposer.compose(
-            settings = settings,
+            settings = loadedSettings,
             activity = activity,
             stats = stats,
             joke = joke
@@ -105,7 +117,7 @@ fun DiscordPresenceHost(
         DiscordPresenceRuntime.updatePresence(presence)
     }
 
-    DiscordPresencePublisher(settings = settings, presence = presence)
+    DiscordPresencePublisher(settings = loadedSettings, presence = presence)
 }
 
 /**
@@ -120,7 +132,11 @@ private fun DiscordPresencePublisher(
     settings: DiscordSettings,
     presence: DiscordPresence
 ) {
-    val client = remember { DiscordRpcClient() }
+    // The process-wide client, not one of its own. The Settings page verifies a
+    // pasted token with the same instance, so the log-out control there can
+    // actually close the socket this publisher opened - see
+    // [DiscordRpcClient.shared].
+    val client = DiscordRpcClient.shared
     var lastLiveToken by remember { mutableStateOf<String?>(null) }
     var publishJob by remember { mutableStateOf<Job?>(null) }
     val latestSettings by rememberUpdatedState(settings)
