@@ -15,6 +15,7 @@ import com.anisequel.data.discord.DiscordPresenceRuntime
 import com.anisequel.data.discord.DiscordRpcClient
 import com.anisequel.data.discord.DiscordRuntimeState
 import com.anisequel.data.repository.DiscordPreferences
+import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.domain.discord.DiscordPresenceComposer
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.domain.discord.DiscordStats
@@ -43,6 +44,9 @@ fun DiscordPresenceHost(
         DiscordActivityBus.browse(discordPageStatus(route))
     }
 
+    // Read here, not through a helper that returns the line: a state read inside
+    // another composable invalidates only that scope, so the host would never
+    // recompose the presence below when only the joke changed.
     var joke by remember { mutableStateOf<String?>(null) }
     // The last few lines, so a rotation does not redraw one it quoted two ticks
     // ago. Three is enough to stop the "it keeps saying the same thing" feeling
@@ -101,9 +105,25 @@ fun DiscordPresenceHost(
         DiscordPresenceRuntime.updatePresence(presence)
     }
 
+    DiscordPresencePublisher(settings = settings, presence = presence)
+}
+
+/**
+ * Keeps the gateway socket and the published presence in step with the settings.
+ *
+ * Split from [DiscordPresenceHost] because it owns the three things a presence
+ * change must not see - the client, the token the live presence went out with,
+ * and the publish in flight - and the host owns none of them.
+ */
+@Composable
+private fun DiscordPresencePublisher(
+    settings: DiscordSettings,
+    presence: DiscordPresence
+) {
     val client = remember { DiscordRpcClient() }
     var lastLiveToken by remember { mutableStateOf<String?>(null) }
     var publishJob by remember { mutableStateOf<Job?>(null) }
+    val latestSettings by rememberUpdatedState(settings)
 
     LaunchedEffect(settings.enabled, settings.token, settings.linked) {
         if (!settings.enabled) {
@@ -172,7 +192,7 @@ fun DiscordPresenceHost(
                     )
                     if (!isActive) return@launch
                     if (result.isSuccess) {
-                        if (!latestSettings.enabled || latestSettings.token != token || !latestSettings.canPublish) {
+                        if (!latestSettings.stillLiveWith(token)) {
                             runCatching { client.clear(token) }
                             runCatching { client.disconnect() }
                             lastLiveToken = null
@@ -182,7 +202,7 @@ fun DiscordPresenceHost(
                                 DiscordRuntimeState.Live(result.getOrNull()?.username ?: "Discord")
                             )
                         }
-                    } else if (latestSettings.enabled && latestSettings.canPublish && latestSettings.token == token) {
+                    } else if (latestSettings.stillLiveWith(token)) {
                         DiscordPresenceRuntime.update(
                             DiscordRuntimeState.Failed(
                                 result.exceptionOrNull()?.message
@@ -195,6 +215,15 @@ fun DiscordPresenceHost(
         }
     }
 }
+
+/**
+ * Whether a presence published with [token] is still the one the reader wants.
+ *
+ * A publish can land after the settings moved on - disabled, logged out, or the
+ * token replaced - and its result must be withdrawn rather than painted as live.
+ */
+private fun DiscordSettings.stillLiveWith(token: String): Boolean =
+    enabled && canPublish && this.token == token
 
 internal fun discordPageStatus(route: String?): String = when {
     route == AppRoutes.DASHBOARD ||

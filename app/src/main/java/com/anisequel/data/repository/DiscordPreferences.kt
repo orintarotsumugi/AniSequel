@@ -73,6 +73,7 @@ class DiscordPreferences(private val context: Context) {
     }
 
     val settings: Flow<DiscordSettings> = context.discordDataStore.data.map { preferences ->
+        val linkedFlag = preferences[Keys.LINKED] ?: false
         DiscordSettings(
             enabled = preferences[Keys.ENABLED] ?: false,
             token = preferences[Keys.TOKEN].orEmpty(),
@@ -80,8 +81,7 @@ class DiscordPreferences(private val context: Context) {
             // relay held the credentials. Reading that flag as "connected" drew
             // "Connected to Discord" over a preview that could never publish, so
             // a link only counts when there is a token to publish with.
-            linked = (preferences[Keys.LINKED] ?: false) &&
-                !preferences[Keys.TOKEN].isNullOrBlank(),
+            linked = linkedFlag && !preferences[Keys.TOKEN].isNullOrBlank(),
             username = preferences[Keys.USERNAME].orEmpty(),
             userId = preferences[Keys.USER_ID].orEmpty(),
             avatarUrl = preferences[Keys.AVATAR_URL].orEmpty(),
