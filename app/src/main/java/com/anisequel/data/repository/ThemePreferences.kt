@@ -292,7 +292,13 @@ class ThemePreferences(context: Context) {
         // a defaulted theme is not a fix for a bug in the parser.
         .catch { error ->
             if (error is IOException) {
-                emit(ThemeSettings(isLoaded = true))
+                emit(
+                    ThemeSettings(
+                        themeMode = ThemeMode.DEFAULT,
+                        useDynamicColor = false,
+                        isLoaded = true
+                    )
+                )
             } else {
                 throw error
             }
