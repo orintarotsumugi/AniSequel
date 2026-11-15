@@ -93,7 +93,16 @@ fun buildInlineAnnotatedString(
     onLinkClick: ((String) -> Unit)? = null
 ): AnnotatedString {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest
+    // A wash of the reader's accent, not an opaque container.
+    //
+    // The code run used to sit on `surfaceContainerHighest`, which is a *surface*
+    // role: on a card whose own fill is a container role it read as a grey chip
+    // pasted on the text, and it was indistinguishable from the inline spoiler's
+    // chip one line below. A translucent primary lets the card's own colour show
+    // through and takes its hue from the palette the reader picked - the same
+    // warm tint on a golden theme, a cool one on the AniList blue - so a code run
+    // belongs to the surface it is written on instead of interrupting it.
+    val codeBackground = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
     val spoilerBackground = MaterialTheme.colorScheme.secondaryContainer
     val spoilerColor = MaterialTheme.colorScheme.onSecondaryContainer
 

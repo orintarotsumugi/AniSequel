@@ -62,6 +62,62 @@ object AniListMarkdownParser {
     )
 
     /**
+     * An HTML tag, as a name and whatever attributes it carries.
+     *
+     * `<escape>` is the one that made this necessary: AniList's own editor wraps
+     * a page link in it, and the tag reached the reader as the eight visible
+     * characters of its own name - twice per link, around the title. The site
+     * strips the tag; this parser printed it.
+     *
+     * The pattern deliberately requires a tag name that starts with a letter and
+     * is followed by `>`, `/` or whitespace. A bio is full of ordinary `<` and
+     * `>` - "a < b", "<3" - and a looser pattern turned those into a deletion.
+     */
+    private val HTML_TAG_PATTERN = Regex(
+        """</?([a-zA-Z][a-zA-Z0-9]*)(?:\s[^>]*)?/?>"""
+    )
+
+    /**
+     * The tags this renderer actually has a branch for.
+     *
+     * Everything outside this set is unwrapped - the tag goes, its text stays -
+     * because that is what AniList's own sanitiser does and because the
+     * alternative is showing a reader somebody's markup instead of their words.
+     * `div` and `span` stay because the spoiler forms depend on their
+     * attributes; `center` and `img` because the block walk reads them; the
+     * emphasis tags because the inline walk does.
+     *
+     * `<blockquote>`, `<p>`, `<h1>`-`<h5>`, `<pre>`, `<ul>` and `<li>` are
+     * absent on purpose: this parser has no branch for them, so keeping the tags
+     * would print them. Their *contents* survive the unwrap, which is the part a
+     * reader needs.
+     */
+    private val KEPT_HTML_TAGS = setOf(
+        "b", "strong", "i", "em", "u", "s", "del", "code",
+        "img", "center", "div", "span", "br"
+    )
+
+    /**
+     * An anchor with a target, which AniList documents as a supported link.
+     *
+     * It is converted to Markdown before the unsupported-tag pass so the one
+     * link parser renders it: the author's `target="_blank"` is dropped because
+     * every link in this app leaves for the browser anyway. Only `http(s)` is
+     * converted; a relative href has no meaning outside anilist.co and unwraps
+     * to its text.
+     */
+    private val HTML_ANCHOR = Regex(
+        """<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))[^>]*>([\s\S]*?)</a\s*>""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** `<a>text</a>` with no href - AniList's documented "coloured text". */
+    private val HTML_ANCHOR_WITHOUT_HREF = Regex(
+        """<a\b[^>]*>([\s\S]*?)</a\s*>""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
      * The parse cache, keyed on the raw source.
      *
      * ## Why a cache rather than `remember` at each call site
@@ -420,8 +476,15 @@ object AniListMarkdownParser {
      * The same balanced-paren allowance as [INLINE_LINK], for the same reason: a
      * bare `https://en.wikipedia.org/wiki/Foo_(bar)` between two words used to link
      * to `https://en.wikipedia.org/wiki/Foo_` and leave `(bar)` as prose.
+     *
+     * The plain run excludes `(` and `)` too. It used to include them, so a bio's
+     * `(https://anilist.co/anime/128893/)` - which is how AniList's own Hall of
+     * Fame format writes every title - took the closing bracket into the URL. The
+     * card linked to a path one character too long, which is a 404 on the site and
+     * the reason the link in that bio did not work. Only a *balanced* pair is
+     * allowed, so Wikipedia's `..._(Cowboy_Bebop)` still keeps its own bracket.
      */
-    private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}]|\([^\s<>"'\[\]{}]*\))+""")
+    private val INLINE_AUTO_URL = Regex("""https?://(?:[^\s<>"'\[\]{}()]|\([^\s<>"'\[\]{}()]*\))+""")
     /**
      * Text that only the block walk can turn into media.
      *
@@ -441,7 +504,18 @@ object AniListMarkdownParser {
 
     private val IMAGE_EXTENSION = Regex("""\.(?:gif|png|jpe?g|webp|bmp|avif|svg)(?:\?.*)?$""", RegexOption.IGNORE_CASE)
     private val INLINE_SPOILER = Regex("""~!([\s\S]*?)!~""")
-    private val INLINE_CODE = Regex("""`([^`]+)`""")
+    /**
+     * A code run: backticks, or the `<code>` tag AniList documents as the
+     * markdown-capable spelling.
+     *
+     * The tag form was missing, so a comment written the way the site's own guide
+     * describes printed `<code>` around its text instead of drawing a code run.
+     * The two groups are read as one content value in `appendTextMatch`.
+     */
+    private val INLINE_CODE = Regex(
+        """`([^`]+)`|<code>(.+?)</code>""",
+        RegexOption.IGNORE_CASE
+    )
     /**
      * Italic. `_` counts as a delimiter only at a word boundary.
      *
@@ -514,6 +588,54 @@ object AniListMarkdownParser {
     private val INLINE_MENTION = Regex("""(?<![\w.+\-])@([a-zA-Z0-9_-]+)""")
 
     /**
+     * `<a href="…">label</a>` as `[label](url)`, and `<a>label</a>` as `label`.
+     *
+     * AniList's guide documents both: the href form is an ordinary link, and the
+     * bare form is the site's own trick for coloured text (`<a>hello</a>`). This
+     * renderer has no per-run colour a bio can choose - the app's accent is the
+     * reader's own palette - so the bare form keeps its words and drops the tag,
+     * which is the readable half of the effect.
+     */
+    private fun convertAnchorsToMarkdown(text: String): String {
+        if (!text.contains("<a", ignoreCase = true)) return text
+        val withLinks = HTML_ANCHOR.replace(text) { match ->
+            val href = match.groupValues[1]
+                .ifEmpty { match.groupValues[2] }
+                .ifEmpty { match.groupValues[3] }
+                .trim()
+            val label = match.groupValues[4]
+            if (href.startsWith("https://", ignoreCase = true) ||
+                href.startsWith("http://", ignoreCase = true)
+            ) {
+                "[$label]($href)"
+            } else {
+                // A relative target, or a `javascript:` one. Neither is a page
+                // this app can open, so the label is the whole of what survives.
+                label
+            }
+        }
+        return HTML_ANCHOR_WITHOUT_HREF.replace(withLinks) { it.groupValues[1] }
+    }
+
+    /**
+     * Removes every real HTML tag this renderer has no branch for, keeping the
+     * text between them.
+     *
+     * This is what turns AniList's `<escape>"Title"
+     * (https://anilist.co/anime/1/)</escape>` from tag soup into a quoted title
+     * and a bare link - and, when the URL is alone on its line, into the preview
+     * card the site draws for it. The tags in [KEPT_HTML_TAGS] are left for the
+     * block and inline walks, which do understand them.
+     */
+    private fun unwrapUnsupportedHtml(text: String): String {
+        if (!text.contains('<')) return text
+        return HTML_TAG_PATTERN.replace(text) { match ->
+            val name = match.groupValues[1].lowercase(Locale.US)
+            if (name in KEPT_HTML_TAGS) match.value else ""
+        }
+    }
+
+    /**
      * [text] with every escape in [HTML_ENTITY_PATTERN] replaced by the character it names.
      *
      * ## Why the escapes are decoded here and nowhere else
@@ -558,12 +680,20 @@ object AniListMarkdownParser {
         // escaped literal `&lt;br&gt;` stays the visible text `<br>` instead of
         // becoming a line break. Entities are then decoded once, here, on the
         // whole document - see [decodeHtmlEntities] for why here and why once.
+        //
+        // Tag unwrapping happens *between* the two for the same reason as the
+        // `<br>` pass: it reads real tags only. Running it after the decode would
+        // let an author's escaped `&lt;escape&gt;` become a tag and be deleted, and
+        // running it after normalisation would let it eat the newline a `<br>`
+        // just became.
         val clean = raw
             .replace("\r\n", "\n")
             .replace("\r", "\n")
             .replace("<br>", "\n")
             .replace("<br/>", "\n")
             .replace("<br />", "\n")
+            .let(::convertAnchorsToMarkdown)
+            .let(::unwrapUnsupportedHtml)
             .let(::decodeHtmlEntities)
             .trim()
         // A parse that fails must not take the screen with it. This runs on the
@@ -1688,7 +1818,21 @@ object AniListMarkdownParser {
      * underline, code, strikethrough, mentions, auto URLs, and plain text.
      */
     fun parseInlines(text: String): List<InlineToken> =
-        parseInlines(text, depth = 0, spoilerDepth = 0)
+        parseInlines(prepareInlineTags(text), depth = 0, spoilerDepth = 0)
+
+    /**
+     * [text] with its anchors converted and its unsupported tags unwrapped.
+     *
+     * The public inline entry point needs this as much as [parse] does: a
+     * renderer or a test holding only a line - the composer's preview, a reply
+     * body's own test - would otherwise still see `<escape>` and `<a>` while the
+     * full-document path had already cleaned them. Entity decoding deliberately
+     * stays out of it; see [decodeHtmlEntities] for why that pass has to run
+     * exactly once over the whole document.
+     */
+    private fun prepareInlineTags(text: String): String =
+        if (!text.contains('<')) text
+        else unwrapUnsupportedHtml(convertAnchorsToMarkdown(text))
 
     /**
      * Inline tokens from a block handler, at the start of the inline nesting budget.
@@ -2016,7 +2160,9 @@ object AniListMarkdownParser {
     ) {
         when (type) {
             "SPOILER" -> appendLegacySpoiler(match, tokens, depth, spoilerDepth)
-            "CODE" -> tokens.add(InlineToken.Code(match.groupValues[1]))
+            "CODE" -> tokens.add(
+                InlineToken.Code(match.groupValues[1].ifEmpty { match.groupValues[2] })
+            )
             "BOLD_ITALIC" -> {
                 val content = match.groupValues[1]
                 tokens.add(InlineToken.BoldItalic(content, nested(content, depth, spoilerDepth)))

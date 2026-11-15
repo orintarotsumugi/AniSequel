@@ -31,8 +31,8 @@ class InterfaceModesTest {
     @Test
     fun `the bar lift only offers values the slider can draw`() {
         assertEquals(0, NavBarLift.MIN_DP)
-        assertEquals(24, NavBarLift.MAX_DP)
-        assertEquals(2, NavBarLift.STEP_DP)
+        assertEquals(96, NavBarLift.MAX_DP)
+        assertEquals(4, NavBarLift.STEP_DP)
         assertEquals(NavBarLift.MAX_DP, NavBarLift.clamp(NavBarLift.MAX_DP + 1))
         assertEquals(NavBarLift.MIN_DP, NavBarLift.clamp(-1))
         assertEquals(0, (NavBarLift.MAX_DP - NavBarLift.MIN_DP) % NavBarLift.STEP_DP)
@@ -51,8 +51,33 @@ class InterfaceModesTest {
     @Test
     fun `an animated bar lift cannot leave its range`() {
         assertEquals(0f, NavBarLift.clampDp(-3.4f), 0f)
-        assertEquals(24f, NavBarLift.clampDp(26.2f), 0f)
+        assertEquals(96f, NavBarLift.clampDp(126.2f), 0f)
         assertEquals(11.5f, NavBarLift.clampDp(11.5f), 0f)
+    }
+
+    /**
+     * The per-frame guard has a hard floor and a forgiving ceiling.
+     *
+     * Below zero is the shipped crash: `Modifier.padding` refuses a negative dp,
+     * so the spring cannot be allowed to spend frames under the screen edge.
+     * Above the stored maximum is not a crash and not a lie - it is the spring's
+     * own overshoot - so it is allowed a little room rather than stopping the bar
+     * dead at the top of its range.
+     */
+    @Test
+    fun `the animated guard floors at zero and lets the spring overshoot the ceiling`() {
+        assertEquals(0f, NavBarLift.clampAnimatedDp(-4f), 0f)
+        assertEquals(11.5f, NavBarLift.clampAnimatedDp(11.5f), 0f)
+        assertTrue(
+            "the spring must be able to pass the stored ceiling",
+            NavBarLift.clampAnimatedDp(100f) > NavBarLift.MAX_DP
+        )
+        assertEquals(
+            "but not travel without bound",
+            (NavBarLift.MAX_DP + NavBarLift.OVERSHOOT_DP).toFloat(),
+            NavBarLift.clampAnimatedDp(10_000f),
+            0f
+        )
     }
 
     @Test

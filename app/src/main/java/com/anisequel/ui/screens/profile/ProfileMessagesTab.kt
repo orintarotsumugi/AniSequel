@@ -99,6 +99,14 @@ fun ProfileMessagesTab(
      * preference rather than a delete.
      */
     onHideMessage: (MessageNode) -> Unit,
+    /**
+     * Likes or un-likes one message.
+     *
+     * A direct message is an activity, so this lands in the same mutation the feed's
+     * cards use. It lives on the ViewModel rather than here because the optimistic
+     * count has to survive the tab being switched away from and back.
+     */
+    onToggleLike: (MessageNode) -> Unit,
     /** Puts every dismissed row back. */
     onShowHidden: () -> Unit,
     /** The option: whether a new arrival carries the badge. */
@@ -243,6 +251,9 @@ fun ProfileMessagesTab(
                         isNew = isNewMessage(state, message),
                         onOpenUser = onOpenUser,
                         onHide = { onHideMessage(message) },
+                        onToggleLike = { onToggleLike(message) },
+                        likePending = message.id in state.pendingLikes,
+                        canLike = state.canLike,
                         onOpenComments = onOpenComments,
                         modifier = Modifier
                             .widthIn(max = ProfileMaxContentWidth)

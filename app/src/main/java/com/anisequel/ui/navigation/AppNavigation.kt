@@ -1,7 +1,7 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
-import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import android.net.Uri
@@ -272,22 +272,29 @@ fun AppNavigation(
     // `LocalMainBarLift` (the bar and the lists that reserve clearance) follows
     // the same spring. The Settings page keeps its own live draft for the thumb.
     // Clamped again on this side: DataStore can hold a value written by an older
-    // build, and a lift outside 0..24 is not a layout this app draws.
+    // build, and a lift outside the slider's range is not a layout this app draws.
     val interfaceSettings by interfacePreferences.settings.collectAsState(
         initial = InterfacePreferences.InterfaceSettings()
     )
-    val rawBarLift by animateIntAsState(
-        targetValue = NavBarLift.clamp(interfaceSettings.mainBarLift),
-        animationSpec = ExpressiveMotion.FastSpatialInt,
+    // A float spring, not an int one: the local is fractional now so the bar's
+    // flight is smooth, and the float spec is the one that can overshoot by the
+    // pixels between two 4dp steps rather than by whole steps.
+    val rawBarLift by animateFloatAsState(
+        targetValue = NavBarLift.clamp(interfaceSettings.mainBarLift).toFloat(),
+        animationSpec = ExpressiveMotion.FastSpatial,
         label = "main_bar_lift"
     )
     // Clamped per frame, not only at the target. The spatial spring overshoots,
-    // and on the way from 24 to 0 it spends a few frames below zero; that value
+    // and on the way back to zero it spends a few frames below zero; that value
     // fed `Modifier.padding(bottom = ...)` and every list's `contentPadding`, and
     // Compose throws "Padding must be non-negative" on the frame it lands. A bar
-    // cannot float below the screen, so the drawn value is the stored range even
-    // while the spring is still moving.
-    val animatedBarLift = NavBarLift.clamp(rawBarLift)
+    // cannot float below the screen, so zero is a hard floor.
+    //
+    // The ceiling is the one value this does *not* clamp to the stored range: the
+    // spring is allowed a little room past the top so a lift to the maximum still
+    // arrives with its own bounce instead of hitting a wall. See
+    // [NavBarLift.clampAnimatedDp].
+    val animatedBarLift = NavBarLift.clampAnimatedDp(rawBarLift)
 
     // The planning confirmation, read once at the root for the same reason. The
     // dashboard still collects this flow for its hold/swipe settings; this read is

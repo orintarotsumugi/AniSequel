@@ -13,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The five card layouts, as the table every surface reads.
+ * The card layouts, as the table every surface reads.
  *
  * ## Why this is worth pinning on a JVM
  *
@@ -30,7 +30,7 @@ import org.junit.Test
 class MediaCardStyleTest {
 
     @Test
-    fun `the five styles are five different layouts`() {
+    fun `every style is a different layout`() {
         val signatures = MediaCardStyle.entries.map {
             Triple(it.titlePlacement, it.scorePlacement, it.bordered to it.glowing)
         }
@@ -65,7 +65,9 @@ class MediaCardStyleTest {
             MediaCardStyle.SAIKOU to true,
             MediaCardStyle.EXOTIC to false,
             MediaCardStyle.MINIMAL_EXOTIC to false,
-            MediaCardStyle.MODERN to true
+            MediaCardStyle.MODERN to true,
+            MediaCardStyle.GALLERY to true,
+            MediaCardStyle.CINEMA to false
         ).forEach { (style, onPoster) ->
             assertEquals("${style.name} as a poster rating", onPoster, style.scoreOnPoster)
             assertEquals(
@@ -90,6 +92,17 @@ class MediaCardStyleTest {
         assertEquals(PosterCorner.TOP_START, metaCornerFor(MediaCardStyle.EXOTIC))
         assertEquals(PosterCorner.TOP_START, metaCornerFor(MediaCardStyle.MINIMAL_EXOTIC))
         assertEquals(
+            "Gallery puts the rating top-start with the name below it, so the " +
+                "progress pill moves to bottom-start",
+            PosterCorner.BOTTOM_START,
+            metaCornerFor(MediaCardStyle.GALLERY)
+        )
+        assertEquals(
+            "Cinema keeps its rating in the body, so the pill keeps the corner",
+            PosterCorner.TOP_START,
+            metaCornerFor(MediaCardStyle.CINEMA)
+        )
+        assertEquals(
             "Modern puts the rating top-start and its title on the bottom edge, so " +
                 "the progress pill belongs at top-end",
             PosterCorner.TOP_END,
@@ -110,10 +123,10 @@ class MediaCardStyleTest {
     }
 
     @Test
-    fun `only the two overlaid styles put the title on the artwork`() {
+    fun `only the overlaid styles put the title on the artwork`() {
         assertEquals(
-            "the name belongs to the picture in exactly these two, and in no others",
-            listOf(MediaCardStyle.MINIMAL_EXOTIC, MediaCardStyle.MODERN),
+            "the name belongs to the picture in exactly these, and in no others",
+            listOf(MediaCardStyle.MINIMAL_EXOTIC, MediaCardStyle.MODERN, MediaCardStyle.CINEMA),
             MediaCardStyle.entries.filter {
                 it.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
             }

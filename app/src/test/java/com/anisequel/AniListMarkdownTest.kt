@@ -727,6 +727,32 @@ class AniListMarkdownTest {
     }
 
     /**
+     * A bare AniList URL wrapped in prose brackets does not take the bracket.
+     *
+     * The Hall of Fame format writes every title as `"Name"
+     * (https://anilist.co/anime/1/)`, and the auto-URL rule used to include the
+     * closing `)` in the address. The card then linked to a path one character
+     * too long - a 404 - and the site's own preview card was never drawn because
+     * the id parser saw `128893/)` rather than `128893`.
+     */
+    @Test
+    fun `a bare URL in prose brackets stops before the closing bracket`() {
+        val inlines = AniListMarkdownParser.parseInlines(
+            "(https://anilist.co/anime/128893/)"
+        )
+
+        val media = inlines.filterIsInstance<InlineToken.MediaLink>().singleOrNull()
+        assertNotNull("the URL is still an AniList entity address", media)
+        val link = media!!
+        assertEquals("https://anilist.co/anime/128893/", link.url)
+        assertEquals("128893", link.id)
+        assertTrue(
+            "the sentence's closing bracket must still be printed",
+            inlines.any { it is InlineToken.Plain && it.text.contains(")") }
+        )
+    }
+
+    /**
      * The sentence's full stop still stays out of the URL.
      *
      * Allowing balanced parens must not cost the older rule: `[Title](https://anilist.co/anime/1).`
@@ -850,6 +876,111 @@ class AniListMarkdownTest {
         val nodes = AniListMarkdownParser.parse("write &amp;lt;b&amp;gt; to open bold")
 
         assertEquals("write &lt;b&gt; to open bold", paragraphText(nodes))
+    }
+
+    /**
+     * AniList's own editor wraps a link in `<escape>…</escape>`, and the parser
+     * used to print the tag.
+     *
+     * The reader saw `"Hell's Paradise"` on one line and, around it, the literal
+     * text `<escape>` and `</escape>` - two tags that mean nothing to them and
+     * make the app look like the one thing it is not, which is a browser showing
+     * an unstyled page. The site strips the tag; so does this now.
+     */
+    @Test
+    fun `an escape wrapper is unwrapped rather than printed`() {
+        val source = "<escape>\"Hell's Paradise\" (https://anilist.co/anime/128893/)</escape>"
+        val inlines = AniListMarkdownParser.parseInlines(source)
+
+        val text = inlines.filterIsInstance<InlineToken.Plain>()
+            .joinToString("") { it.text }
+
+        assertFalse("the opening tag must not reach the reader: <$text>", text.contains("<escape>"))
+        assertFalse("nor the closing one: <$text>", text.contains("</escape>"))
+        assertTrue("the title survives the unwrap: <$text>", text.contains("Hell's Paradise"))
+        assertTrue(
+            "and the link is still a link: <$text>",
+            inlines.mapNotNull { token ->
+                when (token) {
+                    is InlineToken.Link -> token.url
+                    is InlineToken.MediaLink -> token.url
+                    else -> null
+                }
+            }.any { it == "https://anilist.co/anime/128893/" }
+        )
+
+        // The block walk is what a bio actually goes through, and it may fold the
+        // line into a preview card rather than a paragraph - so the tag check here
+        // is on the parsed tree's own values, not on one node type.
+        val rendered = AniListMarkdownParser.parse(source).toString()
+        assertFalse("the tag must not survive the block parse: $rendered", rendered.contains("<escape>"))
+        assertFalse("nor its closing form: $rendered", rendered.contains("</escape>"))
+    }
+
+    /**
+     * The tags this renderer has no branch for are unwrapped, not printed.
+     *
+     * `<p>`, `<h3>` and `<blockquote>` are all documented AniList markup, and
+     * none of them has a renderer here - so the choice is between showing their
+     * words and showing their angle brackets. The words win.
+     */
+    @Test
+    fun `an unsupported html tag is unwrapped and its text kept`() {
+        val inlines = AniListMarkdownParser.parseInlines(
+            "<p>keep me</p> and <h3>this</h3> too"
+        )
+        val text = inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+
+        assertFalse("no tag may be printed: <$text>", text.contains("<p>"))
+        assertFalse("nor a closing one: <$text>", text.contains("</p>"))
+        assertTrue("the text inside survives: <$text>", text.contains("keep me"))
+        assertTrue("and text after it: <$text>", text.contains("too"))
+    }
+
+    /**
+     * An ordinary comparison is not a tag.
+     *
+     * The unwrap pass looks for a real tag - a letter, a name, then `>`, `/` or
+     * whitespace - because a looser pattern deleted the text between two ordinary
+     * angle brackets. "2 < 3 > 1" is somebody's sentence, not markup.
+     */
+    @Test
+    fun `comparison signs in a sentence are left alone`() {
+        val inlines = AniListMarkdownParser.parseInlines("if 2 < 3 > 1 then <3 this")
+        val text = inlines.filterIsInstance<InlineToken.Plain>().joinToString("") { it.text }
+
+        assertTrue("the sentence must survive intact: <$text>", text.contains("2 < 3 > 1"))
+        assertTrue("and a heart is not a tag either: <$text>", text.contains("<3"))
+    }
+
+    /** `<a href="…">label</a>` is a documented AniList link, not literal markup. */
+    @Test
+    fun `an anchor with an href becomes a link`() {
+        // A non-AniList host on purpose: an `anilist.co/anime/…` URL becomes a
+        // `MediaLink` (a cover card) before the plain-link rule runs, and the
+        // claim here is about anchors, not about the entity-preview path.
+        val link = AniListMarkdownParser.parseInlines(
+            "See <a href=\"https://example.com/title\" target=\"_blank\">the title</a> now"
+        ).filterIsInstance<InlineToken.Link>().singleOrNull()
+
+        assertNotNull("the anchor has to produce a link token", link)
+        assertEquals("https://example.com/title", link!!.url)
+    }
+
+    /**
+     * `<code>` is the site's other code spelling, and it printed itself.
+     *
+     * The guide documents it as a code run that still allows Markdown inside, so
+     * it is the same token as a backtick span with the tags stripped.
+     */
+    @Test
+    fun `the code tag is a code run like a backtick span`() {
+        val code = AniListMarkdownParser.parseInlines(
+            "blah <code>val x = 1</code> blah"
+        ).filterIsInstance<InlineToken.Code>().singleOrNull()
+
+        assertNotNull("<code> must produce a Code token", code)
+        assertEquals("val x = 1", code!!.code)
     }
 
     /** The query-string case that made whole images 404 rather than just look odd. */

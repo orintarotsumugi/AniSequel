@@ -2513,3 +2513,101 @@ when a screenful of cards is on screen; it rewinds one remembered path now, the 
 the seasonal shapes already draw. And the lists that mix row types - the dashboard,
 the inbox, the library grid, the arriving rows - name a `contentType`, so a fast
 scroll recycles a slot instead of composing a new one every frame.
+
+## 1.9.9: markup the site writes, and the gaps a preview leaves
+
+### `<escape>` is AniList's wrapper, not its content
+
+A profile bio in the Hall of Fame format came back printing its own markup:
+`<escape>"Hell's Paradise" (https://anilist.co/anime/128893/)</escape>` rendered as
+the tags, the quoted title, and the URL on its own line. `<escape>` is not in
+AniList's published Markdown guide, and the site itself does not show it - its
+sanitiser unwraps a tag it does not recognise and keeps the text.
+
+The parser now does the same, before entities are decoded: any real tag outside
+the set the renderer has a branch for is removed and its contents kept. Doing it
+before the decode is what keeps an author's escaped `&lt;escape&gt;` visible as
+text instead of eating it; doing it after the `<br>` normalisation is what keeps
+it from removing the newline a `<br>` just became. The tag pattern requires a
+letter after `<`, so `2 < 3 > 1` and `<3` are sentences, not tags.
+
+`<a href="…">` and `<code>` are documented AniList markup, so those gain real
+renderers rather than being unwrapped: the anchor becomes a Markdown link (bare
+`<a>label</a>` keeps its words and drops the tag, which is the readable half of
+the site's coloured-text trick), and `<code>` is the same token as a backtick
+span. The public `parseInlines` entry runs the tag pass too - it was only in the
+whole-document path, so a preview or a test holding one line still saw the tags.
+
+### A code run is drawn from the reader's accent, not from a fixed grey
+
+Inline code and fenced blocks used `surfaceContainerHighest`, which is a grey chip
+whatever palette the reader picked - on Golden Hour it was the one surface in the
+card that belonged to another theme. Both now use a translucent `primary` wash
+over the card (14% inline, 10% plus a 22% hairline for a block), so the code run
+inherits the accent and stays legible without a separate token per palette.
+
+### Two more card styles, and no preview with its own copy
+
+`GALLERY` is a framed print: hairline border, rating in the poster's top corner,
+name below. `CINEMA` is the inverse: full-bleed cover, name over the foot, rating
+as a quiet line in the body, plus the cover-tinted glow. They are rows in the
+placement table, not composables, so the Library grid, the dashboard rows and the
+settings preview all draw them from the same four facts. `metaCornerFor` is what
+keeps Gallery's top-start rating from stacking on the Library's progress pill -
+it moves the pill to bottom-start, and the test pins that.
+
+### The bar lift is four times taller, and the scale follows
+
+0-96dp in 4dp steps replaces 0-24dp in 2dp. 24dp is a fingerprint of separation
+on a tall phone and not enough to clear a thumb resting on the bottom edge; 96dp
+is four bar heights and still short of halfway up any supported screen.
+
+The preview was the part that lied. Its gauge was still labelled 24, 16, 8, 0
+beside a phone whose bar moved by the same small amount - so raising the ceiling
+would have drawn a scale that disagreed with the control. The ticks are now
+derived from `NavBarLift`, and the number above them is read from the spring. The
+phone's bar is a `graphicsLayer` translation with the per-frame guard applied at
+draw time, not a bottom padding read in composition: the old padding re-measured
+the whole dummy on every frame, which is why the animation looked expensive for a
+single moving capsule. The two mini layouts use a quarter of the lift because
+184dp of schematic stands in for a 700dp screen; the phone below the slider is
+where the real gap is judged, and it draws the actual dp.
+
+The spring is allowed 16dp past the top now. Clamping it to the stored range on
+every frame - which the floor has to do, because negative padding throws - also
+turned the ceiling into a wall: the bar arrived early, sat still and came back.
+
+### A drifting banner starts where the picture is
+
+`initialValue = -1f` is the far-left end of the pan range, so every profile
+banner jumped sideways the instant its pixels landed and then drifted right.
+`StartOffset(DRIFT_PERIOD_MILLIS / 2, FastForward)` starts the cycle at its
+midpoint, which is the centre crop the image was already showing - the sweep now
+begins from rest rather than from a snap.
+
+The other banner failure was not an animation at all: a painter can report
+`Size.Unspecified` (NaN) for an image whose intrinsic size it does not know, and
+NaN passes `<= 0f` while poisoning every multiplication it reaches. The transform
+became NaN, the layer drew nothing, and one profile's header was simply missing
+while every other profile worked. An unusable measurement is now stored as
+unmeasured, which keeps the picture at its fill size, and every profile draws the
+themed gradient and sparkle underneath the image so a failed load still reveals a
+designed header.
+
+### A message heart was fetched on every page and never drawn
+
+`MessageNode` has carried `isLiked` and `likeCount` since the inbox was written,
+and every inbox query selects both. The card drew a direction chip, a privacy
+chip, a reply count, a link and a dismiss button, and no heart.
+
+The mutation had a trap: `TOGGLE_ACTIVITY_LIKE` fragments `ListActivity` and
+`TextActivity`, and `MessageActivity` is the third member of `LikeableUnion`. A
+message id sent through a document that does not fragment its member selects
+nothing, so the server answers an empty object, the decoder reads `isLiked = false`
+and `likeCount = 0`, and a like that worked looks like an unlike that reset the
+count. The member is now fragmented and `MessageLikeTest` pins it.
+
+The ViewModel writes optimistically, one request per row, and rolls back on
+failure; the response's count overwrites the guess because somebody else may have
+liked it in between. The footer is a `FlowRow` - a private message on a 360dp
+phone no longer clips the comment button behind the new heart.

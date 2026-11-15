@@ -3,9 +3,9 @@ package com.anisequel.domain.card
 /**
  * Where a card puts its title, once the reader has chosen a style.
  *
- * The two answers are the whole difference between the five layouts a reader can
- * pick: the name either sits under the artwork or is laid over its bottom edge, and
- * that single choice is what makes a grid read as posters or as covers.
+ * The two answers are the whole difference between the layouts a reader can pick:
+ * the name either sits under the artwork or is laid over its bottom edge, and that
+ * single choice is what makes a grid read as posters or as covers.
  */
 enum class CardTitlePlacement {
     /** Under the poster, in the card's own body. */
@@ -63,7 +63,7 @@ fun scoreCornerOf(style: MediaCardStyle): PosterCorner? = when (style.scorePlace
  * The corner a surface's own badge should use, given where the style put the score.
  *
  * The reason this is a function rather than a constant: the Library's progress pill
- * has always lived top-start, and one of the five styles puts the rating there too.
+ * has always lived top-start, and more than one style puts the rating there too.
  * Two capsules stacked in one corner is not a layout - one is drawn over the other,
  * and the one that vanishes is whichever the reader was actually looking for. So the
  * score takes the corner the style says, and the surface's own mark moves to the
@@ -83,14 +83,14 @@ fun metaCornerFor(style: MediaCardStyle): PosterCorner =
     }
 
 /**
- * The five card layouts the Library grid and the dashboard's sequel rows can draw.
+ * The card layouts the Library grid and the dashboard's sequel rows can draw.
  *
- * ## Why a style is a table of placements rather than five composables
+ * ## Why a style is a table of placements rather than a composable per style
  *
- * The alternative is a `when` over five hand-drawn layouts on each surface, and this
+ * The alternative is a `when` over a hand-drawn layout per style on each surface, and this
  * app draws media cards in more than one place: the Library grid, the dashboard's
- * rows, and the picker's own preview. Five layouts times three surfaces is fifteen
- * layouts, and the one that goes stale is always the preview - it is the only copy
+ * rows, and the picker's own preview. Seven layouts times three surfaces is
+ * twenty-one layouts, and the one that goes stale is always the preview - it is the only copy
  * nobody taps, so a reader is shown a card the app does not build.
  *
  * So a style is four facts, and every surface renders those facts. The preview draws
@@ -160,6 +160,32 @@ enum class MediaCardStyle(
         bordered = false,
         glowing = false
     ),
+    GALLERY(
+        storageValue = "gallery",
+        displayName = "Gallery",
+        // The frame and the corner stamp are the whole idea: a print hung on a
+        // wall has a mount around it and its number in a corner. It is the one
+        // style whose rating is on the artwork while its name is not, which is
+        // what keeps the poster reading as an object and the title as a caption.
+        blurb = "A framed print: hairline border, rating in the poster's top corner, name below.",
+        titlePlacement = CardTitlePlacement.BELOW_POSTER,
+        scorePlacement = CardScorePlacement.POSTER_TOP_START,
+        bordered = true,
+        glowing = false
+    ),
+    CINEMA(
+        storageValue = "cinema",
+        displayName = "Cinema",
+        // The inverse trade to Gallery: the artwork is the whole tile, the name
+        // rides its foot, and the rating is a quiet line in the card's body
+        // rather than a badge on the picture. The glow lifts the unlabelled
+        // poster off a dark shelf without putting a capsule over the art.
+        blurb = "Full-bleed cover with the name over its foot and the rating as a quiet line beneath.",
+        titlePlacement = CardTitlePlacement.OVERLAY_BOTTOM,
+        scorePlacement = CardScorePlacement.BELOW_TITLE,
+        bordered = false,
+        glowing = true
+    ),
     COVER_ONLY(
         storageValue = "cover_only",
         displayName = "Cover only",
@@ -176,7 +202,7 @@ enum class MediaCardStyle(
      *
      * This is the question each surface has to answer about its own existing score
      * line, and answering it from the table rather than from a `when (style)` at each
-     * call site is what keeps a sixth style from needing every card file reopened.
+     * call site is what keeps a new style from needing every card file reopened.
      */
     val scoreOnPoster: Boolean
         get() = scorePlacement == CardScorePlacement.POSTER_TOP_START ||

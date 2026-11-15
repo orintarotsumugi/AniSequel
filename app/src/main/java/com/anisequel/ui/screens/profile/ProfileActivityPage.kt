@@ -286,6 +286,7 @@ fun ProfileActivityPage(
                     state = messagesState,
                     onSelectFilter = { messagesViewModel.selectFilter(it) },
                     onHideMessage = { messagesViewModel.hideMessage(it) },
+                    onToggleLike = { messagesViewModel.toggleMessageLike(it.id) },
                     onShowHidden = { messagesViewModel.showHiddenMessages() },
                     onFlagNewChange = { messagesViewModel.setFlagsNewMessages(it) },
                     onLoadFirstPage = { messagesViewModel.loadFirstPages() },

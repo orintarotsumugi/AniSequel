@@ -167,9 +167,10 @@ fun InterfaceTab(
                 modifier = Modifier.testTag("main_bar_lift_slider")
             )
             Text(
-                text = "The mini layouts above move with the slider. The real bar " +
-                    "floats this far above the bottom edge, and every list keeps " +
-                    "room for it.",
+                text = "The mini layouts above move with the slider, and the phone " +
+                    "below shows the real gap from 0 to ${NavBarLift.MAX_DP} dp. " +
+                    "The real bar floats this far above the bottom edge, and every " +
+                    "list keeps room for it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

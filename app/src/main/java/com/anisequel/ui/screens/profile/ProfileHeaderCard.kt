@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -305,6 +306,18 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
             )
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
+        // The themed base is drawn for *every* profile, not only the ones with no
+        // banner URL.
+        //
+        // Two kinds of account used to fall through to nothing: one with no banner
+        // at all, and - the case a `if (banner != null)` cannot see - one whose
+        // banner URL exists but will not load. The second left a flat
+        // `surfaceContainerHigh` rectangle where the picture should be, which looks
+        // less like "no artwork" than like a broken image. Painting the gradient and
+        // the sparkle underneath means a failed load reveals a designed header, and
+        // a successful one covers it completely.
+        BannerFallback()
+
         val banner = state.bannerUrl
         if (banner != null) {
             PannableBackdrop(
@@ -332,29 +345,39 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
                         )
                     )
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
-                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.90f),
-                                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = AppVectorIcons.AnimeSparkle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                    modifier = Modifier.size(52.dp)
-                )
-            }
         }
+    }
+}
+
+/**
+ * The header's artwork when there is no picture to show.
+ *
+ * A gradient from the reader's own containers plus the sparkle mark, which is the
+ * same language the empty states use. It sits *behind* the banner as well as in
+ * place of it, so a broken URL does not punch a hole in the page.
+ */
+@Composable
+private fun BannerFallback() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.90f),
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
+                    )
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.AnimeSparkle,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            modifier = Modifier.size(52.dp)
+        )
     }
 }
 

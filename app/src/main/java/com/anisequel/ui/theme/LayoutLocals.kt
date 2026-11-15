@@ -52,7 +52,8 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * live preview, so dragging the slider in Settings and leaving the page cannot
  * leave one of the three describing a different position. Provided once at the
  * app root from [com.anisequel.data.repository.InterfacePreferences]; see
- * [com.anisequel.domain.ui.NavBarLift] for why the range is small.
+ * [com.anisequel.domain.ui.NavBarLift] for the range and why its ceiling is
+ * where it is.
  *
  * A *dynamic* local, unlike its neighbours here. The root animates this value on
  * every frame of the spring between two lift settings, and a `staticCompositionLocalOf`
@@ -65,8 +66,13 @@ val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
  * frame**. A spring overshoots, and below zero dp Compose throws rather than
  * drawing a smaller lift, so the provider cannot rely on the stored preference
  * having been clamped at write time.
+ *
+ * A `Float` rather than an `Int`: the spring's frames are fractional, and rounding
+ * each of them to the slider's 4dp step would make a 96dp travel play as a
+ * staircase. The stored preference is still whole dp - see [NavBarLift.STEP_DP] -
+ * so only the flight between two values is fractional.
  */
-val LocalMainBarLift = compositionLocalOf { NavBarLift.DEFAULT_DP }
+val LocalMainBarLift = compositionLocalOf { NavBarLift.DEFAULT_DP.toFloat() }
 
 /**
  * Whether tapping "Add to Planning" asks for a tick or a cross first.
