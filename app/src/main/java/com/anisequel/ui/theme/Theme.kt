@@ -576,7 +576,12 @@ fun AniSequelTheme(
     }
 
     CompositionLocalProvider(
-        LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors
+        LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors,
+        // The *resolved* mode, not the phone's. A page that derives a colour at
+        // tone 40 or 80 has to ask the same question the scheme asked, or a
+        // reader who forced Light on a dark phone gets the dark tone on a light
+        // card - see [LocalAppDarkTheme].
+        LocalAppDarkTheme provides darkTheme
     ) {
         // MaterialExpressiveTheme rather than MaterialTheme: the difference that
         // matters is the motion scheme it installs, which is what every

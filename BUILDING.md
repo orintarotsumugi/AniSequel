@@ -77,7 +77,7 @@ the only record of why they exist.
 ./gradlew test
 ```
 
-There are 98 JVM test classes and **no instrumented tests** — `androidTest/`
+There are 196 JVM test classes and **no instrumented tests** — `androidTest/`
 does not exist, so there is nothing to run on a device and no test that needs an
 emulator to pass. Everything below is `testImplementation` and Robolectric or
 pure JUnit.

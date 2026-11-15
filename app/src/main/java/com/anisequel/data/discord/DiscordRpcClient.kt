@@ -41,6 +41,32 @@ class DiscordRpcClient(
         .pingInterval(20, TimeUnit.SECONDS)
         .build()
 ) {
+
+    companion object {
+        /**
+         * The one client for the process.
+         *
+         * There used to be one per owner: the app-root publisher held its own, and
+         * the Settings page built another in a `remember` for the login check. Two
+         * things followed from that, both wrong.
+         *
+         *  - **Signing out from Settings disconnected the wrong client.** The page
+         *    called `disconnect()` on the instance it had just constructed, so the
+         *    socket that was actually publishing - the publisher's - stayed open
+         *    until the preference flow happened to reach it. The call that looked
+         *    like the fix was a no-op on the instance that mattered.
+         *  - **Every visit to the page bought a client nobody closed.** Each one
+         *    carries an `OkHttpClient` connection pool and its own supervision scope,
+         *    and `remember` disposes neither. The leak is small per visit and grows
+         *    with them.
+         *
+         * One instance also means one gateway socket by construction: two clients
+         * publishing could open two sessions for one account, which Discord answers
+         * by closing one of them at random.
+         */
+        val shared: DiscordRpcClient by lazy { DiscordRpcClient() }
+    }
+
     private val moshi = Moshi.Builder().build()
     private val userAdapter = moshi.adapter(DiscordUser::class.java)
     private val envelopeAdapter = moshi.adapter(GatewayEnvelope::class.java)
@@ -201,6 +227,16 @@ class DiscordRpcClient(
         connected = false
         identified.set(false)
         ready = null
+        // A publish waiting on READY has to be released when the socket goes
+        // away, instead of being left to its own 15-second timeout. Signing out
+        // during a slow connect used to leave the Settings page saying
+        // "Connecting…" for the full wait, and the one thing that would have
+        // cancelled it was the token change the reader had just made.
+        //
+        // `complete` on an already-completed or absent deferred is a no-op or a
+        // null-check away, so the failure paths that complete it first are safe.
+        readyDeferred?.complete(Result.failure(IOException("The Discord connection closed.")))
+        readyDeferred = null
         val ws = socket
         socket = null
         runCatching { ws?.close(closeCode, reason) }

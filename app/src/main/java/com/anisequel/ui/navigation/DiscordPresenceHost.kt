@@ -120,7 +120,11 @@ private fun DiscordPresencePublisher(
     settings: DiscordSettings,
     presence: DiscordPresence
 ) {
-    val client = remember { DiscordRpcClient() }
+    // The process-wide client, not one of its own. The Settings page verifies a
+    // pasted token with the same instance, so the log-out control there can
+    // actually close the socket this publisher opened - see
+    // [DiscordRpcClient.shared].
+    val client = DiscordRpcClient.shared
     var lastLiveToken by remember { mutableStateOf<String?>(null) }
     var publishJob by remember { mutableStateOf<Job?>(null) }
     val latestSettings by rememberUpdatedState(settings)

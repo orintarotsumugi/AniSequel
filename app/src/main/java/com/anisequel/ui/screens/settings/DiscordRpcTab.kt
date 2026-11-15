@@ -95,7 +95,10 @@ fun DiscordRpcTab(
     var showLogin by remember { mutableStateOf(false) }
     var showAddJoke by remember { mutableStateOf(false) }
 
-    val client = remember { DiscordRpcClient() }
+    // Shared with the app-root publisher, so "Log out" below closes the socket
+    // that is actually carrying the presence. A client built here used to be
+    // disconnected while the publisher's own session kept running.
+    val client = DiscordRpcClient.shared
     val previewActivity = previewOverride ?: liveActivity
     val previewPresence = remember(settings, previewActivity, stats, enginePresence?.joke) {
         DiscordPresenceComposer.compose(

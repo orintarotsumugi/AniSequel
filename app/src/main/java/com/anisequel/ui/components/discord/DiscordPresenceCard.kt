@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.rememberIsResumed
 import kotlinx.coroutines.delay
 
 @Composable
@@ -237,7 +238,13 @@ private fun PresenceTimer(startTimestampSeconds: Long?) {
     var nowSeconds by remember {
         mutableLongStateOf(System.currentTimeMillis() / 1_000L)
     }
-    LaunchedEffect(startTimestampSeconds) {
+    // Gated on the window being visible, for the same reason every other clock in
+    // the app is: the card stays composed behind another app, and this writes
+    // state every second - a full recomposition of the presence card, its images
+    // and its timer, with nobody reading it.
+    val resumed = rememberIsResumed()
+    LaunchedEffect(startTimestampSeconds, resumed) {
+        if (!resumed) return@LaunchedEffect
         while (true) {
             nowSeconds = System.currentTimeMillis() / 1_000L
             delay(1_000L)

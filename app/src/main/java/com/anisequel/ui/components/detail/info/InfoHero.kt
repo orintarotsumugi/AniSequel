@@ -11,7 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,6 +84,7 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
@@ -235,7 +236,11 @@ fun InfoHero(
     // seed only changes once.
     val coverSeed = CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
-    val dark = isSystemInDarkTheme()
+    // The app's resolved mode, not the phone's: the theme can be forced to Light or
+    // Dark, and `accentColor` picks tone 40 or 80 from this flag. Asking the phone
+    // meant a reader who forced Dark on a light phone got the light tone behind a
+    // dark hero - the mismatch this accent pipeline exists to prevent.
+    val dark = LocalAppDarkTheme.current
     val coverFallback = MaterialTheme.colorScheme.surfaceContainerHigh
     val coverColor = remember(coverSeed, dark, coverFallback) {
         coverSeed?.let {

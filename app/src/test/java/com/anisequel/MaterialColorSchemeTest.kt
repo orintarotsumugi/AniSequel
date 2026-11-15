@@ -158,6 +158,47 @@ class MaterialColorSchemeTest {
         )
     }
 
+    /**
+     * A gradient swatch must still be the colour the scheme calls its accent.
+     *
+     * The Settings chip draws three tones now, and the one property that keeps it
+     * from becoming decoration is that its middle stop is exactly `accentFor` - the
+     * tone the buttons on the same screen use. `AnimeThemeSurfaceTest` pins
+     * `accentFor` against the scheme's `primary`; this pins the ramp against
+     * `accentFor`, so a future "richer" ramp cannot quietly pick its own centre.
+     */
+    @Test
+    fun `the accent ramp is centred on the scheme accent`() {
+        val seeds = listOf(
+            "red" to 0xFFD32F2F.toInt(),
+            "green" to 0xFF2E7D32.toInt(),
+            "yellow" to 0xFFFBC02D.toInt(),
+            "a night sky" to 0xFF0A0F1E.toInt(),
+            "a snow field" to 0xFFF2F6FB.toInt()
+        )
+
+        seeds.forEach { (name, seed) ->
+            listOf(false, true).forEach { dark ->
+                val ramp = MaterialColorSchemes.accentRamp(seed, dark)
+                val mode = if (dark) "dark" else "light"
+
+                assertEquals("$name $mode: a ramp is three stops", 3, ramp.size)
+                assertEquals(
+                    "$name $mode: the middle stop must be the accent the buttons use",
+                    MaterialColorSchemes.accentFor(seed, dark),
+                    ramp[1]
+                )
+                assertNotEquals(
+                    "$name $mode: the ends have to differ from the centre, or the " +
+                        "gradient is a flat chip with two extra allocations",
+                    ramp[1],
+                    ramp[0]
+                )
+                assertNotEquals("$name $mode: the far end too", ramp[1], ramp[2])
+            }
+        }
+    }
+
     private fun contrastRatio(a: Int, b: Int): Double {
         val first = relativeLuminance(a)
         val second = relativeLuminance(b)

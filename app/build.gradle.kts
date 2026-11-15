@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.1.0"
-val BASELINE_VERSION_CODE = 622
+val BASELINE_VERSION_NAME = "2.2.0"
+val BASELINE_VERSION_CODE = 623
 
 plugins {
   alias(libs.plugins.android.application)
@@ -246,7 +246,6 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.datastore.preferences)
-  implementation(libs.androidx.browser)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

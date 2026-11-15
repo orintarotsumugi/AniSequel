@@ -101,3 +101,21 @@ val LocalSearchMangaEnabled = staticCompositionLocalOf { true }
 
 /** Optional direct tier-list shortcut shown beside the Nova/classic top-bar actions. */
 val LocalTierTopBarShortcut = staticCompositionLocalOf { false }
+
+/**
+ * Whether the app is drawing its dark scheme right now.
+ *
+ * Not the same question as `isSystemInDarkTheme()`, and the difference is a real
+ * bug that shipped: Settings > Theme can force Light or Dark, so a reader on a
+ * light phone with the app set to Dark was drawn the *light* scheme - while two
+ * surfaces kept asking the phone instead of the app. The hero's backdrop and the
+ * "Now matching this anime" swatch both derived their accent at
+ * `accentColor(seed, dark = isSystemInDarkTheme())`, which picks tone 40 or tone
+ * 80 - so on the mismatched pair the swatch was the light tone over a dark sheet,
+ * the exact undoing of the "the colour shown is the colour the scheme uses" rule
+ * [`com.anisequel.ui.theme.DynamicThemeBuilder.accentColor`] exists for.
+ *
+ * Provided once by `AniSequelTheme` from the resolved mode. Reads are static: the
+ * value changes only when the reader changes the theme, never per frame.
+ */
+val LocalAppDarkTheme = staticCompositionLocalOf { false }

@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "2.2.0",
+      "entries": [
+        {
+          "title": "Sign-in moves to your device's browser",
+          "detail": "AniList and Discord both open in the browser you already use instead of a page inside AniSequel. AniList returns straight to the app from any browser; Discord's sign-in page now opens in the real browser, with its address bar, password manager and your existing session, and the app no longer runs a web view at all. That removes a Chromium renderer from the download and a login page you could not inspect."
+        },
+        {
+          "title": "The official Discord mark",
+          "detail": "The Discord card, the log-in control and the preview dock draw Discord's published 24x24 brand glyph instead of a hand-drawn lookalike, so the badge on the button that asks for an account is the one that belongs there."
+        },
+        {
+          "title": "One Discord client, and a log-out that closes it",
+          "detail": "The Settings page used to build its own Discord client, so its Log out disconnected an instance that had never connected while the live socket kept publishing, and every visit left a client and its HTTP pool behind. Both now share one process-wide client: logging out ends the session immediately, and a slow connect can no longer leave the page saying Connecting for the full timeout."
+        },
+        {
+          "title": "The cover accent follows the app's theme, not the phone's",
+          "detail": "The title page's backdrop and the Now matching this anime swatch picked their accent tone from the system theme, so a reader who forced Dark on a light phone got the light tone behind a dark page. Both now read the mode the app is actually drawing."
+        },
+        {
+          "title": "Richer anime palettes",
+          "detail": "A vivid cover used to tint its page at about a fifth of the accent sitting above it, which is why the recolour read as a coloured button on a grey page. The tint ceiling is raised, so the surfaces carry more of the show's hue - and every text pair still comes from Material's tone ladder, so contrast is unchanged."
+        },
+        {
+          "title": "Accent gradients and a cascading recolour",
+          "detail": "The cover swatch is a three-tone gradient centred on the exact accent the scheme uses, and a theme change now moves the accent roles first while the large surfaces settle on a softer spring behind them. Opening a title reads as the app taking on its colour rather than as one image cross-fading into another."
+        },
+        {
+          "title": "Discord tokens paste cleanly",
+          "detail": "Bearer and Bot prefixes are stripped whatever case they arrive in. A lower-case bearer used to be stored as part of the token and refused by Discord, with nothing in the message pointing at the paste."
+        },
+        {
+          "title": "A timer that sleeps when the app is not on screen",
+          "detail": "The presence card's elapsed clock stops with the window instead of writing state every second behind another app, which also stops a recomposition of the card and its artwork once a second for nobody."
+        }
+      ]
+    },
+    {
       "version": "2.1.0",
       "entries": [
         {

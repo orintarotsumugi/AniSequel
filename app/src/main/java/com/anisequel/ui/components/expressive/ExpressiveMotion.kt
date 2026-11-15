@@ -128,6 +128,27 @@ object ExpressiveMotion {
         colorEffects(stiffness = Spring.StiffnessLow)
 
     /**
+     * The colour transition for the large surfaces of a scheme.
+     *
+     * Slower than [ThemeColorEffects] on purpose. When the anime layer opens, the
+     * accent, the containers and the page all change at once; on one stiffness they
+     * arrive together, which reads as a cross-fade of a single flat image. The softer
+     * spring here lets the large areas trail the accent by a fraction of a second, so
+     * the recolour arrives as the app *taking on* the colour - accent first, then the
+     * page settling under it.
+     *
+     * No delay is involved, deliberately: a delay can arrive in the wrong order when a
+     * second recolour interrupts the first, while two springs simply settle at their
+     * own rates. [MotionStyle.INSTANT] still snaps both through [colorEffects], so a
+     * reader who asked for no motion gets one frame.
+     *
+     * `NoBouncy` for the same reason as [ThemeColorEffects]: an overshooting channel in
+     * a `Color` spring can leave the sRGB cube.
+     */
+    val SurfaceColorEffects: FiniteAnimationSpec<Color> get() =
+        colorEffects(stiffness = Spring.StiffnessVeryLow)
+
+    /**
      * The press spring shared by every press gesture below.
      *
      * One token rather than a literal per gesture, so `bouncyPress` and
