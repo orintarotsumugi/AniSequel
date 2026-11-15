@@ -4,6 +4,10 @@
       "version": "2.1.1",
       "entries": [
         {
+          "title": "Animation fixes across the app",
+          "detail": "Five motion defects: the number counter showed one value on both halves of its roll, so the old count never appeared; a sequel card's 6dp progress bar was forced to 10dp; the main bar's hold bounced as it lifted and landed flat as it settled; on Floaty and Dreamy the press-down spring took the style's bounce, so a press became indistinguishable from its release; and a page arriving as the tier board left still slid in sideways under it."
+        },
+        {
           "title": "Dreamy motion style",
           "detail": "A sixth motion style, Dreamy, joins Instant, Smooth, Snappy, Chill and Floaty: the softest setting, with very slow, very gentle movement and barely any bounce."
         },

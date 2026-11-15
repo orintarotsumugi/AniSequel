@@ -165,6 +165,7 @@ object ExpressiveMotion {
      */
     val PressSpatialIn: FiniteAnimationSpec<Float> get() =
         spatial(
+            noOvershoot = true,
             expressiveDamping = Spring.DampingRatioNoBouncy,
             // `High`, not `Medium`: the press is the frame the finger is watching,
             // and at Medium the squash was still arriving after the touch had
@@ -195,9 +196,11 @@ object ExpressiveMotion {
      * thrown at the user, and a control that overshoots visibly on every tap is
      * tiring over a long session.
      *
-     * Only [com.anisequel.data.repository.MotionStyle.CHILL] sees either token —
-     * `SMOOTH` is `NoBouncy` by design and `INSTANT` snaps, so on those styles a
-     * press behaves exactly as it always has.
+     * `SMOOTH` and `SNAPPY` are `NoBouncy` by design and `INSTANT` snaps, so on
+     * those styles a press behaves exactly as it always has. `FLOATY` and `DREAMY`
+     * keep their softer stiffness but still answer [PressSpatialIn] with
+     * `NoBouncy` - see the `noOvershoot` argument of [spatial] for why that half
+     * cannot be allowed to take the style's bounce.
      */
     val PressSpatialOut: FiniteAnimationSpec<Float> get() =
         spatial(
@@ -444,8 +447,17 @@ object ExpressiveMotion {
      * styles are a single dial the whole app turns together, so a branch added here
      * changes every spring in the app at once, and a branch added at a call site is
      * the drift this file exists to prevent.
+     *
+     * [noOvershoot] is the one escape hatch, and only [PressSpatialIn] uses it. The
+     * softer styles would otherwise hand *every* spring their own `LowBouncy`, which
+     * made the press-down spring identical to the release spring - so the squash
+     * dipped below its target on the landing frame, and on Floaty the two halves of a
+     * press became the same motion. Keeping the style's stiffness while pinning its
+     * damping to `NoBouncy` is what lets a soft style stay soft without flickering
+     * under the finger.
      */
     private fun spatial(
+        noOvershoot: Boolean = false,
         expressiveDamping: Float = Spring.DampingRatioMediumBouncy,
         expressiveStiffness: Float = Spring.StiffnessMedium
     ): FiniteAnimationSpec<Float> =
@@ -467,13 +479,22 @@ object ExpressiveMotion {
                 stiffness = expressiveStiffness
             )
             // Softer and slower than Chill on every axis, with a low bounce that
-            // reads as floating rather than as a wobble.
+            // reads as floating rather than as a wobble. `noOvershoot` keeps the
+            // slow stiffness and drops the bounce for the press-down half.
             com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
+                dampingRatio = if (noOvershoot) {
+                    Spring.DampingRatioNoBouncy
+                } else {
+                    Spring.DampingRatioLowBouncy
+                },
                 stiffness = Spring.StiffnessLow
             )
             com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
+                dampingRatio = if (noOvershoot) {
+                    Spring.DampingRatioNoBouncy
+                } else {
+                    Spring.DampingRatioLowBouncy
+                },
                 stiffness = Spring.StiffnessVeryLow
             )
         }

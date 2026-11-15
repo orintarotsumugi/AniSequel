@@ -29,8 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
  * list row it sits above.
  *
  * Keying on [count] - the settled target - means one transition per actual change.
- * The digits themselves still interpolate, because `animatedCount` is what gets
- * rendered inside both the outgoing and incoming content.
+ * The digits still interpolate on the *incoming* side, which reads `animatedCount`;
+ * the outgoing side renders the count it is leaving, taken from the content
+ * lambda's own parameter. Both sides reading `animatedCount` was the bug this
+ * fixes: they then showed the same number on every frame, so the old count never
+ * appeared at all and the roll read as a flicker.
  *
  * The spring used to be spelled out inline with exactly the parameters
  * [ExpressiveMotion.FastSpatialInt] already declares; it is now the token.
@@ -74,13 +77,19 @@ fun AnimatedCounterText(
         },
         label = "animated_counter_content",
         modifier = modifier
-    ) { _ ->
-        // `animatedCount`, not the content lambda's own `targetState`: the digits
-        // are what should roll, and rolling them is the whole point of the
-        // spring. Reading the content parameter here would render the settled
-        // number and animate nothing but the slide.
+    ) { value ->
+        // The incoming side rolls its digits (`animatedCount`), the outgoing side
+        // shows the number it is leaving (`value`).
+        //
+        // Both sides used to read `animatedCount` - the single animating value -
+        // so at every frame of the transition the departing and arriving `Text`
+        // rendered the *same* number. The old count was never on screen: the roll
+        // looked like one number sliding out and the same number sliding back in,
+        // which is why the counter read as a flicker rather than as a roll. The
+        // content lambda's parameter is the side's own settled count, so it is the
+        // only thing that can freeze the outgoing digits at the value they had.
         Text(
-            text = "$animatedCount",
+            text = if (value == count) "$animatedCount" else "$value",
             // Tabular figures. The digits interpolate every frame of the spring,
             // and with proportional figures the text's width changes with them -
             // "111" measures narrower than "888" - so the counter's own box, and
