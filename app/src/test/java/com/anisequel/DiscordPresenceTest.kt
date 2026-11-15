@@ -1,5 +1,6 @@
 package com.anisequel
 
+import com.anisequel.data.discord.DiscordPresenceJson
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
@@ -8,10 +9,12 @@ import com.anisequel.data.model.MediaTitle
 import com.anisequel.domain.discord.DISCORD_TEXT_LIMIT
 import com.anisequel.domain.discord.DiscordActivity
 import com.anisequel.domain.discord.DiscordActivityKind
+import com.anisequel.domain.discord.DiscordActivityType
 import com.anisequel.domain.discord.DiscordJokeInterval
+import com.anisequel.domain.discord.DiscordLogin
+import com.anisequel.domain.discord.DiscordOnlineStatus
 import com.anisequel.domain.discord.DiscordPhrasing
 import com.anisequel.domain.discord.DiscordPresenceComposer
-import com.anisequel.domain.discord.DiscordRelay
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.domain.jokes.JokeTone
@@ -22,15 +25,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * The presence's sentence rules.
- *
- * These are the failures that would not throw and would not be seen by the person
- * who caused them: a hidden title leaking through a button, a truncated line cut
- * mid-word, a dangling separator after turning stats off. The preview card cannot
- * be the test for those, because the reader looking at it is the one person whose
- * list is already on their screen.
- */
 class DiscordPresenceTest {
 
     private fun settings(
@@ -38,6 +32,9 @@ class DiscordPresenceTest {
         phrasing: Map<DiscordActivityKind, DiscordPhrasing> = emptyMap()
     ) = DiscordSettings(
         enabled = enabled,
+        token = "mfa.test-token-value-that-is-long-enough",
+        linked = true,
+        username = "Reader",
         showActivity = true,
         showCover = true,
         showStats = true,
@@ -85,12 +82,7 @@ class DiscordPresenceTest {
 
     @Test
     fun `an empty stats line does not leave a dangling separator`() {
-        val presence = DiscordPresenceComposer.compose(
-            settings(),
-            activity(),
-            DiscordStats.Empty
-        )
-
+        val presence = DiscordPresenceComposer.compose(settings(), activity(), DiscordStats.Empty)
         assertEquals("Viewing Frieren", presence.details)
         assertNull(presence.state)
     }
@@ -99,13 +91,11 @@ class DiscordPresenceTest {
     fun `hiding titles removes the name, the cover and the AniList button`() {
         val visible = DiscordPresenceComposer.compose(settings(), activity(), stats)
         val presence = DiscordPresenceComposer.compose(
-            DiscordSettings(enabled = true, showJokes = false, hideTitles = true),
+            settings().copy(hideTitles = true),
             activity(),
             stats
         )
 
-        // The visible one is the control: if the switch changed nothing, the
-        // assertions below would pass for the wrong reason.
         assertEquals("Viewing Frieren", visible.details)
         assertTrue(visible.buttons.any { it.label == "View on AniList" })
         assertEquals("Viewing an anime", presence.details)
@@ -116,17 +106,34 @@ class DiscordPresenceTest {
 
     @Test
     fun `turning cover art off keeps the title link`() {
-        // Separate switches, separate jobs: the cover is a picture, the AniList
-        // button is a route. They shared a condition, so turning off the picture
-        // also removed the link.
+        val presence = DiscordPresenceComposer.compose(settings().copy(showCover = false), activity(), stats)
+        assertNull(presence.largeImage)
+        assertTrue(presence.buttons.any { it.label == "View on AniList" })
+    }
+
+    @Test
+    fun `elapsed time can be hidden without changing the text`() {
+        val presence = DiscordPresenceComposer.compose(settings().copy(showElapsedTime = false), activity(), stats)
+        assertNull(presence.startTimestampSeconds)
+        assertEquals("Viewing Frieren", presence.details)
+    }
+
+    @Test
+    fun `custom activity name and buttons are applied`() {
         val presence = DiscordPresenceComposer.compose(
-            settings().copy(showCover = false),
+            settings().copy(
+                activityName = "AniSequel RPC",
+                primaryButtonLabel = "Open title",
+                secondaryButtonLabel = "Project",
+                secondaryButtonUrl = "https://example.com/project"
+            ),
             activity(),
             stats
         )
-
-        assertNull(presence.largeImage)
-        assertTrue(presence.buttons.any { it.label == "View on AniList" })
+        assertEquals("AniSequel RPC", presence.activityName)
+        assertEquals("Open title", presence.buttons.first().label)
+        assertEquals("Project", presence.buttons.last().label)
+        assertEquals("https://example.com/project", presence.buttons.last().url)
     }
 
     @Test
@@ -141,20 +148,13 @@ class DiscordPresenceTest {
             activity(),
             stats
         )
-
         assertEquals("Viewing", presence.details)
     }
 
     @Test
     fun `a joke goes on the second line and is not duplicated`() {
         val jokes = settings().copy(showJokes = true)
-        val presence = DiscordPresenceComposer.compose(
-            jokes,
-            activity(),
-            DiscordStats.Empty,
-            joke = "Sleep is a side quest."
-        )
-
+        val presence = DiscordPresenceComposer.compose(jokes, activity(), DiscordStats.Empty, joke = "Sleep is a side quest.")
         assertEquals("Sleep is a side quest.", presence.state)
 
         val inTemplate = DiscordPresenceComposer.compose(
@@ -168,7 +168,6 @@ class DiscordPresenceTest {
             DiscordStats.Empty,
             joke = "Sleep is a side quest."
         )
-
         assertEquals("Thinking about Sleep is a side quest.", inTemplate.state)
     }
 
@@ -180,23 +179,18 @@ class DiscordPresenceTest {
             DiscordStats.Empty,
             joke = "One more episode."
         )
-
         assertEquals("Viewing Frieren · One more episode.", presence.details)
         assertNull(presence.state)
     }
 
     @Test
     fun `turning the rotation off also drops the joke`() {
-        // The interval's Off is a second way to say no jokes. The switch alone
-        // used to decide this, so the last rotated line stayed in the presence
-        // after the reader chose Off and the host stopped replacing it.
         val presence = DiscordPresenceComposer.compose(
             settings().copy(showJokes = true, jokeInterval = DiscordJokeInterval.OFF),
             activity(),
             DiscordStats.Empty,
             joke = "One more episode."
         )
-
         assertEquals("Viewing Frieren", presence.details)
         assertNull(presence.state)
         assertNull(presence.joke)
@@ -204,24 +198,14 @@ class DiscordPresenceTest {
 
     @Test
     fun `a long line is cut to Discord's limit with an ellipsis`() {
-        val presence = DiscordPresenceComposer.compose(
-            settings(),
-            activity(title = "A".repeat(300)),
-            DiscordStats.Empty
-        )
-
+        val presence = DiscordPresenceComposer.compose(settings(), activity(title = "A".repeat(300)), DiscordStats.Empty)
         assertEquals(DISCORD_TEXT_LIMIT, presence.details.length)
         assertTrue(presence.details.endsWith("…"))
     }
 
     @Test
     fun `turning activity off still leaves a valid presence`() {
-        val presence = DiscordPresenceComposer.compose(
-            settings().copy(showActivity = false),
-            activity(),
-            stats
-        )
-
+        val presence = DiscordPresenceComposer.compose(settings().copy(showActivity = false), activity(), stats)
         assertEquals("Browsing AniSequel", presence.details)
         assertEquals("24 anime · 318 episodes · 6 manga · 142 chapters · 12 sequels", presence.state)
     }
@@ -229,28 +213,33 @@ class DiscordPresenceTest {
     @Test
     fun `the default is private until the reader opts in`() {
         val defaults = DiscordSettings()
-
         assertFalse(defaults.enabled)
         assertFalse(defaults.canPublish)
         assertEquals("Rich Presence disabled", defaults.connectionLabel)
     }
 
     @Test
-    fun `the relay rejects plain http and keeps https`() {
-        assertEquals(
-            "https://relay.example",
-            DiscordRelay.normalizeBaseUrl(" https://relay.example/ ")
-        )
-        assertNull(DiscordRelay.normalizeBaseUrl("http://relay.example"))
-        assertNull(DiscordRelay.normalizeBaseUrl("relay.example"))
-        assertNull(DiscordRelay.normalizeBaseUrl("https://user:pass@relay.example"))
+    fun `token login validation normalizes and masks plausible tokens`() {
+        val raw = "  mfa.abcdefghijklmnopqrstuvwxyz1234567890  "
+        val normalized = DiscordLogin.normalizeToken(raw)
+        assertTrue(DiscordLogin.looksLikeToken(normalized))
+        assertEquals("mfa.••••••••7890", DiscordLogin.maskedToken(normalized))
+        assertFalse(DiscordLogin.looksLikeToken("short"))
     }
 
     @Test
-    fun `an application id is a snowflake`() {
-        assertTrue(DiscordRelay.isValidApplicationId("123456789012345678"))
-        assertFalse(DiscordRelay.isValidApplicationId("AniSequel"))
-        assertFalse(DiscordRelay.isValidApplicationId("1234"))
+    fun `gateway presence payload includes activity type status and timestamps`() {
+        val presence = DiscordPresenceComposer.compose(settings(), activity(), DiscordStats.Empty)
+        val json = DiscordPresenceJson.gatewayPresenceUpdate(
+            presence = presence,
+            status = DiscordOnlineStatus.IDLE,
+            activityType = DiscordActivityType.WATCHING
+        )
+        assertTrue(json.contains("\"op\":3"))
+        assertTrue(json.contains("\"status\":\"idle\""))
+        assertTrue(json.contains("\"type\":3"))
+        assertTrue(json.contains("\"details\":\"Viewing Frieren\""))
+        assertTrue(json.contains("\"start\":1700000000000"))
     }
 
     @Test
@@ -269,7 +258,6 @@ class DiscordPresenceTest {
         )
 
         val folded = SummarizeDiscordStats.execute(collection, sequelsFound = 4)
-
         assertEquals(1, folded.animeCompleted)
         assertEquals(15, folded.episodesWatched)
         assertEquals(1, folded.mangaCompleted)

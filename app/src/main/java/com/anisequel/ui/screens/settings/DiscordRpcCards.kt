@@ -48,9 +48,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.DiscordPreferences
+import com.anisequel.domain.discord.DISCORD_PROJECT_URL
 import com.anisequel.domain.discord.DISCORD_TEXT_LIMIT
 import com.anisequel.domain.discord.DiscordActivityKind
+import com.anisequel.domain.discord.DiscordActivityType
 import com.anisequel.domain.discord.DiscordJokeInterval
+import com.anisequel.domain.discord.DiscordOnlineStatus
 import com.anisequel.domain.discord.DiscordPhrasing
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.domain.jokes.JokeTone
@@ -59,13 +62,113 @@ import com.anisequel.ui.components.discord.DiscordJokes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-/**
- * The phrasing list, one row per activity.
- *
- * The row shows the template, not a resolved sentence: "$anime" is the thing the
- * reader is learning to write, and replacing it with a sample title on the index
- * would hide the only editable part.
- */
+@Composable
+fun DiscordCustomizationCard(
+    settings: DiscordSettings,
+    scope: CoroutineScope,
+    preferences: DiscordPreferences
+) {
+    SectionCard(
+        title = "Presence customization",
+        icon = AppVectorIcons.Tune,
+        subtitle = "Fine-tune how your activity appears on Discord"
+    ) {
+        DiscordDropdownRow(
+            label = "Activity type",
+            value = settings.activityType.displayName,
+            enabled = true
+        ) { dismiss ->
+            DiscordActivityType.entries.forEach { type ->
+                DropdownMenuItem(
+                    text = { Text(type.displayName) },
+                    trailingIcon = { if (type == settings.activityType) CheckMark() },
+                    onClick = {
+                        scope.launch { preferences.setActivityType(type) }
+                        dismiss()
+                    }
+                )
+            }
+        }
+
+        DiscordDropdownRow(
+            label = "Online status",
+            value = settings.onlineStatus.displayName,
+            enabled = true
+        ) { dismiss ->
+            DiscordOnlineStatus.entries.forEach { status ->
+                DropdownMenuItem(
+                    text = { Text(status.displayName) },
+                    trailingIcon = { if (status == settings.onlineStatus) CheckMark() },
+                    onClick = {
+                        scope.launch { preferences.setOnlineStatus(status) }
+                        dismiss()
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsFieldLabel("Activity name")
+        Spacer(modifier = Modifier.height(4.dp))
+        OutlinedTextField(
+            value = settings.activityName,
+            onValueChange = { value ->
+                if (value.length <= 48) scope.launch { preferences.setActivityName(value) }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("AniSequel") },
+            supportingText = { Text("${settings.activityName.length}/48") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsFieldLabel("Primary button label (title link)")
+        Spacer(modifier = Modifier.height(4.dp))
+        OutlinedTextField(
+            value = settings.primaryButtonLabel,
+            onValueChange = { value ->
+                if (value.length <= 32) scope.launch { preferences.setPrimaryButtonLabel(value) }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("View on AniList") },
+            supportingText = { Text("${settings.primaryButtonLabel.length}/32") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsFieldLabel("Secondary button label")
+        Spacer(modifier = Modifier.height(4.dp))
+        OutlinedTextField(
+            value = settings.secondaryButtonLabel,
+            onValueChange = { value ->
+                if (value.length <= 32) {
+                    scope.launch { preferences.setSecondaryButton(value, settings.secondaryButtonUrl) }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("AniSequel on GitHub") },
+            supportingText = { Text("${settings.secondaryButtonLabel.length}/32") }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+        SettingsFieldLabel("Secondary button URL")
+        Spacer(modifier = Modifier.height(4.dp))
+        OutlinedTextField(
+            value = settings.secondaryButtonUrl,
+            onValueChange = { value ->
+                if (value.length <= 512) {
+                    scope.launch { preferences.setSecondaryButton(settings.secondaryButtonLabel, value) }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text(DISCORD_PROJECT_URL) },
+            supportingText = { Text("${settings.secondaryButtonUrl.length}/512") }
+        )
+    }
+}
+
 @Composable
 fun DiscordPhrasingCard(
     settings: DiscordSettings,
@@ -74,7 +177,7 @@ fun DiscordPhrasingCard(
     SectionCard(
         title = "Activity phrasing",
         icon = AppVectorIcons.TextBold,
-        subtitle = "The two lines Discord shows, per activity"
+        subtitle = "Customize the two lines Discord shows for each activity"
     ) {
         Column {
             DiscordActivityKind.phrasingOrder.forEachIndexed { index, kind ->
@@ -145,7 +248,6 @@ private fun DiscordActivityKind.icon() = when (this) {
     DiscordActivityKind.BROWSING -> AppVectorIcons.Search
 }
 
-/** The editor behind one row. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DiscordPhrasingDialog(
@@ -166,8 +268,7 @@ fun DiscordPhrasingDialog(
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
-                    text = "Discord's first line is the details line, the second is the " +
-                        "state line. Tap a token to add it to the field you are editing.",
+                    text = "Discord's first line is the details line, the second is the state line. Tap a token to insert it.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -215,8 +316,7 @@ fun DiscordPhrasingDialog(
                                     val target = if (activeField == PhrasingField.DETAILS) details else state
                                     val next = appendToken(target, token)
                                     if (next.length <= DISCORD_TEXT_LIMIT) {
-                                        if (activeField == PhrasingField.DETAILS) details = next
-                                        else state = next
+                                        if (activeField == PhrasingField.DETAILS) details = next else state = next
                                     }
                                 }
                         ) {
@@ -230,9 +330,7 @@ fun DiscordPhrasingDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                TextButton(onClick = onReset) {
-                    Text("Reset this activity to the shipped phrasing")
-                }
+                TextButton(onClick = onReset) { Text("Reset this activity to the shipped phrasing") }
             }
         },
         confirmButton = {
@@ -241,34 +339,17 @@ fun DiscordPhrasingDialog(
                 enabled = !detailsBlank
             ) { Text("Save") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
 private enum class PhrasingField { DETAILS, STATE }
 
-private val DiscordTokens = listOf(
-    "\$anime",
-    "\$manga",
-    "\$novel",
-    "\$status",
-    "\$episode",
-    "\$stats",
-    "\$joke"
-)
+private val DiscordTokens = listOf("\$anime", "\$manga", "\$novel", "\$status", "\$episode", "\$stats", "\$joke")
 
 private fun appendToken(current: String, token: String): String =
     if (current.isBlank()) token else "$current $token"
 
-/**
- * The jokes switch, the rotation, the tone filter and the reader's own lines.
- *
- * The interval and the tone filter are real dropdowns, because both are lists the
- * reader compares against each other; the card that replaced them with a cycling
- * button made "every 15 minutes" a thing to tap through rather than choose.
- */
 @Composable
 fun DiscordJokesCard(
     settings: DiscordSettings,
@@ -280,7 +361,7 @@ fun DiscordJokesCard(
     SectionCard(
         title = "Jokes in the presence",
         icon = AppVectorIcons.AnimeSparkle,
-        subtitle = "Ani-chan, on a timer, in somebody else's friends list"
+        subtitle = "Rotate custom or built-in lines in your presence"
     ) {
         currentJoke?.takeIf { it.isNotBlank() }?.let { line ->
             Surface(
@@ -296,11 +377,7 @@ fun DiscordJokesCard(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Text(text = line, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
@@ -308,7 +385,7 @@ fun DiscordJokesCard(
 
         SwitchRow(
             title = "Show a joke",
-            subtitle = "Off leaves the stats line alone.",
+            subtitle = "Off leaves the stats/activity lines alone.",
             checked = settings.showJokes,
             onCheckedChange = { scope.launch { preferences.setShowJokes(it) } }
         )
@@ -337,9 +414,7 @@ fun DiscordJokesCard(
         ) { dismiss ->
             DropdownMenuItem(
                 text = { Text("Mixed (every tone)") },
-                trailingIcon = {
-                    if (settings.activeJokeTones.size == JokeTone.entries.size) CheckMark()
-                },
+                trailingIcon = { if (settings.activeJokeTones.size == JokeTone.entries.size) CheckMark() },
                 onClick = {
                     scope.launch { preferences.setJokeTones(JokeTone.entries.toSet()) }
                     dismiss()
@@ -361,15 +436,8 @@ fun DiscordJokesCard(
                     },
                     trailingIcon = { if (selected) CheckMark() },
                     onClick = {
-                        // The last tone cannot be switched off: an empty set is
-                        // read as "everything" everywhere else, so allowing it
-                        // would make the switch look broken rather than broad.
                         if (!selected || settings.activeJokeTones.size > 1) {
-                            val next = if (selected) {
-                                settings.activeJokeTones - tone
-                            } else {
-                                settings.activeJokeTones + tone
-                            }
+                            val next = if (selected) settings.activeJokeTones - tone else settings.activeJokeTones + tone
                             scope.launch { preferences.setJokeTones(next) }
                         }
                         dismiss()
@@ -380,7 +448,7 @@ fun DiscordJokesCard(
 
         SwitchRow(
             title = "Put the joke on the first line",
-            subtitle = "Off keeps it under the stats, where a long joke has room.",
+            subtitle = "Off keeps it on the second line with more room.",
             checked = settings.jokeInDetails,
             enabled = settings.showJokes,
             onCheckedChange = { scope.launch { preferences.setJokeInDetails(it) } }
@@ -394,31 +462,21 @@ fun DiscordJokesCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onAdd, modifier = Modifier.testTag("discord_add_joke")) {
-                Text("Add a line")
-            }
+            TextButton(onClick = onAdd, modifier = Modifier.testTag("discord_add_joke")) { Text("Add a line") }
         }
         if (settings.customJokes.isEmpty()) {
             Text(
-                text = "The app's own pool is used until you add one. A custom line is " +
-                    "kept even when its tone is switched off.",
+                text = "Custom lines are stored on this device and used in the Discord presence when jokes are enabled.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             settings.customJokes.forEach { line ->
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = line,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2
-                    )
+                    Text(text = line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f), maxLines = 2)
                     IconButton(
                         onClick = { scope.launch { preferences.removeCustomJoke(line) } },
                         modifier = Modifier.size(32.dp)
@@ -432,9 +490,7 @@ fun DiscordJokesCard(
                     }
                 }
             }
-            TextButton(onClick = { scope.launch { preferences.clearCustomJokes() } }) {
-                Text("Clear my lines")
-            }
+            TextButton(onClick = { scope.launch { preferences.clearCustomJokes() } }) { Text("Clear my lines") }
         }
     }
 }
@@ -449,14 +505,6 @@ private fun CheckMark() {
     )
 }
 
-/**
- * A settings row that opens a menu.
- *
- * `DropdownMenu` anchored to the row rather than an `ExposedDropdownMenuBox`: the
- * menu is the row's action, the row already carries its label and value, and the
- * exposed variant would draw a second outlined field around a value that is not
- * editable as text.
- */
 @Composable
 private fun DiscordDropdownRow(
     label: String,
@@ -479,17 +527,9 @@ private fun DiscordDropdownRow(
                     text = label,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(text = value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Icon(
                 imageVector = Icons.Default.KeyboardArrowDown,
@@ -503,7 +543,6 @@ private fun DiscordDropdownRow(
     }
 }
 
-/** Add a custom line, with the same blunt length limit the composer enforces. */
 @Composable
 fun DiscordAddJokeDialog(
     onDismiss: () -> Unit,
@@ -516,9 +555,7 @@ fun DiscordAddJokeDialog(
         text = {
             Column {
                 Text(
-                    text = "This line can appear in your presence. It is stored on this " +
-                        "phone, and it is not sent anywhere except to the relay as part " +
-                        "of the card.",
+                    text = "This line can appear in your Discord presence. It is stored on this phone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -526,27 +563,15 @@ fun DiscordAddJokeDialog(
                 OutlinedTextField(
                     value = line,
                     onValueChange = { if (it.length <= 160) line = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("discord_custom_joke_field"),
+                    modifier = Modifier.fillMaxWidth().testTag("discord_custom_joke_field"),
                     placeholder = { Text("One more episode won't hurt.") },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(
-                        onDone = { if (line.isNotBlank()) onAdd(line) }
-                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (line.isNotBlank()) onAdd(line) }),
                     supportingText = { Text("${line.length}/160") }
                 )
             }
         },
-        confirmButton = {
-            TextButton(
-                onClick = { onAdd(line) },
-                enabled = line.isNotBlank()
-            ) { Text("Add") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        confirmButton = { TextButton(onClick = { onAdd(line) }, enabled = line.isNotBlank()) { Text("Add") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
-

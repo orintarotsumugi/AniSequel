@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "2.1.0",
+      "entries": [
+        {
+          "title": "Direct Discord login, no relay",
+          "detail": "Rich Presence now connects straight to Discord from this device. Use official web login inside the app or paste your Discord token directly; the relay flow is removed and no local relay/build setup is needed."
+        },
+        {
+          "title": "More customization and controls",
+          "detail": "Choose activity type and online status, set a custom activity name and button labels/URL, toggle the elapsed timer, and fine-tune presence text and behavior with more options."
+        },
+        {
+          "title": "Revamped Discord settings UI",
+          "detail": "The Discord page is clearer and more polished with improved connection states, animated preview/live indicators, streamlined cards, and a cleaner layout for setup and quick actions."
+        },
+        {
+          "title": "Faster, smoother presence updates",
+          "detail": "Initial settings loading is smoother, joke rotation is more stable, and presence publishing is debounced/coalesced to reduce chatter while keeping updates responsive."
+        },
+        {
+          "title": "Fixes for connection and preview behavior",
+          "detail": "Resolved publish/disable races, improved reconnect and logout handling, fixed preview/status inconsistencies, and tightened token/login validation and messaging."
+        }
+      ]
+    },
+    {
       "version": "2.0.0",
       "entries": [
         {

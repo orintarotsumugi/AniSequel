@@ -11,51 +11,35 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * What the presence host is doing, stated once for both readers.
- *
- * The host is mounted at the navigation root; the page that turns the feature on
- * lives in Settings. Without a shared answer the page would have to guess whether
- * "Enabled" means "on" or "actually reaching Discord", and the difference is the
- * whole reason this feature has a connection card.
  */
 sealed interface DiscordRuntimeState {
     /** The reader has not enabled the feature. */
     data object Disabled : DiscordRuntimeState
 
-    /** Enabled and composed locally, but no relay has been linked. */
+    /** Enabled and composed locally, but no Discord account is linked. */
     data object PreviewOnly : DiscordRuntimeState
 
-    data object Publishing : DiscordRuntimeState
+    /** Connecting or refreshing the live presence. */
+    data object Connecting : DiscordRuntimeState
 
-    /** The relay accepted the last presence. */
-    data class Live(val relay: String) : DiscordRuntimeState
+    /** A token is linked and the gateway session is live. */
+    data class Live(val account: String) : DiscordRuntimeState
 
     /**
      * Something failed.
      *
-     * The composed presence is still drawn locally - the reader can see exactly
-     * what Discord would have shown - and [message] says why it did not arrive.
+     * The composed presence is still drawn locally and [message] says why it
+     * did not reach Discord.
      */
     data class Failed(val message: String) : DiscordRuntimeState
 }
 
-/**
- * The process-wide presence status.
- *
- * Deliberately not a ViewModel: the host outlives every Settings page and every
- * tab, and the alternative is passing a status through four navigation graphs.
- * The same pattern as `JokeMomentBus`, for the same reason.
- */
+/** The process-wide presence status. */
 object DiscordPresenceRuntime {
     private val _state = MutableStateFlow<DiscordRuntimeState>(DiscordRuntimeState.Disabled)
     val state: StateFlow<DiscordRuntimeState> = _state.asStateFlow()
 
-    /**
-     * The last value the host composed.
-     *
-     * The Settings preview reads it for the joke it is currently quoting: the
-     * host owns the rotating line, and a second draw on the page would show a
-     * sentence that never reaches Discord.
-     */
+    /** The last value the host composed. */
     private val _presence = MutableStateFlow<DiscordPresence?>(null)
     val presence: StateFlow<DiscordPresence?> = _presence.asStateFlow()
 
@@ -68,15 +52,7 @@ object DiscordPresenceRuntime {
     }
 }
 
-/**
- * The two quick actions that have to reach the app-root host.
- *
- * "New joke" is the only thing the Settings page can ask for that the host owns:
- * the joke currently published is state inside the host, and a second source of
- * truth on the page would let the preview quote a line Discord never received.
- * A shared flow rather than a preference write, because this is an event, not a
- * choice the reader wants remembered across launches.
- */
+/** Quick actions that must reach the app-root host. */
 object DiscordPresenceCommands {
     private val _newJoke = MutableSharedFlow<Unit>(
         extraBufferCapacity = 1,

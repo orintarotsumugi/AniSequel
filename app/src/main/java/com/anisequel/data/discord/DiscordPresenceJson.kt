@@ -1,41 +1,54 @@
 package com.anisequel.data.discord
 
+import com.anisequel.domain.discord.DiscordActivityType
+import com.anisequel.domain.discord.DiscordOnlineStatus
 import com.anisequel.domain.discord.DiscordPresence
 
 /**
- * The request body a Discord relay expects.
+ * Builds the JSON payloads used for direct Discord gateway presence updates.
  *
- * ## Why this is hand-written JSON
- *
- * It is the one payload in the app that is not a Retrofit model, and it is
- * deliberately so: the presence is assembled from user text that may contain
- * quotes, newlines and emoji, and a Moshi adapter for this would still have to be
- * pinned by a test. A small, explicit writer keeps the escaping in one place and
- * lets the test assert the exact bytes.
+ * Hand-written to keep escaping explicit and to make the exact bytes easy to
+ * pin in tests.
  */
 object DiscordPresenceJson {
 
-    /**
-     * Wraps [presence] in the relay's envelope.
-     *
-     * The relay is the only party that talks to Discord; `applicationId` is what
-     * tells it which registered Discord application the presence belongs to.
-     */
-    fun envelope(applicationId: String, presence: DiscordPresence): String = buildString {
-        append("{\"applicationId\":")
-        appendQuoted(applicationId)
-        append(",\"activity\":")
-        appendActivity(presence)
-        append('}')
+    fun gatewayPresenceUpdate(
+        presence: DiscordPresence?,
+        status: DiscordOnlineStatus,
+        activityType: DiscordActivityType
+    ): String = buildString {
+        append("{\"op\":3,\"d\":{")
+        append("\"since\":")
+        append(presence?.startTimestampSeconds?.times(1000L) ?: 0L)
+        append(",\"activities\":")
+        if (presence == null || status == DiscordOnlineStatus.INVISIBLE) {
+            append("[]")
+        } else {
+            append('[')
+            appendActivity(presence, activityType)
+            append(']')
+        }
+        append(",\"status\":")
+        appendQuoted(status.gatewayValue)
+        append(",\"afk\":false}}")
     }
 
-    private fun StringBuilder.appendActivity(presence: DiscordPresence) {
+    fun activityObject(
+        presence: DiscordPresence,
+        activityType: DiscordActivityType
+    ): String = buildString {
+        appendActivity(presence, activityType)
+    }
+
+    private fun StringBuilder.appendActivity(
+        presence: DiscordPresence,
+        activityType: DiscordActivityType
+    ) {
         append('{')
         append("\"name\":")
         appendQuoted(presence.activityName)
-        // 0 is Discord's Playing type, and the only one a game-like presence
-        // should use: Watching/Listening mean Spotify and embedded activities.
-        append(",\"type\":0")
+        append(",\"type\":")
+        append(activityType.gatewayType)
         append(",\"details\":")
         appendQuoted(presence.details)
         presence.state?.let { state ->
@@ -59,7 +72,7 @@ object DiscordPresenceJson {
         }
         presence.startTimestampSeconds?.let { start ->
             append(",\"timestamps\":{\"start\":")
-            append(start)
+            append(start * 1000L)
             append('}')
         }
         if (presence.buttons.isNotEmpty()) {
@@ -77,13 +90,6 @@ object DiscordPresenceJson {
         append('}')
     }
 
-    /**
-     * A JSON string with the escapes Discord's gateway accepts.
-     *
-     * Control characters are escaped rather than dropped: a joke is allowed to
-     * contain a newline, and emitting a literal one inside a JSON string would
-     * make the whole request unparseable at the relay.
-     */
     private fun StringBuilder.appendQuoted(value: String) {
         append('"')
         value.forEach { char ->
