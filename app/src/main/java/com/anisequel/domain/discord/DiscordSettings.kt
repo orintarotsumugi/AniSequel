@@ -147,11 +147,18 @@ data class DiscordSettings(
     val canPublish: Boolean
         get() = enabled && linked && token.trim().isNotEmpty()
 
-    /** Whether the page can honestly claim a Discord connection right now. */
+    /**
+     * Whether the page can honestly claim a Discord connection right now.
+     *
+     * `linked` alone is not enough: a relay-era install carries the flag with no
+     * token, because the relay held the credentials, and calling that "Connected"
+     * drew a live card over a presence that could never publish. [canPublish]
+     * already refuses the same install, so the label asks the same question.
+     */
     val connectionLabel: String
         get() = when {
             !enabled -> "Rich Presence disabled"
-            linked -> username.takeIf { it.isNotBlank() }?.let { "Connected as $it" }
+            canPublish -> username.takeIf { it.isNotBlank() }?.let { "Connected as $it" }
                 ?: "Connected to Discord"
             else -> "Preview only - no Discord account linked"
         }
