@@ -2,6 +2,8 @@ package com.anisequel.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -57,6 +59,49 @@ import com.anisequel.ui.viewmodel.rememberApiStatusProbe
 private const val HUB_SAVEABLE_KEY = "settings_hub"
 
 /**
+ * The motion of going one level deeper, and of coming back out.
+ *
+ * One definition rather than one per level: the Interface page opens its own
+ * sub-pages (`InterfaceTab`), and a page that pushed sideways into a part which
+ * then faded in place would read as two different navigations on the way in and
+ * back out of the same settings screen.
+ *
+ * Branched on direction rather than by negating one pair: a push travels sideways, a
+ * pop drops away. The old single pair made Back a second push that happened to run
+ * the other way, which is not what the gesture means.
+ */
+internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): ContentTransform {
+    val opening = targetState != null
+    return if (opening) {
+        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            slideInHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialOffset
+            ) { width -> width / 4 }
+        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+            slideOutHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialOffset
+            ) { width -> -width / 4 }
+        (enter togetherWith exit) using null
+    } else {
+        // The outgoing page falls a tenth of its height and fades; the shelf does
+        // not slide at all, so only one surface is moving and the eye knows which
+        // one left. The height itself snaps (`using null`), because a page settling
+        // its own scroll while the container animated its height was a crash once
+        // - see the class documentation.
+        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            scaleIn(
+                initialScale = 0.98f,
+                animationSpec = ExpressiveMotion.FastSpatial
+            )
+        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+            slideOutVertically(
+                animationSpec = ExpressiveMotion.FastSpatialOffset
+            ) { height -> height / 10 }
+        (enter togetherWith exit) using null
+    }
+}
+
+/**
  * The pages behind the Settings hub.
  *
  * They are an enum rather than a nested navigation graph because they are not
@@ -69,7 +114,8 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     // How the app is laid out, kept apart from what colour it is: the card style
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
-    UI("Interface", "Card style, layout and motion"),
+    // Its parts each have a sub-page of their own - see [InterfaceTab].
+    UI("Interface", "Layout, cards, motion and gestures"),
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
@@ -255,38 +301,7 @@ fun SettingsScreen(
         ) {
             AnimatedContent(
                 targetState = page,
-                transitionSpec = {
-                    // Branched on direction rather than by negating one pair: a
-                    // push travels sideways, a pop drops away. The old single
-                    // pair made Back a second push that happened to run the other
-                    // way, which is not what the gesture means.
-                    val opening = targetState != null
-                    if (opening) {
-                        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                            slideInHorizontally(
-                                animationSpec = ExpressiveMotion.FastSpatialOffset
-                            ) { width -> width / 4 }
-                        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                            slideOutHorizontally(
-                                animationSpec = ExpressiveMotion.FastSpatialOffset
-                            ) { width -> -width / 4 }
-                        (enter togetherWith exit) using null
-                    } else {
-                        // The outgoing page falls a tenth of its height and fades;
-                        // the shelf does not slide at all, so only one surface is
-                        // moving and the eye knows which one left.
-                        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                            scaleIn(
-                                initialScale = 0.98f,
-                                animationSpec = ExpressiveMotion.FastSpatial
-                            )
-                        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                            slideOutVertically(
-                                animationSpec = ExpressiveMotion.FastSpatialOffset
-                            ) { height -> height / 10 }
-                        (enter togetherWith exit) using null
-                    }
-                },
+                transitionSpec = { settingsLevelTransition() },
                 label = "settings_page_transition",
                 modifier = Modifier
                     .fillMaxSize()
