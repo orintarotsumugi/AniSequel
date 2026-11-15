@@ -140,6 +140,15 @@ android {
       } else {
         signingConfigs.getByName("debugConfig")
       }
+      // F-Droid-friendly: no VCS provenance (`META-INF/version-control-info.textproto`)
+      // in the shipped APK, which keeps a release reproducible from the same tree.
+      //
+      // This belongs to the build type, not to the `android` block: `vcsInfo` is
+      // declared on `BuildType`, so the same two lines written one scope up do not
+      // resolve and the whole build script fails to compile - which is how it
+      // landed, and how CI caught it. The default is "on for release", so release
+      // is the only build type that needs it.
+      vcsInfo { include = false }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
@@ -190,11 +199,6 @@ android {
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
-  }
-  // F-Droid-friendly: no VCS provenance in the APK. Two lines, no behaviour
-  // change; makes the build byte-reproducible-friendly.
-  vcsInfo {
-    include = false
   }
   androidResources {
     // English-only resources, on purpose.
