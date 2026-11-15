@@ -194,6 +194,24 @@ enum class MediaCardStyle(
         scorePlacement = CardScorePlacement.POSTER_BOTTOM_END,
         bordered = false,
         glowing = true
+    ),
+    RIBBON(
+        storageValue = "ribbon",
+        displayName = "Ribbon",
+        blurb = "Poster with the title beneath it and the rating as a coloured band.",
+        titlePlacement = CardTitlePlacement.BELOW_POSTER,
+        scorePlacement = CardScorePlacement.BANNER_BELOW_TITLE,
+        bordered = false,
+        glowing = false
+    ),
+    STAMP(
+        storageValue = "stamp",
+        displayName = "Stamp",
+        blurb = "Cover with the title overlaid at its foot and the rating stamped in the corner.",
+        titlePlacement = CardTitlePlacement.OVERLAY_BOTTOM,
+        scorePlacement = CardScorePlacement.POSTER_TOP_START,
+        bordered = true,
+        glowing = false
     );
 
     /**

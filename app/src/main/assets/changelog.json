@@ -4,6 +4,10 @@
       "version": "2.1.1",
       "entries": [
         {
+          "title": "Two more card styles",
+          "detail": "The card picker gained Ribbon (title beneath the poster, rating as a coloured band) and Stamp (title over the poster's foot, rating stamped in its corner), taking the styles from eight to ten. Both reuse the same placement table as the rest, so the preview and the grid agree."
+        },
+        {
           "title": "Log out closes Discord at once",
           "detail": "Disconnecting used to take the same lock a publish holds while it waits up to fifteen seconds for Discord's READY, so the teardown that would release that wait could not run until the wait had already timed out. The client now bumps a session epoch and tears the socket down outside the lock, and a clear that cannot get the lock returns instead of queueing - so Log out ends the session immediately, and a connect that started before the sign-out is abandoned rather than left publishing."
         },
@@ -1133,7 +1137,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
+          "detail": "An airing title with no next episode number now reads \"Airing \u00b7 12 eps\" instead of \"Airing \u00b7 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
         }
       ]
     },
@@ -1158,7 +1162,7 @@
         },
         {
           "title": "A creator's page introduces them properly",
-          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+          "detail": "The staff hero now leads with the creator's occupations - Director \u00b7 Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
         },
         {
           "title": "The library bar carries its number",
@@ -3252,7 +3256,7 @@
         },
         {
           "title": "Widgets stop naming shows they are not showing",
-          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to \u2026\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
         },
         {
           "title": "The activity tile shows your face",
@@ -3273,7 +3277,7 @@
         },
         {
           "title": "A Featured Sequel widget",
-          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe \u2014 a large poster, its title, what it is a sequel to and how many are waiting \u2014 so the recommendation is readable before you even open the app."
         },
         {
           "title": "See who liked an activity",
@@ -3290,11 +3294,11 @@
       "entries": [
         {
           "title": "In-app details from the Activity feed and Currently Arriving",
-          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet \u2014 synopsis, community scores, rankings, genres, specs and an AniList link \u2014 instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
         },
         {
           "title": "The detail sheet adapts to what it is showing",
-          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to \u2026\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
         }
       ]
     },
@@ -3303,7 +3307,7 @@
       "entries": [
         {
           "title": "Retain Anime Color keeps the colour",
-          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts \u2014 no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
         },
         {
           "title": "Theme tab, rebuilt around Material 3 Expressive",
@@ -3316,7 +3320,7 @@
       "entries": [
         {
           "title": "GIFs and images in bios and comments",
-          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence \u2014 like a GIF between two words \u2014 are embedded in the flow and animate inline."
         },
         {
           "title": "AniList links get a preview card",
@@ -3328,7 +3332,7 @@
         },
         {
           "title": "Theme screen, reorganised",
-          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+          "detail": "Settings > Theme is now grouped into clear sections \u2014 appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
         },
         {
           "title": "Theme switching is snappier",

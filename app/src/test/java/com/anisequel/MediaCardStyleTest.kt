@@ -67,7 +67,10 @@ class MediaCardStyleTest {
             MediaCardStyle.MINIMAL_EXOTIC to false,
             MediaCardStyle.MODERN to true,
             MediaCardStyle.GALLERY to true,
-            MediaCardStyle.CINEMA to false
+            MediaCardStyle.CINEMA to false,
+            MediaCardStyle.COVER_ONLY to true,
+            MediaCardStyle.RIBBON to false,
+            MediaCardStyle.STAMP to true
         ).forEach { (style, onPoster) ->
             assertEquals("${style.name} as a poster rating", onPoster, style.scoreOnPoster)
             assertEquals(
