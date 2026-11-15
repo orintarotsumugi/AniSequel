@@ -795,7 +795,7 @@ fun ProfileLibraryTab(
                             entry = entry,
                             detailed = true,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = Modifier.animateLibraryItem()
+                            modifier = animateLibraryItem()
                         )
                     }
                 }
@@ -809,7 +809,7 @@ fun ProfileLibraryTab(
                         LibraryListRow(
                             entry = entry,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = Modifier.animateLibraryItem()
+                            modifier = animateLibraryItem()
                         )
                     }
                 }
@@ -834,7 +834,7 @@ fun ProfileLibraryTab(
                             LibraryListRow(
                                 entry = entry,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                                modifier = Modifier.animateLibraryItem()
+                                modifier = animateLibraryItem()
                             )
                         }
                     }
@@ -855,7 +855,7 @@ fun ProfileLibraryTab(
                             LibraryListRow(
                                 entry = entry,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                                modifier = Modifier.animateLibraryItem()
+                                modifier = animateLibraryItem()
                             )
                         }
                     }
@@ -884,7 +884,7 @@ fun ProfileLibraryTab(
                                 // filter removed, which is what makes a filter feel like a
                                 // rearrangement rather than a redraw. Spring tokens, not
                                 // durations, for the reason the rest of the app uses them.
-                                .animateLibraryItem(),
+                                .then(animateLibraryItem()),
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
                         )
                     }
@@ -903,6 +903,12 @@ fun ProfileLibraryTab(
  * "Other" heading, which snapped into place while the groups above them slid - which
  * is what five copies of one set of spring tokens produces. One definition instead of
  * six, and the sixth cannot be forgotten again.
+ *
+ * Call it as `animateLibraryItem()`, not `Modifier.animateLibraryItem()`: this is a
+ * top-level extension, so its only receiver is the grid item scope, and writing a
+ * `Modifier` in front of it asks for a `LazyGridItemScope` receiver of type `Modifier`
+ * and does not compile. That is not a style point - it was written the other way, it
+ * failed CI's Kotlin compile at all four call sites, and the fix is the bare call.
  */
 private fun LazyGridItemScope.animateLibraryItem(): Modifier = Modifier.animateItem(
     placementSpec = ExpressiveMotion.DefaultSpatialOffset,
