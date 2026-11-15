@@ -76,6 +76,17 @@ class DashboardViewModel(
     private val findArrivingEntriesUseCase: FindArrivingEntriesUseCase = FindArrivingEntriesUseCase(),
     private val summarizeRecentActivityUseCase: SummarizeRecentActivityUseCase = SummarizeRecentActivityUseCase(),
     /**
+     * Folds the Discord presence's counts from the collection already in hand.
+     *
+     * Injected like the other pure use cases so the walk can be pinned by a test
+     * without a ViewModel, and so a dashboard built for a preview can pass a
+     * fixture instead of a real list.
+     */
+    // The object itself, not `SummarizeDiscordStats()`: a Kotlin `object` has no
+    // callable constructor, and the test factory passes the singleton explicitly.
+    private val summarizeDiscordStats: com.anisequel.domain.usecase.SummarizeDiscordStats =
+        com.anisequel.domain.usecase.SummarizeDiscordStats,
+    /**
      * Optional so the demo and public-profile dashboards - which have no reason
      * to remember anything - construct without one, and so existing call sites
      * keep compiling.
@@ -772,6 +783,10 @@ class DashboardViewModel(
             val recentActivity = recentActivity(collection)
             val cardPreview = cardPreviewEntries(collection)
             val continueWatching = continueWatchingEntries(collection)
+            val discordStats = summarizeDiscordStats.execute(
+                collection = collection,
+                sequelsFound = filteredVisible.size
+            )
 
             val updated = filteredVisible.map { found ->
                 val entry = withCachedDetail(found)
@@ -800,7 +815,8 @@ class DashboardViewModel(
                 arriving = arriving,
                 recentActivity = recentActivity,
                 cardPreview = cardPreview,
-                continueWatching = continueWatching
+                continueWatching = continueWatching,
+                discordStats = discordStats
             )
         }
 
@@ -826,7 +842,8 @@ class DashboardViewModel(
             isCached = showingCachedData,
             isDemoMode = isDemo,
             canWriteToAniList = canWriteToAniList,
-            cardPreview = work.cardPreview
+            cardPreview = work.cardPreview,
+            discordStats = work.discordStats
         )
     }
 
@@ -838,7 +855,8 @@ class DashboardViewModel(
         val arriving: List<ArrivingEntry>,
         val recentActivity: RecentActivitySummary,
         val cardPreview: List<MediaListEntryItem>,
-        val continueWatching: List<MediaListEntryItem>
+        val continueWatching: List<MediaListEntryItem>,
+        val discordStats: com.anisequel.domain.discord.DiscordStats
     )
 
     /**

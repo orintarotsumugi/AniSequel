@@ -39,6 +39,7 @@ import com.anisequel.data.network.ApiStatusSnapshot
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.DevicePreferences
+import com.anisequel.data.repository.DiscordPreferences
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.LibraryPreferences
@@ -47,6 +48,7 @@ import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
+import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.AuthViewModel
@@ -73,6 +75,10 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     // judged by - which is a page, not a switch.
     TYPE("Type & reading", "Font, text size and scrolling titles"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
+    // Its own page rather than a row on Jokes: Discord presence has a preview,
+    // a relay, per-activity phrasing and its own joke rotation. Sharing the Jokes
+    // page would put two independent features behind one scroll and one name.
+    DISCORD("Discord RPC", "Configure Discord Rich Presence & activity status"),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
@@ -184,6 +190,15 @@ fun SettingsScreen(
      * Library grid is not drawing. See [InterfaceTab].
      */
     interfacePreferences: InterfacePreferences,
+    /**
+     * The Discord presence's switches, relay link and phrasing.
+     *
+     * The same instance the app root publishes through, so this page's preview
+     * and the relay cannot describe two different presences.
+     */
+    discordPreferences: DiscordPreferences,
+    /** The counts the presence may quote, folded from the dashboard's list. */
+    discordStats: DiscordStats = DiscordStats.Empty,
     /**
      * The repository's reachability probe, passed as a function so Settings does
      * not need the whole repository to ask one question.
@@ -314,6 +329,8 @@ fun SettingsScreen(
                                     seasonalPreferences = seasonalPreferences,
                                     devicePreferences = devicePreferences,
                                     interfacePreferences = interfacePreferences,
+                                    discordPreferences = discordPreferences,
+                                    discordStats = discordStats,
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
@@ -421,6 +438,14 @@ private fun SettingsRoot(
                     SettingsPage.JOKES.entry(
                         AppVectorIcons.AnimeSparkle,
                         "settings_row_jokes",
+                        onOpen
+                    ),
+                    // The one row whose subtitle names the other app by name:
+                    // "Rich Presence" alone reads as this app's own status line,
+                    // and the whole point is that it is visible on Discord.
+                    SettingsPage.DISCORD.entry(
+                        AppVectorIcons.Discord,
+                        "settings_row_discord",
                         onOpen
                     )
                 ),
@@ -530,6 +555,8 @@ private fun SettingsPageContent(
     seasonalPreferences: SeasonalPreferences,
     devicePreferences: DevicePreferences,
     interfacePreferences: InterfacePreferences,
+    discordPreferences: DiscordPreferences,
+    discordStats: DiscordStats,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -554,6 +581,11 @@ private fun SettingsPageContent(
             arrivingPreferences = arrivingPreferences,
             libraryPreferences = libraryPreferences,
             mainTabPreferences = mainTabPreferences
+        )
+        SettingsPage.DISCORD -> DiscordRpcTab(
+            preferences = discordPreferences,
+            stats = discordStats,
+            previewEntries = cardPreviewEntries
         )
         SettingsPage.DEVICE -> DeviceManagerTab(
             seasonalPreferences = seasonalPreferences,

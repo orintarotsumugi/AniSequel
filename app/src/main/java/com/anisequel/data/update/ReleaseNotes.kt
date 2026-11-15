@@ -10,6 +10,45 @@ package com.anisequel.data.update
  */
 data class ReleaseNote(val title: String, val detail: String? = null)
 
+/**
+ * What kind of change a note describes, inferred from its title.
+ *
+ * The changelog has no machine-readable category field and adding one would mean
+ * editing every historical release block. Titles are written in the app's own
+ * voice and already start with the verb - "Adds", "Fixes", "The bar-lift crash is
+ * fixed" - so the classification is a keyword pass over the title only. It is a
+ * *presentation* hint: an unrecognised title is [NOTE], not an error, and the
+ * detail text is never used to guess because a fix often mentions the feature it
+ * fixed.
+ *
+ * This exists so the update prompt can colour-code what changed. The categories
+ * are deliberately outcome-shaped rather than conventional-commit-shaped: a reader
+ * deciding whether to update cares whether it is new, fixed, faster or different,
+ * not whether it was a `feat` or a `refactor`.
+ */
+enum class ReleaseNoteTone(val label: String) {
+    NEW("New"),
+    FIX("Fix"),
+    IMPROVE("Faster"),
+    CHANGE("Changed"),
+    NOTE("Note")
+}
+
+fun releaseNoteTone(title: String): ReleaseNoteTone {
+    val text = title.lowercase()
+    return when {
+        listOf("fix", "bug", "crash", "restore", "repair", "no longer", "stops")
+            .any { text.contains(it) } -> ReleaseNoteTone.FIX
+        listOf("new", "add", "introduc", "now has", "can be", "gains")
+            .any { text.contains(it) } -> ReleaseNoteTone.NEW
+        listOf("faster", "speed", "improv", "optimi", "reduc", "lighter", "smooth")
+            .any { text.contains(it) } -> ReleaseNoteTone.IMPROVE
+        listOf("change", "remov", "replac", "rename", "moves", "move ")
+            .any { text.contains(it) } -> ReleaseNoteTone.CHANGE
+        else -> ReleaseNoteTone.NOTE
+    }
+}
+
 /** The prefix the release workflow writes before every entry. */
 private const val BULLET = "- "
 

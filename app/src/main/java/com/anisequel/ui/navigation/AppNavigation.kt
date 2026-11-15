@@ -44,9 +44,11 @@ import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.OnboardingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
+import com.anisequel.data.repository.DiscordPreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
+import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
@@ -120,6 +122,32 @@ private fun catalogueShortcutOffered(
     searchMangaEnabled: Boolean
 ): Boolean = shortcutEnabled && (searchAnimeEnabled || searchMangaEnabled)
 
+/**
+ * Draws the launch screen and answers whether [AppNavigation] should stop here.
+ *
+ * The decision and the sentence it implies live together so the routing function
+ * keeps one branch instead of three: the gate waits for *both* stores, and which
+ * of the two is still unanswered is what the reader is told.
+ */
+@Composable
+private fun drawRestoringPlaceholder(
+    authState: AuthUiState,
+    onboardingCompleted: Boolean?,
+    modifier: Modifier
+): Boolean {
+    val message = when {
+        authState is AuthUiState.Restoring -> "Checking for a saved session\u2026"
+        onboardingCompleted == null -> "Reading your setup\u2026"
+        else -> return false
+    }
+    RestoringPlaceholder(modifier = modifier, message = message)
+    return true
+}
+
+/** The folded presence numbers, or none before the dashboard has answered. */
+private fun DashboardUiState?.discordStatsOrEmpty(): DiscordStats =
+    (this as? DashboardUiState.Success)?.discordStats ?: DiscordStats.Empty
+
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -186,6 +214,14 @@ fun AppNavigation(
     // switch; the host needs them to draw the heart filled in the pill.
     val jokeFavourites by jokePreferences.favourites.collectAsState(initial = emptySet())
 
+    // Discord presence, application-scoped for the same reason as every other
+    // preference here: the publishing host at this root and the page in Settings
+    // are two readers of one store, so the preview cannot describe a presence the
+    // relay never receives.
+    val discordPreferences = remember(context) {
+        DiscordPreferences(context.applicationContext)
+    }
+
     // The Library page's remembered media type. Application-scoped and built here
     // for the same reason as the rest: one DataStore reader per process, so the
     // tab cannot disagree with itself about what was last chosen.
@@ -245,7 +281,11 @@ fun AppNavigation(
     val onboardingPreferences = remember(context) {
         OnboardingPreferences(context.applicationContext)
     }
-    val onboardingCompleted by onboardingPreferences.completed.collectAsState(initial = true)
+    // Null until the answer has actually been read. Seeding `true` made a fresh
+    // install paint Home and only then pop the setup wizard over it - the app's
+    // first impression was a screen the reader was not allowed to use yet. The
+    // gate below treats "not read" as a wait, not as "done".
+    val onboardingCompleted by onboardingPreferences.completed.collectAsState(initial = null)
 
     // How the media cards are drawn. Read here and handed down as a composition
     // local rather than as another parameter on every destination, because the
@@ -374,8 +414,7 @@ fun AppNavigation(
     //
     // A splash for the few tens of milliseconds this takes is the honest thing
     // to draw while the answer is genuinely unknown. Guessing is not.
-    if (authState is AuthUiState.Restoring) {
-        RestoringPlaceholder(modifier)
+    if (drawRestoringPlaceholder(authState, onboardingCompleted, modifier)) {
         return
     }
 
@@ -461,6 +500,13 @@ fun AppNavigation(
     }
     val totalMissedCount by remember(dashboardFlow) {
         derivedStateOf { (dashboardState as? DashboardUiState.Success)?.totalMissedCount }
+    }
+
+    // The Discord presence's numbers. Derived for the same reason as the counts
+    // above: `uiState` is replaced per keystroke, and the presence host only needs
+    // to hear when the folded value actually changes.
+    val discordStats by remember(dashboardFlow) {
+        derivedStateOf { dashboardState.discordStatsOrEmpty() }
     }
 
     // The three entries Settings' card preview draws. Derived for the same reason
@@ -795,6 +841,8 @@ fun AppNavigation(
                         seasonalPreferences = seasonalPreferences,
                         devicePreferences = devicePreferences,
                         interfacePreferences = interfacePreferences,
+                        discordPreferences = discordPreferences,
+                        discordStats = discordStats,
                         aniListRepository = aniListRepository,
                         totalWatchedCount = totalWatchedCount,
                         totalMissedCount = totalMissedCount,
@@ -842,8 +890,18 @@ fun AppNavigation(
                     favourites = jokeFavourites
                 )
 
+                // The Discord presence host. Mounted beside the bar and the joke
+                // toast because the presence describes whichever page is on
+                // screen, and a screen cannot draw something that outlives it.
+                // Draws nothing itself; it composes and publishes.
+                DiscordPresenceHost(
+                    navController = navController,
+                    preferences = discordPreferences,
+                    stats = discordStats
+                )
+
                 FirstRunSetupHost(
-                    completed = onboardingCompleted,
+                    completed = onboardingCompleted == true,
                     authState = authState,
                     onboardingPreferences = onboardingPreferences,
                     interfacePreferences = interfacePreferences,

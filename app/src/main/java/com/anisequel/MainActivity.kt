@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
@@ -50,6 +51,7 @@ import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.theme.ThemePalette
 import com.anisequel.ui.viewmodel.AuthViewModel
 import java.lang.ref.WeakReference
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
@@ -289,6 +291,23 @@ class MainActivity : ComponentActivity() {
                 )
             )
 
+            // A stall is the one failure a `.catch` cannot help with.
+            //
+            // Both preference reads now survive an `IOException`, but a DataStore
+            // read that never completes (a wedged disk, a platform bug, a restore
+            // holding the file) simply emits nothing, and this gate waits for an
+            // `isLoaded` that is never coming. The screen then shows "Restoring your
+            // settings..." forever, which is the one launch failure a reader cannot
+            // distinguish from a slow phone. After this long the app opens with the
+            // defaults it already seeded; if the lock preference arrives later, the
+            // `LaunchedEffect(storedAppLock)` above still arms the gate, so this is
+            // a timeout on the splash, not a way around the lock.
+            var launchWatchdogElapsed by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(8_000L)
+                launchWatchdogElapsed = true
+            }
+
             // Full screen is the app's default presentation - applied by its own
             // helper so this method's branching stays about the app's screens.
             ImmersiveModeEffect(
@@ -377,7 +396,12 @@ class MainActivity : ComponentActivity() {
                             // window had nothing to show and the app looked stopped.
                             // The same branded placeholder the session read uses is
                             // drawn instead, so both pre-screen waits look deliberate.
-                            if (!themeSettings.isLoaded || !appLockReady) {
+                            if (!launchGateReady(
+                                    themeLoaded = themeSettings.isLoaded,
+                                    lockLoaded = appLockReady,
+                                    watchdogElapsed = launchWatchdogElapsed
+                                )
+                            ) {
                                 RestoringPlaceholder(message = "Restoring your settings\u2026")
                             } else {
                                 AppLockGate(
@@ -620,6 +644,20 @@ private fun rateLimitMessage(retryAfterSeconds: Int?): String = when {
     else ->
         "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
 }
+
+/**
+ * Whether the launch screen may step aside.
+ *
+ * `watchdogElapsed` wins over both reads because it exists for the day one of them
+ * never answers at all. Extracted so the rule is a fact a test can pin rather than
+ * a pair of `||`s buried in a composition. The lock is not skipped: its own
+ * collector calls `setLocked(true)` when a late `true` arrives.
+ */
+internal fun launchGateReady(
+    themeLoaded: Boolean,
+    lockLoaded: Boolean,
+    watchdogElapsed: Boolean
+): Boolean = watchdogElapsed || (themeLoaded && lockLoaded)
 
 /**
  * Only the fact that this Activity has already been unlocked, and only across a

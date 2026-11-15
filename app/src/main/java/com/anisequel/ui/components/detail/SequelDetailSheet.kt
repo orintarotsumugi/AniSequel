@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,7 +58,9 @@ import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
+import com.anisequel.domain.discord.DiscordActivityKind
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.discord.DiscordActivityBus
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
 import com.anisequel.ui.components.detail.info.InfoAppearanceEditor
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -211,6 +214,30 @@ fun SequelDetailSheet(
 ) {
     if (subject == null) return
     val media = subject.media
+
+    // What the Discord presence calls this. Announced only while the sheet is
+    // open, and withdrawn on the way out: a presence that still says "Viewing
+    // Frieren" after the sheet closed would be describing a page nobody is on.
+    // `media.id` is the key so a relation walk inside the sheet re-announces the
+    // new title rather than keeping the first one.
+    DisposableEffect(media.id, media.type, media.format) {
+        DiscordActivityBus.focus(
+            kind = DiscordActivityKind.forDetail(media.type, media.format),
+            title = media.title?.bestTitleOrNull,
+            coverUrl = media.coverImage?.bestUrl,
+            pageUrl = media.siteUrl,
+            progress = media.mediaListEntry?.progress
+                ?.takeIf { it > 0 }
+                ?.let { number ->
+                    if (media.type.equals("MANGA", ignoreCase = true)) {
+                        "Chapter $number"
+                    } else {
+                        "Episode $number"
+                    }
+                }
+        )
+        onDispose { DiscordActivityBus.clearFocus() }
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themePreferences = remember(context) { ThemePreferences(context) }

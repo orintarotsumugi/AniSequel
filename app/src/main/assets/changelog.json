@@ -1,6 +1,43 @@
 {
   "versions": [
     {
+      "version": "2.0.0",
+      "entries": [
+        {
+          "title": "Discord Rich Presence, previewed before it is published",
+          "detail": "Settings > Discord RPC draws the card a friend will see: the cover of the title you have open, the two lines Discord renders, the elapsed timer and the two buttons. A pinned preview sits at the bottom of the page while you change things, and quick actions let you try the Manga, Anime, Details and Idle phrasings without leaving your own list."
+        },
+        {
+          "title": "Your phrasing, per activity",
+          "detail": "Each activity - watching, anime details, manga, manga details, novel, novel details and browsing - has its own first and second line, written with tokens such as `$anime`, `$status`, `$stats` and `$joke`. Tap a token to insert it, reset one activity without touching the others, and the composer collapses a separator left by a token you turned off."
+        },
+        {
+          "title": "Ani-chan can follow you to Discord",
+          "detail": "A joke can ride along in the presence, on a one, five, ten, fifteen or thirty minute rotation. Pick the tones with a dropdown, keep the app's pool or add your own lines, and choose whether the joke sits on the first line or under the stats. Turning jokes off keeps the interval and the lines you wrote."
+        },
+        {
+          "title": "Stats and privacy are separate switches",
+          "detail": "The presence can quote completed anime, episodes watched, manga, chapters and sequels found, and Hide titles replaces every title with \"an anime\" while removing the cover and the AniList button. Nothing is published until the master switch is on; the default is off."
+        },
+        {
+          "title": "An honest Discord connection",
+          "detail": "Android has no Rich Presence API a Compose app can call directly, so the app sends the same card to a small https relay you run and the relay talks to Discord. Link it with a health check, change or unlink it at any time, and no Discord token is stored in the app. The Connection card says this plainly instead of pretending a switch is a connection."
+        },
+        {
+          "title": "Play Protect is explained, and the build is checkable",
+          "detail": "About > App authenticity explains why a GitHub release gets \"app scan recommended\" and shows the SHA-256 of the certificate this copy was signed with, selectable and copyable, with a debug/release row. A release build is no longer silently signed with the debug key: packaging one without the real keystore now fails with the reason."
+        },
+        {
+          "title": "Update notes are colour-coded",
+          "detail": "Each release note carries a New, Fix, Faster, Changed or Note label in its own colour, so a crash fix is findable without reading six paragraphs. Inline `code` and **emphasis** now render instead of printing their markers, and the update status row takes the colour of its state."
+        },
+        {
+          "title": "Three launch-path repairs",
+          "detail": "A preferences file that cannot be read no longer leaves the app on \"Restoring your settings\" forever, a read that never answers is released after eight seconds, and the first-run wizard now waits until the setup answer is known instead of appearing over an already-painted Home."
+        }
+      ]
+    },
+    {
       "version": "1.9.9",
       "entries": [
         {

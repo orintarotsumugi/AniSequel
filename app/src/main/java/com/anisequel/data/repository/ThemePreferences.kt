@@ -14,8 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -273,6 +275,34 @@ class ThemePreferences(context: Context) {
             isLoaded = true
         )
     }
+        // A settings file the platform cannot read must not hold the launch screen
+        // forever.
+        //
+        // `MainActivity` draws the branded placeholder until `isLoaded` is true, and
+        // this flow used to be the only thing that could set it. DataStore throws
+        // `IOException` on a corrupt or unreadable preferences file (a restore from
+        // another device, a crash during a write, a failing flash), the exception
+        // terminated the flow, and the app sat on "Restoring your settings..." with
+        // no error and no way forward - indistinguishable from a slow disk and
+        // permanent. Emitting the defaults is the only recoverable answer: the
+        // reader gets the app, and their stored choices are still on disk if the
+        // read was merely transient.
+        //
+        // Only `IOException` is swallowed. A programming error still crashes, because
+        // a defaulted theme is not a fix for a bug in the parser.
+        .catch { error ->
+            if (error is IOException) {
+                emit(
+                    ThemeSettings(
+                        themeMode = ThemeMode.DEFAULT,
+                        useDynamicColor = false,
+                        isLoaded = true
+                    )
+                )
+            } else {
+                throw error
+            }
+        }
 
     suspend fun setPalette(paletteId: String) {
         appContext.themeDataStore.edit { preferences ->
