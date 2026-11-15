@@ -653,7 +653,7 @@ private fun ExpressiveThemeHost(
             com.anisequel.data.repository.MotionStyle.SMOOTH -> MotionScheme.standard()
             com.anisequel.data.repository.MotionStyle.SNAPPY -> MotionScheme.standard()
             com.anisequel.data.repository.MotionStyle.CHILL -> MotionScheme.expressive()
-            com.anisequel.data.repository.MotionStyle.FLOATY -> MotionScheme.expressive()
+            com.anisequel.data.repository.MotionStyle.FLOATY, com.anisequel.data.repository.MotionStyle.DREAMY -> MotionScheme.expressive()
         },
         shapes = ExpressiveShapes,
         typography = typography,

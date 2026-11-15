@@ -75,7 +75,8 @@ enum class MotionStyle(val storageValue: String, val displayName: String) {
     SMOOTH("smooth", "Smooth"),
     SNAPPY("snappy", "Snappy"),
     CHILL("chill", "Chill"),
-    FLOATY("floaty", "Floaty");
+    FLOATY("floaty", "Floaty"),
+    DREAMY("dreamy", "Dreamy");
 
     companion object {
         val DEFAULT = CHILL

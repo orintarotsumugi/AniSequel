@@ -4,6 +4,10 @@
       "version": "2.1.1",
       "entries": [
         {
+          "title": "Dreamy motion style",
+          "detail": "A sixth motion style, Dreamy, joins Instant, Smooth, Snappy, Chill and Floaty: the softest setting, with very slow, very gentle movement and barely any bounce."
+        },
+        {
           "title": "Two more card styles",
           "detail": "The card picker gained Ribbon (title beneath the poster, rating as a coloured band) and Stamp (title over the poster's foot, rating stamped in its corner), taking the styles from eight to ten. Both reuse the same placement table as the rest, so the preview and the grid agree."
         },

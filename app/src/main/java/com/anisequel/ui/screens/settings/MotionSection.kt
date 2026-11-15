@@ -497,4 +497,6 @@ private fun motionDescription(style: MotionStyle): String = when (style) {
             "sheets and pages."
     MotionStyle.FLOATY ->
         "Slow and soft, with a low bounce: every move drifts into place."
+    MotionStyle.DREAMY ->
+        "The softest setting: very slow, very gentle, with barely any bounce."
 }

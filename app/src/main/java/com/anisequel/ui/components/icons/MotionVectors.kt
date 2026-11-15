@@ -142,6 +142,28 @@ object MotionVectors {
     }
 
     /**
+     * Dreamy: a single slow drift, the softest mark in the set.
+     */
+    val MotionDream: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "MotionDream",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                circle(cx = 18.5f, cy = 5.5f, radius = 2.2f)
+                circle(cx = 13.5f, cy = 10.5f, radius = 1.6f)
+                circle(cx = 9.5f, cy = 15.5f, radius = 1.1f)
+            }
+        }.build()
+    }
+
+    /**
      * The Motion section's own header mark: two travel lines and a dot.
      *
      * Deliberately not one of the five styles. The section used to borrow Smooth's
@@ -190,6 +212,7 @@ fun motionGlyph(style: MotionStyle): ImageVector = when (style) {
     MotionStyle.SNAPPY -> AppCustomVectors.MotionBolt
     MotionStyle.CHILL -> MotionVectors.MotionSpring
     MotionStyle.FLOATY -> MotionVectors.MotionDrift
+    MotionStyle.DREAMY -> MotionVectors.MotionDream
 }
 
 /**
