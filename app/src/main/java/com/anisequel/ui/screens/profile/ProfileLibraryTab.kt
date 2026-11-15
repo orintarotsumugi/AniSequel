@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.withListStatus
@@ -1120,7 +1121,12 @@ private fun LibraryPoster(
     val interactionSource = remember { MutableInteractionSource() }
     val style = LocalMediaCardStyle.current
     val title = media.displayName
-    val score = media.averageScore?.takeIf { it > 0 }
+    // A list entry carries the *owner's* score when AniList returns one, which is
+    // the number that matters on somebody else's profile (and on your own list).
+    // Fall back to the community average only when the entry is unrated, so a
+    // poster never loses its badge just because the reader has not scored it.
+    val score = entry.score?.roundToInt()?.takeIf { it > 0 }
+        ?: media.averageScore?.takeIf { it > 0 }
 
     Column(
         modifier = modifier
