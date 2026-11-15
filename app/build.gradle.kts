@@ -6,7 +6,7 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.2.0"
+val BASELINE_VERSION_NAME = "2.1.1"
 val BASELINE_VERSION_CODE = 623
 
 plugins {

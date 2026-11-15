@@ -355,7 +355,7 @@ private fun DiscordAccountCard(
         }
         Spacer(modifier = Modifier.height(10.dp))
         Text(
-            text = "Direct official web or token login. Your presence is sent straight to Discord with no relay server.",
+            text = "Connect with your own Discord token. Your presence is sent straight to Discord with no relay server.",
             style = MaterialTheme.typography.bodySmall,
             color = Color(0xFF9FA4AC)
         )

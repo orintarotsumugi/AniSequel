@@ -92,7 +92,11 @@ object DiscordPresenceComposer {
                 null
             },
             buttons = if (settings.showButtons) buttonsFor(settings, activity, title) else emptyList(),
-            activityName = settings.activityName.trim().ifBlank { DISCORD_APP_NAME },
+            // Discord's activity name shares the 128-character text budget. A
+            // custom name was passed through whole, so a long one was rejected
+            // server-side and the presence silently did not appear.
+            activityName = settings.activityName.trim().ifBlank { DISCORD_APP_NAME }
+                .fitDiscord(),
             kind = activity.kind,
             joke = lines.joke
         )
@@ -104,26 +108,46 @@ object DiscordPresenceComposer {
         title: String?
     ): List<DiscordButton> =
         buildList {
-            if (title != null && activity.pageUrl != null) {
+            val primaryUrl = activity.pageUrl?.discordButtonUrl()
+            if (title != null && primaryUrl != null) {
                 add(
                     DiscordButton(
                         label = settings.primaryButtonLabel.trim().ifBlank { "View on AniList" }
                             .fit(DISCORD_BUTTON_LABEL_LIMIT),
-                        url = activity.pageUrl.fit(DISCORD_BUTTON_URL_LIMIT)
+                        url = primaryUrl
                     )
                 )
             }
-            val secondaryUrl = settings.secondaryButtonUrl.trim().ifBlank { DISCORD_PROJECT_URL }
-            if (secondaryUrl.startsWith("https://") || secondaryUrl.startsWith("http://")) {
+            val secondaryUrl =
+                settings.secondaryButtonUrl.trim().ifBlank { DISCORD_PROJECT_URL }
+                    .discordButtonUrl()
+            if (secondaryUrl != null) {
                 add(
                     DiscordButton(
                         label = settings.secondaryButtonLabel.trim().ifBlank { "AniSequel on GitHub" }
                             .fit(DISCORD_BUTTON_LABEL_LIMIT),
-                        url = secondaryUrl.fit(DISCORD_BUTTON_URL_LIMIT)
+                        url = secondaryUrl
                     )
                 )
             }
         }
+
+    /**
+     * A URL Discord can actually open, or null.
+     *
+     * A too-long URL used to go through [fit], which kept its first 511
+     * characters and added an ellipsis - a guaranteed dead link that still used
+     * one of the two button slots. Dropping the button is the honest failure: the
+     * presence is still published, just without a button that cannot work. The
+     * scheme check matches the one the secondary URL always had, so a page URL
+     * that somehow arrived without http(s) is not handed to Discord either.
+     */
+    private fun String.discordButtonUrl(): String? {
+        val trimmed = trim()
+        if (trimmed.length > DISCORD_BUTTON_URL_LIMIT) return null
+        if (!trimmed.startsWith("https://") && !trimmed.startsWith("http://")) return null
+        return trimmed
+    }
 
     fun resolve(
         template: String,

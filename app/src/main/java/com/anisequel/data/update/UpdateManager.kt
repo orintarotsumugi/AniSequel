@@ -519,7 +519,10 @@ open class UpdateManager(private val context: Context) {
     }
 
     private companion object {
-        const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+        // The installer intent's MIME type lives with the intent in
+        // UpdateInstallation. A second copy here was never read, and an unused
+        // constant in the update path is the kind of thing that gets edited during
+        // a fix and makes the next reader believe it is load-bearing.
         const val OFFICIAL_SIGNER_SHA256 = "01924c4a7503820489802deb6993e5e030103a1a1a36482ecb54688fa3311f82"
     }
 }

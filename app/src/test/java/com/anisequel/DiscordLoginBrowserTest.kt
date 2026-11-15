@@ -10,7 +10,7 @@ import java.io.File
 /**
  * The sign-in transport, pinned where a device is not needed.
  *
- * 2.2.0 moved both sign-ins out of the app and into the device's browser: AniList
+ * 2.1.1 moved both sign-ins out of the app and into the device's browser: AniList
  * through a plain `ACTION_VIEW` instead of a Custom Tab, and Discord through the
  * same intent instead of a `WebView` that scraped the page's storage. Neither can
  * be observed in a JVM test - the browser is another app - but the parts that
@@ -49,17 +49,32 @@ class DiscordLoginBrowserTest {
     fun `a pasted token loses its scheme prefix in any case`() {
         val token = "mfa.abcdefghijklmnopqrstuvwxyz1234567890"
 
-        listOf("", "Bearer ", "bearer ", "BEARER ", "Bot ", "bot ", "Bearer Bot ")
-            .forEach { prefix ->
-                assertEquals(
-                    "the prefix '$prefix' has to be stripped",
-                    token,
-                    DiscordLogin.normalizeToken(prefix + token)
-                )
-            }
+        listOf(
+            "",
+            "Bearer ",
+            "bearer ",
+            "BEARER ",
+            "Bot ",
+            "bot ",
+            "Bearer Bot ",
+            "Bot Bearer ",
+            // A copied header carries a tab, not a space. The old literal-space
+            // check missed it, then whitespace removal welded the prefix onto
+            // the token: length-plausible, and refused by Discord.
+            "Bearer\t",
+            "Bot\t"
+        ).forEach { prefix ->
+            assertEquals(
+                "the prefix '$prefix' has to be stripped",
+                token,
+                DiscordLogin.normalizeToken(prefix + token)
+            )
+        }
 
         assertEquals(token, DiscordLogin.normalizeToken("  $token  "))
         assertTrue(DiscordLogin.looksLikeToken("bearer $token"))
+        // A real token that merely starts with the letters "bot" is not a prefix.
+        assertEquals("botanical$token", DiscordLogin.normalizeToken("botanical$token"))
     }
 
     @Test

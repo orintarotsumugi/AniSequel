@@ -1,8 +1,68 @@
 {
   "versions": [
     {
-      "version": "2.2.0",
+      "version": "2.1.1",
       "entries": [
+        {
+          "title": "Log out closes Discord at once",
+          "detail": "Disconnecting used to take the same lock a publish holds while it waits up to fifteen seconds for Discord's READY, so the teardown that would release that wait could not run until the wait had already timed out. The client now bumps a session epoch and tears the socket down outside the lock, and a clear that cannot get the lock returns instead of queueing - so Log out ends the session immediately, and a connect that started before the sign-out is abandoned rather than left publishing."
+        },
+        {
+          "title": "A failed old socket can no longer end the new one",
+          "detail": "After a reconnect, OkHttp can deliver the previous socket's failure on its own thread. That callback used to null and close whatever socket the client held by then - the replacement that had just connected - and the next publish started over. Each listener now carries the session epoch and socket it belongs to, so a late callback from a retired connection is ignored."
+        },
+        {
+          "title": "Rich Presence survives a rotation",
+          "detail": "The app-root host collected the settings with an initial default of \"disabled\", which is indistinguishable from the reader having turned Rich Presence off. An Activity recreation drew that default for one frame and disconnected the process-wide client before DataStore answered. The host now waits for the stored value before it publishes or disconnects anything."
+        },
+        {
+          "title": "A pasted Discord token loses every prefix",
+          "detail": "Bearer and Bot are stripped in either order, and a tab or other whitespace after the prefix counts. The old check looked for a literal space, so a copied header with a tab left \"BearereyJ...\" after whitespace removal - the right length and the wrong token."
+        },
+        {
+          "title": "Presence text and buttons stay inside Discord's limits",
+          "detail": "A custom activity name is trimmed to the 128-character text budget instead of being sent whole and rejected. A button URL longer than Discord's 512-character limit is dropped rather than truncated into a dead link, and a page URL has to be http(s) to become a button."
+        },
+        {
+          "title": "The connecting dot stops pulsing behind another app",
+          "detail": "The preview card's indefinite pulse is now gated on the window being resumed as well as on a connection in progress, so a connect that outlives the foreground no longer animates a dot nobody can see."
+        },
+        {
+          "title": "Theme text and surfaces travel together",
+          "detail": "During a recolour, on-surface and on-background text moved on the accent spring while their surfaces moved on the softer surface spring - so for a beat the page drew next-palette text on the previous palette's background. Each foreground now shares its surface's spring, keeping the contrast pair that the scheme promises for the whole animation."
+        },
+        {
+          "title": "A downloaded update survives a re-check",
+          "detail": "An Activity recreation runs the updater's once-per-launch check again. If the APK was already downloaded and GitHub was unreachable, that check replaced Ready to install with Failed and took the install prompt and Settings button off screen even though the verified file was still on disk. A check no longer runs over a release that is already downloaded."
+        },
+        {
+          "title": "The release guards compare whole versions",
+          "detail": "The baseline-trails-release test compared only the patch digit, so a baseline one minor behind a published release passed; it now uses the changelog as the release ledger and allows one entry of slack. The changelog order key folded versions in base 100, where 1.0.100 and 1.1.0 collided; it now uses a wider base and fails loudly if a component outgrows it."
+        },
+        {
+          "title": "The updater points at a release that exists",
+          "detail": "The manifest's release and download URLs named a tag that was never published, so the update dialog's release-page link and the download both pointed at nothing. They now name the v2.1.1 tag this version is published under."
+        },
+        {
+          "title": "Release notes come from the changelog",
+          "detail": "update.json's notes are regenerated from this file's 2.1.1 block, so the updater dialog, the What's new card and the release page describe the same release. The previous notes described a build that was never published."
+        },
+        {
+          "title": "The Discord card stops advertising the removed web login",
+          "detail": "The account card still said it offered an official web login inside the app. The web view was removed in this release, and the card now describes what the button actually does: link the account with a Discord token, with no relay server."
+        },
+        {
+          "title": "An unused updater constant is gone",
+          "detail": "UpdateManager carried a private APK MIME type that nothing read; the installer intent's type lives with the intent in UpdateInstallation. An unused constant in the update path invites a future edit to the copy that has no effect."
+        },
+        {
+          "title": "The version is 2.1.1 in every file",
+          "detail": "The release is 2.1.1: gradle.properties, the build script's fallback constants, update.json, the README, these notes and the code comments now agree, and the version code stays 623, one past 2.1.0's 622. AGENTS.md's patch-first rule is why this is a patch rather than a new minor line."
+        },
+        {
+          "title": "The baseline comment follows the patch rule",
+          "detail": "gradle.properties argued that the previous jump was deliberate and exempt from the patch-first rule, which contradicted the release policy the rest of the repo follows. The comment now records the 2.1.1 patch and why it is one."
+        },
         {
           "title": "Sign-in moves to your device's browser",
           "detail": "AniList and Discord both open in the browser you already use instead of a page inside AniSequel. AniList returns straight to the app from any browser; Discord's sign-in page now opens in the real browser, with its address bar, password manager and your existing session, and the app no longer runs a web view at all. That removes a Chromium renderer from the download and a login page you could not inspect."

@@ -81,7 +81,22 @@ class DiscordRpcClient(
     @Volatile private var connected: Boolean = false
     private val lastSequence = AtomicLong(-1L)
     private val identified = AtomicBoolean(false)
-    private var readyDeferred: CompletableDeferred<Result<GatewayReady>>? = null
+
+    /**
+     * Bumped whenever a disconnect is requested.
+     *
+     * A connect runs while holding [mutex], but [disconnect] must not wait for
+     * that lock: a slow gateway is allowed to spend fifteen seconds before READY,
+     * and the reader who just signed out should not. The epoch is how the two meet
+     * without the lock - a connect that started before the bump notices the change
+     * and abandons its socket instead of publishing the session the reader closed.
+     */
+    private val sessionEpoch = AtomicLong(0L)
+
+    // Written from OkHttp's listener thread and read by the coroutine waiting for
+    // READY; without `@Volatile` the waiter can keep seeing `null` (and a late
+    // READY can be dropped) because nothing orders the two threads' caches.
+    @Volatile private var readyDeferred: CompletableDeferred<Result<GatewayReady>>? = null
 
     /** Verifies a token against Discord's HTTP API and returns the account. */
     suspend fun verify(rawToken: String): Result<DiscordAccount> = withContext(Dispatchers.IO) {
@@ -146,22 +161,48 @@ class DiscordRpcClient(
         }
     }
 
-    suspend fun clear(rawToken: String): Result<Unit> = mutex.withLock {
-        runCatching {
-            val token = DiscordLogin.normalizeToken(rawToken)
-            if (token.isBlank()) return@runCatching
-            if (connected && activeToken == token && socket != null) {
-                val payload = DiscordPresenceJson.gatewayPresenceUpdate(
-                    presence = null,
-                    status = DiscordOnlineStatus.ONLINE,
-                    activityType = DiscordActivityType.PLAYING
-                )
-                socket?.send(payload)
+    /**
+     * Hides the presence, if the socket is free to say so right now.
+     *
+     * Deliberately non-blocking. Every caller clears and then disconnects, and the
+     * disconnect is what actually ends the session, so waiting here for a publish
+     * that may still be inside its fifteen-second READY wait bought nothing and
+     * made Log out sit on "Connecting…" for the rest of that timeout. The lock is
+     * only held long enough to send one frame when nobody else is using it.
+     */
+    suspend fun clear(rawToken: String): Result<Unit> {
+        val token = DiscordLogin.normalizeToken(rawToken)
+        if (token.isBlank()) return Result.success(Unit)
+        if (!mutex.tryLock()) return Result.success(Unit)
+        return try {
+            runCatching {
+                if (connected && activeToken == token && socket != null) {
+                    val payload = DiscordPresenceJson.gatewayPresenceUpdate(
+                        presence = null,
+                        status = DiscordOnlineStatus.ONLINE,
+                        activityType = DiscordActivityType.PLAYING
+                    )
+                    socket?.send(payload)
+                }
             }
+        } finally {
+            mutex.unlock()
         }
     }
 
-    suspend fun disconnect() = mutex.withLock {
+    /**
+     * Ends the session immediately, even while a connect is still waiting.
+     *
+     * This used to take [mutex], so a sign-out during a slow gateway queued behind
+     * the very `publish` whose pending READY it was supposed to cancel: the
+     * teardown that completes the READY deferred could not run until the deferred
+     * had already timed out, which is the opposite of what Log out is for. Bumping
+     * the epoch and tearing down outside the lock lets the waiter fail at once and
+     * release the lock, and [ensureConnected] checks the epoch so a socket opened in
+     * that window is closed rather than left publishing for a signed-out account.
+     */
+    suspend fun disconnect() {
+        sessionEpoch.incrementAndGet()
         teardown(closeCode = 1000, reason = "client disconnect")
     }
 
@@ -171,6 +212,7 @@ class DiscordRpcClient(
             return Result.success(existingReady.toAccount())
         }
         teardown(closeCode = 4000, reason = "reconnect")
+        val epoch = sessionEpoch.get()
         val deferred = CompletableDeferred<Result<GatewayReady>>()
         readyDeferred = deferred
         activeToken = token
@@ -180,7 +222,16 @@ class DiscordRpcClient(
         val request = Request.Builder()
             .url("wss://gateway.discord.gg/?v=9&encoding=json")
             .build()
-        socket = http.newWebSocket(request, GatewayListener(token))
+        socket = http.newWebSocket(request, GatewayListener(token, epoch))
+
+        // A disconnect can land between the epoch read above and this assignment;
+        // its teardown then saw no deferred to complete. Check once the deferred and
+        // socket exist, so that case fails now instead of waiting out the timeout.
+        if (epoch != sessionEpoch.get()) {
+            readyDeferred = null
+            teardown(closeCode = 4000, reason = "disconnected while connecting")
+            return Result.failure(IOException("The Discord connection was closed."))
+        }
 
         val result = withTimeoutOrNull(15_000L) { deferred.await() }
         if (result == null) {
@@ -227,6 +278,13 @@ class DiscordRpcClient(
         connected = false
         identified.set(false)
         ready = null
+        // The account this session belonged to goes with the socket. Leaving it
+        // behind meant a signed-out token kept sitting in the shared client's
+        // memory, and the next connect could compare against a token nobody was
+        // using any more. The sequence number belongs to the gateway session too;
+        // carrying it into a new one asks Discord to resume a session it closed.
+        activeToken = null
+        lastSequence.set(-1L)
         // A publish waiting on READY has to be released when the socket goes
         // away, instead of being left to its own 15-second timeout. Signing out
         // during a slow connect used to leave the Settings page saying
@@ -243,12 +301,29 @@ class DiscordRpcClient(
         runCatching { ws?.cancel() }
     }
 
-    private inner class GatewayListener(private val token: String) : WebSocketListener() {
+    /**
+     * Whether a callback still belongs to the session that created it.
+     *
+     * A reconnect disposes the old socket only after the new one is in place, and
+     * OkHttp delivers the old listener's `onFailure` on its own thread. Without
+     * this, a socket that failed a second late tore down its replacement - the
+     * reconnect succeeded, then the old failure closed the live session, and the
+     * next publish started over. The epoch closes the same door for a callback
+     * racing a sign-out.
+     */
+    private fun isCurrent(webSocket: WebSocket, epoch: Long): Boolean =
+        epoch == sessionEpoch.get() && webSocket === socket
+
+    private inner class GatewayListener(
+        private val token: String,
+        private val epoch: Long
+    ) : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             // wait for HELLO
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
+            if (!isCurrent(webSocket, epoch)) return
             val envelope = runCatching { envelopeAdapter.fromJson(text) }.getOrNull() ?: return
             envelope.s?.let { lastSequence.set(it) }
             when (envelope.op) {
@@ -277,6 +352,7 @@ class DiscordRpcClient(
                 0 -> { // DISPATCH
                     if (envelope.t == "READY") {
                         val user = extractReadyUser(text)
+                        if (!isCurrent(webSocket, epoch)) return
                         val readyEvent = GatewayReady(user = user)
                         ready = readyEvent
                         connected = true
@@ -298,10 +374,12 @@ class DiscordRpcClient(
         }
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isCurrent(webSocket, epoch)) return
             connected = false
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (!isCurrent(webSocket, epoch)) return
             connected = false
             if (ready == null) {
                 readyDeferred?.complete(Result.failure(IOException(closeReason(code, reason))))
@@ -310,6 +388,7 @@ class DiscordRpcClient(
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            if (!isCurrent(webSocket, epoch)) return
             connected = false
             val message = response?.code?.let { "Discord connection failed ($it)." }
                 ?: t.message?.takeIf { it.isNotBlank() }

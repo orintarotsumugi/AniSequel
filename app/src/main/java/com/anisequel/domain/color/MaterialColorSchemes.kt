@@ -164,7 +164,7 @@ object MaterialColorSchemes {
      * gets a recognisably tinted page, high enough that a vivid one does not
      * repaint the containers as coloured cards.
      *
-     * Raised from 8/12 in 2.2.0. At the old ceiling a vivid cover's page was a
+     * Raised from 8/12 in 2.1.1. At the old ceiling a vivid cover's page was a
      * near-grey with a coloured button on it: `primaryChroma / 8` for a chroma-100
      * cover was capped at 12, which is about a fifth of the accent sitting right
      * above it, so the "the whole app takes on this show's colour" promise held for

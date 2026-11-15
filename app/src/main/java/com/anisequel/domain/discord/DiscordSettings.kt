@@ -191,12 +191,26 @@ object DiscordLogin {
      * passed [looksLikeToken] on length alone once the space was stripped, and was
      * stored as a token Discord refuses with nothing in the message to suggest the
      * paste was the problem.
+     *
+     * The strip repeats until there is no prefix left, because a paste can carry
+     * both (`"Bot Bearer eyJ..."`). It also accepts a tab or any other whitespace
+     * between the prefix and the token: the old check was for a literal `"Bearer "`,
+     * so a copied header with a tab survived as `"BearereyJ..."` once all whitespace
+     * was removed - a value that is the right length and still the wrong token. A
+     * prefix only counts when it is followed by whitespace, so a token that happens
+     * to begin with the letters "bot" is left alone.
      */
     fun normalizeToken(raw: String): String {
         var value = raw.trim()
-        for (prefix in listOf("Bearer ", "Bot ")) {
-            if (value.startsWith(prefix, ignoreCase = true)) {
-                value = value.substring(prefix.length).trimStart()
+        var stripped = true
+        while (stripped) {
+            stripped = false
+            for (prefix in listOf("Bearer", "Bot")) {
+                if (!value.startsWith(prefix, ignoreCase = true)) continue
+                val rest = value.substring(prefix.length)
+                if (rest.isEmpty() || !rest.first().isWhitespace()) continue
+                value = rest.trimStart()
+                stripped = true
             }
         }
         return value.replace(whitespace, "")

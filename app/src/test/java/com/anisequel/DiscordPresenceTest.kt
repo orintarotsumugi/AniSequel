@@ -6,6 +6,7 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaListGroup
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
+import com.anisequel.domain.discord.DISCORD_BUTTON_URL_LIMIT
 import com.anisequel.domain.discord.DISCORD_TEXT_LIMIT
 import com.anisequel.domain.discord.DiscordActivity
 import com.anisequel.domain.discord.DiscordActivityKind
@@ -276,6 +277,34 @@ class DiscordPresenceTest {
             DiscordStats.Empty
         )
         assertTrue(presence.buttons.none { it.label == "AniSequel on GitHub" })
+    }
+
+    @Test
+    fun `a button whose url is too long is dropped rather than truncated`() {
+        val longUrl = "https://example.com/" + "a".repeat(DISCORD_BUTTON_URL_LIMIT)
+        val presence = DiscordPresenceComposer.compose(
+            settings().copy(secondaryButtonUrl = longUrl),
+            activity().copy(pageUrl = longUrl),
+            DiscordStats.Empty
+        )
+
+        // A truncated URL with an ellipsis on the end is a dead link, not a
+        // shorter one: Discord would publish a button that goes nowhere. The
+        // presence itself is still valid, just without either button.
+        assertTrue(presence.buttons.isEmpty())
+        assertEquals("Viewing Frieren", presence.details)
+    }
+
+    @Test
+    fun `a custom activity name is kept inside Discord's text budget`() {
+        val presence = DiscordPresenceComposer.compose(
+            settings().copy(activityName = "A".repeat(200)),
+            activity(),
+            DiscordStats.Empty
+        )
+
+        assertTrue(presence.activityName.length <= DISCORD_TEXT_LIMIT)
+        assertTrue(presence.activityName.endsWith("\u2026"))
     }
 
     @Test

@@ -2685,9 +2685,9 @@ release without the real keystore: the old silent debug fallback produced the on
 APK that Play Protect distrusts *and* the updater rejects, with no line in the log
 saying why.
 
-## 2.2.0: the browser is the sign-in, and one Discord client
+## 2.1.1: the browser is the sign-in, and one Discord client
 
-The relay section above is history: 2.1.0 removed the relay and 2.2.0 finishes the
+The relay section above is history: 2.1.0 removed the relay and 2.1.1 finishes the
 job by taking the last in-app web surface out of the sign-in path.
 
 ### AniList: `ACTION_VIEW`, not a Custom Tab
@@ -2737,8 +2737,23 @@ The real socket belongs to `DiscordPresencePublisher` at the app root, so the pa
 meant to end kept publishing until the preference flow reached the publisher. Every
 visit also left an `OkHttpClient` pool and a supervision scope behind, because
 `remember` disposes neither. Both now use `DiscordRpcClient.shared`, and
-`teardown()` completes a pending READY wait, so a log-out during a slow connect
-returns at once instead of waiting out the 15-second timeout.
+`teardown()` completes a pending READY wait. The follow-up round finished that
+argument: `disconnect()` used to take the same mutex the publish held across the
+READY wait, so it could not reach the teardown that released the waiter until the
+timeout had already elapsed. It now bumps a session epoch and tears down outside
+the lock; the connect checks that epoch once its deferred and socket exist, and
+`clear()` skips rather than queues behind a busy publish. The epoch also retires a
+reconnect's old listener: a failure delivered a second late used to null the *new*
+socket. `DiscordPresencePublisher` now waits for DataStore instead of acting on a
+default `DiscordSettings()`, which made every Activity recreation disconnect the
+process-wide client for one frame.
+
+The two version guards were fixed rather than only renumbered. The
+baseline-trails-release test compared patch digits, so it could not see a minor
+bump, and `ChangelogTest.sortKey()` folded three-digit components into the same
+number (1.0.100 and 1.1.0 both became 10100). The first now uses the changelog as
+the release ledger and allows one entry of slack; the second uses a wider base and
+fails loudly if a component outgrows it.
 
 ### The tint ceiling, and the tone that asked the wrong question
 

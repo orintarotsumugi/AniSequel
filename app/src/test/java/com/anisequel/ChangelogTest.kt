@@ -310,16 +310,23 @@ class ChangelogTest {
     }
 
     /**
- * `1.0.24` → 10024, so the sort is numeric.
+ * `1.0.24` → 1024 with base 1000, so the sort is numeric.
  *
  * String comparison is wrong here for the same reason the workflow compares patch
  * numbers as integers: "1.0.9" sorts above "1.0.10", which would make an older
  * release look like the newest one — and "newest" is what every consumer renders.
+ *
+ * The base was 100, which silently collided once a component reached three digits:
+ * 1.0.100 and 1.1.0 both folded to 10100, so the order test could accept a file
+ * with those two reversed. A thousand releases of one component is beyond where
+ * this app will be before the key needs widening again; the require makes the
+ * assumption fail loudly rather than wrap.
  */
 private fun String.sortKey(): Long {
     val parts = split('.').mapNotNull { it.toIntOrNull() }
     require(parts.isNotEmpty()) { "'$this' has no numeric components" }
-    return parts.fold(0L) { acc, part -> acc * 100L + part }
+    require(parts.all { it < 1_000 }) { "'$this' has a component too large to sort" }
+    return parts.fold(0L) { acc, part -> acc * 1_000L + part }
 }
 
 private fun findProjectRoot(): File {

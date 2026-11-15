@@ -23,15 +23,17 @@ middleman server.
 
 ---
 
-## What's new - 2.2.0
+## What's new - 2.1.1
 
-Sign-in happens in your browser, and the colour follows the show further.
+Sign-in happens in your browser, the colour follows the show further, and the
+follow-up round fixes the Discord session, theme, updater and version-guard
+flaws the first pass left behind.
 
 - **The browser is the sign-in.** AniList and Discord both open in the browser you already use instead of a page inside the app. AniList still returns straight to AniSequel; Discord's page is now the real browser's, with its address bar and password manager. The app ships no web view at all.
-- **One Discord client.** The Settings page and the app-root publisher share one client, so Log out ends the live session immediately instead of disconnecting an instance that was never connected.
-- **The accent follows the app's theme.** The title page's backdrop and the cover swatch take their tone from the mode the app is drawing, not the phone's.
+- **A Discord log-out that is immediate.** Log out no longer waits behind a slow gateway connect, a stale socket can no longer close the replacement that reconnected after it, and rotating the device no longer drops the live session before the stored settings arrive.
+- **The accent follows the app's theme.** The title page's backdrop and the cover swatch take their tone from the mode the app is drawing, not the phone's. During a recolour, text now travels on the same spring as the surface under it, so the pair is never momentarily mismatched.
 - **Richer palettes.** Surfaces carry more of the cover's hue, every text pair stays on Material's tone ladder, and the swatch is a three-tone gradient centred on the scheme's own accent.
-- **A cascading recolour.** A theme change moves the accent roles first while the large surfaces settle behind them on a softer spring.
+- **Updater and release guards.** A downloaded update is no longer replaced by an offline check on rotation, and the version tests now compare whole versions instead of a patch digit that could not see a minor bump.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
