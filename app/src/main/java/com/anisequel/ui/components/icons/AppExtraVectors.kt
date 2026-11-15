@@ -792,9 +792,69 @@ object AppExtraVectors {
             }
         }.build()
     }
+    /**
+     * The Discord mark, for the presence settings and the preview card.
+     *
+     * A deliberately simplified mascot rather than a traced brand asset: the
+     * outline, the two eyes and the little side flicks are what make the shape
+     * recognisable at 20dp, and every other line in this file is drawn the same
+     * way. It is stroked, with filled eyes, because at this size a solid body
+     * loses the eyes into the silhouette.
+     */
+    val Discord: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "Discord",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.7f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // The face: a rounded body with a notch at the top for the fringe.
+                moveTo(9.0f, 6.4f)
+                curveTo(10.6f, 5.8f, 13.4f, 5.8f, 15.0f, 6.4f)
+                curveTo(17.6f, 7.3f, 19.4f, 9.4f, 19.7f, 12.4f)
+                curveTo(19.9f, 14.2f, 18.8f, 15.6f, 17.6f, 16.7f)
+                curveTo(16.3f, 17.9f, 14.2f, 18.4f, 12.0f, 18.4f)
+                curveTo(9.8f, 18.4f, 7.7f, 17.9f, 6.4f, 16.7f)
+                curveTo(5.2f, 15.6f, 4.1f, 14.2f, 4.3f, 12.4f)
+                curveTo(4.6f, 9.4f, 6.4f, 7.3f, 9.0f, 6.4f)
+                close()
+
+                // The two side flicks that read as ears/wings.
+                moveTo(4.5f, 9.8f)
+                lineTo(2.9f, 8.8f)
+                lineTo(3.4f, 11.9f)
+                moveTo(19.5f, 9.8f)
+                lineTo(21.1f, 8.8f)
+                lineTo(20.6f, 11.9f)
+            }
+            path(fill = SolidColor(Color.White)) {
+                // Left eye.
+                moveTo(9.4f, 9.9f)
+                curveToRelative(0.9f, 0f, 1.3f, 0.7f, 1.3f, 1.7f)
+                curveToRelative(0f, 1f, -0.4f, 1.7f, -1.3f, 1.7f)
+                curveToRelative(-0.9f, 0f, -1.3f, -0.7f, -1.3f, -1.7f)
+                curveToRelative(0f, -1f, 0.4f, -1.7f, 1.3f, -1.7f)
+                close()
+                // Right eye.
+                moveTo(13.6f, 9.9f)
+                curveToRelative(0.9f, 0f, 1.3f, 0.7f, 1.3f, 1.7f)
+                curveToRelative(0f, 1f, -0.4f, 1.7f, -1.3f, 1.7f)
+                curveToRelative(-0.9f, 0f, -1.3f, -0.7f, -1.3f, -1.7f)
+                curveToRelative(0f, -1f, 0.4f, -1.7f, 1.3f, -1.7f)
+                close()
+            }
+        }.build()
+    }
     /*
-     * Every glyph above is built like the rest of this file: a builder, one `path`
-     * per stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,
+     * Every glyph in this file is built the same way: a builder, one `path` per
+     * stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,
      * because these shapes started as SVG snippets and `PathBuilder` has no
      * `horizontalTo`/`verticalTo` - a straight line names both ends here.
      */

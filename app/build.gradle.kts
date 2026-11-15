@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "1.9.9"
-val BASELINE_VERSION_CODE = 619
+val BASELINE_VERSION_NAME = "2.0.0"
+val BASELINE_VERSION_CODE = 620
 
 plugins {
   alias(libs.plugins.android.application)
@@ -143,6 +143,33 @@ android {
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
+
+  // A release is never debug-signed silently.
+  //
+  // The fallback above keeps configuration and the *lint/compile* tasks working
+  // on a machine with no keystore - those never package a release APK. Packaging
+  // one without the real key used to succeed, and the result is the worst of both
+  // worlds: Play Protect treats a debug-signed sideload as unknown, the in-app
+  // updater refuses it on the next release because the certificate changed, and
+  // nothing in the run says why. CI already restores the key from secrets; this
+  // makes a local `assembleRelease` fail with the reason instead.
+  val releaseSigningForGuard = signingConfigs.getByName("release")
+  tasks.matching { it.name == "assembleRelease" || it.name == "bundleRelease" }
+    .configureEach {
+      doFirst {
+        val store = releaseSigningForGuard.storeFile
+        if (store == null || !store.exists()) {
+          throw org.gradle.api.GradleException(
+            "Refusing to package an unsigned/debug-signed release. Set KEYSTORE_PATH " +
+              "(or add release-key.jks) and STORE_PASSWORD / KEY_PASSWORD, or build " +
+              "\"debug\" for a local test APK. A release signed with a substitute " +
+              "key cannot install over the previous AniSequel and is what Play " +
+              "Protect is warning about."
+          )
+        }
+      }
+    }
+
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11

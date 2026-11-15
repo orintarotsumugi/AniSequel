@@ -2611,3 +2611,76 @@ The ViewModel writes optimistically, one request per row, and rolls back on
 failure; the response's count overwrites the guess because somebody else may have
 liked it in between. The footer is a `FlowRow` - a private message on a 360dp
 phone no longer clips the comment button behind the new heart.
+
+## 2.0.0: Discord Rich Presence is a relay, not an SDK
+
+### Android has no Rich Presence API this app can call
+
+Discord's Rich Presence transport is local IPC. On Android the supported client is
+the native **Discord Social SDK** (C++ with Unity/Unreal bindings), and there is no
+Kotlin or Java artifact on Maven to put in `libs.versions.toml`. Shipping the
+native SDK for this feature alone would add an ABI set, a second build system and
+a Discord application secret that a sideloaded APK updates over GitHub.
+
+The alternative was a switch that says "Connected" and does nothing. This release
+takes the third option: the app composes the exact presence and sends it over
+HTTPS to a small relay the reader runs. The relay holds the Discord credentials
+and does the IPC. The app stores no Discord token, and the Connection card says so
+rather than implying a direct session.
+
+### The wire contract
+
+Three endpoints under the base URL the reader links:
+
+- `GET /v1/health` -> `{"ok":true,"user":"name"}`. Linking probes this and only
+  saves the link on a 2xx with `ok: true`; a typed URL alone would let Settings
+  claim a connection that the first real publish would disprove.
+- `POST /v1/presence` -> the envelope written by `DiscordPresenceJson`:
+  `{"applicationId":"...","activity":{...}}`, using Discord's field names
+  (`details`, `state`, `assets.large_image`, `timestamps.start`, `buttons`). It is
+  hand-written JSON because the only variable text is user-authored jokes and
+  titles; the escaping is one function and a test pins it.
+- `DELETE /v1/presence` -> withdraws the activity. A 404 is an answer, not a
+  failure; anything else is surfaced because a presence that will not clear is the
+  one thing the off switch must report.
+
+`DiscordRelay.normalizeBaseUrl` accepts HTTPS only, requires a host, and rejects
+user info in the URL. A plain-HTTP relay would be blocked by the platform's
+cleartext policy on this target SDK anyway, so accepting it in the field would
+only turn a blocked request into an unexplained failure. Application IDs are
+checked as 17-20 digit snowflakes before a request leaves the phone.
+
+### Where the sentence is made, and where it is sent
+
+`DiscordPresenceComposer` is pure Kotlin and owns the rules that fail silently:
+the 128-character limit, the ellipsis that does not split a surrogate pair, the
+separator left behind by a disabled stats line, resolving a template against the
+live title, and the privacy switch that must remove the name, the cover **and**
+the AniList button together. `DiscordActivityBus` owns what is open - the route
+observer is the page, the detail sheet is the title - and stamps the start time so
+a recomposition does not reset the timer.
+
+`DiscordPresenceHost` is mounted beside the navigation bar and the joke host, not
+inside a destination: the presence outlives the page it describes. The Settings
+page reads the host's last composed value for its preview, so the joke quoted in
+the dock and the joke sent to the relay cannot be two different sentences. A live
+status is only set from a successful POST; any other answer leaves the preview
+visible with the failure printed on the account card.
+
+Linking a *different* relay is a key on the publish effect (`relayUrl` and
+`applicationId`), not just on `canPublish`. Without those keys the boolean stays
+true, the card does not change, and the old relay keeps the presence while the new
+one never sees it - which would read as a successful link. The old relay is
+cleared before the new one is sent to.
+
+### Play Protect cannot be dismissed from inside the app
+
+The scan prompt in 2.0 is the platform's response to an APK Play has not seen, not
+a malware verdict, and no permission or manifest flag changes it. Distribution
+through Play with Play App Signing is the only complete fix. What the app can do is
+make the copy checkable: About > App authenticity shows the SHA-256 of the
+certificate this build was signed with, selectable and copyable, and whether the
+build is release- or debug-signed. The Gradle guard also refuses to package a
+release without the real keystore: the old silent debug fallback produced the one
+APK that Play Protect distrusts *and* the updater rejects, with no line in the log
+saying why.

@@ -52,6 +52,17 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
         subtitle = "Check for a newer build",
         modifier = modifier
     ) {
+        // One tint for the whole status row, chosen from the state rather than a
+        // single primary: "ready to install" and "could not check" used to be the
+        // same colour and the same word weight, so the only difference was the
+        // sentence. The colour is a second, faster signal for the same fact.
+        val statusTint = when (state) {
+            is UpdateUiState.Failed -> MaterialTheme.colorScheme.error
+            is UpdateUiState.NeedsInstallPermission -> MaterialTheme.colorScheme.tertiary
+            is UpdateUiState.ReadyToInstall, is UpdateUiState.Available ->
+                MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -59,7 +70,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
             Icon(
                 imageVector = AppVectorIcons.SystemUpdate,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = statusTint,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -88,7 +99,10 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    // The same tint as the icon. Failure was the only arm that
+                    // used it, so an available update and "checking" were the
+                    // same colour; the icon alone is easy to miss at 22dp.
+                    color = statusTint
                 )
 
                 if (state is UpdateUiState.Available) {

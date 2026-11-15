@@ -1,7 +1,9 @@
 package com.anisequel
 
 import com.anisequel.data.update.ReleaseNote
+import com.anisequel.data.update.ReleaseNoteTone
 import com.anisequel.data.update.parseReleaseNotes
+import com.anisequel.data.update.releaseNoteTone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -113,6 +115,20 @@ class ReleaseNotesTest {
             listOf(ReleaseNote("Kept", null)),
             parseReleaseNotes("- \n- : a detail with no title\n- Kept")
         )
+    }
+
+    @Test
+    fun `notes are colour-coded by what kind of change they describe`() {
+        // The categories are inferred from the title, so the titles that actually
+        // shipped are the fixtures. A classifier that only knows a test sentence
+        // is a classifier that colours the real changelog wrong.
+        assertEquals(ReleaseNoteTone.FIX, releaseNoteTone("The bar-lift crash is fixed"))
+        assertEquals(ReleaseNoteTone.FIX, releaseNoteTone("Messages can no longer vanish"))
+        assertEquals(ReleaseNoteTone.NEW, releaseNoteTone("Two new card styles, Gallery and Cinema"))
+        assertEquals(ReleaseNoteTone.NEW, releaseNoteTone("Messages can be liked"))
+        assertEquals(ReleaseNoteTone.IMPROVE, releaseNoteTone("The list loads faster"))
+        assertEquals(ReleaseNoteTone.CHANGE, releaseNoteTone("Settings moves to a shelf"))
+        assertEquals(ReleaseNoteTone.NOTE, releaseNoteTone("Code runs take the theme's accent"))
     }
 
     @Test

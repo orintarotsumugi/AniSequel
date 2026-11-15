@@ -42,6 +42,7 @@ import com.anisequel.BuildConfig
 import com.anisequel.data.diagnostics.CrashReports
 import com.anisequel.data.network.AniListOAuth
 import com.anisequel.data.repository.DiagnosticsPreferences
+import com.anisequel.data.security.AppSignature
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
@@ -81,6 +82,7 @@ fun InfoSettingsTab(
 ) {
     SettingsScrollColumn(modifier) {
         BuildCard()
+        AppAuthenticityCard()
         CrashReportCard()
         PrivacyCard()
         HelpLinksCard()
@@ -136,6 +138,122 @@ private fun BuildCard() {
                 InfoRow(label = "Data source", value = "AniList GraphQL API")
             }
         }
+    }
+}
+
+/**
+ * Why Play Protect asks, and the one fact the reader can verify.
+ *
+ * ## What this can and cannot fix
+ *
+ * The "app scan recommended" sheet is the platform responding to an app it has
+ * not seen before, which is every GitHub release and no Play release. Nothing in
+ * this APK can pre-approve it: the trust is a Play/Google-side fact, and the only
+ * complete fix is distributing through Play with Play App Signing. Telling the
+ * reader the prompt is a bug in the app would be false, and telling them to ignore
+ * security prompts would be worse.
+ *
+ * What the app *can* do is make the other half checkable. The certificate digest
+ * below is the same one the release workflow verifies and the update manager
+ * pins; a copy of the APK that does not match it did not come from this project.
+ * The debug/release line matters too: a debug-signed build is treated as unknown
+ * by Play Protect and cannot install over a release build, which is exactly the
+ * `INSTALL_FAILED_UPDATE_INCOMPATIBLE` a reader would otherwise blame on the
+ * download.
+ */
+@Composable
+private fun AppAuthenticityCard() {
+    val context = LocalContext.current
+    var fingerprint by remember { mutableStateOf("Reading the certificate…") }
+    var releaseBuild by remember { mutableStateOf<Boolean?>(null) }
+    var copied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        fingerprint = withContext(Dispatchers.IO) { AppSignature.sha256(context) }
+        releaseBuild = !AppSignature.isDebugBuild(context)
+    }
+    LaunchedEffect(copied) {
+        if (!copied) return@LaunchedEffect
+        delay(COPY_CONFIRMATION_MILLIS)
+        copied = false
+    }
+
+    val ready = fingerprint != "Reading the certificate…" && fingerprint != "Unavailable"
+    SectionCard(
+        title = "App authenticity",
+        icon = AppVectorIcons.CheckDouble,
+        subtitle = "Why the phone asks, and how to check this copy"
+    ) {
+        Text(
+            text = "Play Protect shows \"app scan recommended\" for an app Google has " +
+                "not seen before. It is not a finding - it is an offer to send this " +
+                "APK's hash for a scan. Tap Scan app if you want that check; nothing " +
+                "about your AniList account is included. AniSequel cannot dismiss the " +
+                "prompt from inside the app, because trust is decided by Play, and " +
+                "this build arrives from a GitHub release.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                InfoRow(
+                    label = "Build",
+                    value = when (releaseBuild) {
+                        null -> "Reading…"
+                        true -> "Release-signed"
+                        false -> "Debug-signed"
+                    }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                Text(
+                    text = "Signing certificate · SHA-256",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                SelectionContainer {
+                    Text(
+                        text = fingerprint,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        SettingsButton(
+            text = if (copied) "Fingerprint copied" else "Copy the fingerprint",
+            onClick = {
+                copyToClipboard(
+                    context = context,
+                    report = fingerprint,
+                    label = "AniSequel signing certificate"
+                )
+                copied = true
+            },
+            icon = AppVectorIcons.CopyLink,
+            variant = SettingsButtonVariant.Outlined,
+            enabled = ready,
+            fillWidth = true
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Compare it with the fingerprint on the release page before installing " +
+                "an APK somebody sent you. If they differ, it is not this app. A " +
+                "debug-signed copy is also why an update can refuse to install over " +
+                "the release.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -400,9 +518,16 @@ private fun CrashReportDialog(
 }
 
 /** The platform clipboard, `as?` because a device can in principle not publish one. */
-private fun copyToClipboard(context: Context, report: String) {
+private fun copyToClipboard(
+    context: Context,
+    report: String,
+    // The label is what the clipboard preview shows in the system UI. The
+    // fingerprint was copied under "AniSequel crash report", which is the wrong
+    // story to tell somebody who just copied a certificate digest.
+    label: String = "AniSequel crash report"
+) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    clipboard?.setPrimaryClip(ClipData.newPlainText("AniSequel crash report", report))
+    clipboard?.setPrimaryClip(ClipData.newPlainText(label, report))
 }
 
 /**
