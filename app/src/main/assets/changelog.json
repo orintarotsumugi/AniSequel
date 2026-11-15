@@ -22,6 +22,10 @@
         {
           "title": "Fixes for connection and preview behavior",
           "detail": "Resolved publish/disable races, improved reconnect and logout handling, fixed preview/status inconsistencies, and tightened token/login validation and messaging."
+        },
+        {
+          "title": "The Info page ends above its capsule",
+          "detail": "The last card and the Categories heading could not be scrolled clear of the floating Info / My Entry bar, because the page reserved a fixed 112dp for a bar that is taller than that on most phones. The page now reserves the bar's measured height plus a gap, and the hero hands its artwork over to the page backdrop without the hard horizontal seam that made the banner look cut off."
         }
       ]
     },
