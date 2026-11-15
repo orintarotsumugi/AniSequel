@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,13 +23,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,12 +69,19 @@ import kotlin.math.roundToInt
 @Composable
 internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
     val target = NavBarLift.clamp(liftDp)
-    val animated by animateFloatAsState(
+    // Held as a `State`, not read here.
+    //
+    // Reading `.value` in this function made every frame of the spring a
+    // recomposition of the whole preview - the phone outline, its status bar, its
+    // shortcut pills, its poster row and the gauge - so the one thing being
+    // animated was also the thing redrawing everything around it. The value is
+    // read at the three places that draw it now: the readout's text, the gauge's
+    // marker, and (in the draw phase) the bar's own translation.
+    val animated = animateFloatAsState(
         targetValue = target.toFloat(),
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "bottom_bar_lift_preview"
     )
-    val lift = NavBarLift.clampDp(animated)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
@@ -87,12 +95,7 @@ internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "${lift.roundToInt()} dp",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            LiftReadout(lift = animated)
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -106,15 +109,14 @@ internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             PhoneDummy(
-                lift = lift,
+                lift = animated,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
                     .widthIn(max = 196.dp)
             )
             LiftGauge(
-                lift = lift,
-                target = target,
+                lift = animated,
                 modifier = Modifier
                     .width(58.dp)
                     .fillMaxHeight()
@@ -132,7 +134,7 @@ internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
  * they had chosen.
  */
 @Composable
-private fun PhoneDummy(lift: Float, modifier: Modifier = Modifier) {
+private fun PhoneDummy(lift: State<Float>, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
@@ -224,12 +226,23 @@ private fun PhoneDummy(lift: Float, modifier: Modifier = Modifier) {
             // Nine dp of fixed gesture lane under it: at a stored lift of zero the
             // bar still sits above the device pill instead of being drawn on top of
             // it, which is what the real bar's navigation inset buys.
-            // A clamped value only: see the file comment for the shipped crash.
+            //
+            // The animated lift is a `translationY` inside `graphicsLayer`, not a
+            // bottom padding. A padding read in composition resized the phone's
+            // inner box on every frame of the spring, which re-measured the bar
+            // and everything laid out around it for an animation that only moves
+            // one control; a layer translation invalidates the draw pass alone.
+            // The value is clamped as it is drawn: see the file comment for the
+            // shipped `Padding must be non-negative` crash, which is why the
+            // guard has to hold on every frame rather than at the target.
             PhoneNavBar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = lift.dp + 9.dp)
+                    .padding(bottom = 9.dp)
                     .padding(horizontal = 10.dp)
+                    .graphicsLayer {
+                        translationY = -NavBarLift.clampAnimatedDp(lift.value).dp.toPx()
+                    }
             )
 
             // The device's own gesture area, fixed to the screen edge so the
@@ -364,17 +377,33 @@ private fun PhoneNavItem(
     }
 }
 
+/** The number above the gauge, read from the spring rather than from the target. */
+@Composable
+private fun LiftReadout(lift: State<Float>) {
+    Text(
+        text = "${NavBarLift.clampAnimatedDp(lift.value).roundToInt()} dp",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary
+    )
+}
+
 /**
- * A vertical level: 0 at the device edge, 24 at the top of the range.
+ * A vertical level: 0 at the device edge, [NavBarLift.MAX_DP] at the top.
  *
- * The ticks are the slider's constants, not the preview's own numbers, so the
- * scale cannot describe a range the stored preference cannot hold. The moving
- * rule is the same clamped value the phone's bar is drawn at.
+ * The ticks and their labels are derived from the slider's own constants, not
+ * written out. They used to be the literals `24`, `16`, `8`, `0` beside a Canvas
+ * that scaled by `MAX_DP` and a marker that divided by it - so raising the range
+ * left the scale drawing one thing and saying another. A gauge that disagrees
+ * with the control it measures is worse than no gauge: it is the preview telling
+ * the reader the setting did nothing.
+ *
+ * The number under `LEVEL` follows the spring, so it matches the bar in the phone
+ * beside it during the drag and the settle, not only after both have stopped.
  */
 @Composable
 private fun LiftGauge(
-    lift: Float,
-    target: Int,
+    lift: State<Float>,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -387,12 +416,7 @@ private fun LiftGauge(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(
-            text = "$target dp",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        LiftReadout(lift = lift)
         Spacer(modifier = Modifier.height(8.dp))
         BoxWithConstraints(
             modifier = Modifier
@@ -402,7 +426,15 @@ private fun LiftGauge(
         ) {
             val tickColor = MaterialTheme.colorScheme.outlineVariant
             val accent = MaterialTheme.colorScheme.primary
-            val labels = listOf("24", "16", "8", "0")
+            // Top to bottom, and every value a third of the range. The last
+            // entry is the edge, which the caption below repeats in words.
+            val tickValues = listOf(
+                NavBarLift.MAX_DP,
+                NavBarLift.MAX_DP * 2 / 3,
+                NavBarLift.MAX_DP / 3,
+                0
+            )
+            val labels = tickValues.map { it.toString() }
             val usable = maxHeight
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val x = size.width * 0.3f
@@ -412,7 +444,7 @@ private fun LiftGauge(
                     end = Offset(x, size.height),
                     strokeWidth = 1.dp.toPx()
                 )
-                listOf(0, 8, 16, 24).forEach { value ->
+                tickValues.forEach { value ->
                     val y = size.height * (1f - value / NavBarLift.MAX_DP.toFloat())
                     drawLine(
                         color = tickColor,
@@ -437,12 +469,20 @@ private fun LiftGauge(
                     )
                 }
             }
-            val liftFraction = (lift / NavBarLift.MAX_DP.toFloat()).coerceIn(0f, 1f)
-            val markerY = (usable - 1.dp) * (1f - liftFraction)
+            // Read in the draw phase, not here: the gauge is drawn beside a bar
+            // that uses the same rule, and a `offset(y = …)` read in composition
+            // would recompose the whole level - line, ticks, four labels - on
+            // every frame of the spring just to move one 2dp rule.
+            val travelPx = with(LocalDensity.current) { (usable - 1.dp).toPx() }
             Row(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(y = markerY)
+                    .graphicsLayer {
+                        val fraction =
+                            (NavBarLift.clampAnimatedDp(lift.value) / NavBarLift.MAX_DP.toFloat())
+                                .coerceIn(0f, 1f)
+                        translationY = travelPx * (1f - fraction)
+                    }
                     .height(2.dp)
                     .fillMaxWidth(0.72f),
                 verticalAlignment = Alignment.CenterVertically

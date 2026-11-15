@@ -104,10 +104,27 @@ class UserMessagesViewModel(
          * subscription would give the list and its empty state two answers about the
          * same dismissal.
          */
-        val visibility: MessageVisibility = MessageVisibility()
+        val visibility: MessageVisibility = MessageVisibility(),
+        /**
+         * False for the demo, whose fixtures have no session behind them.
+         *
+         * The fixtures carry `isLiked = false`, so a heart gated only on that
+         * would look live on the demo profile and do nothing when tapped - the one
+         * state a like control must never be in.
+         */
+        val canLike: Boolean = false,
+        /**
+         * Message ids with a like request in flight.
+         *
+         * A double tap on a heart has to be refused: the second tap would be
+         * applied to the optimistic count the first one already wrote, so one
+         * visible heart would toggle the server twice. The same rule the feed and
+         * the comment sheet use, kept here because the inbox owns its own rows.
+         */
+        val pendingLikes: Set<Int> = emptySet()
     )
 
-    private val _state = MutableStateFlow(UiState(viewerId = viewerId))
+    private val _state = MutableStateFlow(UiState(viewerId = viewerId, canLike = !isDemo))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -402,6 +419,59 @@ class UserMessagesViewModel(
         isDemo = isDemo,
         viewerId = viewerId
     )
+
+    /**
+     * Likes or un-likes one message.
+     *
+     * ## Why this is an activity like and not a reply like
+     *
+     * A direct message is a `MessageActivity`, so its heart is the same
+     * `ToggleLikeV2(type: ACTIVITY)` mutation the feed's cards use - and
+     * `MessageNode` has carried `isLiked` and `likeCount` since the inbox was
+     * written. The fields were fetched on every page and never drawn: the tab had
+     * a comment count, a link out and a dismiss button, and the one piece of
+     * engagement the API had already paid for had no control at all.
+     *
+     * Optimistic, one request in flight per row, rolled back on failure - the
+     * shape [CommentThreadStore.toggleReplyLike] documents. A response writes the
+     * server's count rather than adding one locally, because somebody else may
+     * have liked the message between the tap and the answer.
+     */
+    fun toggleMessageLike(messageId: Int) {
+        if (isDemo) return
+        val current = _state.value
+        if (messageId in current.pendingLikes) return
+        val message = current.received.messages.firstOrNull { it.id == messageId }
+            ?: current.sent.messages.firstOrNull { it.id == messageId }
+            ?: return
+        // Null is AniList answering without a session. Guessing would put the
+        // heart in a state the server never agreed to.
+        val wasLiked = message.isLiked ?: return
+        val previousCount = message.likeCount ?: 0
+
+        fun write(liked: Boolean, likeCount: Int, pending: Boolean) {
+            val live = _state.value
+            _state.value = live.copy(
+                received = live.received.withLike(messageId, liked, likeCount),
+                sent = live.sent.withLike(messageId, liked, likeCount),
+                pendingLikes = if (pending) {
+                    live.pendingLikes + messageId
+                } else {
+                    live.pendingLikes - messageId
+                }
+            )
+        }
+
+        val optimistic = (previousCount + if (wasLiked) -1 else 1).coerceAtLeast(0)
+        write(!wasLiked, optimistic, pending = true)
+
+        viewModelScope.launch {
+            repositoryResult { aniListRepository.toggleActivityLike(messageId) }.fold(
+                onSuccess = { result -> write(result.isLiked, result.likeCount, pending = false) },
+                onFailure = { write(wasLiked, previousCount, pending = false) }
+            )
+        }
+    }
 
     /**
      * Opens the comment thread on [message].
@@ -866,6 +936,25 @@ class UserMessagesViewModel(
         MessageFilter.SENT -> _state.value.sent
         MessageFilter.ALL -> SourceState()
     }
+
+    /**
+     * Writes one message's like state onto a page, if the row is on it.
+     *
+     * Applied to the live row rather than replacing it with the object read before
+     * the tap: a refresh that changed the body or the reply count while the request
+     * was out must not have its answer overwritten by the stale copy - the same
+     * failure the comment sheet's like documents.
+     */
+    private fun SourceState.withLike(messageId: Int, liked: Boolean, likeCount: Int): SourceState =
+        if (messages.none { it.id == messageId }) {
+            this
+        } else {
+            copy(
+                messages = messages.map { row ->
+                    if (row.id == messageId) row.copy(isLiked = liked, likeCount = likeCount) else row
+                }
+            )
+        }
 
     private fun updateSource(source: MessageFilter, transform: (SourceState) -> SourceState) {
         val current = _state.value

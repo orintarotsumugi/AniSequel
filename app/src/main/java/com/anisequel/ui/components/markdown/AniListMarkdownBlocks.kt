@@ -160,11 +160,25 @@ fun RenderBlockquote(
     }
 }
 
+/**
+ * A fenced block, drawn as a clear pane rather than a grey slab.
+ *
+ * `surfaceContainerHighest` is a *surface* role, and a code block is not a
+ * surface: on a bio card or a comment row it read as a hole cut out of the card,
+ * and on a golden palette it was the one cold rectangle on the page. The fill is
+ * the reader's accent at a low alpha over whatever the card already is, with a
+ * hairline to say where the pane starts - so the block picks up the card's own
+ * colour the way the inline code run does, and the two read as one treatment.
+ */
 @Composable
 fun RenderCodeBlock(block: MarkdownNode.CodeBlock) {
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(

@@ -25,12 +25,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -51,7 +52,6 @@ import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import kotlin.math.roundToInt
 
 /**
  * Previews for the two layout choices on the Interface page.
@@ -78,16 +78,16 @@ internal fun AppLayoutPreviews(
     barLift: Int = 0
 ) {
     // The mini layouts follow the slider on the same spring the real bar uses.
-    // Clamped on every frame: the spring overshoots below zero on the way down,
-    // and a negative dp reaches `.padding(bottom = ...)` as a crash. The preview
-    // is the first place the reader can see that spring, which is exactly why it
-    // has to survive its own bounce.
-    val animatedLift by animateFloatAsState(
+    //
+    // The animated value stays a `State` and is consumed inside each mini's
+    // `graphicsLayer`: reading it here made both mini trees recompose, re-measure
+    // and re-lay out on every frame of a spring whose only visible effect is one
+    // 18dp capsule moving. The guard still runs on every frame - see the minis.
+    val animatedLift = animateFloatAsState(
         targetValue = NavBarLift.clamp(barLift).toFloat(),
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "app_layout_preview_lift"
     )
-    val liftedDp = NavBarLift.clampDp(animatedLift).roundToInt()
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -139,9 +139,9 @@ internal fun AppLayoutPreviews(
                             .padding(7.dp)
                     ) {
                         if (layout == AppLayout.NOVA) {
-                            NovaLayoutMini(entries = entries, barLift = liftedDp)
+                            NovaLayoutMini(entries = entries, lift = animatedLift)
                         } else {
-                            ClassicLayoutMini(entries = entries, barLift = liftedDp)
+                            ClassicLayoutMini(entries = entries, lift = animatedLift)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
@@ -162,74 +162,109 @@ internal fun AppLayoutPreviews(
     }
 }
 
+/**
+ * How much of the real lift a mini shows.
+ *
+ * A mini is a schematic, not a phone: 184dp of card stands in for a 700dp screen,
+ * so drawing a 96dp gap at 96dp inside it would push the bar into the header. A
+ * quarter is the scale that keeps the *proportion* right - the full range still
+ * moves the mini bar a quarter of the way up its own screen - while leaving the
+ * mini's own rows intact. The phone-shaped preview below the slider draws the real
+ * dp, which is where the reader judges the actual gap.
+ */
+private const val MINI_LIFT_SCALE = 0.25f
+
+/** The mini's bar, translated in the draw phase so the spring costs no layout. */
 @Composable
-private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        MiniTopBar()
-        Spacer(modifier = Modifier.height(7.dp))
-        MiniStatStrip()
-        Spacer(modifier = Modifier.height(7.dp))
-        // getOrNull rather than take(2): with an empty or one-entry library the
-        // preview used to shrink to one row or none, so the shape a reader is
-        // choosing disappeared precisely when they had no posters to demonstrate
-        // it with. A null entry draws the themed placeholder cover.
-        repeat(2) { index ->
-            MiniClassicRow(entry = previewEntry(entries, index), index = index)
-            Spacer(modifier = Modifier.height(5.dp))
+private fun miniBarLift(lift: State<Float>): Modifier = Modifier.graphicsLayer {
+    translationY = -NavBarLift.clampAnimatedDp(lift.value).dp.toPx() * MINI_LIFT_SCALE
+}
+
+@Composable
+private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, lift: State<Float>) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                // The lane the bar sits in, so no row runs under it at zero lift.
+                .padding(bottom = 22.dp)
+        ) {
+            MiniTopBar()
+            Spacer(modifier = Modifier.height(7.dp))
+            MiniStatStrip()
+            Spacer(modifier = Modifier.height(7.dp))
+            // getOrNull rather than take(2): with an empty or one-entry library the
+            // preview used to shrink to one row or none, so the shape a reader is
+            // choosing disappeared precisely when they had no posters to demonstrate
+            // it with. A null entry draws the themed placeholder cover.
+            repeat(2) { index ->
+                MiniClassicRow(entry = previewEntry(entries, index), index = index)
+                Spacer(modifier = Modifier.height(5.dp))
+            }
         }
-        Spacer(modifier = Modifier.weight(1f))
-        // The bar's gap takes room from the feed above it, exactly as the real
-        // lift takes room from the page; a fixed preview height must not clip it.
-        if (barLift > 0) Spacer(modifier = Modifier.height(barLift.dp))
-        MiniBottomBar()
+        // The bar floats over the feed, which is what the real bar does; it used to
+        // take a gap out of the column, which pushed the rows up as the slider moved.
+        MiniBottomBar(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .then(miniBarLift(lift))
+        )
     }
 }
 
 @Composable
-private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        MiniTopBar()
-        Spacer(modifier = Modifier.height(7.dp))
-        Box(
+private fun NovaLayoutMini(entries: List<MediaListEntryItem>, lift: State<Float>) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.72f)
-                .height(9.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f))
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.5f)
-                .height(6.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.62f))
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                .fillMaxSize()
+                .padding(bottom = 22.dp)
         ) {
-            MiniShortcut(previewEntry(entries, 0))
-            MiniShortcut(previewEntry(entries, 1))
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            repeat(3) { index ->
-                MiniCover(
-                    entry = previewEntry(entries, index),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(38.dp)
-                )
+            MiniTopBar()
+            Spacer(modifier = Modifier.height(7.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.72f)
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f))
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.62f))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                MiniShortcut(previewEntry(entries, 0))
+                MiniShortcut(previewEntry(entries, 1))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                repeat(3) { index ->
+                    MiniCover(
+                        entry = previewEntry(entries, index),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.weight(1f))
-        if (barLift > 0) Spacer(modifier = Modifier.height(barLift.dp))
-        MiniBottomBar()
+        MiniBottomBar(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .then(miniBarLift(lift))
+        )
     }
 }
 
@@ -242,9 +277,9 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>, barLift: Int) {
  * drawn identically here too. The selected dot is Home in both.
  */
 @Composable
-private fun MiniBottomBar() {
+private fun MiniBottomBar(modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(18.dp)
             .clip(CircleShape)

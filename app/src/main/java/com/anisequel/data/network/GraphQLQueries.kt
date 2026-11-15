@@ -1689,9 +1689,15 @@ object GraphQLQueries {
      * likes this app will add next use the identical shape. `type: ACTIVITY`
      * disambiguates the id, which is not unique across the likeable types.
      *
-     * `LikeableUnion` carries both feed members; the document fragments both so
-     * a text post can be liked from its card. A reply like (not sent yet) would
-     * add an `ActivityReply` fragment here.
+     * `LikeableUnion` carries three activity members, and all three are
+     * fragmented here. `ListActivity` and `TextActivity` are the feed's cards;
+     * `MessageActivity` is the inbox's, which is why it is not optional - a
+     * message like whose member was not selected answers an *empty* union object,
+     * and the reducer reads a missing `isLiked` as `false` and a missing
+     * `likeCount` as zero. The reader's own like would visibly un-like itself and
+     * reset the count. A reply like is the separate
+     * [TOGGLE_REPLY_LIKE] document, against `ACTIVITY_REPLY`: the id namespaces
+     * are independent, so one document cannot serve both.
      */
     val TOGGLE_ACTIVITY_LIKE = """
         mutation ToggleActivityLike(${'$'}activityId: Int) {
@@ -1702,6 +1708,11 @@ object GraphQLQueries {
               likeCount
             }
             ... on TextActivity {
+              id
+              isLiked
+              likeCount
+            }
+            ... on MessageActivity {
               id
               isLiked
               likeCount

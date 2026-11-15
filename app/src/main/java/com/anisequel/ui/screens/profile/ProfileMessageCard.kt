@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -88,6 +90,19 @@ internal fun MessageCard(
     onOpenUser: (FollowUser) -> Unit,
     onOpenComments: (MessageNode) -> Unit,
     onHide: () -> Unit,
+    /**
+     * Likes or un-likes this message.
+     *
+     * A message is an `ActivityMessage`, so this is the activity like, not a
+     * reply like - see `UserMessagesViewModel.toggleMessageLike`. The row has
+     * carried the API's `isLiked`/`likeCount` since the inbox was written and
+     * never drew a control for them, which is the gap this closes.
+     */
+    onToggleLike: () -> Unit,
+    /** True while this row's like request is in flight. */
+    likePending: Boolean = false,
+    /** False for the demo, which has no session to write a like to. */
+    canLike: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val body = message.message ?: return
@@ -171,7 +186,13 @@ internal fun MessageCard(
                 sent = sent,
                 isPrivate = message.isPrivate == true,
                 siteUrl = message.siteUrl,
+                liked = message.isLiked == true,
+                likeCount = message.likeCount ?: 0,
+                // Null means AniList did not say, so the heart is drawn disabled
+                // rather than as an unliked one - see [EngagementAction].
+                likeEnabled = canLike && message.isLiked != null && !likePending,
                 replyCount = message.replyCount ?: 0,
+                onToggleLike = onToggleLike,
                 onOpenComments = { onOpenComments(message) }
             )
         }
@@ -325,45 +346,74 @@ private fun MessageExpandToggle(
  * site. It draws even at zero, exactly as [ProfileActivityCard]'s does, because the
  * control that opens an empty thread is the control that lets you start one.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MessageFooter(
     sent: Boolean,
     isPrivate: Boolean,
     siteUrl: String?,
+    liked: Boolean,
+    likeCount: Int,
+    likeEnabled: Boolean,
     replyCount: Int,
+    onToggleLike: () -> Unit,
     onOpenComments: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    // The chips and the two actions wrap; the link out does not.
+    //
+    // A private message on a 360dp phone drew a direction chip, a Private chip,
+    // a 48dp heart and a 48dp comment button in one Row - about 344dp of content
+    // inside 300dp of card, so the last control was clipped off the edge. FlowRow
+    // keeps the one-line footer when it fits and lets the comment button take a
+    // second line when it does not, which is the only one of the two that must
+    // remain tappable at every width.
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.padding(top = 10.dp)
     ) {
-        SequelInfoChip(
-            icon = if (sent) {
-                AppVectorIcons.ActivitySend
-            } else {
-                AppVectorIcons.MessageReceived
-            },
-            label = if (sent) "Sent" else "Received"
-        )
-        if (isPrivate) {
+        FlowRow(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             SequelInfoChip(
-                icon = AppVectorIcons.Privacy,
-                label = "Private"
+                icon = if (sent) {
+                    AppVectorIcons.ActivitySend
+                } else {
+                    AppVectorIcons.MessageReceived
+                },
+                label = if (sent) "Sent" else "Received"
+            )
+            if (isPrivate) {
+                SequelInfoChip(
+                    icon = AppVectorIcons.Privacy,
+                    label = "Private"
+                )
+            }
+            // The heart, before the comment count, because it is the lighter action.
+            // It shares the feed's control down to the spring and the 48dp target, so
+            // a message and a post are liked the same way in the same app.
+            EngagementAction(
+                icon = if (liked) AppVectorIcons.ActivityLiked else AppVectorIcons.ActivityNotLiked,
+                count = likeCount,
+                active = liked,
+                enabled = likeEnabled,
+                contentDescription = if (liked) "Unlike message" else "Like message",
+                onClick = onToggleLike,
+                modifier = Modifier.testTag("message_like_button")
+            )
+            EngagementAction(
+                icon = AppVectorIcons.ActivityReplies,
+                count = replyCount,
+                active = false,
+                enabled = true,
+                contentDescription = "Comments",
+                onClick = onOpenComments,
+                modifier = Modifier.testTag("message_comments_button")
             )
         }
-        EngagementAction(
-            icon = AppVectorIcons.ActivityReplies,
-            count = replyCount,
-            active = false,
-            enabled = true,
-            contentDescription = "Comments",
-            onClick = onOpenComments,
-            modifier = Modifier.testTag("message_comments_button")
-        )
-        Spacer(modifier = Modifier.weight(1f))
         // Only when the row is a real AniList activity. The demo's
         // fixtures carry no URL, and a made-up one would open an
         // unrelated real activity - so the action is simply absent there.

@@ -2,6 +2,8 @@ package com.anisequel.ui.components
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -149,9 +151,22 @@ fun PannableBackdrop(
             targetValue = 1f,
             // Reverse rather than Restart: a restart snaps the picture back to the
             // left edge every period, which reads as a stutter rather than a sweep.
+            //
+            // The half-period offset is the fix for the *first* frame. `animateFloat`
+            // starts at its `initialValue`, and -1 is the far-left end of the pan
+            // range, so every banner jumped sideways to its leftmost crop the instant
+            // its pixels landed and then drifted right from there. Fast-forwarding
+            // to the middle of the cycle starts the sweep at the centre, which is
+            // where the picture already was, so the image settles and then moves
+            // instead of snapping first. The same start is reused after a pause or
+            // a re-entry, which is why resuming a profile no longer jumps either.
             animationSpec = infiniteRepeatable(
                 animation = tween(DRIFT_PERIOD_MILLIS, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
+                repeatMode = RepeatMode.Reverse,
+                initialStartOffset = StartOffset(
+                    DRIFT_PERIOD_MILLIS / 2,
+                    StartOffsetType.FastForward
+                )
             ),
             label = "backdrop_drift_phase"
         )
@@ -224,7 +239,18 @@ fun PannableBackdrop(
                     // The source image's own pixels - the only measurement available
                     // before the image lands, and the reason the fit can only be
                     // computed once it has.
-                    imageSize = state.painter.intrinsicSize
+                    //
+                    // A painter may report `Size.Unspecified` (NaN components) for a
+                    // picture whose intrinsic size it does not know - an SVG banner
+                    // is the common one, and a few animated formats. NaN is not
+                    // "small": `<= 0f` is false for it, so it used to pass every
+                    // guard in `backdropTransform`, multiply out to a NaN scale and
+                    // translation, and draw *nothing* - a profile whose banner was
+                    // simply missing while every other profile worked. An unusable
+                    // measurement is stored as unmeasured, which keeps the picture
+                    // at its plain fill size instead.
+                    val measured = state.painter.intrinsicSize
+                    imageSize = if (measured.isUsableBackdropSize()) measured else Size.Zero
                 },
                 modifier = Modifier
                     .fillMaxSize()
@@ -275,6 +301,20 @@ fun PannableBackdrop(
         overlay()
     }
 }
+
+/**
+ * Whether an intrinsic size can be used to compute a cover fit at all.
+ *
+ * Finite rather than only positive, because `Size.Unspecified` is NaN and NaN
+ * compares false against every bound while poisoning every multiplication it
+ * reaches. See the `onSuccess` call site for the profile whose banner vanished.
+ */
+internal fun Size.isUsableBackdropSize(): Boolean =
+    width.isFinite() && height.isFinite() && width > 0f && height > 0f
+
+/** The same question for the two loose floats the transform functions take. */
+private fun usableImageSize(width: Float, height: Float): Boolean =
+    width.isFinite() && height.isFinite() && width > 0f && height > 0f
 
 /** Zoomed-out is the cover fit; anything less would leave a gap. */
 private const val BACKDROP_MIN_ZOOM = 1f
@@ -343,7 +383,7 @@ internal fun hasOverflow(
     fit: BackdropFit = BackdropFit.COVER
 ): Boolean {
     if (containerWidth <= 0f || containerHeight <= 0f) return false
-    if (imageSize.width <= 0f || imageSize.height <= 0f) return false
+    if (!usableImageSize(imageSize.width, imageSize.height)) return false
     val clampedZoom = zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
     // At the fit the answer is no regardless of the geometry. See the KDoc: the
     // per-axis question below cannot be expressed through `canPan`, and asking it
@@ -381,7 +421,7 @@ internal fun backdropCoverScale(
     imageHeight: Float
 ): Float {
     if (containerWidth <= 0f || containerHeight <= 0f) return 1f
-    if (imageWidth <= 0f || imageHeight <= 0f) return 1f
+    if (!usableImageSize(imageWidth, imageHeight)) return 1f
     return max(containerWidth / imageWidth, containerHeight / imageHeight)
 }
 
@@ -400,7 +440,7 @@ internal fun backdropFitScale(
     imageHeight: Float
 ): Float {
     if (containerWidth <= 0f || containerHeight <= 0f) return 1f
-    if (imageWidth <= 0f || imageHeight <= 0f) return 1f
+    if (!usableImageSize(imageWidth, imageHeight)) return 1f
     return min(containerWidth / imageWidth, containerHeight / imageHeight)
 }
 
@@ -443,7 +483,7 @@ internal fun backdropTransform(
     // real answer and is not one. It also means a gesture arriving before the
     // image has loaded cannot scale an invisible picture.
     if (containerWidth <= 0f || containerHeight <= 0f) return BackdropTransform(1f, 0f, 0f)
-    if (imageWidth <= 0f || imageHeight <= 0f) return BackdropTransform(1f, 0f, 0f)
+    if (!usableImageSize(imageWidth, imageHeight)) return BackdropTransform(1f, 0f, 0f)
 
     val base = backdropBaseScale(fit, containerWidth, containerHeight, imageWidth, imageHeight)
     val scale = base * zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
@@ -486,7 +526,7 @@ internal fun backdropHorizontalLimit(
     fit: BackdropFit = BackdropFit.COVER
 ): Float {
     if (containerWidth <= 0f || containerHeight <= 0f) return 0f
-    if (imageWidth <= 0f || imageHeight <= 0f) return 0f
+    if (!usableImageSize(imageWidth, imageHeight)) return 0f
     val scale = backdropBaseScale(fit, containerWidth, containerHeight, imageWidth, imageHeight) *
         zoom.coerceIn(BACKDROP_MIN_ZOOM, BACKDROP_MAX_ZOOM)
     val overflowX = imageWidth * scale - containerWidth

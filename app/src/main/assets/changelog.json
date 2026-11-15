@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "1.9.9",
+      "entries": [
+        {
+          "title": "AniList bios stop printing their markup",
+          "detail": "The `<escape>` wrapper the site's editor leaves around a linked title is stripped, unknown HTML tags such as `<p>` and `<h3>` are unwrapped instead of printed, and `<a href>` and `<code>` are rendered as a link and a code run. A bio whose first line was literal angle brackets now reads as prose."
+        },
+        {
+          "title": "Code runs take the theme's accent",
+          "detail": "Inline code and fenced code blocks use a translucent wash of the accent colour over the card instead of an opaque grey surface, so a code run on a Golden Hour bio is golden rather than a chip that belongs to another palette."
+        },
+        {
+          "title": "Two new card styles, Gallery and Cinema",
+          "detail": "Gallery frames the portrait, puts the rating in the top corner and the title beneath it. Cinema runs the title across the artwork, places the rating line under it and adds a soft glow. Both are selectable under Interface > Style and preview with the reader's own covers."
+        },
+        {
+          "title": "The bottom bar can float much further up",
+          "detail": "The bar lift now runs from 0 to 96dp in 4dp steps instead of 0 to 24dp in 2dp steps. The phone preview and its level are drawn to the same scale, both mini layouts move with the slider, and the spring's overshoot is clamped on every frame in the real bar and in the previews."
+        },
+        {
+          "title": "Profile banners settle instead of snapping",
+          "detail": "A drifting banner starts at the middle of its travel rather than the leftmost crop, an image whose intrinsic size is unusable no longer blanks the header, and every banner now has the themed gradient and sparkle fallback beneath it, so no profile draws an empty hero."
+        },
+        {
+          "title": "Messages can be liked",
+          "detail": "Inbox rows carry a heart with the like count, backed by the activity-like mutation with its `MessageActivity` member selected. The tap updates optimistically, allows one request per row, and rolls back if AniList refuses."
+        }
+      ]
+    },
+    {
       "version": "1.9.8",
       "entries": [
         {
