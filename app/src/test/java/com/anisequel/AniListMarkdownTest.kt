@@ -889,36 +889,32 @@ class AniListMarkdownTest {
      */
     @Test
     fun `an escape wrapper is unwrapped rather than printed`() {
-        val nodes = AniListMarkdownParser.parse(
-            "<escape>\"Hell's Paradise\" (https://anilist.co/anime/128893/)</escape>"
-        )
+        val source = "<escape>\"Hell's Paradise\" (https://anilist.co/anime/128893/)</escape>"
+        val inlines = AniListMarkdownParser.parseInlines(source)
 
-        val text = nodes.filterIsInstance<MarkdownNode.Paragraph>()
-            .flatMap { paragraph -> paragraph.inlines }
-            .joinToString("") { token ->
-                when (token) {
-                    is InlineToken.Plain -> token.text
-                    is InlineToken.Link -> token.url
-                    else -> ""
-                }
-            }
+        val text = inlines.filterIsInstance<InlineToken.Plain>()
+            .joinToString("") { it.text }
 
         assertFalse("the opening tag must not reach the reader: <$text>", text.contains("<escape>"))
         assertFalse("nor the closing one: <$text>", text.contains("</escape>"))
         assertTrue("the title survives the unwrap: <$text>", text.contains("Hell's Paradise"))
         assertTrue(
             "and the link is still a link: <$text>",
-            nodes.filterIsInstance<MarkdownNode.Paragraph>()
-                .flatMap { it.inlines }
-                .mapNotNull { token ->
-                    when (token) {
-                        is InlineToken.Link -> token.url
-                        is InlineToken.MediaLink -> token.url
-                        else -> null
-                    }
+            inlines.mapNotNull { token ->
+                when (token) {
+                    is InlineToken.Link -> token.url
+                    is InlineToken.MediaLink -> token.url
+                    else -> null
                 }
-                .any { it == "https://anilist.co/anime/128893/" }
+            }.any { it == "https://anilist.co/anime/128893/" }
         )
+
+        // The block walk is what a bio actually goes through, and it may fold the
+        // line into a preview card rather than a paragraph - so the tag check here
+        // is on the parsed tree's own values, not on one node type.
+        val rendered = AniListMarkdownParser.parse(source).toString()
+        assertFalse("the tag must not survive the block parse: $rendered", rendered.contains("<escape>"))
+        assertFalse("nor its closing form: $rendered", rendered.contains("</escape>"))
     }
 
     /**
