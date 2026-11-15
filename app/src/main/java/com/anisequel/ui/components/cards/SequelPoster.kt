@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.displayName
+import com.anisequel.domain.card.posterScoreOf
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
 import com.anisequel.ui.components.expressive.expressiveHoldGesture
 
@@ -42,10 +43,10 @@ import com.anisequel.ui.components.expressive.expressiveHoldGesture
  * why the gesture goes on [MediaPosterCell.posterModifier] rather than on the
  * cell's own modifier, which would also cover the text under it.
  *
- * The rating is only handed to the cell when the chosen style puts it *on* the
- * artwork. Otherwise [SequelCardDetails] keeps drawing it in its chip row, exactly
- * as it always has, and the poster shows nothing - which is the difference between
- * a style and a duplicate.
+ * The rating is handed to the cell only for the styles that own it on the poster.
+ * Otherwise [SequelCardDetails] draws it - as a band or as a chip, depending on the
+ * same table - and the poster shows nothing, which is the difference between a style
+ * and a duplicate.
  */
 @Composable
 fun SequelPoster(
@@ -57,14 +58,21 @@ fun SequelPoster(
     // Where the cell's artwork is on screen, so the viewer can grow out of the
     // picture the reader tapped instead of fading in over it. Keyed on the media
     // because a recycled lazy slot must not carry the previous title's rectangle.
-    var posterBounds by remember(sequel.sequelMedia.id) { mutableStateOf<Rect?>(null) }
+    //
+    // Held in a plain box rather than in state: `onGloballyPositioned` fires on
+    // every frame the poster moves, so a `mutableStateOf` here invalidated this
+    // card's composition for the whole length of a scroll - to keep current a
+    // rectangle that is read once, when the viewer opens. Nothing draws from it, so
+    // nothing has to be told when it changes.
+    val posterBounds = remember(sequel.sequelMedia.id) { PosterBounds() }
     val style = LocalMediaCardStyle.current
-    val score = sequel.sequelMedia.averageScore?.takeIf { it >= 75 }
+    // Null for every style that keeps the rating somewhere other than the artwork.
+    val score = posterScoreOf(style, sequel.sequelMedia.averageScore)
 
     if (showFullScreen) {
         FullScreenCoverViewer(
             media = sequel.sequelMedia,
-            origin = posterBounds,
+            origin = posterBounds.rect,
             onDismiss = { showFullScreen = false }
         )
     }
@@ -73,11 +81,11 @@ fun SequelPoster(
         coverUrl = sequel.sequelCoverUrl,
         coverColor = coverColor,
         title = sequel.sequelTitle,
-        score = if (style.scoreOnPoster) score else null,
+        score = score,
         modifier = modifier.width(POSTER_WIDTH),
         style = style,
         posterModifier = Modifier
-            .onGloballyPositioned { posterBounds = it.boundsInWindow() }
+            .onGloballyPositioned { posterBounds.rect = it.boundsInWindow() }
             .expressiveHoldGesture(
                 onHold = { showFullScreen = true },
                 onClick = { showFullScreen = true }
@@ -98,14 +106,10 @@ fun SequelPoster(
                     .align(Alignment.TopEnd)
                     .fillMaxWidth(0.6f)
                     .height(32.dp)
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
-                        )
-                    )
+                    .background(FORMAT_SCRIM)
             )
             Surface(
-                shape = RoundedCornerShape(bottomStart = 10.dp),
+                shape = FORMAT_PILL_SHAPE,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.align(Alignment.TopEnd)
             ) {
@@ -126,6 +130,22 @@ fun SequelPoster(
  * 104x152 the box used to state twice - two numbers for one shape is how they drift.
  */
 private val POSTER_WIDTH = 104.dp
+
+/**
+ * One rectangle, written by layout and read when the viewer opens.
+ *
+ * Deliberately not a [androidx.compose.runtime.MutableState]: see [SequelPoster].
+ */
+private class PosterBounds {
+    var rect: Rect? = null
+}
+
+/** Fixed colours, so the scrim is built once rather than per card per frame. */
+private val FORMAT_SCRIM = Brush.horizontalGradient(
+    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+)
+
+private val FORMAT_PILL_SHAPE = RoundedCornerShape(bottomStart = 10.dp)
 
 /**
  * Parses an AniList `#RRGGBB` cover colour, or null if it is missing or junk.

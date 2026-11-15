@@ -144,7 +144,7 @@ class SettingsLayoutTest {
         assertTrue(
             "the details column reads the style, so it cannot keep drawing a score " +
                 "the poster already shows",
-            details.contains("style.scoreOnPoster")
+            details.contains("style.scoreOwner")
         )
     }
 

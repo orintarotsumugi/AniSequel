@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -62,6 +63,8 @@ import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.PosterSkeletonMosaic
+import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.ui.components.cards.toAlignment
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -753,6 +756,7 @@ fun ProfileLibraryTab(
                 LibraryEmpty(
                     isLoading = (type == LibraryType.MANGA && isLoadingManga) ||
                         (awaitingAnime && animeEntries.isEmpty()),
+                    columns = columns,
                     // A failed fetch is not an empty list. Saying "nothing here"
                     // when the truth is "we could not read it" is the false answer
                     // this whole path exists to stop.
@@ -791,11 +795,7 @@ fun ProfileLibraryTab(
                             entry = entry,
                             detailed = true,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = Modifier.animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
+                            modifier = Modifier.animateLibraryItem()
                         )
                     }
                 }
@@ -809,11 +809,7 @@ fun ProfileLibraryTab(
                         LibraryListRow(
                             entry = entry,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = Modifier.animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
+                            modifier = Modifier.animateLibraryItem()
                         )
                     }
                 }
@@ -838,11 +834,7 @@ fun ProfileLibraryTab(
                             LibraryListRow(
                                 entry = entry,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                                modifier = Modifier.animateItem(
-                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                                )
+                                modifier = Modifier.animateLibraryItem()
                             )
                         }
                     }
@@ -862,7 +854,8 @@ fun ProfileLibraryTab(
                         ) { entry ->
                             LibraryListRow(
                                 entry = entry,
-                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                modifier = Modifier.animateLibraryItem()
                             )
                         }
                     }
@@ -891,11 +884,7 @@ fun ProfileLibraryTab(
                                 // filter removed, which is what makes a filter feel like a
                                 // rearrangement rather than a redraw. Spring tokens, not
                                 // durations, for the reason the rest of the app uses them.
-                                .animateItem(
-                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                                ),
+                                .animateLibraryItem(),
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
                         )
                     }
@@ -906,6 +895,20 @@ fun ProfileLibraryTab(
     }
     }
 }
+
+/**
+ * The list animation every Library row and poster shares.
+ *
+ * It was copied into five call sites and missing from a sixth - the rows under the
+ * "Other" heading, which snapped into place while the groups above them slid - which
+ * is what five copies of one set of spring tokens produces. One definition instead of
+ * six, and the sixth cannot be forgotten again.
+ */
+private fun LazyGridItemScope.animateLibraryItem(): Modifier = Modifier.animateItem(
+    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+)
 
 @Composable
 private fun LibraryControls(
@@ -1193,7 +1196,7 @@ private fun LibraryPoster(
         // no "under" for it to belong to, and Cover only promised no repeated label;
         // it was still drawing "TV" beneath a captionless poster, which read as a
         // stray fragment rather than as a card style.
-        if (showTitle && score == null && style.titlePlacement != com.anisequel.domain.card.CardTitlePlacement.HIDDEN) {
+        if (showTitle && score == null && style.titlePlacement != CardTitlePlacement.HIDDEN) {
             val format = media.formatLabel.takeIf { it.isNotBlank() }
             if (format != null && !title.contains(format, ignoreCase = true)) {
                 Spacer(modifier = Modifier.height(1.dp))
@@ -1213,25 +1216,49 @@ private fun LibraryPoster(
 @Composable
 private fun LibraryEmpty(
     isLoading: Boolean,
+    /** The column count the grid is using, so the waiting posters line up with it. */
+    columns: Int,
     query: String,
     /** Why the list could not be read, or null when it was. Never both empty and failed. */
     failedMessage: String? = null,
     /** True when a status/favourite chip is excluding entries as well as (or instead of) text. */
     isFiltered: Boolean = false
 ) {
+    if (isLoading) {
+        // A grid that is waiting for its list is waiting for posters, so it holds the
+        // grid's own shape open - at the column count it is about to use - rather than
+        // drawing one spinner on an empty page. One shimmer clock for the whole
+        // mosaic; `rememberShimmerPhase` already stops it when the screen is not
+        // resumed or the reader asked for instant motion.
+        //
+        // Only the poster modes: a table, a list or a grouped view waits in rows, and
+        // a mosaic of 2:3 posters is not the shape of a one-column row. Those keep the
+        // indicator, and `columns` is the modes' own answer about which one they are.
+        if (columns > 1) {
+            PosterSkeletonMosaic(
+                columns = columns,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 18.dp)
+                    .testTag("library_skeleton")
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                ExpressiveLoadingIndicator(
+                    modifier = Modifier.size(30.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 36.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (isLoading) {
-            ExpressiveLoadingIndicator(
-                modifier = Modifier.size(30.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
-            return@Column
-        }
         val failed = failedMessage != null
         val searched = query.isNotBlank()
         val narrowed = searched || isFiltered

@@ -16,6 +16,22 @@
           "detail": "The card picker gained Ribbon (title beneath the poster, rating as a coloured band) and Stamp (title over the poster's foot, rating stamped in its corner), taking the styles from eight to ten. Both reuse the same placement table as the rest, so the preview and the grid agree."
         },
         {
+          "title": "Cards keep the rating they were given",
+          "detail": "The dashboard handed a sequel's rating to its poster only when the score was at least 75, while the chip row beneath stepped aside for every style whose rating lives on the artwork - so a sequel rated 74, or anything below it, showed no rating at all. Which surface draws the number is now one answer on the style table, read by the poster and by the chip row, and a poster badge draws every score AniList returns rather than the top of the range."
+        },
+        {
+          "title": "Poster skeletons while the Library loads",
+          "detail": "The Library drew one small spinner on an otherwise empty page while its list was on the wire. It now holds the grid's own shape open: poster-sized skeletons at the column count it is about to use, with their own title and context lines, sweeping on the app's single shimmer clock - so the first row lands where the placeholders were instead of in a page that was never the size of a card."
+        },
+        {
+          "title": "Smoother poster cards",
+          "detail": "A sequel card measured its artwork on every frame it moved and wrote that rectangle into composition state, so scrolling a dashboard row recomposed every card on screen for a value that is only read when the cover viewer opens; the rectangle now lives outside the snapshot, and nothing recomposes for it. The title's wash and the row's scrims are built once instead of per card per frame, and the wash keeps three stops so the name stays readable over a bright cover without a hard band across the artwork."
+        },
+        {
+          "title": "Rows under Other slide with the rest",
+          "detail": "Every Library row and poster carried its own copy of the same list animation, and the rows under the Other heading had been given none of them, so they snapped into place while the groups above them slid. The animation is one modifier now, which is what makes the sixth call site impossible to forget."
+        },
+        {
           "title": "Profile posters show the list's own score",
           "detail": "Posters in a profile's Library took the community average for their rating badge even when the list carried a score, so the number the owner gave a title never appeared on their own grid. The badge now uses the entry's score when there is one and falls back to the average only for an unrated title, so the grid agrees with the list rows that already showed the owner's number."
         },

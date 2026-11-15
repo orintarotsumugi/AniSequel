@@ -10,7 +10,7 @@ Planning list.
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203%20Expressive-4285F4?logo=jetpackcompose&logoColor=white)
 ![Android](https://img.shields.io/badge/Android-12%2B%20(API%2031)-3DDC84?logo=android&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-196%20JVM%20classes-6E56CF)
+![Tests](https://img.shields.io/badge/tests-197%20JVM%20classes-6E56CF)
 
 Not on the Play Store. Every release is a signed universal APK on
 [GitHub Releases](https://github.com/orintarotsumugi/AniSequel/releases), with a
@@ -245,7 +245,7 @@ AniSequel/
 │       │   │   └── ui/            screens, components, theme, viewmodel, widget
 │       │   ├── assets/            changelog.json
 │       │   └── res/               the widget XML, adaptive icon, strings
-│       └── test/                  196 JVM test classes (there is no androidTest/)
+│       └── test/                  197 JVM test classes (there is no androidTest/)
 ├── gradle/libs.versions.toml      every version, with its reasoning inline
 ├── update.json                    what the updater reads from the release asset
 ├── LICENSE                        MIT - use it, keep the notice

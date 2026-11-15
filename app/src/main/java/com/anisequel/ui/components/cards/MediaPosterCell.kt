@@ -75,6 +75,24 @@ fun PosterCorner.toAlignment(): Alignment = when (this) {
 const val POSTER_ASPECT: Float = 2f / 3f
 
 /**
+ * The wash under an overlaid title, built once.
+ *
+ * It used to be built inside the artwork of every card on every recomposition, so a
+ * scrolling grid allocated a brush and a colour list per visible card per frame. The
+ * colours are constant, so the brush can be too.
+ *
+ * Three stops rather than two: a straight ramp from clear to 78% black puts a visible
+ * edge across the middle of the artwork, which is exactly where a cover's subject
+ * usually is. The middle stop softens that band while keeping the foot - where the
+ * name is drawn - as dark as it was.
+ */
+private val TITLE_SCRIM = Brush.verticalGradient(
+    0.0f to Color.Transparent,
+    0.55f to Color.Black.copy(alpha = 0.62f),
+    1.0f to Color.Black.copy(alpha = 0.86f)
+)
+
+/**
  * One media card: the artwork, the rating and the title, placed by [style].
  *
  * ## Why this is shared rather than copied into each surface
@@ -127,8 +145,9 @@ fun MediaPosterCell(
     titleVisible: Boolean = true,
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
-    val scoreOnTop = score != null && scoreCornerOf(style) == PosterCorner.TOP_START
-    val scoreOnBottom = score != null && scoreCornerOf(style) == PosterCorner.BOTTOM_END
+    // Asked once. Two booleans derived from the same table let the cell be handed a
+    // "top and bottom" the table cannot produce, and every scroll asked it twice.
+    val scoreCorner = if (score != null) scoreCornerOf(style) else null
     val titleOverlaid = titleVisible && style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
     val titleHidden = !titleVisible || style.titlePlacement == CardTitlePlacement.HIDDEN
 
@@ -138,8 +157,7 @@ fun MediaPosterCell(
             coverColor = coverColor,
             title = title,
             score = score,
-            scoreOnTop = scoreOnTop,
-            scoreOnBottom = scoreOnBottom,
+            scoreCorner = scoreCorner,
             titleOverlaid = titleOverlaid,
             style = style,
             contentDescription = contentDescription,
@@ -161,7 +179,7 @@ fun MediaPosterCell(
             )
         }
 
-        if (score != null && scoreCornerOf(style) == null && !titleHidden) {
+        if (score != null && scoreCorner == null && !titleHidden) {
             Spacer(modifier = Modifier.height(if (titleOverlaid) 6.dp else 1.dp))
             if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE) {
                 ScoreBanner(score = score)
@@ -268,8 +286,7 @@ private fun PosterArtwork(
     coverColor: Color?,
     title: String,
     score: Int?,
-    scoreOnTop: Boolean,
-    scoreOnBottom: Boolean,
+    scoreCorner: PosterCorner?,
     titleOverlaid: Boolean,
     style: MediaCardStyle,
     contentDescription: String?,
@@ -332,27 +349,15 @@ private fun PosterArtwork(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .height(64.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
-                        )
-                    )
+                    .background(TITLE_SCRIM)
             )
         }
 
-        if (scoreOnTop) {
+        if (scoreCorner != null) {
             PosterScoreBadge(
                 score = score,
                 modifier = Modifier
-                    .align(PosterCorner.TOP_START.toAlignment())
-                    .padding(5.dp)
-            )
-        }
-        if (scoreOnBottom) {
-            PosterScoreBadge(
-                score = score,
-                modifier = Modifier
-                    .align(PosterCorner.BOTTOM_END.toAlignment())
+                    .align(scoreCorner.toAlignment())
                     .padding(5.dp)
             )
         }
