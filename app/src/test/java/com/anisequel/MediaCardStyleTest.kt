@@ -127,9 +127,17 @@ class MediaCardStyleTest {
 
     @Test
     fun `only the overlaid styles put the title on the artwork`() {
+        // Stamp belongs here too - its blurb promises the title overlaid at the
+        // poster's foot - so this list moves with the table rather than the table
+        // moving to keep an old expectation green.
         assertEquals(
             "the name belongs to the picture in exactly these, and in no others",
-            listOf(MediaCardStyle.MINIMAL_EXOTIC, MediaCardStyle.MODERN, MediaCardStyle.CINEMA),
+            listOf(
+                MediaCardStyle.MINIMAL_EXOTIC,
+                MediaCardStyle.MODERN,
+                MediaCardStyle.CINEMA,
+                MediaCardStyle.STAMP
+            ),
             MediaCardStyle.entries.filter {
                 it.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
             }

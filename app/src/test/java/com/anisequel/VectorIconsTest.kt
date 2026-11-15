@@ -86,7 +86,7 @@ class VectorIconsTest {
     }
 
     /**
-     * Five motion styles, five marks.
+     * Six motion styles, six marks.
      *
      * The picker drew Snappy with Smooth's waves and Floaty with Chill's bolt, so two
      * of five choices wore another choice's face - and the glyph is the only part of

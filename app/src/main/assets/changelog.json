@@ -16,6 +16,10 @@
           "detail": "The card picker gained Ribbon (title beneath the poster, rating as a coloured band) and Stamp (title over the poster's foot, rating stamped in its corner), taking the styles from eight to ten. Both reuse the same placement table as the rest, so the preview and the grid agree."
         },
         {
+          "title": "Profile posters show the list's own score",
+          "detail": "Posters in a profile's Library took the community average for their rating badge even when the list carried a score, so the number the owner gave a title never appeared on their own grid. The badge now uses the entry's score when there is one and falls back to the average only for an unrated title, so the grid agrees with the list rows that already showed the owner's number."
+        },
+        {
           "title": "Log out closes Discord at once",
           "detail": "Disconnecting used to take the same lock a publish holds while it waits up to fifteen seconds for Discord's READY, so the teardown that would release that wait could not run until the wait had already timed out. The client now bumps a session epoch and tears the socket down outside the lock, and a clear that cannot get the lock returns instead of queueing - so Log out ends the session immediately, and a connect that started before the sign-out is abandoned rather than left publishing."
         },

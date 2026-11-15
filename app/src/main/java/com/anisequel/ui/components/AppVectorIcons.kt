@@ -335,8 +335,8 @@ object AppVectorIcons {
     val NewReleases = Icons.Outlined.NewReleases
     val FullscreenExpand = AppCustomVectors.FullscreenExpand
 
-    // The five motion styles are deliberately *not* listed here. Their glyphs are
+    // The six motion styles are deliberately *not* listed here. Their glyphs are
     // one family with one mapping (`motionGlyph` in `icons/MotionVectors.kt`), and a
-    // second list of the same five names is exactly how Snappy and Floaty ended up
+    // second list of the same six names is exactly how Snappy and Floaty ended up
     // borrowing another style's icon: the picker read a mapping that had gone stale.
 }
