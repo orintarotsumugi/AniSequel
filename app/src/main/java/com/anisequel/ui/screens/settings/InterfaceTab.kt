@@ -1,51 +1,33 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.foundation.layout.Arrangement
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
-import com.anisequel.data.model.displayName
-import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
-import com.anisequel.domain.card.MediaCardStyle
-import com.anisequel.domain.ui.AppLayout
-import com.anisequel.domain.ui.HomeSequelStyle
-import com.anisequel.domain.ui.LibraryViewMode
-import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.cards.MediaPosterCell
-import com.anisequel.ui.components.expressive.ExpressiveStateChip
-import com.anisequel.ui.components.rememberBoundSliderState
-import com.anisequel.ui.theme.DynamicThemeBuilder
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+
+/** The key the [rememberSaveableStateHolder] files the Interface shelf under. */
+private const val INTERFACE_HUB_KEY = "interface_hub"
 
 /**
  * How the app is laid out, as distinct from what colour it is.
@@ -59,10 +41,29 @@ import kotlin.math.roundToInt
  * reach a layout control, and the reference the readers pointed at splits them the
  * same way: a UI page for the interface, a Theme page for the colour.
  *
- * Motion moved here too, for the same reason: it is about how the app behaves on
- * this screen rather than about what it is painted in.
+ * ## Why this page is a shelf of sub-screens
+ *
+ * The page had grown into six full cards in one scroll - layout, sequels, library view,
+ * card style, motion and gestures - each of which opens with a preview several hundred
+ * pixels tall. The same argument that split Settings into pages applies one level down:
+ * a reader who came to turn the bottom bar down was scrolling past a motion sample and a
+ * quick-add button to reach it, and the page's own name ("Card style, layout and motion")
+ * had already drifted from its contents.
+ *
+ * So every part gets a row with a sentence under it, and a sub-page of its own. The
+ * parts did not change: each body in `InterfaceSections.kt` is the card that used to
+ * sit in this file, and every one of them still writes the preference it wrote before.
+ * Nothing
+ * is drawn twice, so there is no page where two controls over one value can disagree.
+ *
+ * ## Why a sub-page still says "Interface" above it
+ *
+ * The header above this content is the page the reader came from, and the sub-header
+ * below it is the part they are in - a breadcrumb, not two titles for one screen. Back
+ * drops the sub-page before it drops the page: this composable's `BackHandler` is
+ * registered after the one in `SettingsScreen`, and the dispatcher gives the most
+ * recently added enabled callback the event.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InterfaceTab(
     themePreferences: ThemePreferences,
@@ -71,372 +72,231 @@ fun InterfaceTab(
      * The hold/swipe/confirm gestures.
      *
      * On this page rather than in Device Manager: a gesture is part of how the
-     * interface behaves, and the preview below it is the whole reason the
+     * interface behaves, and the preview on its sub-page is the whole reason the
      * settings are worth a page of their own - the reader can try the real
      * control before deciding whether the tick is worth it.
      */
     quickAddPreferences: QuickAddPreferences,
     modifier: Modifier = Modifier,
     /**
-     * Up to three of the reader's own entries, for the preview to draw.
+     * Up to three of the reader's own entries, for the previews to draw.
      *
      * Passed in rather than fetched here. The dashboard has already downloaded the
      * list this screen is previewing, so asking the repository again would either
      * be a cache hit that still walks the whole collection or - on a cold Settings
      * visit - an entire list download to draw three thumbnails. Empty is a real
      * answer (demo mode, or Settings opened before Home finishes) and falls back
-     * to the sample titles the preview has always used.
+     * to the sample titles the previews have always used.
      */
     previewEntries: List<MediaListEntryItem> = emptyList()
 ) {
-    val scope = rememberCoroutineScope()
+    var section by rememberSaveable { mutableStateOf<InterfaceSection?>(null) }
+    // Collected once for the page rather than once per sub-page: the motion sample
+    // and the shelf are two views of the same settings object, and a second reader
+    // would only be a second chance to disagree.
     val themeSettings by themePreferences.settings.collectAsState(
         initial = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
             useDynamicColor = false
         )
     )
-    val style by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
-    )
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
-    )
-    // The slider's live value while the finger is down. The preview above reads
-    // this, not the preference, so dragging moves the mini bar immediately; the
-    // preference is written once on release rather than on every tick, because a
-    // DataStore write per frame would make the drag the thing that stutters.
-    // Saved as well as keyed: a rotation while the thumb is down kept the
-    // preference but lost the draft, so the mini previews snapped back to the
-    // stored value under a finger that had not lifted. The key still resets the
-    // draft when an external write (Reset, or the preference after release)
-    // changes the stored value.
-    var liftDraft by rememberSaveable(interfaceSettings.mainBarLift) {
-        mutableStateOf(interfaceSettings.mainBarLift.toFloat())
+    val scope = rememberCoroutineScope()
+
+    // The shelf and the sub-pages are separate compositions, and `AnimatedContent`
+    // disposes the outgoing one - so a sub-page's scroll position would start at the
+    // top every time the reader came back to it, and so would the shelf's. The
+    // holder keys each destination so both survive the trip, exactly as the Settings
+    // pages do one level up.
+    val sectionStateHolder = rememberSaveableStateHolder()
+
+    // Only while a sub-page is open: disabled here, the event falls through to the
+    // Settings page's own handler, which is what Back means on the shelf.
+    BackHandler(enabled = section != null) { section = null }
+
+    AnimatedContent(
+        targetState = section,
+        // The same push in and drop away the Settings pages use, so a level deeper
+        // reads as a level deeper at both depths - see `settingsLevelTransition`.
+        transitionSpec = { settingsLevelTransition() },
+        label = "interface_section_transition",
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("interface_tab_content")
+    ) { destination ->
+        sectionStateHolder.SaveableStateProvider(
+            key = destination?.name ?: INTERFACE_HUB_KEY
+        ) {
+            if (destination == null) {
+                InterfaceHub(onOpen = { section = it })
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SettingsSubHeader(
+                        title = destination.title,
+                        subtitle = destination.subtitle,
+                        onBack = { section = null },
+                        // Not "Back to settings": this goes one page out, not two,
+                        // and the wrong sentence on the one control every sub-page
+                        // is left through is worse than no sentence.
+                        backDescription = "Back to Interface",
+                        backTestTag = "interface_sub_back"
+                    )
+                    InterfaceSectionBody(
+                        section = destination,
+                        themePreferences = themePreferences,
+                        themeSettings = themeSettings,
+                        interfacePreferences = interfacePreferences,
+                        quickAddPreferences = quickAddPreferences,
+                        scope = scope,
+                        previewEntries = previewEntries
+                    )
+                }
+            }
+        }
     }
+}
 
-    SettingsScrollColumn(modifier) {
-        SectionCard(
-            title = "App layout",
-            icon = AppVectorIcons.Settings,
-            subtitle = "Classic is untouched. The new look is the shelf layout, in beta."
-        ) {
-            AppLayoutPreviews(
-                selected = interfaceSettings.layout,
-                entries = previewEntries,
-                onSelect = { option ->
-                    if (option != interfaceSettings.layout) {
-                        scope.launch { interfacePreferences.setLayout(option) }
-                    }
-                },
-                modifier = Modifier.testTag("app_layout_row"),
-                barLift = NavBarLift.clamp(liftDraft.roundToInt())
+/**
+ * The parts of the Interface page, in the order the shelf draws them.
+ *
+ * An enum rather than six lambdas for the reason `SettingsPage` is one: the row's
+ * title and the sub-page's header come from the same two strings, so a row cannot
+ * promise a different page than the one it opens.
+ */
+private enum class InterfaceSection(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val testTag: String
+) {
+    LAYOUT(
+        title = "App layout",
+        subtitle = "Shelf or classic, the bar's lift and the Home rail",
+        icon = AppVectorIcons.Tune,
+        testTag = "interface_row_layout"
+    ),
+    SEQUELS(
+        title = "Home sequels",
+        subtitle = "Rows, cards or banners for the sequel feed",
+        icon = AppVectorIcons.HomeTab,
+        testTag = "interface_row_sequels"
+    ),
+    LIBRARY(
+        title = "Library view",
+        subtitle = "Poster grid, compact grid or list",
+        icon = AppVectorIcons.Library,
+        testTag = "interface_row_library"
+    ),
+    CARDS(
+        title = "Card style",
+        subtitle = "The shape every card in the app draws",
+        icon = AppVectorIcons.ViewGrid,
+        testTag = "interface_row_cards"
+    ),
+    MOTION(
+        title = "Motion",
+        subtitle = "How much the app animates, with a sample",
+        icon = AppVectorIcons.SectionMotion,
+        testTag = "interface_row_motion"
+    ),
+    GESTURES(
+        title = "Quick add gestures",
+        subtitle = "Hold or swipe to add to Currently Watching",
+        icon = AppVectorIcons.Play,
+        testTag = "interface_row_gestures"
+    )
+}
+
+/**
+ * The shelf itself: what the page is made of, grouped by the question each part
+ * answers.
+ *
+ * The rows reuse [SettingsHubGroup] and [SettingsSectionLabel] rather than a second
+ * row design - a reader who has just come through the Settings shelf should not meet
+ * a different-looking list one level in. The labels are `compact` because
+ * [SettingsScrollColumn] already supplies the gutter and the gap; the shelf keeps the
+ * inset label only because its rows are indented from it.
+ */
+@Composable
+private fun InterfaceHub(onOpen: (InterfaceSection) -> Unit) {
+    SettingsScrollColumn {
+        SettingsSectionLabel(text = "Layout", compact = true)
+        SettingsHubGroup(
+            entries = listOf(
+                InterfaceSection.LAYOUT.entry(onOpen),
+                InterfaceSection.SEQUELS.entry(onOpen),
+                InterfaceSection.LIBRARY.entry(onOpen),
+                InterfaceSection.CARDS.entry(onOpen)
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SettingsFieldLabel(text = "Bottom bar lift")
-                Text(
-                    text = "${NavBarLift.clamp(liftDraft.roundToInt())} dp",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Slider(
-                // Bound, not owned: Reset writes this preference back to zero from
-                // elsewhere, and a state that only read its first value would leave
-                // the thumb where the reader left it.
-                state = rememberBoundSliderState(
-                    value = liftDraft,
-                    // One tick every 2dp between 0 and 24. The divisor is the step,
-                    // not a hand-written 11, so changing the range above keeps the
-                    // ticks honest.
-                    steps = ((NavBarLift.MAX_DP - NavBarLift.MIN_DP) / NavBarLift.STEP_DP - 1)
-                        .coerceAtLeast(0),
-                    trackRange = NavBarLift.MIN_DP.toFloat()..NavBarLift.MAX_DP.toFloat()
-                ),
-                onValueChange = { liftDraft = it },
-                onValueChangeFinished = {
-                    val lift = NavBarLift.clamp(liftDraft.roundToInt())
-                    scope.launch { interfacePreferences.setMainBarLift(lift) }
-                },
-                modifier = Modifier.testTag("main_bar_lift_slider")
-            )
-            Text(
-                text = "The mini layouts above move with the slider, and the phone " +
-                    "below shows the real gap from 0 to ${NavBarLift.MAX_DP} dp. " +
-                    "The real bar floats this far above the bottom edge, and every " +
-                    "list keeps room for it.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            BottomBarLiftPreview(liftDp = liftDraft.roundToInt())
-
-            Spacer(modifier = Modifier.height(8.dp))
-            SwitchRow(
-                title = "Continue Watching rail",
-                subtitle = "Show in-progress anime above the sequel feed on the new Home.",
-                checked = interfaceSettings.showContinueRail,
-                enabled = interfaceSettings.layout == AppLayout.NOVA,
-                onCheckedChange = { show ->
-                    scope.launch { interfacePreferences.setShowContinueRail(show) }
-                },
-                modifier = Modifier.testTag("show_continue_rail_switch")
-            )
-        }
-
-        SectionCard(
-            title = "Home sequels",
-            icon = AppVectorIcons.ViewGrid,
-            subtitle = interfaceSettings.homeSequelStyle.blurb
-        ) {
-            SequelStylePreview(
-                style = interfaceSettings.homeSequelStyle,
-                entries = previewEntries
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("home_sequel_style_row")
-            ) {
-                HomeSequelStyle.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == interfaceSettings.homeSequelStyle,
-                        onClick = {
-                            if (option != interfaceSettings.homeSequelStyle) {
-                                scope.launch {
-                                    interfacePreferences.setHomeSequelStyle(option)
-                                }
-                            }
-                        },
-                        minTouchTargetHeight = 48.dp,
-                        role = Role.RadioButton,
-                        onClickLabel = "Draw Home sequels as ${option.displayName}",
-                        modifier = Modifier.testTag("home_sequel_style_${option.storageValue}")
-                    )
-                }
-            }
-        }
-
-        SectionCard(
-            title = "Library view",
-            icon = AppVectorIcons.ViewGrid,
-            subtitle = interfaceSettings.libraryView.blurb
-        ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("library_view_row")
-            ) {
-                LibraryViewMode.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == interfaceSettings.libraryView,
-                        onClick = {
-                            if (option != interfaceSettings.libraryView) {
-                                scope.launch { interfacePreferences.setLibraryView(option) }
-                            }
-                        },
-                        minTouchTargetHeight = 48.dp,
-                        role = Role.RadioButton,
-                        onClickLabel = "Draw the library as ${option.displayName}",
-                        modifier = Modifier.testTag("library_view_${option.storageValue}")
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-            LibraryViewPreview(
-                mode = interfaceSettings.libraryView,
-                entries = previewEntries
-            )
-        }
-
-        SectionCard(
-            title = "Card style",
-            icon = AppVectorIcons.ViewGrid,
-            subtitle = style.blurb
-        ) {
-            CardStylePreview(style = style, libraryEntries = previewEntries)
-
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsFieldLabel(text = "Style")
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // A wrapping row, not a scrolling one: the same reason `MotionSection`
-            // gives - a picker that hides two of its five options off the edge reads
-            // as those options having been removed, because nothing about the row
-            // says it scrolls.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("card_style_row")
-            ) {
-                MediaCardStyle.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == style,
-                        onClick = {
-                            if (option != style) {
-                                scope.launch { interfacePreferences.setCardStyle(option) }
-                            }
-                        },
-                        // This picker is the primary control of the page, not a
-                        // filter beside a grid: a 30dp chip is a fingertip target
-                        // found by aiming, and the five options are the whole
-                        // decision. Give it the platform's 48dp minimum.
-                        minTouchTargetHeight = 48.dp,
-                        // One style is active at a time, so this is a radio
-                        // choice, not a filter. The chip defaults to Checkbox
-                        // because that is what the filter rows elsewhere are.
-                        role = Role.RadioButton,
-                        onClickLabel = "Use the ${option.displayName} card style",
-                        modifier = Modifier.testTag("card_style_${option.storageValue}")
-                    )
-                }
-            }
-        }
-
-        MotionSection(
-            themePreferences = themePreferences,
-            settings = themeSettings,
-            scope = scope
         )
 
-        // The gestures moved here from Device Manager: they shape how the app
-        // behaves, and this page is the one that answers that question. The
-        // card carries a live copy of the control, so the tick/cross layout is
-        // something the reader can see before they meet it on a card.
-        QuickAddSectionCard(quickAddPreferences = quickAddPreferences)
+        SettingsSectionLabel(text = "Behaviour", compact = true)
+        SettingsHubGroup(
+            entries = listOf(
+                InterfaceSection.MOTION.entry(onOpen),
+                InterfaceSection.GESTURES.entry(onOpen)
+            )
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
-/**
- * Three cards drawn by [MediaPosterCell] - the same composable, and the same
- * three-column width, the Library grid uses.
- *
- * ## Why the cards come from the reader's library
- *
- * A preview of a card style should show the cards being styled. The old sample was
- * three fixed titles on flat tints, so the one thing the reader was actually
- * choosing - whether *their* posters read well under this layout - was the one thing
- * the preview could not answer. Real titles also expose the layout honestly: a long
- * name ellipsizes where the grid will ellipsize it, and a title with no community
- * score shows the empty-rating card the reader will get.
- *
- * The covers are only drawn from entries the dashboard already holds, so this costs
- * no request of its own; Coil serves them from the cache the Library grid filled.
- * When there is no library yet (demo mode, or Settings opened before Home has
- * answered) the original three sample titles are used, so the page never shows an
- * empty preview.
- *
- * ## Why it shares the renderer rather than drawing its own idea of the style
- *
- * A preview written separately is an advert. It can be tuned to look good, it can be
- * left behind when the real card changes, and nothing fails when it does, because
- * nobody taps a preview. This one cannot drift: it calls the cell, and the cell
- * decides where the title and the rating go from the style - so a style that is
- * wrong in the preview is wrong in the grid, visibly, while the reader is picking
- * it.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun CardStylePreview(
-    style: MediaCardStyle,
-    libraryEntries: List<MediaListEntryItem>,
-    modifier: Modifier = Modifier
-) {
-    // Parsed once per list, not once per frame: the preview repaints on every
-    // style tap and every colour crossfade in the card above it.
-    val fromLibrary = remember(libraryEntries) {
-        libraryEntries.take(PreviewCardCount).map { entry ->
-            CardStyleSample(
-                title = entry.media.displayName,
-                coverUrl = entry.media.posterUrl,
-                coverColor = DynamicThemeBuilder.parseHexColor(entry.media.posterColor),
-                // The same threshold the Library grid uses: a zero average is an
-                // unrated title, and the grid draws no badge for it.
-                score = entry.media.averageScore?.takeIf { it > 0 }
-            )
-        }
-    }
-    // The scheme's containers, so the fallback on a light theme is not three dark
-    // slabs and vice versa.
-    val placeholderTints = listOf(
-        MaterialTheme.colorScheme.primaryContainer,
-        MaterialTheme.colorScheme.tertiaryContainer,
-        MaterialTheme.colorScheme.secondaryContainer
-    )
-    val placeholderTitles = listOf(
-        "Dandadan" to 84,
-        "Frieren: Beyond Journey's End S2" to 91,
-        "Kaiju No. 8" to 76
-    )
-    val samples = fromLibrary + placeholderTitles
-        .drop(fromLibrary.size)
-        .mapIndexed { index, (title, score) ->
-            CardStyleSample(
-                title = title,
-                coverUrl = null,
-                coverColor = placeholderTints[(fromLibrary.size + index) % placeholderTints.size],
-                score = score
-            )
-        }
+/** One shelf row, named and described by the sub-page it opens. */
+private fun InterfaceSection.entry(
+    onOpen: (InterfaceSection) -> Unit
+): SettingsHubEntry = SettingsHubEntry(
+    icon = icon,
+    title = title,
+    subtitle = subtitle,
+    testTag = testTag,
+    onClick = { onOpen(this) }
+)
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = if (fromLibrary.isNotEmpty()) "Preview \u00b7 from your library" else "Preview",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+/**
+ * The body of one part.
+ *
+ * The dispatch lives here rather than in `InterfaceSections.kt` so this file names
+ * every part of the page: the two bodies that are other files' cards (motion and the
+ * quick-add gestures) would otherwise be reachable only by following an import.
+ */
+@Composable
+private fun InterfaceSectionBody(
+    section: InterfaceSection,
+    themePreferences: ThemePreferences,
+    themeSettings: ThemePreferences.ThemeSettings,
+    interfacePreferences: InterfacePreferences,
+    quickAddPreferences: QuickAddPreferences,
+    scope: CoroutineScope,
+    previewEntries: List<MediaListEntryItem>
+) {
+    when (section) {
+        InterfaceSection.LAYOUT -> InterfaceLayoutSection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Top,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("card_style_preview")
-        ) {
-            samples.forEach { sample ->
-                MediaPosterCell(
-                    coverUrl = sample.coverUrl,
-                    coverColor = sample.coverColor,
-                    title = sample.title,
-                    // Null draws no badge in any style, which is the honest card
-                    // for a title the community has not rated yet.
-                    score = sample.score,
-                    style = style,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        InterfaceSection.SEQUELS -> InterfaceSequelSection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries
+        )
+        InterfaceSection.LIBRARY -> InterfaceLibrarySection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries
+        )
+        InterfaceSection.CARDS -> InterfaceCardStyleSection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries
+        )
+        InterfaceSection.MOTION -> SettingsScrollColumn {
+            MotionSection(
+                themePreferences = themePreferences,
+                settings = themeSettings,
+                scope = scope
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        InterfaceSection.GESTURES -> SettingsScrollColumn {
+            QuickAddSectionCard(quickAddPreferences = quickAddPreferences)
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
-
-/** How many cards the preview draws; the Library grid is three columns wide. */
-private const val PreviewCardCount = 3
-
-/** One card the preview can draw, already flattened out of a list entry. */
-private data class CardStyleSample(
-    val title: String,
-    val coverUrl: String?,
-    val coverColor: Color?,
-    val score: Int?
-)

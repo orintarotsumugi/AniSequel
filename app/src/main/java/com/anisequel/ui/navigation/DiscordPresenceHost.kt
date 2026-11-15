@@ -10,32 +10,24 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.anisequel.data.discord.DiscordPresenceRuntime
 import com.anisequel.data.discord.DiscordPresenceCommands
+import com.anisequel.data.discord.DiscordPresenceRuntime
 import com.anisequel.data.discord.DiscordRpcClient
 import com.anisequel.data.discord.DiscordRuntimeState
 import com.anisequel.data.repository.DiscordPreferences
+import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.domain.discord.DiscordPresenceComposer
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.ui.components.discord.DiscordActivityBus
 import com.anisequel.ui.components.discord.DiscordJokes
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
- * Draws nothing, and is the only thing that publishes.
- *
- * Mounted once at the navigation root, beside the bar, the seasonal sky and the
- * joke toast: the presence describes the whole app, so it cannot live inside a
- * screen that is disposed when its tab changes. Being a sibling of `NavHost`
- * rather than a parameter also means a route change recomposes this small
- * composable, not the destination table.
- *
- * ## What it does not do
- *
- * It does not compose a new presence every second. The value changes when the
- * page, the list or the joke changes, and each of those is a real publish.
- * Discord's own timer runs from the start timestamp in the value.
+ * Publishes Discord Rich Presence directly to Discord from the app root.
  */
 @Composable
 fun DiscordPresenceHost(
@@ -48,42 +40,55 @@ fun DiscordPresenceHost(
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
 
-    // The page name is the fallback activity's whole content, so it is updated
-    // even when Discord is off: turning the switch on should not say "Home" for
-    // as long as it takes to navigate somewhere.
     LaunchedEffect(route) {
         DiscordActivityBus.browse(discordPageStatus(route))
     }
 
+    // Read here, not through a helper that returns the line: a state read inside
+    // another composable invalidates only that scope, so the host would never
+    // recompose the presence below when only the joke changed.
     var joke by remember { mutableStateOf<String?>(null) }
+    // The last few lines, so a rotation does not redraw one it quoted two ticks
+    // ago. Three is enough to stop the "it keeps saying the same thing" feeling
+    // without making the pool predictable.
+    var recentJokes by remember { mutableStateOf<List<String>>(emptyList()) }
     val latestSettings by rememberUpdatedState(settings)
 
-    // A quick action on the Settings page, routed here so the preview and the
-    // published line cannot quote two different jokes.
+    fun pickJoke(): String? {
+        val next = DiscordJokes.next(latestSettings, recentJokes)
+        if (next != null) recentJokes = (recentJokes + next).takeLast(3)
+        return next
+    }
+
     LaunchedEffect(Unit) {
         DiscordPresenceCommands.newJokeRequested.collect {
-            joke = DiscordJokes.next(latestSettings, joke)
+            joke = pickJoke()
         }
     }
 
-    // Restarts on any switch that changes what the pool is or how often it
-    // changes. The first line is drawn immediately rather than after one whole
-    // interval: a ten-minute wait is indistinguishable from a broken feature.
+    // Stabilize list/set keys so unrelated DataStore emissions don't restart rotation.
+    val jokeTonesKey = remember(settings.activeJokeTones) {
+        settings.activeJokeTones.map { it.storageValue }.sorted().joinToString("|")
+    }
+    val customJokesKey = remember(settings.customJokes) { settings.customJokes.joinToString("\u0000") }
+
     LaunchedEffect(
         settings.showJokes,
         settings.jokeInterval,
-        settings.activeJokeTones,
-        settings.customJokes
+        jokeTonesKey,
+        customJokesKey
     ) {
         if (!settings.jokesScheduled) {
             joke = null
+            recentJokes = emptyList()
             return@LaunchedEffect
         }
-        joke = DiscordJokes.next(settings, joke)
+        joke = pickJoke()
         if (!settings.jokeInterval.schedules) return@LaunchedEffect
-        while (true) {
+        while (isActive) {
             delay(settings.jokeInterval.minutes * 60_000L)
-            joke = DiscordJokes.next(settings, joke)
+            // Re-read latest settings/tones/custom lines at tick time.
+            joke = pickJoke()
         }
     }
 
@@ -96,79 +101,115 @@ fun DiscordPresenceHost(
         )
     }
 
-    // The Settings preview reads this rather than composing a second opinion
-    // about the joke that is currently live.
     LaunchedEffect(presence) {
         DiscordPresenceRuntime.updatePresence(presence)
     }
 
-    val client = remember { DiscordRpcClient() }
-    // Remembered across the disabled emission so switching the feature off can
-    // withdraw the activity from the relay it was actually sent to.
-    var publishedRelay by remember { mutableStateOf<String?>(null) }
+    DiscordPresencePublisher(settings = settings, presence = presence)
+}
 
-    LaunchedEffect(settings.enabled) {
-        if (settings.enabled) return@LaunchedEffect
-        DiscordPresenceRuntime.update(DiscordRuntimeState.Disabled)
-        publishedRelay?.let { relay -> client.clear(relay) }
-        publishedRelay = null
+/**
+ * Keeps the gateway socket and the published presence in step with the settings.
+ *
+ * Split from [DiscordPresenceHost] because it owns the three things a presence
+ * change must not see - the client, the token the live presence went out with,
+ * and the publish in flight - and the host owns none of them.
+ */
+@Composable
+private fun DiscordPresencePublisher(
+    settings: DiscordSettings,
+    presence: DiscordPresence
+) {
+    val client = remember { DiscordRpcClient() }
+    var lastLiveToken by remember { mutableStateOf<String?>(null) }
+    var publishJob by remember { mutableStateOf<Job?>(null) }
+    val latestSettings by rememberUpdatedState(settings)
+
+    LaunchedEffect(settings.enabled, settings.token, settings.linked) {
+        if (!settings.enabled) {
+            publishJob?.cancel()
+            DiscordPresenceRuntime.update(DiscordRuntimeState.Disabled)
+            val token = lastLiveToken ?: settings.token
+            if (token.isNotBlank()) {
+                runCatching { client.clear(token) }
+            }
+            // Unconditionally, not only when a token is present: logging out
+            // clears the token, and the old build guarded this on a non-blank one,
+            // leaving the gateway socket open after a sign-out.
+            runCatching { client.disconnect() }
+            lastLiveToken = null
+        }
     }
 
-    // The relay URL and the application id are keys in their own right: linking a
-    // *different* relay leaves `canPublish` true and the composed card unchanged,
-    // so without them the old relay would keep the presence and the new one would
-    // never see it - while Settings happily said "Connected".
-    LaunchedEffect(
+    val publishKey = remember(
         settings.canPublish,
-        settings.relayUrl,
-        settings.applicationId,
+        settings.token,
+        settings.linked,
+        settings.onlineStatus,
+        settings.activityType,
+        settings.reduceNetworkChatter,
         presence
     ) {
+        arrayOf<Any?>(
+            settings.canPublish,
+            settings.token,
+            settings.linked,
+            settings.onlineStatus,
+            settings.activityType,
+            settings.reduceNetworkChatter,
+            presence.details,
+            presence.state,
+            presence.largeImage,
+            presence.largeText,
+            presence.startTimestampSeconds,
+            presence.activityName,
+            presence.buttons.joinToString { "${it.label}|${it.url}" },
+            presence.joke
+        ).contentHashCode()
+    }
+
+    LaunchedEffect(publishKey) {
         when {
-            !settings.enabled -> {
-                DiscordPresenceRuntime.update(DiscordRuntimeState.Disabled)
-            }
+            !settings.enabled -> DiscordPresenceRuntime.update(DiscordRuntimeState.Disabled)
             !settings.canPublish -> {
+                publishJob?.cancel()
+                runCatching { client.disconnect() }
+                lastLiveToken = null
                 DiscordPresenceRuntime.update(DiscordRuntimeState.PreviewOnly)
             }
             else -> {
-                DiscordPresenceRuntime.update(DiscordRuntimeState.Publishing)
-                // A new relay is linked while the old one is still holding an
-                // activity: withdraw it first, or the old relay shows a stale
-                // presence until Discord times it out.
-                publishedRelay
-                    ?.takeIf { it != settings.relayUrl }
-                    ?.let { previous -> client.clear(previous) }
-
-                val result = client.publish(
-                    rawBaseUrl = settings.relayUrl,
-                    applicationId = settings.applicationId,
-                    presence = presence
-                )
-                if (result.isSuccess) {
-                    // The switch can be flipped while the POST is in flight;
-                    // cancellation does not stop a blocking `execute()`. The
-                    // latest value, not the one this effect started with,
-                    // decides whether the relay is allowed to keep the card.
-                    if (!latestSettings.enabled) {
-                        client.clear(settings.relayUrl)
-                        publishedRelay = null
-                    } else {
-                        publishedRelay = settings.relayUrl
+                publishJob?.cancel()
+                DiscordPresenceRuntime.update(DiscordRuntimeState.Connecting)
+                val token = settings.token
+                // Small debounce to coalesce rapid edits and reduce network chatter.
+                if (settings.reduceNetworkChatter) delay(350L)
+                publishJob = launch {
+                    val result = client.publish(
+                        rawToken = token,
+                        presence = presence,
+                        status = latestSettings.onlineStatus,
+                        activityType = latestSettings.activityType
+                    )
+                    if (!isActive) return@launch
+                    if (result.isSuccess) {
+                        if (!latestSettings.stillLiveWith(token)) {
+                            runCatching { client.clear(token) }
+                            runCatching { client.disconnect() }
+                            lastLiveToken = null
+                        } else {
+                            lastLiveToken = token
+                            DiscordPresenceRuntime.update(
+                                DiscordRuntimeState.Live(result.getOrNull()?.username ?: "Discord")
+                            )
+                        }
+                    } else if (latestSettings.stillLiveWith(token)) {
                         DiscordPresenceRuntime.update(
-                            DiscordRuntimeState.Live(settings.relayUrl)
+                            DiscordRuntimeState.Failed(
+                                result.exceptionOrNull()?.message
+                                    ?: "Discord did not accept the presence."
+                            )
                         )
                     }
-                } else if (latestSettings.enabled) {
-                    // A cancelled publish that fails because the reader turned the
-                    // feature off must not paint an error over the off state; the
-                    // clear path is the one that matters.
-                    DiscordPresenceRuntime.update(
-                        DiscordRuntimeState.Failed(
-                            result.exceptionOrNull()?.message
-                                ?: "The Discord relay did not answer."
-                        )
-                    )
                 }
             }
         }
@@ -176,13 +217,14 @@ fun DiscordPresenceHost(
 }
 
 /**
- * The presence's word for a route.
+ * Whether a presence published with [token] is still the one the reader wants.
  *
- * A pure mapping rather than a `when` inside the host so a new destination is one
- * line here - and so the fallback is obvious. It deliberately returns the app's
- * name for anything unrecognised: a presence that says "Browsing AniSequel" is
- * true on every screen this app has, including the ones added later.
+ * A publish can land after the settings moved on - disabled, logged out, or the
+ * token replaced - and its result must be withdrawn rather than painted as live.
  */
+private fun DiscordSettings.stillLiveWith(token: String): Boolean =
+    enabled && canPublish && this.token == token
+
 internal fun discordPageStatus(route: String?): String = when {
     route == AppRoutes.DASHBOARD ||
         route == AppRoutes.DASHBOARD_DEMO ||

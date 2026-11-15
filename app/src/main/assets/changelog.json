@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "2.1.0",
+      "entries": [
+        {
+          "title": "The Interface page is a shelf of sub-screens",
+          "detail": "App layout, Home sequels, Library view, Card style, Motion and Quick add gestures each open a page of their own, so the previews and controls that shared one long scroll are now a tap apart and each keeps its own scroll position. Back leaves the part before it leaves the page, and every switch, slider and chip still writes the same preference it did."
+        },
+        {
+          "title": "Direct Discord login, no relay",
+          "detail": "Rich Presence now connects straight to Discord from this device. Use official web login inside the app or paste your Discord token directly; the relay flow is removed and no local relay/build setup is needed."
+        },
+        {
+          "title": "More customization and controls",
+          "detail": "Choose activity type and online status, set a custom activity name and button labels/URL, toggle the elapsed timer, and fine-tune presence text and behavior with more options."
+        },
+        {
+          "title": "Revamped Discord settings UI",
+          "detail": "The Discord page is clearer and more polished with improved connection states, animated preview/live indicators, streamlined cards, and a cleaner layout for setup and quick actions."
+        },
+        {
+          "title": "Faster, smoother presence updates",
+          "detail": "Initial settings loading is smoother, joke rotation is more stable, and presence publishing is debounced/coalesced to reduce chatter while keeping updates responsive."
+        },
+        {
+          "title": "Fixes for connection and preview behavior",
+          "detail": "Resolved publish/disable races, improved reconnect and logout handling, fixed preview/status inconsistencies, and tightened token/login validation and messaging."
+        },
+        {
+          "title": "The Info page ends above its capsule",
+          "detail": "The last card and the Categories heading could not be scrolled clear of the floating Info / My Entry bar, because the page reserved a fixed 112dp for a bar that is taller than that on most phones. The page now reserves the bar's measured height plus a gap, and the hero hands its artwork over to the page backdrop without the hard horizontal seam that made the banner look cut off."
+        },
+        {
+          "title": "Discord typing no longer fights you",
+          "detail": "The activity name, button labels and button URL used to write to storage on every keystroke, so the value came back a round trip later and fast typing lost characters. They now keep a local draft and save once you pause, a non-http button URL is flagged instead of silently dropped, and one tap resets the whole customization card."
+        },
+        {
+          "title": "Connection fixes behind the Discord card",
+          "detail": "The token check could hang forever because the presence client has no read timeout for its websocket; it now uses a bounded one. A login that timed out could also leave a socket connecting behind a screen that had already reported failure, signing out could leave the connection open, and an install upgraded from the relay build could claim \"Connected\" with no token - all three are fixed."
+        },
+        {
+          "title": "The joke rotation stops repeating itself",
+          "detail": "The presence remembers the last three lines it quoted, so a ten-minute rotation works through the pool instead of drawing the same line twice in a row. Invisible status now says plainly that it hides the activity too."
+        }
+      ]
+    },
+    {
       "version": "2.0.0",
       "entries": [
         {

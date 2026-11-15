@@ -38,11 +38,26 @@ object DiscordJokes {
         settings: DiscordSettings,
         previous: String?,
         random: Random = Random.Default
+    ): String? = next(settings, listOfNotNull(previous), random)
+
+    /**
+     * One line, avoiding everything in [recent], not only the line on screen.
+     *
+     * A two-line draw from a large pool repeats the *same* line about as often as
+     * any other, and on a ten-minute rotation the reader sees a repeat long before
+     * they see the whole pool. Remembering the last few is what makes the rotation
+     * feel like a pool rather than a coin. Falls back to the whole pool when every
+     * line is recent (a reader with two custom lines and Off on every tone).
+     */
+    fun next(
+        settings: DiscordSettings,
+        recent: Collection<String>,
+        random: Random = Random.Default
     ): String? {
         val lines = pool(settings)
         if (lines.isEmpty()) return null
         if (lines.size == 1) return lines.first()
-        val candidates = lines.filterNot { it == previous }
+        val candidates = lines.filterNot { it in recent }.ifEmpty { lines }
         return candidates.random(random)
     }
 

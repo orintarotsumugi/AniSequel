@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -39,7 +40,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -418,8 +421,30 @@ fun SequelDetailSheet(
         // stop too high on devices with a gesture bar. Keep one content clearance,
         // and add only a small physical lift when immersive mode makes the system
         // inset report zero.
-        val navClearance = (if (destinations.size > 1) 112.dp else 28.dp) +
-            if (immersive) 12.dp else 0.dp
+        //
+        // The clearance is the capsule's *measured* height, not the 112dp it used
+        // to assume. That constant was smaller than a real bar plus the navigation
+        // inset on several phones: the last card - and the whole "Categories"
+        // heading under it - could not be scrolled clear of the capsule, so the
+        // page ended underneath the only control that switches away from it. The
+        // bar measures itself below and the list reserves exactly that much plus
+        // a breathing gap; 112dp stays only as the first-frame fallback, before
+        // the bar has been laid out once.
+        var dockHeightPx by remember { mutableStateOf(0) }
+        val dockHeight = with(LocalDensity.current) { dockHeightPx.toDp() }
+        // With no capsule (a host with no entry editor) the page still ends
+        // edge-to-edge, so the gesture bar needs the same clearance the capsule
+        // used to provide. Read as an inset rather than a constant: 0dp on a
+        // three-button phone and 24dp+ on gesture navigation.
+        val navigationInset = WindowInsets.navigationBars
+            .asPaddingValues()
+            .calculateBottomPadding()
+        val navClearance = if (destinations.size > 1) {
+            (if (dockHeightPx > 0) dockHeight else 112.dp) + DOCK_GAP +
+                if (immersive) 12.dp else 0.dp
+        } else {
+            navigationInset + 28.dp + if (immersive) 12.dp else 0.dp
+        }
 
         Box(
             modifier = Modifier
@@ -550,6 +575,10 @@ fun SequelDetailSheet(
                     onSelect = { destination = it },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        // Measured *outside* the insets padding, so the height the
+                        // list reserves already includes the gesture/nav bar the
+                        // capsule is lifted above.
+                        .onSizeChanged { dockHeightPx = it.height }
                         .windowInsetsPadding(WindowInsets.navigationBars)
                         .padding(bottom = if (immersive) 12.dp else 0.dp)
                 )
@@ -618,3 +647,12 @@ private suspend fun themeWrite(block: suspend () -> Unit) {
         // Deliberately swallowed: see above.
     }
 }
+
+/**
+ * The gap between the floating capsule and the last card that can scroll under it.
+ *
+ * Not zero: the capsule has a 6dp shadow and the page's cards have their own
+ * elevation, so a card that stopped exactly at the bar's top edge looked welded to
+ * it. 16dp is the same rhythm the cards use between themselves.
+ */
+private val DOCK_GAP = 16.dp

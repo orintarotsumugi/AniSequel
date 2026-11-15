@@ -105,7 +105,13 @@ class SettingsLayoutTest {
         )
         assertTrue("the OLED switch lost its name", theme.contains("title = \"OLED mode\""))
 
-        val iface = source(settings + "InterfaceTab.kt")
+        // The page is two files: the shelf (`InterfaceTab`) and the sub-page bodies
+        // (`InterfaceSections`). Both are read, because the requirement is that the
+        // Interface page draws motion and the style chips - not that one file does.
+        // A guard that read only the shelf would pass on a page whose bodies had
+        // been emptied.
+        val iface = source(settings + "InterfaceTab.kt") +
+            source(settings + "InterfaceSections.kt")
         assertTrue("the interface page does not draw motion", iface.contains("MotionSection("))
         assertTrue("the interface page has no style chips", iface.contains("card_style_"))
     }
@@ -118,7 +124,7 @@ class SettingsLayoutTest {
     @Test
     fun `every card surface draws the same cell`() {
         val surfaces = listOf(
-            settings + "InterfaceTab.kt" to "the picker's preview",
+            settings + "InterfaceSections.kt" to "the picker's preview",
             "app/src/main/java/com/anisequel/ui/screens/profile/ProfileLibraryTab.kt" to
                 "the Library grid",
             "app/src/main/java/com/anisequel/ui/components/cards/SequelPoster.kt" to

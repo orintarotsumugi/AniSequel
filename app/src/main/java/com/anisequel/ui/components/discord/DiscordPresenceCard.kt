@@ -1,5 +1,14 @@
 package com.anisequel.ui.components.discord
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -37,39 +47,13 @@ import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.ui.components.AppVectorIcons
 import kotlinx.coroutines.delay
 
-/**
- * The Discord card, drawn with Discord's own colours.
- *
- * ## Why it is not themed
- *
- * Every other surface in this app follows Material You, because it is *this* app.
- * This card is a preview of *another* app's window: a themed version would tell
- * the reader their presence will be lavender on a lavender phone, which is not
- * what their friends will see. The colours below are Discord's dark client,
- * deliberately fixed even in light mode.
- *
- * ## What it is allowed to show
- *
- * Only [DiscordPresence] - the same value handed to the relay. There is no second
- * description of the presence in the UI to drift from the one that is published.
- * If a title is hidden, the cover and the title are already absent from the
- * value; this composable does not re-check the switches.
- */
 @Composable
 fun DiscordPresenceCard(
     presence: DiscordPresence,
     modifier: Modifier = Modifier,
-    /** Hides the buttons and shrinks the artwork for the pinned dock. */
     compact: Boolean = false,
-    /**
-     * Whether a relay has accepted this card.
-     *
-     * The header used to say LIVE unconditionally, which made a preview of an
-     * unconfigured feature claim it was already visible to friends. The dock's
-     * status row said "Preview only" two lines away, so the card contradicted its
-     * own page. Default false because composition is not delivery.
-     */
-    live: Boolean = false
+    live: Boolean = false,
+    connecting: Boolean = false
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -78,7 +62,11 @@ fun DiscordPresenceCard(
         tonalElevation = 0.dp
     ) {
         Column(modifier = Modifier.padding(if (compact) 12.dp else 16.dp)) {
-            PresenceHeader(live = live)
+            PresenceHeader(
+                live = live,
+                connecting = connecting,
+                appName = presence.activityName
+            )
             Spacer(modifier = Modifier.height(if (compact) 10.dp else 14.dp))
             Row {
                 PresenceArtwork(
@@ -95,15 +83,21 @@ fun DiscordPresenceCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    presence.state?.let { state ->
-                        Spacer(modifier = Modifier.height(3.dp))
-                        Text(
-                            text = state,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DiscordMuted,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                    AnimatedVisibility(
+                        visible = !presence.state.isNullOrBlank(),
+                        enter = fadeIn(tween(180)),
+                        exit = fadeOut(tween(120))
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = presence.state.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DiscordMuted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(7.dp))
                     PresenceTimer(presence.startTimestampSeconds)
@@ -121,15 +115,28 @@ fun DiscordPresenceCard(
     }
 }
 
-/**
- * The row every Discord presence shares: the app's mark, its name and the
- * "Playing" verb.
- *
- * Kept separate so the compact dock and the full card cannot disagree about what
- * the presence is.
- */
 @Composable
-private fun PresenceHeader(live: Boolean) {
+private fun PresenceHeader(live: Boolean, connecting: Boolean, appName: String) {
+    // Only while connecting. The transition used to be built on every card and
+    // ticked forever, so a preview sitting on the settings page animated a dot
+    // nobody was looking at - the one indefinite animation in the app that was not
+    // gated on whether it could be seen. Conditional composition also stops the
+    // tick when the connection settles.
+    val alpha = if (connecting) {
+        val pulse = rememberInfiniteTransition(label = "discord_live_pulse")
+        val animated by pulse.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse_alpha"
+        )
+        animated
+    } else {
+        1f
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
@@ -147,14 +154,17 @@ private fun PresenceHeader(live: Boolean) {
         }
         Spacer(modifier = Modifier.width(7.dp))
         Text(
-            text = "AniSequel",
+            text = appName.ifBlank { "AniSequel" },
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = DiscordText
+            color = DiscordText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
         Spacer(modifier = Modifier.width(5.dp))
         Text(
-            text = "· Playing",
+            text = "· Activity",
             style = MaterialTheme.typography.labelSmall,
             color = DiscordMuted
         )
@@ -164,11 +174,22 @@ private fun PresenceHeader(live: Boolean) {
                 modifier = Modifier
                     .size(6.dp)
                     .clip(CircleShape)
-                    .background(if (live) DiscordOnline else DiscordMuted.copy(alpha = 0.6f))
+                    .alpha(if (connecting) alpha else 1f)
+                    .background(
+                        when {
+                            live -> DiscordOnline
+                            connecting -> DiscordBlurple
+                            else -> DiscordMuted.copy(alpha = 0.6f)
+                        }
+                    )
             )
             Spacer(modifier = Modifier.width(5.dp))
             Text(
-                text = if (live) "LIVE" else "PREVIEW",
+                text = when {
+                    live -> "LIVE"
+                    connecting -> "CONNECTING"
+                    else -> "PREVIEW"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = DiscordMuted
@@ -210,14 +231,6 @@ private fun PresenceArtwork(presence: DiscordPresence, size: androidx.compose.ui
     }
 }
 
-/**
- * Discord's own count-up timer.
- *
- * A one-second clock is not an animation and is not what AGENTS section 3's
- * motion rules are about - it is the same value Discord is ticking in the other
- * window, and showing a static "just now" would make the preview look less alive
- * than the product.
- */
 @Composable
 private fun PresenceTimer(startTimestampSeconds: Long?) {
     if (startTimestampSeconds == null) return
@@ -266,7 +279,6 @@ private fun PresenceButton(label: String) {
     }
 }
 
-/** `h:mm:ss` past an hour, `m:ss` below it, matching Discord's own format. */
 internal fun formatElapsed(totalSeconds: Long): String {
     val safe = totalSeconds.coerceAtLeast(0L)
     val hours = safe / 3_600L
@@ -279,7 +291,6 @@ internal fun formatElapsed(totalSeconds: Long): String {
     }
 }
 
-// Discord's dark client, fixed on purpose. See the composable's KDoc.
 private val DiscordSurface = Color(0xFF232428)
 private val DiscordDeep = Color(0xFF1B1C20)
 private val DiscordText = Color(0xFFF2F3F5)

@@ -111,7 +111,16 @@ fun SettingsSubHeader(
     title: String,
     subtitle: String?,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * What the back arrow announces, and the tag it is found by.
+     *
+     * The Interface page's parts are a level below a page rather than below the
+     * shelf, so "Back to settings" there would promise two steps away from one. A
+     * default keeps every existing caller's sentence and tag unchanged.
+     */
+    backDescription: String = "Back to settings",
+    backTestTag: String = "settings_sub_back"
 ) {
     val haptics = LocalHapticFeedback.current
     Row(
@@ -131,11 +140,11 @@ fun SettingsSubHeader(
             modifier = Modifier
                 .size(48.dp)
                 .bouncyPress(pressedScale = 0.9f)
-                .testTag("settings_sub_back")
+                .testTag(backTestTag)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back to settings"
+                contentDescription = backDescription
             )
         }
         Spacer(modifier = Modifier.width(4.dp))
