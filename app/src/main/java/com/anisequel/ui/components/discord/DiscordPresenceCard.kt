@@ -117,16 +117,26 @@ fun DiscordPresenceCard(
 
 @Composable
 private fun PresenceHeader(live: Boolean, connecting: Boolean, appName: String) {
-    val pulse = rememberInfiniteTransition(label = "discord_live_pulse")
-    val alpha by pulse.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_alpha"
-    )
+    // Only while connecting. The transition used to be built on every card and
+    // ticked forever, so a preview sitting on the settings page animated a dot
+    // nobody was looking at - the one indefinite animation in the app that was not
+    // gated on whether it could be seen. Conditional composition also stops the
+    // tick when the connection settles.
+    val alpha = if (connecting) {
+        val pulse = rememberInfiniteTransition(label = "discord_live_pulse")
+        val animated by pulse.animateFloat(
+            initialValue = 0.45f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(900, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulse_alpha"
+        )
+        animated
+    } else {
+        1f
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier

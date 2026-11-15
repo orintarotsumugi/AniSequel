@@ -35,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,7 @@ import com.anisequel.domain.jokes.JokeTone
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.discord.DiscordJokes
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -107,66 +109,139 @@ fun DiscordCustomizationCard(
             }
         }
 
+        // "Invisible" is a real choice, but Discord drops the activity with it:
+        // the gateway payload sends an empty activity list so the presence is not
+        // visible. Saying so here is cheaper than a reader filing the silence as a
+        // broken feature.
+        if (settings.onlineStatus == DiscordOnlineStatus.INVISIBLE) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Invisible keeps you offline to friends, so the activity is hidden too.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         SettingsFieldLabel("Activity name")
         Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
+        // Draft-backed, not straight-to-DataStore: these fields used to write on
+        // every keystroke, so the value came back through the preferences flow a
+        // round trip later and the caret lost characters on a fast typist. A
+        // debounce writes once the reader stops, and the stored value still wins
+        // when it changes from anywhere else.
+        DiscordDraftField(
             value = settings.activityName,
-            onValueChange = { value ->
-                if (value.length <= 48) scope.launch { preferences.setActivityName(value) }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("AniSequel") },
-            supportingText = { Text("${settings.activityName.length}/48") }
+            limit = 48,
+            placeholder = "AniSequel",
+            testTag = "discord_activity_name_field",
+            onCommit = { value -> scope.launch { preferences.setActivityName(value) } }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
         SettingsFieldLabel("Primary button label (title link)")
         Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
+        DiscordDraftField(
             value = settings.primaryButtonLabel,
-            onValueChange = { value ->
-                if (value.length <= 32) scope.launch { preferences.setPrimaryButtonLabel(value) }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("View on AniList") },
-            supportingText = { Text("${settings.primaryButtonLabel.length}/32") }
+            limit = 32,
+            placeholder = "View on AniList",
+            testTag = "discord_primary_button_field",
+            onCommit = { value -> scope.launch { preferences.setPrimaryButtonLabel(value) } }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
         SettingsFieldLabel("Secondary button label")
         Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
+        DiscordDraftField(
             value = settings.secondaryButtonLabel,
-            onValueChange = { value ->
-                if (value.length <= 32) {
-                    scope.launch { preferences.setSecondaryButton(value, settings.secondaryButtonUrl) }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text("AniSequel on GitHub") },
-            supportingText = { Text("${settings.secondaryButtonLabel.length}/32") }
+            limit = 32,
+            placeholder = "AniSequel on GitHub",
+            testTag = "discord_secondary_button_field",
+            onCommit = { value ->
+                scope.launch { preferences.setSecondaryButton(value, settings.secondaryButtonUrl) }
+            }
         )
 
         Spacer(modifier = Modifier.height(8.dp))
         SettingsFieldLabel("Secondary button URL")
         Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
+        DiscordDraftField(
             value = settings.secondaryButtonUrl,
-            onValueChange = { value ->
-                if (value.length <= 512) {
-                    scope.launch { preferences.setSecondaryButton(settings.secondaryButtonLabel, value) }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            placeholder = { Text(DISCORD_PROJECT_URL) },
-            supportingText = { Text("${settings.secondaryButtonUrl.length}/512") }
+            limit = 512,
+            placeholder = DISCORD_PROJECT_URL,
+            testTag = "discord_secondary_url_field",
+            // Discord only renders an http(s) button. The composer already drops
+            // anything else, so the field says so instead of the preview quietly
+            // missing a button the reader thinks they configured.
+            validate = { it.isBlank() || it.startsWith("https://") || it.startsWith("http://") },
+            invalidMessage = "Discord needs a full http:// or https:// URL.",
+            onCommit = { value ->
+                scope.launch { preferences.setSecondaryButton(settings.secondaryButtonLabel, value) }
+            }
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        // One action for the whole card. The per-activity phrasing has its own
+        // reset inside the editor, and account/token are deliberately untouched:
+        // this restores the card the reader is looking at, nothing else.
+        TextButton(
+            onClick = { scope.launch { preferences.resetCustomization() } },
+            modifier = Modifier.testTag("discord_reset_customization")
+        ) {
+            Text("Reset presence customization")
+        }
     }
+}
+
+/**
+ * A preference text field that writes on a pause rather than on every keystroke.
+ *
+ * The value is a local draft until it is committed, so typing never waits on a
+ * `DataStore` round trip. A commit that lands is indistinguishable from the stored
+ * value, which is what keeps the sync effect from overwriting the caret mid-word;
+ * a change made elsewhere (Reset, another screen) still flows back in.
+ */
+@Composable
+private fun DiscordDraftField(
+    value: String,
+    limit: Int,
+    placeholder: String,
+    testTag: String,
+    validate: (String) -> Boolean = { true },
+    invalidMessage: String? = null,
+    onCommit: (String) -> Unit
+) {
+    var draft by remember { mutableStateOf(value) }
+
+    LaunchedEffect(value) {
+        if (value != draft) draft = value
+    }
+    LaunchedEffect(draft) {
+        if (draft == value) return@LaunchedEffect
+        delay(450L)
+        onCommit(draft)
+    }
+
+    val valid = validate(draft)
+    OutlinedTextField(
+        value = draft,
+        onValueChange = { next -> if (next.length <= limit) draft = next },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(testTag),
+        singleLine = true,
+        placeholder = { Text(placeholder) },
+        isError = !valid,
+        supportingText = {
+            Text(
+                text = if (!valid && invalidMessage != null) {
+                    invalidMessage
+                } else {
+                    "${draft.length}/$limit"
+                }
+            )
+        }
+    )
 }
 
 @Composable

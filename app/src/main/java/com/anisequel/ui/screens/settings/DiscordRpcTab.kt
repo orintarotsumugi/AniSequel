@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -36,16 +35,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,14 +75,22 @@ fun DiscordRpcTab(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    val loaded by produceState(initialValue = false) {
-        preferences.settings.collect { value = true }
-    }
-    val settings by preferences.settings.collectAsState(initial = DiscordSettings())
+    // One collection, not two: the page used to open a second reader just to learn
+    // that the first had emitted, so a single preference had two DataStore
+    // subscribers and the loader could disagree with the content by a frame.
+    val storedSettings by preferences.settings.collectAsState(initial = null)
+    val loaded = storedSettings != null
+    val settings = storedSettings ?: DiscordSettings()
     val runtime by DiscordPresenceRuntime.state.collectAsState()
     val enginePresence by DiscordPresenceRuntime.presence.collectAsState()
     val liveActivity by DiscordActivityBus.activity.collectAsState()
     var previewOverride by remember { mutableStateOf<DiscordActivity?>(null) }
+    // The dock's own height, measured. The clearance under the scroll used to be a
+    // guessed 320dp, which was short as soon as a long state line or two buttons
+    // made the card taller - the same class of bug the Info page had, where the
+    // last card could not be scrolled out from under a floating bar.
+    var dockHeightPx by remember { mutableStateOf(0) }
+    val dockHeight = with(LocalDensity.current) { dockHeightPx.toDp() }
     var editingKind by remember { mutableStateOf<DiscordActivityKind?>(null) }
     var showLogin by remember { mutableStateOf(false) }
     var showAddJoke by remember { mutableStateOf(false) }
@@ -117,11 +124,9 @@ fun DiscordRpcTab(
             return@Box
         }
 
-        val contentAlpha by animateFloatAsState(if (loaded) 1f else 0f, label = "discord_content_alpha")
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .alpha(contentAlpha)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -201,7 +206,15 @@ fun DiscordRpcTab(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(if (settings.previewPinned) 320.dp else 24.dp))
+                Spacer(
+                    modifier = Modifier.height(
+                        if (settings.previewPinned) {
+                            if (dockHeightPx > 0) dockHeight + 24.dp else 320.dp
+                        } else {
+                            24.dp
+                        }
+                    )
+                )
             }
         }
 
@@ -217,7 +230,8 @@ fun DiscordRpcTab(
                 runtime = runtime,
                 previewing = previewOverride != null,
                 previewActivity = previewActivity,
-                onHide = { scope.launch { preferences.setPreviewPinned(false) } }
+                onHide = { scope.launch { preferences.setPreviewPinned(false) } },
+                modifier = Modifier.onSizeChanged { dockHeightPx = it.height }
             )
         }
     }

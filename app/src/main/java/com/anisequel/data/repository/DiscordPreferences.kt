@@ -76,7 +76,12 @@ class DiscordPreferences(private val context: Context) {
         DiscordSettings(
             enabled = preferences[Keys.ENABLED] ?: false,
             token = preferences[Keys.TOKEN].orEmpty(),
-            linked = preferences[Keys.LINKED] ?: false,
+            // A relay-era install has `LINKED` set but no token, because the
+            // relay held the credentials. Reading that flag as "connected" drew
+            // "Connected to Discord" over a preview that could never publish, so
+            // a link only counts when there is a token to publish with.
+            linked = (preferences[Keys.LINKED] ?: false) &&
+                !preferences[Keys.TOKEN].isNullOrBlank(),
             username = preferences[Keys.USERNAME].orEmpty(),
             userId = preferences[Keys.USER_ID].orEmpty(),
             avatarUrl = preferences[Keys.AVATAR_URL].orEmpty(),
@@ -110,10 +115,14 @@ class DiscordPreferences(private val context: Context) {
             }.toMap(),
             activityType = DiscordActivityType.fromStorage(preferences[Keys.ACTIVITY_TYPE]),
             onlineStatus = DiscordOnlineStatus.fromStorage(preferences[Keys.ONLINE_STATUS]),
-            activityName = preferences[Keys.ACTIVITY_NAME]?.ifBlank { DISCORD_APP_NAME } ?: DISCORD_APP_NAME,
-            primaryButtonLabel = preferences[Keys.PRIMARY_BUTTON]?.ifBlank { "View on AniList" } ?: "View on AniList",
-            secondaryButtonLabel = preferences[Keys.SECONDARY_BUTTON]?.ifBlank { "AniSequel on GitHub" } ?: "AniSequel on GitHub",
-            secondaryButtonUrl = preferences[Keys.SECONDARY_BUTTON_URL]?.ifBlank { DISCORD_PROJECT_URL } ?: DISCORD_PROJECT_URL,
+            // Stored blank means "use the default", and the *composer* applies
+            // that. Filling the default in here instead would make an emptied
+            // field snap back to "AniSequel" while the reader's caret was still
+            // in it, because the stored value flows straight back out.
+            activityName = preferences[Keys.ACTIVITY_NAME].orEmpty(),
+            primaryButtonLabel = preferences[Keys.PRIMARY_BUTTON].orEmpty(),
+            secondaryButtonLabel = preferences[Keys.SECONDARY_BUTTON].orEmpty(),
+            secondaryButtonUrl = preferences[Keys.SECONDARY_BUTTON_URL].orEmpty(),
             reduceNetworkChatter = preferences[Keys.REDUCE_CHATTER] ?: true
         )
     }
@@ -180,17 +189,38 @@ class DiscordPreferences(private val context: Context) {
     }
 
     suspend fun setActivityName(name: String) {
-        context.discordDataStore.edit { it[Keys.ACTIVITY_NAME] = name.trim().ifBlank { DISCORD_APP_NAME } }
+        context.discordDataStore.edit { it[Keys.ACTIVITY_NAME] = name.trim() }
     }
 
     suspend fun setPrimaryButtonLabel(label: String) {
-        context.discordDataStore.edit { it[Keys.PRIMARY_BUTTON] = label.trim().ifBlank { "View on AniList" } }
+        context.discordDataStore.edit { it[Keys.PRIMARY_BUTTON] = label.trim() }
     }
 
     suspend fun setSecondaryButton(label: String, url: String) {
         context.discordDataStore.edit { preferences ->
-            preferences[Keys.SECONDARY_BUTTON] = label.trim().ifBlank { "AniSequel on GitHub" }
-            preferences[Keys.SECONDARY_BUTTON_URL] = url.trim().ifBlank { DISCORD_PROJECT_URL }
+            preferences[Keys.SECONDARY_BUTTON] = label.trim()
+            preferences[Keys.SECONDARY_BUTTON_URL] = url.trim()
+        }
+    }
+
+    /**
+     * Puts the presence's appearance back to what the app ships.
+     *
+     * Only the customization card's keys: switching the feature off, the token,
+     * the account and the phrasing the reader wrote for each activity are all
+     * choices with more weight than a label, and a "reset" that quietly signed
+     * them out of Discord would be the wrong kind of reset.
+     */
+    suspend fun resetCustomization() {
+        context.discordDataStore.edit { preferences ->
+            preferences.remove(Keys.ACTIVITY_NAME)
+            preferences.remove(Keys.PRIMARY_BUTTON)
+            preferences.remove(Keys.SECONDARY_BUTTON)
+            preferences.remove(Keys.SECONDARY_BUTTON_URL)
+            preferences.remove(Keys.ACTIVITY_TYPE)
+            preferences.remove(Keys.ONLINE_STATUS)
+            preferences.remove(Keys.SHOW_ELAPSED)
+            preferences.remove(Keys.REDUCE_CHATTER)
         }
     }
 

@@ -19,6 +19,7 @@ import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.domain.jokes.JokeTone
 import com.anisequel.domain.usecase.SummarizeDiscordStats
+import com.anisequel.ui.components.discord.DiscordJokes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -240,6 +241,52 @@ class DiscordPresenceTest {
         assertTrue(json.contains("\"type\":3"))
         assertTrue(json.contains("\"details\":\"Viewing Frieren\""))
         assertTrue(json.contains("\"start\":1700000000000"))
+    }
+
+    @Test
+    fun `invisible status publishes no activity`() {
+        val presence = DiscordPresenceComposer.compose(settings(), activity(), stats)
+        val json = DiscordPresenceJson.gatewayPresenceUpdate(
+            presence = presence,
+            status = DiscordOnlineStatus.INVISIBLE,
+            activityType = DiscordActivityType.PLAYING
+        )
+
+        assertTrue(json.contains("\"activities\":[]"))
+        assertTrue(json.contains("\"status\":\"invisible\""))
+    }
+
+    @Test
+    fun `a link without a token is not a connection`() {
+        // A relay-era install carries the old "linked" flag but no token, because
+        // the relay held the credentials.
+        val relayEra = DiscordSettings(enabled = true, linked = true, token = "", username = "Old")
+        assertFalse(relayEra.canPublish)
+        assertEquals("Preview only - no Discord account linked", relayEra.connectionLabel)
+
+        val direct = relayEra.copy(token = "mfa.test-token-value-that-is-long-enough")
+        assertTrue(direct.canPublish)
+    }
+
+    @Test
+    fun `a secondary button with a non-http url is dropped`() {
+        val presence = DiscordPresenceComposer.compose(
+            settings().copy(secondaryButtonUrl = "javascript:alert(1)"),
+            activity(),
+            DiscordStats.Empty
+        )
+        assertTrue(presence.buttons.none { it.label == "AniSequel on GitHub" })
+    }
+
+    @Test
+    fun `a rotation skips the lines it just quoted`() {
+        val pool = DiscordJokes.pool(settings())
+        assertTrue(pool.size > 2)
+        val recent = pool.dropLast(1)
+
+        repeat(8) {
+            assertEquals(pool.last(), DiscordJokes.next(settings(), recent))
+        }
     }
 
     @Test

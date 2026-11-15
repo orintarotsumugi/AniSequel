@@ -166,8 +166,12 @@ object DiscordLogin {
 
     fun looksLikeToken(raw: String): Boolean {
         val token = normalizeToken(raw)
-        // Discord user/bot tokens vary in shape; require a plausible non-trivial value.
-        return token.length >= 30 && token.any { it == '.' } || token.length >= 50
+        // Discord user/bot tokens vary in shape, so this is a plausibility check and
+        // not a grammar: the dotted form is what the web client stores, and a long
+        // opaque value is accepted because bot tokens have no dots at all. The
+        // parentheses matter - without them `&&` binds first and the second clause
+        // alone would accept a 50-character string with whitespace removed.
+        return (token.length >= 30 && token.contains('.')) || token.length >= 50
     }
 
     fun maskedToken(token: String): String {

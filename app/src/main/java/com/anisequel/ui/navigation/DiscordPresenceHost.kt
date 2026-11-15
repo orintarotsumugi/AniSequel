@@ -44,11 +44,21 @@ fun DiscordPresenceHost(
     }
 
     var joke by remember { mutableStateOf<String?>(null) }
+    // The last few lines, so a rotation does not redraw one it quoted two ticks
+    // ago. Three is enough to stop the "it keeps saying the same thing" feeling
+    // without making the pool predictable.
+    var recentJokes by remember { mutableStateOf<List<String>>(emptyList()) }
     val latestSettings by rememberUpdatedState(settings)
+
+    fun pickJoke(): String? {
+        val next = DiscordJokes.next(latestSettings, recentJokes)
+        if (next != null) recentJokes = (recentJokes + next).takeLast(3)
+        return next
+    }
 
     LaunchedEffect(Unit) {
         DiscordPresenceCommands.newJokeRequested.collect {
-            joke = DiscordJokes.next(latestSettings, joke)
+            joke = pickJoke()
         }
     }
 
@@ -66,14 +76,15 @@ fun DiscordPresenceHost(
     ) {
         if (!settings.jokesScheduled) {
             joke = null
+            recentJokes = emptyList()
             return@LaunchedEffect
         }
-        joke = DiscordJokes.next(latestSettings, joke)
+        joke = pickJoke()
         if (!settings.jokeInterval.schedules) return@LaunchedEffect
         while (isActive) {
             delay(settings.jokeInterval.minutes * 60_000L)
             // Re-read latest settings/tones/custom lines at tick time.
-            joke = DiscordJokes.next(latestSettings, joke)
+            joke = pickJoke()
         }
     }
 
@@ -101,8 +112,11 @@ fun DiscordPresenceHost(
             val token = lastLiveToken ?: settings.token
             if (token.isNotBlank()) {
                 runCatching { client.clear(token) }
-                runCatching { client.disconnect() }
             }
+            // Unconditionally, not only when a token is present: logging out
+            // clears the token, and the old build guarded this on a non-blank one,
+            // leaving the gateway socket open after a sign-out.
+            runCatching { client.disconnect() }
             lastLiveToken = null
         }
     }

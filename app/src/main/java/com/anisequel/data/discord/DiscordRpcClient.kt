@@ -70,7 +70,16 @@ class DiscordRpcClient(
                 .addHeader("Authorization", token)
                 .addHeader("Accept", "application/json")
                 .build()
-            http.newCall(request).execute().use { response ->
+            // The presence client is built for a websocket: `readTimeout(0)` means
+            // *no* read timeout, which is right for a gateway socket and wrong for
+            // a one-shot HTTP call - a stalled login check would hang the dialog
+            // forever. Same pool and dispatcher, finite timeouts.
+            val httpClient = http.newBuilder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
+                .callTimeout(25, TimeUnit.SECONDS)
+                .build()
+            httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val code = response.code
                     throw IOException(
@@ -148,7 +157,17 @@ class DiscordRpcClient(
         socket = http.newWebSocket(request, GatewayListener(token))
 
         val result = withTimeoutOrNull(15_000L) { deferred.await() }
-            ?: Result.failure(IOException("Discord did not answer in time. Check your connection and token."))
+        if (result == null) {
+            // The socket is still trying to connect at this point. Leaving it
+            // open meant a late READY could flip `connected` back on behind a UI
+            // that had already reported a timeout, so the next publish silently
+            // reused a session the reader was told had failed.
+            readyDeferred = null
+            teardown(closeCode = 4000, reason = "connect timeout")
+            return Result.failure(
+                IOException("Discord did not answer in time. Check your connection and token.")
+            )
+        }
         return result.map { it.toAccount() }
     }
 
@@ -208,7 +227,6 @@ class DiscordRpcClient(
                         val identify = "{" +
                             "\"op\":2,\"d\":{" +
                             "\"token\":${jsonString(token)}," +
-                            "\"capabilities\":65," +
                             "\"properties\":{" +
                             "\"os\":\"Android\"," +
                             "\"browser\":\"AniSequel\"," +

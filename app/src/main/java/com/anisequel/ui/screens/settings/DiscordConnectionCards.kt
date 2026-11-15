@@ -38,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -397,6 +398,22 @@ private fun DiscordWebLoginView(
           return '';
         })();
         """.trimIndent()
+    }
+
+    // A WebView holds its activity's context, and this one is created inside a
+    // dialog that is opened and dismissed for every login attempt. Without the
+    // destroy the dialog leaked a renderer process each time, which is visible as
+    // the app getting heavier on a phone that had signed in twice.
+    DisposableEffect(Unit) {
+        onDispose {
+            webViewRef?.let { view ->
+                (view.parent as? ViewGroup)?.removeView(view)
+                runCatching { view.stopLoading() }
+                runCatching { WebStorage.getInstance().deleteAllData() }
+                runCatching { view.destroy() }
+            }
+            webViewRef = null
+        }
     }
 
     AndroidView(
