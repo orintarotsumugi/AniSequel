@@ -76,7 +76,7 @@ private enum class SettingsPage(val title: String, val subtitle: String) {
     TYPE("Type & reading", "Font, text size and scrolling titles"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
     // Its own page rather than a row on Jokes: Discord presence has a preview,
-    // a relay, per-activity phrasing and its own joke rotation. Sharing the Jokes
+    // its own login, per-activity phrasing and its own joke rotation. Sharing the Jokes
     // page would put two independent features behind one scroll and one name.
     DISCORD("Discord RPC", "Configure Discord Rich Presence & activity status"),
     // The one page in Settings that draws something rather than switching it: the
@@ -191,10 +191,10 @@ fun SettingsScreen(
      */
     interfacePreferences: InterfacePreferences,
     /**
-     * The Discord presence's switches, relay link and phrasing.
+     * The Discord presence's switches, account login and phrasing.
      *
      * The same instance the app root publishes through, so this page's preview
-     * and the relay cannot describe two different presences.
+     * and the gateway cannot describe two different presences.
      */
     discordPreferences: DiscordPreferences,
     /** The counts the presence may quote, folded from the dashboard's list. */

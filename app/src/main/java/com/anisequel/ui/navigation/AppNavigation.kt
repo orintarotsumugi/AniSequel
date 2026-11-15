@@ -217,7 +217,7 @@ fun AppNavigation(
     // Discord presence, application-scoped for the same reason as every other
     // preference here: the publishing host at this root and the page in Settings
     // are two readers of one store, so the preview cannot describe a presence the
-    // relay never receives.
+    // gateway never receives.
     val discordPreferences = remember(context) {
         DiscordPreferences(context.applicationContext)
     }

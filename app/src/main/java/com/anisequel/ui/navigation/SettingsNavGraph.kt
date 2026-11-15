@@ -51,7 +51,7 @@ fun NavGraphBuilder.settingsDestinations(
      */
     interfacePreferences: InterfacePreferences,
     /**
-     * The Discord presence's switches, relay link and phrasing.
+     * The Discord presence's switches, account login and phrasing.
      *
      * The same instance the app root publishes through; two DataStore readers
      * would let this page describe a presence the host never sends.
