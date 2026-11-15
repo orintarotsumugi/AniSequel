@@ -191,6 +191,11 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  // F-Droid-friendly: no VCS provenance in the APK. Two lines, no behaviour
+  // change; makes the build byte-reproducible-friendly.
+  vcsInfo {
+    include = false
+  }
   androidResources {
     // English-only resources, on purpose.
     //
