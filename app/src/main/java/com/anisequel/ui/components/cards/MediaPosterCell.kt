@@ -33,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.card.CardScorePlacement
 import com.anisequel.domain.card.PosterCorner
-import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.domain.card.scoreCornerOf
 import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.domain.card.MediaCardStyle

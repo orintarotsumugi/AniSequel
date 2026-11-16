@@ -114,7 +114,17 @@ class ThemePreferences(context: Context) {
          * survives the granting app being uninstalled.
          */
         val CUSTOM_FONT_PATH = stringPreferencesKey("custom_font_path")
+        val CUSTOM_FONT_BOLD_PATH = stringPreferencesKey("custom_font_bold_path")
         val CUSTOM_FONT_NAME = stringPreferencesKey("custom_font_name")
+
+        /**
+         * The system face used when no imported font is active.
+         *
+         * Stored separately from [CUSTOM_FONT_PATH] so importing a file and then
+         * removing it returns to the reader's chosen face rather than resetting
+         * the whole page. An absent key is [SystemFont.DEFAULT].
+         */
+        val SYSTEM_FONT = stringPreferencesKey("system_font")
 
         /** How fast a title too long for its row scrolls, in dp per second. */
         val TITLE_SCROLL_VELOCITY = floatPreferencesKey("title_scroll_velocity_dp")
@@ -188,8 +198,12 @@ class ThemePreferences(context: Context) {
         val fontScale: Float = 1f,
         /** The imported font's file path, or null for the system face. */
         val customFontPath: String? = null,
+        /** The optional bold file of a downloaded family, when it has one. */
+        val customFontBoldPath: String? = null,
         /** The imported font's original file name, for Settings to name it by. */
         val customFontName: String? = null,
+        /** The system face used when [customFontPath] is null. */
+        val systemFont: SystemFont = SystemFont.FALLBACK,
         /** Scroll speed for titles that outgrow their row, in dp per second. */
         val titleScrollDpPerSecond: Float = DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
         /**
@@ -260,7 +274,9 @@ class ThemePreferences(context: Context) {
             immersive = preferences[Keys.IMMERSIVE_MODE] ?: false,
             fontScale = preferences[Keys.FONT_SCALE] ?: 1f,
             customFontPath = preferences[Keys.CUSTOM_FONT_PATH],
+            customFontBoldPath = preferences[Keys.CUSTOM_FONT_BOLD_PATH],
             customFontName = preferences[Keys.CUSTOM_FONT_NAME],
+            systemFont = SystemFont.fromStorage(preferences[Keys.SYSTEM_FONT]),
             titleScrollDpPerSecond = preferences[Keys.TITLE_SCROLL_VELOCITY]
                 ?: DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
             infoBackdropSource = InfoBackdropSource.fromStorage(
@@ -372,15 +388,33 @@ class ThemePreferences(context: Context) {
      * a font preference that silently reverts to the default months later is
      * indistinguishable from a bug.
      */
-    suspend fun setCustomFont(path: String?, name: String?) {
+    suspend fun setCustomFont(path: String?, name: String?, boldPath: String? = null) {
         appContext.themeDataStore.edit { preferences ->
             if (path != null) {
                 preferences[Keys.CUSTOM_FONT_PATH] = path
                 preferences[Keys.CUSTOM_FONT_NAME] = name.orEmpty()
+                if (boldPath != null) {
+                    preferences[Keys.CUSTOM_FONT_BOLD_PATH] = boldPath
+                } else {
+                    preferences.remove(Keys.CUSTOM_FONT_BOLD_PATH)
+                }
             } else {
                 preferences.remove(Keys.CUSTOM_FONT_PATH)
+                preferences.remove(Keys.CUSTOM_FONT_BOLD_PATH)
                 preferences.remove(Keys.CUSTOM_FONT_NAME)
             }
+        }
+    }
+
+    /**
+     * The system face to fall back to when no imported font is active.
+     *
+     * Kept when an import replaces it, not cleared: a reader who tries a font file
+     * and then removes it should land back on the face they picked, not on Default.
+     */
+    suspend fun setSystemFont(font: SystemFont) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.SYSTEM_FONT] = font.storageValue
         }
     }
 

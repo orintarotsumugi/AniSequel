@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "2.1.2",
+      "entries": [
+        {
+          "title": "Fonts can be downloaded inside the app",
+          "detail": "Settings > Type & reading now lists three free families - JetBrains Mono, Inter and Roboto - and fetches one from Google Fonts when you tap Download. Nothing is packaged in the APK: only the regular and bold files are kept in the app's own storage, and a family already downloaded is applied instantly without touching the network."
+        },
+        {
+          "title": "Downloaded fonts bring their real bold",
+          "detail": "The theme builds one family from the downloaded regular and 700 cuts, validates both before use and caches the result by path and file length. The resolved family is installed once in the app's MaterialTheme typography, so every screen, dialog, sheet and settings control draws with it. An imported document stays a single file and uses the platform's bold; a missing or unreadable file still falls back to the chosen system face instead of failing a screen."
+        },
+        {
+          "title": "The profile banner is still",
+          "detail": "The header's artwork never settled: it faded in, jumped sideways to start an automatic sweep, and kept moving under the account's name. The sweep is gone, so a banner arrives once and stays where it is. A changed banner also resets to its own measurement instead of borrowing the previous picture's size for a frame, which was the second half of the flicker."
+        },
+        {
+          "title": "Five system fonts to choose from",
+          "detail": "Settings > Type & reading now offers the five faces Android ships - Default, Sans Serif, Serif, Monospace and Cursive - instead of only the system default or an imported file. The choice is stored under its own key, so removing an imported font returns to the face you picked rather than resetting to Default. Every option is a platform family, so none can fail to render."
+        },
+        {
+          "title": "Text crossfades stop re-measuring the bar",
+          "detail": "The profile title and the Library subtitle faded between two strings with the default size transform, which animated the container's measured width and moved the control beside it for the length of the fade. Both crossfades now animate alpha only, so a name arriving or a count landing changes the text and nothing around it."
+        },
+        {
+          "title": "Discord sign-in now gets an access token",
+          "detail": "The Discord page could open a browser but never came back with anything: Discord gives a browser no way to hand a token to an app, so linking meant asking the reader to dig out their own token by hand. It now runs a real OAuth2 authorization-code sign-in with PKCE (S256), redirected to anisequel://discord and exchanged on the device, with the verifier never leaving it. The paste path stays underneath as the fallback for an install with no application ID."
+        },
+        {
+          "title": "A Discord application ID field",
+          "detail": "An OAuth flow needs an application whose registered redirect URI is anisequel://discord, and AniSequel has never shipped one - the same situation as AniList's client ID. Settings > Discord now remembers the application ID you give it and stays disabled until it looks like a real snowflake, so a typo is a sentence under the field rather than Discord's invalid-URL page."
+        },
+        {
+          "title": "OAuth tokens are sent with the Bearer prefix",
+          "detail": "A pasted user token travels bare; a token minted by the app's own OAuth grant is refused by the gateway without a Bearer prefix, in the HTTP check and in IDENTIFY alike. The token's kind is now stored with it and applied in one place, so a sign-in that succeeds cannot produce a credential the gateway rejects with 4004."
+        },
+        {
+          "title": "The Discord badge is the official mark",
+          "detail": "The badge in the top right was drawn from the published path through an SVG parser, and the published geometry writes its arc flags with no separators - so the parser lost its place and the mark came out mangled. The geometry is now transcribed command for command with arcToRelative, filled even-odd so the eyes are holes, and rendered from that exact source to check it."
+        },
+        {
+          "title": "Two new Home sequel styles: Tickets and Polaroids",
+          "detail": "Tickets is an admission stub: artwork on one end, a perforated tear-off carrying the close button on the other, with notches cut through the card so they show the page behind. Polaroids is an instant print - a white frame with the title written into its thick bottom margin - lying tilted on the card, each print leaning the same way every time."
+        },
+        {
+          "title": "Switching sequel style no longer restarts Home",
+          "detail": "The chosen style lived in a static CompositionLocal, so picking one rebuilt the whole page and its hero and Continue rail replayed their opening animations at the same moment every row recomposed. The local is dynamic now and the style is read inside each list item, so a switch redraws the sequels and leaves the page above them alone."
+        },
+        {
+          "title": "Small engine cleanups",
+          "detail": "The Discord account mapping existed in three copies and its avatar arithmetic had already drifted between them - it is one function now. The unused path parser import and the duplicated verbatim path constant are gone, and the mark moved into its own file so the glyph catalogue stops growing."
+        }
+      ]
+    },
+    {
       "version": "2.1.1",
       "entries": [
         {
@@ -1165,7 +1218,7 @@
         },
         {
           "title": "Smaller fixes",
-          "detail": "An airing title with no next episode number now reads \"Airing \u00b7 12 eps\" instead of \"Airing \u00b7 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
+          "detail": "An airing title with no next episode number now reads \"Airing · 12 eps\" instead of \"Airing · 12\"; compact arriving rows keep their separators correct across group labels; and the arriving cards share their press interaction source with the card itself, so scrolling a row no longer leaves a card squashed. On the info page: following a relation no longer carries the previous title's countdown onto a show with nothing scheduled, each title's sections replay their entrance instead of appearing already settled, an unreleased title's end date reads \"Ends\" rather than \"Ended\", the Details grid stopped printing \"Mean score 0%\" next to the hero's own score chip, the Tags heading counts only the tags it shows, a second copy tap restarts the acknowledgement, and a friend AniList lists twice can no longer crash the row. The Details grid, the studio split and the link lists are derived once per title rather than on every recomposition."
         }
       ]
     },
@@ -1190,7 +1243,7 @@
         },
         {
           "title": "A creator's page introduces them properly",
-          "detail": "The staff hero now leads with the creator's occupations - Director \u00b7 Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
+          "detail": "The staff hero now leads with the creator's occupations - Director · Animator - and their name in its own script, both already on the wire but never drawn. Filmographies gained All / Anime / Manga chips when a person has both, and the AniList action moved onto the hero so it is reachable without scrolling twenty-five credits. The Stats format and episode-count cards also swapped their phone and stopwatch glyphs for a category mark and a numbered list, so each icon says what its chart measures."
         },
         {
           "title": "The library bar carries its number",
@@ -3284,7 +3337,7 @@
         },
         {
           "title": "Widgets stop naming shows they are not showing",
-          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to \u2026\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
+          "detail": "A tile with no entry to name now hides its title instead of showing the app name as if it were the show's title, so a missed-sequels tile that is empty no longer claims a show nobody is missing. The featured tile's \"Sequel to …\" line does the same when a recommendation has no parent, rather than rendering as a sentence with its subject missing."
         },
         {
           "title": "The activity tile shows your face",
@@ -3305,7 +3358,7 @@
         },
         {
           "title": "A Featured Sequel widget",
-          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe \u2014 a large poster, its title, what it is a sequel to and how many are waiting \u2014 so the recommendation is readable before you even open the app."
+          "detail": "A fourth tile gives the single most relevant missed sequel room to breathe — a large poster, its title, what it is a sequel to and how many are waiting — so the recommendation is readable before you even open the app."
         },
         {
           "title": "See who liked an activity",
@@ -3322,11 +3375,11 @@
       "entries": [
         {
           "title": "In-app details from the Activity feed and Currently Arriving",
-          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet \u2014 synopsis, community scores, rankings, genres, specs and an AniList link \u2014 instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
+          "detail": "Tapping an entry in a profile's Activity tab, or a card in the dashboard's Currently Arriving row, now opens AniSequel's own detail sheet — synopsis, community scores, rankings, genres, specs and an AniList link — instead of sending you straight to the browser. Those rows were a dead end before: only a missed sequel had a detail view, so the screen that carries AniList's description and ratings could not be reached from the feed. The on-demand detail query now fetches the entry's full record, so these rows get the same header, artwork and specs a sequel already had."
         },
         {
           "title": "The detail sheet adapts to what it is showing",
-          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to \u2026\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
+          "detail": "An entry with no parent shows an About tab instead of Story & Gaps, and drops the \"Sequel to …\" card and the add-to-list gesture that would mean nothing for a show already on your list. The AniList link is still there on every entry."
         }
       ]
     },
@@ -3335,7 +3388,7 @@
       "entries": [
         {
           "title": "Retain Anime Color keeps the colour",
-          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts \u2014 no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
+          "detail": "Turning it on while an anime detail sheet is open now persists that anime's cover colour as your app accent, so the whole app keeps the anime's hue after the sheet closes and across restarts — no more watching it fade back to your old theme. Switching it off, or picking a palette, a hue, or Reset appearance, takes back control. This was a stored but never-applied setting; it now does what its label promised."
         },
         {
           "title": "Theme tab, rebuilt around Material 3 Expressive",
@@ -3348,7 +3401,7 @@
       "entries": [
         {
           "title": "GIFs and images in bios and comments",
-          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence \u2014 like a GIF between two words \u2014 are embedded in the flow and animate inline."
+          "detail": "A bare image or GIF link on its own line now shows the picture itself instead of a blue link, and images mixed into a sentence — like a GIF between two words — are embedded in the flow and animate inline."
         },
         {
           "title": "AniList links get a preview card",
@@ -3360,7 +3413,7 @@
         },
         {
           "title": "Theme screen, reorganised",
-          "detail": "Settings > Theme is now grouped into clear sections \u2014 appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
+          "detail": "Settings > Theme is now grouped into clear sections — appearance, accent colour, anime colour matching, background and motion. The custom palette and custom hue live in a single accent card, true black and canvas colour share a background card, and reverting an anime colour match back to \"Immediately\" works again."
         },
         {
           "title": "Theme switching is snappier",

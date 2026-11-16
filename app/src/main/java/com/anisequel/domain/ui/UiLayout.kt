@@ -68,6 +68,18 @@ enum class HomeSequelStyle(
         displayName = "Shelf",
         blurb = "A poster shelf for browsing several missed sequels at once.",
         showsPoster = true
+    ),
+    TICKET(
+        storageValue = "ticket",
+        displayName = "Tickets",
+        blurb = "An admission stub: the artwork on one end, a perforated tear-off on the other.",
+        showsPoster = false
+    ),
+    POLAROID(
+        storageValue = "polaroid",
+        displayName = "Polaroids",
+        blurb = "An instant print with the title written in the white margin underneath.",
+        showsPoster = true
     );
 
     companion object {

@@ -21,8 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.SystemFont
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.domain.color.Hct
 import com.anisequel.domain.color.TonalPalette
@@ -407,8 +407,15 @@ fun AniSequelTheme(
      * paid for once: a dozen sizes that no setting could reach.
      */
     fontScale: Float = 1f,
-    /** An imported font's file path, or null for the system face. */
+    /** A local font's regular file path, or null for the system face. */
     customFontPath: String? = null,
+    /** A downloaded family's bold file, when it has a real 700 weight. */
+    customFontBoldPath: String? = null,
+    /**
+     * Which of the platform's five generic faces the app uses when no local
+     * font is installed. Ignored while [customFontPath] resolves to a font.
+     */
+    systemFont: SystemFont = SystemFont.FALLBACK,
     /** Scroll speed for titles that outgrow their row, in dp per second. */
     titleScrollDpPerSecond: Float =
         com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
@@ -564,15 +571,19 @@ fun AniSequelTheme(
     // and it is the scheme the M3 components actually receive.
     val animatedColorScheme = rememberAnimatedColorScheme(colorScheme)
 
-    // The reader's type, resolved once per change: the family from the imported
-    // file (or the system face) and the whole scale at their reading size. Keyed
+    // The reader's type, resolved once per change: the family from the local
+    // files (or the system face) and the whole scale at their reading size. Keyed
     // and remembered because this composable wraps the entire app and rebuilt
     // sixteen TextStyles on every animation frame of a scheme change otherwise.
-    val customFamily = androidx.compose.runtime.remember(customFontPath) {
-        customFontFamily(customFontPath)
+    val customFamily = androidx.compose.runtime.remember(customFontPath, customFontBoldPath) {
+        customFontFamily(customFontPath, customFontBoldPath)
     }
-    val appTypography = androidx.compose.runtime.remember(fontScale, customFamily) {
-        anisequelTypography(fontScale, customFamily ?: FontFamily.Default)
+    // The local files win while they resolve; the chosen system face is the
+    // fallback, and it is the *reader's* choice rather than `FontFamily.Default`
+    // so removing an import or download does not silently reset the page.
+    val family = customFamily ?: systemFont.toFontFamily()
+    val appTypography = androidx.compose.runtime.remember(fontScale, family) {
+        anisequelTypography(fontScale, family)
     }
 
     CompositionLocalProvider(

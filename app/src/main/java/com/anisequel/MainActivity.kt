@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.anisequel.data.discord.DiscordOAuthFlow
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.RateLimitNotice
 import com.anisequel.data.network.SystemNotices
@@ -368,6 +369,8 @@ class MainActivity : ComponentActivity() {
                 appBackgroundColor = themeSettings.appBackgroundColor,
                 fontScale = themeSettings.fontScale,
                 customFontPath = themeSettings.customFontPath,
+                customFontBoldPath = themeSettings.customFontBoldPath,
+                systemFont = themeSettings.systemFont,
                 titleScrollDpPerSecond = themeSettings.titleScrollDpPerSecond
             ) {
                 CompositionLocalProvider(
@@ -621,8 +624,14 @@ class MainActivity : ComponentActivity() {
 
     private fun handleDeepLinkIntent(intent: Intent?) {
         val uri = intent?.data ?: return
-        if (uri.scheme == "anisequel" && uri.host == "oauth") {
-            authViewModel.handleAuthRedirect(uri)
+        when {
+            uri.scheme == "anisequel" && uri.host == "oauth" -> authViewModel.handleAuthRedirect(uri)
+            // Discord's callback is not the ViewModel's: the exchange needs the PKCE
+            // verifier the flow was started with, and that lives with the flow rather
+            // than with the AniList session. Handed over as text so the parse - and
+            // the state check - can be tested off-device.
+            uri.scheme == "anisequel" && uri.host == "discord" ->
+                DiscordOAuthFlow.deliver(uri.toString())
         }
     }
 }

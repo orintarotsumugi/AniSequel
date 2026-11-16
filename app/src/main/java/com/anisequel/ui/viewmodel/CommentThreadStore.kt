@@ -5,7 +5,6 @@ import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.domain.usecase.ContentLimits
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

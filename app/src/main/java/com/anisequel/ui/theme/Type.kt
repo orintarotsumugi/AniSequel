@@ -8,6 +8,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 import com.anisequel.data.repository.MAX_FONT_SCALE
 import com.anisequel.data.repository.MIN_FONT_SCALE
+import com.anisequel.data.repository.SystemFont
 
 // Every style in the Material 3 scale is set explicitly.
 //
@@ -42,6 +43,22 @@ private fun style(
     letterSpacing = (tracking * scale).sp,
     lineHeightStyle = lineHeightStyle,
 )
+
+/**
+ * The Compose family for one of the platform's five generic faces.
+ *
+ * Kept out of [SystemFont] itself because that enum lives in `data/repository`,
+ * which is not allowed to import Compose: the preference stores a word, and this
+ * is the one place that word becomes a drawable face. Every branch is a generic
+ * family Android resolves natively, so none of them can fail to load.
+ */
+internal fun SystemFont.toFontFamily(): FontFamily = when (this) {
+    SystemFont.DEFAULT -> FontFamily.Default
+    SystemFont.SANS_SERIF -> FontFamily.SansSerif
+    SystemFont.SERIF -> FontFamily.Serif
+    SystemFont.MONOSPACE -> FontFamily.Monospace
+    SystemFont.CURSIVE -> FontFamily.Cursive
+}
 
 /**
  * The app's whole type scale, at one reading size and in one font.

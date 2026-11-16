@@ -1,6 +1,5 @@
 package com.anisequel.ui.navigation
 
-import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -71,7 +70,6 @@ import com.anisequel.ui.viewmodel.DashboardUiState
 import com.anisequel.ui.viewmodel.DashboardViewModel
 import com.anisequel.ui.viewmodel.rememberMediaDetailHost
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 object AppRoutes {

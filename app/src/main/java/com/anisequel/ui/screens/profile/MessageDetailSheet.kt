@@ -48,7 +48,6 @@ import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.viewmodel.UserMessagesViewModel

@@ -13,12 +13,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.domain.jokes.JokePosition
 import com.anisequel.domain.jokes.JokeSettings
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first

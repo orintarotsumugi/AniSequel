@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
-import com.anisequel.domain.studio.StudioYearShelf
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ReadingPositions
 import com.anisequel.ui.components.openExternalUrl

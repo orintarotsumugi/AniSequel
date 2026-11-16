@@ -291,8 +291,10 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
             // [TO-DO.md](TO-DO.md) §5.2 is the right long-term answer. The height
             // went up anyway because a profile banner is the one picture a reader
             // chose for themselves, and at 260dp a 16:9 banner is cropped to its
-            // middle band. The drift below is what makes that crop survivable: the
-            // artwork reaches its own edges without anyone asking.
+            // middle band. The sides stay cropped: the automatic sweep that used
+            // to reach them started with a visible jump and left the picture
+            // moving under the name, which is worse than a still banner with a
+            // decided crop.
             // 320 rather than 300 now that the width is the whole screen: a
             // 16:9 banner at full bleed needs the extra height to keep its own
             // aspect instead of being cropped to a strip. Only the bottom edge
@@ -322,8 +324,7 @@ private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modi
         if (banner != null) {
             PannableBackdrop(
                 model = banner,
-                contentDescription = "Profile Banner",
-                drift = true
+                contentDescription = "Profile Banner"
             )
             // Weighted toward the bottom so the artwork stays visible at the top
             // while the identity line below has a surface to sit on.

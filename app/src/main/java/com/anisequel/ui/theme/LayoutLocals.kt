@@ -42,8 +42,17 @@ val LocalShowContinueRail = staticCompositionLocalOf { true }
  * preference - so the sample the reader is choosing between is drawn by the same
  * enum the real rows are, and a card style added later cannot appear in one and
  * not the other.
+ *
+ * A *dynamic* local, though the value changes only when the reader picks a style.
+ * It used to be `staticCompositionLocalOf`, which recomposes the provider's whole
+ * content on a change - and that is what a style switch looked like on the Home
+ * page: the hero's backdrop and the Continue rail were rebuilt from scratch, so
+ * their animations started over from their first frame at the same moment every
+ * row re-composed. The switch is meant to change how the sequels are drawn and
+ * nothing else, and a dynamic local invalidates only the composables that read
+ * it - which is now the inside of each sequel item, not the page.
  */
-val LocalHomeSequelStyle = staticCompositionLocalOf { HomeSequelStyle.DEFAULT }
+val LocalHomeSequelStyle = compositionLocalOf { HomeSequelStyle.DEFAULT }
 
 /**
  * How far the main bar floats above the bottom edge, in dp.

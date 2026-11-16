@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.namespaceKey
-import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 import com.anisequel.ui.viewmodel.UserOverviewViewModel
 

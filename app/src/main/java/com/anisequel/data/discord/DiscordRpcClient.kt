@@ -1,7 +1,9 @@
 package com.anisequel.data.discord
 
 import com.anisequel.domain.discord.DiscordActivityType
+import com.anisequel.domain.discord.DiscordAuthKind
 import com.anisequel.domain.discord.DiscordLogin
+import com.anisequel.domain.discord.DiscordOAuth
 import com.anisequel.domain.discord.DiscordOnlineStatus
 import com.anisequel.domain.discord.DiscordPresence
 import com.squareup.moshi.Moshi
@@ -99,9 +101,9 @@ class DiscordRpcClient(
     @Volatile private var readyDeferred: CompletableDeferred<Result<GatewayReady>>? = null
 
     /** Verifies a token against Discord's HTTP API and returns the account. */
-    suspend fun verify(rawToken: String): Result<DiscordAccount> = withContext(Dispatchers.IO) {
+    suspend fun verify(rawToken: String, bearer: Boolean = false): Result<DiscordAccount> = withContext(Dispatchers.IO) {
         runCatching {
-            val token = DiscordLogin.normalizeToken(rawToken)
+            val token = credential(rawToken, bearer)
             if (!DiscordLogin.looksLikeToken(token)) {
                 throw IOException("That doesn't look like a Discord token.")
             }
@@ -134,13 +136,7 @@ class DiscordRpcClient(
                 }
                 val body = response.body?.string().orEmpty()
                 val user = userAdapter.fromJson(body) ?: throw IOException("Discord returned an unreadable account.")
-                DiscordAccount(
-                    username = user.globalName?.takeIf { it.isNotBlank() }
-                        ?: user.username?.takeIf { it.isNotBlank() }
-                        ?: "Discord",
-                    userId = user.id.orEmpty(),
-                    avatarUrl = avatarUrl(user)
-                )
+                DiscordAccount.from(user)
             }
         }
     }
@@ -149,9 +145,10 @@ class DiscordRpcClient(
         rawToken: String,
         presence: DiscordPresence,
         status: DiscordOnlineStatus,
-        activityType: DiscordActivityType
+        activityType: DiscordActivityType,
+        bearer: Boolean = false
     ): Result<DiscordAccount> = mutex.withLock {
-        val token = DiscordLogin.normalizeToken(rawToken)
+        val token = credential(rawToken, bearer)
         if (!DiscordLogin.looksLikeToken(token)) {
             return Result.failure(IOException("That doesn't look like a Discord token."))
         }
@@ -162,6 +159,21 @@ class DiscordRpcClient(
     }
 
     /**
+     * The token as Discord has to receive it.
+     *
+     * A pasted user token is sent bare. One minted by this app's own OAuth grant
+     * is sent with a `Bearer ` prefix, in the header *and* in the gateway's
+     * IDENTIFY - Discord refuses an OAuth user token on the gateway without it,
+     * with `4004 authentication failed` and no hint about which half was wrong.
+     * [rawToken] is normalised first so a stored value that somehow kept the
+     * prefix does not end up with two.
+     */
+    private fun credential(rawToken: String, bearer: Boolean): String = DiscordOAuth.credential(
+        token = rawToken,
+        kind = if (bearer) DiscordAuthKind.OAUTH else DiscordAuthKind.TOKEN
+    )
+
+    /**
      * Hides the presence, if the socket is free to say so right now.
      *
      * Deliberately non-blocking. Every caller clears and then disconnects, and the
@@ -170,8 +182,8 @@ class DiscordRpcClient(
      * made Log out sit on "Connecting…" for the rest of that timeout. The lock is
      * only held long enough to send one frame when nobody else is using it.
      */
-    suspend fun clear(rawToken: String): Result<Unit> {
-        val token = DiscordLogin.normalizeToken(rawToken)
+    suspend fun clear(rawToken: String, bearer: Boolean = false): Result<Unit> {
+        val token = credential(rawToken, bearer)
         if (token.isBlank()) return Result.success(Unit)
         if (!mutex.tryLock()) return Result.success(Unit)
         return try {
@@ -447,13 +459,6 @@ class DiscordRpcClient(
         else -> if (reason.isNotBlank()) "Discord closed the connection: $reason" else "Discord closed the connection ($code)."
     }
 
-    private fun avatarUrl(user: DiscordUser): String {
-        val id = user.id ?: return ""
-        val hash = user.avatar ?: return ""
-        val ext = if (hash.startsWith("a_")) "gif" else "png"
-        return "https://cdn.discordapp.com/avatars/$id/$hash.$ext?size=128"
-    }
-
     private fun jsonString(value: String): String = buildString {
         append('"')
         value.forEach { c ->
@@ -477,7 +482,32 @@ data class DiscordAccount(
     val username: String,
     val userId: String = "",
     val avatarUrl: String = ""
-)
+) {
+    companion object {
+        /**
+         * One mapping from a Discord user to the account the app remembers.
+         *
+         * The name, the ID and the avatar URL used to be assembled in three places
+         * - the HTTP check, the gateway's READY and the gateway's reconnect - and
+         * the avatar arithmetic had already drifted between them. Whatever answers
+         * the account now goes through here.
+         */
+        fun from(user: DiscordUser?): DiscordAccount {
+            val name = user?.globalName?.takeIf { it.isNotBlank() }
+                ?: user?.username?.takeIf { it.isNotBlank() }
+                ?: "Discord"
+            val id = user?.id.orEmpty()
+            val hash = user?.avatar
+            val avatar = if (id.isNotEmpty() && !hash.isNullOrBlank()) {
+                val ext = if (hash.startsWith("a_")) "gif" else "png"
+                "https://cdn.discordapp.com/avatars/$id/$hash.$ext?size=128"
+            } else {
+                ""
+            }
+            return DiscordAccount(username = name, userId = id, avatarUrl = avatar)
+        }
+    }
+}
 
 @JsonClass(generateAdapter = true)
 internal data class DiscordUser(
@@ -502,14 +532,5 @@ internal data class GatewayHello(
 internal data class GatewayReady(
     val user: DiscordUser? = null
 ) {
-    fun toAccount(): DiscordAccount = DiscordAccount(
-        username = user?.globalName?.takeIf { it.isNotBlank() }
-            ?: user?.username?.takeIf { it.isNotBlank() }
-            ?: "Discord",
-        userId = user?.id.orEmpty(),
-        avatarUrl = if (user?.id != null && user.avatar != null) {
-            val ext = if (user.avatar.startsWith("a_")) "gif" else "png"
-            "https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.$ext?size=128"
-        } else ""
-    )
+    fun toAccount(): DiscordAccount = DiscordAccount.from(user)
 }

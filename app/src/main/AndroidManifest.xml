@@ -36,11 +36,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- AniList's sign-in callback. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="anisequel" android:host="oauth" />
+            </intent-filter>
+
+            <!--
+              Discord's OAuth2 callback.
+
+              A second filter rather than a second `data` element in the one above:
+              the two sign-ins are separate flows with separate handlers, and one
+              filter would make the manifest read as if one host were an alias for
+              the other. The host has to match `DiscordOAuth.REDIRECT_URI` exactly -
+              Discord compares the whole redirect URI and refuses the authorize
+              request when it differs, before the reader ever sees a login page.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="anisequel" android:host="discord" />
             </intent-filter>
         </activity>
 

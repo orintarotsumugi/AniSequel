@@ -14,8 +14,18 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Locale
 
-/** A font the reader imported, as the app now stores it. */
-data class ImportedFont(val path: String, val name: String)
+/**
+ * A font the app has stored locally.
+ *
+ * [boldPath] is present for a downloaded family whose 700 weight was available;
+ * an imported document is a single file and leaves it null, in which case the
+ * platform synthesises bold from the regular face.
+ */
+data class ImportedFont(
+    val path: String,
+    val name: String,
+    val boldPath: String? = null
+)
 
 /**
  * The one imported font, kept inside the app's own storage.
@@ -92,9 +102,11 @@ object CustomFontStore {
                 moveIntoPlace(temp, target)
 
                 // Only after the new font is in place: a failed import must leave
-                // the previous face working, not delete it first.
+                // the previous face working, not delete it first. Download cache
+                // files are kept: importing a document is not a reason to make a
+                // downloaded family download again.
                 dir.listFiles()
-                    ?.filter { it != target && it != temp }
+                    ?.filter { it != target && it != temp && isImportedFile(it) }
                     ?.forEach { it.delete() }
 
                 Result.success(ImportedFont(path = target.absolutePath, name = name))
@@ -105,10 +117,22 @@ object CustomFontStore {
             }
         }
 
-    /** Removes every imported file; the preference is cleared by the caller. */
+    /**
+     * Removes the imported copies, but not downloaded families.
+     *
+     * "Use the system font" should stop drawing the imported document, not throw
+     * away a family the reader downloaded and may want to apply again.
+     */
     suspend fun clear(context: Context) = withContext(Dispatchers.IO) {
-        fontsDir(context).listFiles()?.forEach { it.delete() }
+        fontsDir(context).listFiles()?.filter(::isImportedFile)?.forEach { it.delete() }
     }
+
+    /** True when [path] points at a family downloaded by `GoogleFontDownloader`. */
+    fun isDownloaded(path: String?): Boolean =
+        path?.substringAfterLast('/')?.startsWith("google_") == true
+
+    private fun isImportedFile(file: File): Boolean =
+        file.name.startsWith("custom_font") || file.name == "font.importing"
 
     private fun copyLimited(input: InputStream, output: OutputStream): Long {
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)

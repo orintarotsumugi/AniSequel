@@ -1,6 +1,5 @@
 package com.anisequel.ui.viewmodel
 
-import com.anisequel.data.model.AnimeStats
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.UserOverview
 import com.anisequel.domain.usecase.BuildActivityCalendarUseCase

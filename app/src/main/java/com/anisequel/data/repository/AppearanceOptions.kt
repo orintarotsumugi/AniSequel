@@ -177,3 +177,31 @@ enum class InfoBackdropTint(val storageValue: String, val displayName: String) {
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }
 }
+
+/**
+ * The five generic faces the platform ships for an app to ask for by name.
+ *
+ * These are not downloadable families: they are Android's own aliases - the same
+ * list `android.graphics.Typeface` resolves for `sans-serif`, `serif`,
+ * `monospace` and `cursive`, with the app's default face as the fifth. Every
+ * device has all five, so a choice here cannot fail to render or turn a page into
+ * tofu.
+ *
+ * [DEFAULT] is first because it is what a fresh install uses and what removing an
+ * imported font returns to. The rest are ordered from the plainest to the most
+ * decorative so the picker reads as a range rather than a pile.
+ */
+enum class SystemFont(val storageValue: String, val displayName: String) {
+    DEFAULT("default", "Default"),
+    SANS_SERIF("sans_serif", "Sans Serif"),
+    SERIF("serif", "Serif"),
+    MONOSPACE("monospace", "Monospace"),
+    CURSIVE("cursive", "Cursive");
+
+    companion object {
+        val FALLBACK = DEFAULT
+
+        fun fromStorage(value: String?): SystemFont =
+            entries.firstOrNull { it.storageValue == value } ?: FALLBACK
+    }
+}

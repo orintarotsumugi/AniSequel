@@ -90,9 +90,6 @@ fun NovaHomeScreen(
 ) {
     val showContinueRail = LocalShowContinueRail.current
     val continueEntries = if (showContinueRail) state.continueWatching else emptyList()
-    // The reader's chosen shape for this list. Both arms draw the same sequel and
-    // call the same callbacks - the setting moves the artwork, not the behaviour.
-    val sequelStyle = LocalHomeSequelStyle.current
     val viewer = state.viewer
 
     // The whole list's size, not the completed tally: the shortcut says "your
@@ -284,6 +281,14 @@ fun NovaHomeScreen(
                             fadeInSpec = ExpressiveMotion.ListItemFadeIn,
                             fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                         )
+                    // The reader's chosen shape for this list, read *here* rather than
+                    // in the page's own scope. Both arms draw the same sequel and call
+                    // the same callbacks - the setting moves the artwork, not the
+                    // behaviour - and reading it inside an item means a style switch
+                    // recomposes the rows instead of the page above them, whose hero and
+                    // Continue rail would otherwise rebuild and replay their opening
+                    // animations on the spot.
+                    val sequelStyle = LocalHomeSequelStyle.current
                     when (sequelStyle) {
                         HomeSequelStyle.CARDS -> NovaSequelCard(
                             sequel = sequel,
@@ -296,6 +301,26 @@ fun NovaHomeScreen(
                             modifier = entryModifier
                         )
                         HomeSequelStyle.BANNER -> NovaSequelBanner(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                        HomeSequelStyle.TICKET -> NovaSequelTicket(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
+                        HomeSequelStyle.POLAROID -> NovaSequelPolaroid(
                             sequel = sequel,
                             onOpen = { onOpenSequel(sequel) },
                             onAddToPlanning = { onAddToPlanning(sequel) },

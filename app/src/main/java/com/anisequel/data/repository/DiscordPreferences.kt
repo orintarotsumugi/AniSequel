@@ -8,10 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.anisequel.domain.discord.DISCORD_APP_NAME
-import com.anisequel.domain.discord.DISCORD_PROJECT_URL
 import com.anisequel.domain.discord.DiscordActivityKind
 import com.anisequel.domain.discord.DiscordActivityType
+import com.anisequel.domain.discord.DiscordAuthKind
 import com.anisequel.domain.discord.DiscordJokeInterval
 import com.anisequel.domain.discord.DiscordLogin
 import com.anisequel.domain.discord.DiscordOnlineStatus
@@ -41,6 +40,8 @@ class DiscordPreferences(private val context: Context) {
     private object Keys {
         val ENABLED = booleanPreferencesKey("discord_enabled")
         val TOKEN = stringPreferencesKey("discord_token")
+        val AUTH_KIND = stringPreferencesKey("discord_auth_kind")
+        val OAUTH_CLIENT_ID = stringPreferencesKey("discord_oauth_client_id")
         val LINKED = booleanPreferencesKey("discord_linked")
         val USERNAME = stringPreferencesKey("discord_username")
         val USER_ID = stringPreferencesKey("discord_user_id")
@@ -77,6 +78,10 @@ class DiscordPreferences(private val context: Context) {
         DiscordSettings(
             enabled = preferences[Keys.ENABLED] ?: false,
             token = preferences[Keys.TOKEN].orEmpty(),
+            // An install linked before the OAuth flow existed holds a pasted token
+            // and no kind, which reads as TOKEN and keeps behaving exactly as it did.
+            authKind = DiscordAuthKind.fromStorage(preferences[Keys.AUTH_KIND]),
+            oauthClientId = preferences[Keys.OAUTH_CLIENT_ID].orEmpty(),
             // A relay-era install has `LINKED` set but no token, because the
             // relay held the credentials. Reading that flag as "connected" drew
             // "Connected to Discord" over a preview that could never publish, so
@@ -229,9 +234,16 @@ class DiscordPreferences(private val context: Context) {
     }
 
     /** Remembers a verified token and Discord identity in one write. */
-    suspend fun link(token: String, username: String, userId: String, avatarUrl: String) {
+    suspend fun link(
+        token: String,
+        username: String,
+        userId: String,
+        avatarUrl: String,
+        authKind: DiscordAuthKind = DiscordAuthKind.TOKEN
+    ) {
         context.discordDataStore.edit { preferences ->
             preferences[Keys.TOKEN] = DiscordLogin.normalizeToken(token)
+            preferences[Keys.AUTH_KIND] = authKind.storageValue
             preferences[Keys.LINKED] = true
             preferences[Keys.USERNAME] = username
             preferences[Keys.USER_ID] = userId
@@ -239,10 +251,30 @@ class DiscordPreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Stores the Discord application the reader signed in with.
+     *
+     * Kept when the account is unlinked: it describes the app, not the account, and
+     * asking for it again after every log out would be a field the reader has to
+     * hunt down twice. Blank is stored as a removal, so a cleared field stops
+     * offering a sign-in that cannot work.
+     */
+    suspend fun setOAuthClientId(clientId: String) {
+        val trimmed = clientId.trim()
+        context.discordDataStore.edit { preferences ->
+            if (trimmed.isEmpty()) {
+                preferences.remove(Keys.OAUTH_CLIENT_ID)
+            } else {
+                preferences[Keys.OAUTH_CLIENT_ID] = trimmed
+            }
+        }
+    }
+
     /** Forgets the token and identity but keeps the reader's settings and phrasing. */
     suspend fun unlink() {
         context.discordDataStore.edit { preferences ->
             preferences[Keys.TOKEN] = ""
+            preferences[Keys.AUTH_KIND] = DiscordAuthKind.TOKEN.storageValue
             preferences[Keys.LINKED] = false
             preferences[Keys.USERNAME] = ""
             preferences[Keys.USER_ID] = ""

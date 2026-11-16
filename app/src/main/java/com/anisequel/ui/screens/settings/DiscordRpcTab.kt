@@ -49,6 +49,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anisequel.data.discord.DiscordOAuthFlow
 import com.anisequel.data.discord.DiscordPresenceCommands
 import com.anisequel.data.discord.DiscordPresenceRuntime
 import com.anisequel.data.discord.DiscordRpcClient
@@ -94,11 +95,28 @@ fun DiscordRpcTab(
     var editingKind by remember { mutableStateOf<DiscordActivityKind?>(null) }
     var showLogin by remember { mutableStateOf(false) }
     var showAddJoke by remember { mutableStateOf(false) }
+    // The sign-in's own three states. They live on the page, not in the dialog,
+    // because the callback can arrive after the dialog is gone - the reader is in
+    // the browser app while it happens - and an exchange whose result is written
+    // into a disposed scope is an account that silently never links.
+    var oauthBusy by remember { mutableStateOf(false) }
+    var oauthError by remember { mutableStateOf<String?>(null) }
 
     // Shared with the app-root publisher, so "Log out" below closes the socket
     // that is actually carrying the presence. A client built here used to be
     // disconnected while the publisher's own session kept running.
     val client = DiscordRpcClient.shared
+
+    // The callback can land while the reader is still in the browser, so the
+    // exchange lives on the page rather than in the dialog that started it.
+    DiscordOAuthOutcomeHandler(
+        preferences = preferences,
+        settings = settings,
+        onBusyChange = { oauthBusy = it },
+        onError = { oauthError = it },
+        onLinked = { showLogin = false }
+    )
+
     val previewActivity = previewOverride ?: liveActivity
     val previewPresence = remember(settings, previewActivity, stats, enginePresence?.joke) {
         DiscordPresenceComposer.compose(
@@ -145,9 +163,19 @@ fun DiscordRpcTab(
                     settings = settings,
                     runtime = runtime,
                     onToggle = { enabled -> scope.launch { preferences.setEnabled(enabled) } },
-                    onLogin = { showLogin = true },
+                    onLogin = {
+                        // A refusal from the last attempt describes an attempt that
+                        // is over; it must not sit under the next one's button.
+                        oauthError = null
+                        showLogin = true
+                    },
                     onLogout = {
                         scope.launch {
+                            // A sign-in left waiting in the browser belongs to the
+                            // account being forgotten, so its callback must not land
+                            // on the next one.
+                            DiscordOAuthFlow.cancel()
+                            oauthError = null
                             preferences.unlink()
                             client.disconnect()
                         }
@@ -191,9 +219,19 @@ fun DiscordRpcTab(
                 DiscordConnectionCard(
                     settings = settings,
                     runtime = runtime,
-                    onLogin = { showLogin = true },
+                    onLogin = {
+                        // A refusal from the last attempt describes an attempt that
+                        // is over; it must not sit under the next one's button.
+                        oauthError = null
+                        showLogin = true
+                    },
                     onLogout = {
                         scope.launch {
+                            // A sign-in left waiting in the browser belongs to the
+                            // account being forgotten, so its callback must not land
+                            // on the next one.
+                            DiscordOAuthFlow.cancel()
+                            oauthError = null
                             preferences.unlink()
                             client.disconnect()
                         }
@@ -269,6 +307,9 @@ fun DiscordRpcTab(
         DiscordLoginDialog(
             settings = settings,
             client = client,
+            // Dismissing does not cancel the flow: the reader is looking at the
+            // browser while it runs, so a dialog closed behind it must not turn the
+            // callback they are about to produce into "not started here".
             onDismiss = { showLogin = false },
             onLinked = { token, account ->
                 scope.launch {
@@ -276,7 +317,10 @@ fun DiscordRpcTab(
                     if (!settings.enabled) preferences.setEnabled(true)
                     showLogin = false
                 }
-            }
+            },
+            onSaveClientId = { id -> scope.launch { preferences.setOAuthClientId(id) } },
+            oauthError = oauthError,
+            oauthBusy = oauthBusy
         )
     }
 }

@@ -6,17 +6,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -340,8 +336,13 @@ fun UserProfileScreen(
                                 ?: titleHint?.let { "@$it" }
                                 ?: "Profile",
                             transitionSpec = {
+                                // `using null` drops the default size transform. The
+                                // two titles are different widths, so animating the
+                                // container's measured width slid the trophy beside
+                                // the name and re-measured the bar on every frame -
+                                // the text crossfade should move nothing but alpha.
                                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                             },
                             label = "profile_title"
                         ) { title ->

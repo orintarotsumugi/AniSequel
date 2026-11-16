@@ -52,6 +52,20 @@ class AnimationWiringTest {
     }
 
     @Test
+    fun `the profile banner is still`() {
+        val code = source(
+            "app/src/main/java/com/anisequel/ui/screens/profile/ProfileHeaderCard.kt"
+        )
+
+        assertFalse(
+            "the automatic sweep restarted from the middle after a visible jump; a " +
+                "profile banner must not move on its own",
+            code.contains("drift = true")
+        )
+        assertTrue("the banner is still drawn through PannableBackdrop", code.contains("PannableBackdrop("))
+    }
+
+    @Test
     fun `profile chart bars read their animated width while drawing`() {
         val code = source(
             "app/src/main/java/com/anisequel/ui/screens/profile/ProfileChartComponents.kt"

@@ -198,8 +198,13 @@ fun LibraryScreen(
                                     AnimatedContent(
                                         targetState = subtitle,
                                         transitionSpec = {
+                                            // A crossfade between two strings must not
+                                            // animate the container's width: the count
+                                            // arrives a beat after the name, and the
+                                            // default size transform re-measured the
+                                            // bar for the length of the fade.
                                             fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                                                fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                                fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                                         },
                                         // `fill = false` so a short name does not
                                         // stretch an empty gap across the bar; the

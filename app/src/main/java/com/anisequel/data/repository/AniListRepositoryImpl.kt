@@ -9,9 +9,7 @@ import com.anisequel.data.model.CharacterProfile
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.ActivityReply
-import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.ActivityReplyWindow
-import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse

@@ -43,13 +43,16 @@ import com.anisequel.data.repository.MAX_FONT_SCALE
 import com.anisequel.data.repository.MAX_TITLE_SCROLL_DP_PER_SECOND
 import com.anisequel.data.repository.MIN_FONT_SCALE
 import com.anisequel.data.repository.MIN_TITLE_SCROLL_DP_PER_SECOND
+import com.anisequel.data.repository.SystemFont
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.LocalTitleMotion
 import com.anisequel.ui.components.MarqueeText
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.rememberBoundSliderState
 import kotlinx.coroutines.CoroutineScope
@@ -134,19 +137,52 @@ fun TypeSettingsTab(
                     ?: if (themeSettings.customFontPath != null) {
                         "Imported font"
                     } else {
-                        "System font"
+                        "${themeSettings.systemFont.displayName} system font"
                     },
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (themeSettings.customFontPath != null) {
-                    "Imported into the app, so it survives the file being moved or " +
-                        "the app that supplied it being uninstalled."
-                } else {
-                    "Import a .ttf or .otf file. It is copied into the app, not " +
-                        "linked, so the choice is permanent."
+                text = when {
+                    CustomFontStore.isDownloaded(themeSettings.customFontPath) ->
+                        "Downloaded from Google Fonts and kept in the app's own storage, " +
+                            "so switching away and back does not download it again."
+                    themeSettings.customFontPath != null ->
+                        "Imported into the app, so it survives the file being moved or " +
+                            "the app that supplied it being uninstalled."
+                    else ->
+                        "Import a .ttf or .otf file, or download a family below. " +
+                            "Either choice is copied into the app, not linked."
                 },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // The five faces Android ships for an app to ask for by name. This is
+            // the choice that applies to every screen immediately; an imported
+            // file replaces it until it is removed, and the system choice stays
+            // underneath so removing the file returns to it rather than to
+            // Default.
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsFieldLabel(text = "System font")
+            Spacer(modifier = Modifier.height(8.dp))
+            ExpressivePolygonSegmentedBar(
+                options = SystemFont.entries.map { SegmentedOption(label = it.displayName) },
+                selectedIndex = SystemFont.entries.indexOf(themeSettings.systemFont),
+                onSelect = { index ->
+                    scope.launch {
+                        themePreferences.setSystemFont(SystemFont.entries[index])
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("system_font_row")
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Default, Sans Serif, Serif, Monospace and Cursive are the " +
+                    "faces the system already has, so every one renders on every " +
+                    "device. An imported file replaces this choice until you remove it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -239,6 +275,11 @@ fun TypeSettingsTab(
                 }
             }
         }
+
+        DownloadableFontSection(
+            themePreferences = themePreferences,
+            currentFontPath = themeSettings.customFontPath
+        )
 
         TitleMotionSection(
             themePreferences = themePreferences,

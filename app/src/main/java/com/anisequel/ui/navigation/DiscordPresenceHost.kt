@@ -15,6 +15,7 @@ import com.anisequel.data.discord.DiscordPresenceRuntime
 import com.anisequel.data.discord.DiscordRpcClient
 import com.anisequel.data.discord.DiscordRuntimeState
 import com.anisequel.data.repository.DiscordPreferences
+import com.anisequel.domain.discord.DiscordAuthKind
 import com.anisequel.domain.discord.DiscordPresence
 import com.anisequel.domain.discord.DiscordPresenceComposer
 import com.anisequel.domain.discord.DiscordSettings
@@ -141,13 +142,19 @@ private fun DiscordPresencePublisher(
     var publishJob by remember { mutableStateOf<Job?>(null) }
     val latestSettings by rememberUpdatedState(settings)
 
-    LaunchedEffect(settings.enabled, settings.token, settings.linked) {
+    // The credential kind is part of the key: an account relinked through the
+    // OAuth flow has the same shape of token as a paste but has to be sent with a
+    // `Bearer ` prefix, and a session published with the other kind is stale even
+    // when the token's text happens to be identical.
+    val bearer = settings.authKind == DiscordAuthKind.OAUTH
+
+    LaunchedEffect(settings.enabled, settings.token, settings.linked, bearer) {
         if (!settings.enabled) {
             publishJob?.cancel()
             DiscordPresenceRuntime.update(DiscordRuntimeState.Disabled)
             val token = lastLiveToken ?: settings.token
             if (token.isNotBlank()) {
-                runCatching { client.clear(token) }
+                runCatching { client.clear(token, bearer) }
             }
             // Unconditionally, not only when a token is present: logging out
             // clears the token, and the old build guarded this on a non-blank one,
@@ -160,6 +167,7 @@ private fun DiscordPresencePublisher(
     val publishKey = remember(
         settings.canPublish,
         settings.token,
+        settings.authKind,
         settings.linked,
         settings.onlineStatus,
         settings.activityType,
@@ -204,12 +212,13 @@ private fun DiscordPresencePublisher(
                         rawToken = token,
                         presence = presence,
                         status = latestSettings.onlineStatus,
-                        activityType = latestSettings.activityType
+                        activityType = latestSettings.activityType,
+                        bearer = bearer
                     )
                     if (!isActive) return@launch
                     if (result.isSuccess) {
                         if (!latestSettings.stillLiveWith(token)) {
-                            runCatching { client.clear(token) }
+                            runCatching { client.clear(token, bearer) }
                             runCatching { client.disconnect() }
                             lastLiveToken = null
                         } else {

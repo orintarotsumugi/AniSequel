@@ -95,6 +95,25 @@ data class DiscordPhrasing(
 data class DiscordSettings(
     val enabled: Boolean = false,
     val token: String = "",
+    /**
+     * Which credential [token] is, because Discord reads the two differently.
+     *
+     * A pasted user token travels raw in `Authorization` and in the gateway's
+     * IDENTIFY; an access token minted by the app's own OAuth grant has to carry a
+     * `Bearer ` prefix in both. Storing the kind alongside the token is what stops
+     * a sign-in that worked from producing a credential the gateway refuses.
+     */
+    val authKind: DiscordAuthKind = DiscordAuthKind.TOKEN,
+    /**
+     * The Discord application this app signs in with.
+     *
+     * Supplied by the reader, the way AniList's client ID is: an OAuth flow needs
+     * an application whose registered redirect is [DiscordOAuth.REDIRECT_URI], and
+     * an app cannot invent one. Blank means the automatic sign-in is unavailable
+     * and the page offers the paste-token path instead, which is what it offered
+     * for every install before this existed.
+     */
+    val oauthClientId: String = "",
     val linked: Boolean = false,
     val username: String = "",
     val userId: String = "",
@@ -147,6 +166,10 @@ data class DiscordSettings(
     val canPublish: Boolean
         get() = enabled && linked && token.trim().isNotEmpty()
 
+    /** True when the reader can use the one-tap Discord sign-in on this install. */
+    val canSignInWithDiscord: Boolean
+        get() = DiscordOAuth.isValidClientId(oauthClientId)
+
     /**
      * Whether the page can honestly claim a Discord connection right now.
      *
@@ -160,6 +183,7 @@ data class DiscordSettings(
             !enabled -> "Rich Presence disabled"
             canPublish -> username.takeIf { it.isNotBlank() }?.let { "Connected as $it" }
                 ?: "Connected to Discord"
+            oauthClientId.isNotBlank() -> "Preview only - sign in with Discord"
             else -> "Preview only - no Discord account linked"
         }
 }

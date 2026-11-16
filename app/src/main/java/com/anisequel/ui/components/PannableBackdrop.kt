@@ -25,7 +25,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import coil.compose.AsyncImage
@@ -121,14 +120,20 @@ fun PannableBackdrop(
 ) {
     var containerWidth by remember { mutableFloatStateOf(0f) }
     var containerHeight by remember { mutableFloatStateOf(0f) }
-    var imageSize by remember { mutableStateOf(Size.Zero) }
+    // Keyed on the model: a different picture is a different measurement and a
+    // different gesture. Without the key, a profile whose banner changed reused
+    // the previous image's intrinsic size for a frame and drew the new artwork at
+    // the old scale - which read as the banner flickering before it settled.
+    var imageSize by remember(model) { mutableStateOf(Size.Zero) }
 
     // Not `rememberSaveable`: zoom and pan are meaningless against a box that has
     // been re-measured since, and restoring a stale offset would strand the picture
-    // off-centre on the first frame after a rotation.
-    var zoom by remember { mutableFloatStateOf(1f) }
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(0f) }
+    // off-centre on the first frame after a rotation. Keyed on the model for the
+    // same reason [imageSize] is - a new picture starts at its cover fit, not
+    // wherever the last one was left.
+    var zoom by remember(model) { mutableFloatStateOf(1f) }
+    var offsetX by remember(model) { mutableFloatStateOf(0f) }
+    var offsetY by remember(model) { mutableFloatStateOf(0f) }
 
     // The three conditions are the whole cost of this. `drift` is the caller's
     // choice; the zoom check stops the sweep the moment the reader takes over; and
@@ -262,6 +267,11 @@ fun PannableBackdrop(
                         // `.value` above made every frame recompose this backdrop
                         // and rebuild the transform; the image only needs its layer
                         // invalidated while the sweep is moving.
+                        //
+                        // A banner with no measured size is drawn with
+                        // `ContentScale.Crop` below, so this identity transform is
+                        // the correct one for that frame rather than a stretched
+                        // image waiting for `onSuccess` to correct it.
                         val transform = backdropTransform(
                             containerWidth = containerWidth,
                             containerHeight = containerHeight,
@@ -293,7 +303,17 @@ fun PannableBackdrop(
                 // `FitBounds` because the transform above owns the fit. Crop here
                 // would fight the scale and the two would disagree about what is on
                 // screen the moment the picture was panned or zoomed.
-                contentScale = ContentScale.FillBounds,
+                //
+                // Until the picture reports a usable intrinsic size the transform
+                // is an identity, and `FillBounds` would stretch it to the box's
+                // shape. `Crop` is the cover fit for that one frame, so the first
+                // drawn frame is already the picture's own aspect rather than a
+                // stretched version of it.
+                contentScale = if (imageSize.isUsableBackdropSize()) {
+                    ContentScale.FillBounds
+                } else {
+                    ContentScale.Crop
+                },
                 colorFilter = colorFilter
             )
         }

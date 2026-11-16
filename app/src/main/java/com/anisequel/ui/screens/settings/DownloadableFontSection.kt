@@ -1,0 +1,179 @@
+package com.anisequel.ui.screens.settings
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.CustomFontStore
+import com.anisequel.data.repository.GoogleFontCatalog
+import com.anisequel.data.repository.GoogleFontDownloader
+import com.anisequel.data.repository.ThemePreferences
+import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import kotlinx.coroutines.launch
+
+/**
+ * The Font tab's free downloads.
+ *
+ * Three families are offered instead of a browser or a search field: a download
+ * list is a decision, and a list of three is a decision a reader can make. The
+ * families are fetched from Google Fonts' free CSS endpoint on demand and kept in
+ * the app's private font directory, never packaged in the APK.
+ *
+ * Only the regular and bold cuts are fetched. The type scale asks for those two;
+ * a family's italics and display weights would be dead bytes on every device.
+ */
+@Composable
+internal fun DownloadableFontSection(
+    themePreferences: ThemePreferences,
+    currentFontPath: String?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val downloader = remember { GoogleFontDownloader() }
+    var downloadingId by remember { mutableStateOf<String?>(null) }
+    var downloadError by remember { mutableStateOf<String?>(null) }
+
+    SectionCard(
+        title = "Download fonts",
+        icon = AppVectorIcons.Download,
+        subtitle = "Free Google Fonts, fetched once and kept in the app",
+        modifier = modifier
+    ) {
+        Text(
+            text = "These families are downloaded from Google Fonts when you tap " +
+                "Download, so they do not add to the APK. Only the regular and bold " +
+                "files are kept, which is what the app actually draws.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        GoogleFontCatalog.fonts.forEachIndexed { index, font ->
+            if (index > 0) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+            }
+            val applied = downloadedFontId(currentFontPath) == font.id
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = font.displayName,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = font.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                if (downloadingId == font.id) {
+                    ExpressiveLoadingIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("download_font_loading_${font.id}")
+                    )
+                } else {
+                    FilledTonalButton(
+                        onClick = {
+                            downloadError = null
+                            downloadingId = font.id
+                            scope.launch {
+                                try {
+                                    downloader.download(context, font).fold(
+                                        onSuccess = { downloaded ->
+                                            themePreferences.setCustomFont(
+                                                path = downloaded.path,
+                                                name = downloaded.name,
+                                                boldPath = downloaded.boldPath
+                                            )
+                                        },
+                                        onFailure = { failure ->
+                                            downloadError = failure.message
+                                                ?: "That font could not be downloaded."
+                                        }
+                                    )
+                                } finally {
+                                    downloadingId = null
+                                }
+                            }
+                        },
+                        enabled = downloadingId == null && !applied,
+                        modifier = Modifier.testTag("download_font_${font.id}")
+                    ) {
+                        Text(if (applied) "Applied" else "Download")
+                    }
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = downloadError != null,
+            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
+            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+        ) {
+            downloadError?.let { message ->
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                        .testTag("download_font_error")
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The catalog id of the downloaded family currently active, if any.
+ *
+ * Paths are written by [GoogleFontDownloader] as
+ * `google_<id>_400.ttf`; keeping the id in the name is what lets Settings show
+ * "Applied" without another stored preference that could disagree with the file.
+ */
+private fun downloadedFontId(path: String?): String? {
+    if (!CustomFontStore.isDownloaded(path)) return null
+    return path
+        ?.substringAfterLast('/')
+        ?.removePrefix("google_")
+        ?.substringBefore("_400")
+        ?.takeIf { it.isNotBlank() }
+}

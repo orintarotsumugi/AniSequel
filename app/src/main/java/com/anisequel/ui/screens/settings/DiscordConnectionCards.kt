@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -30,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,9 +48,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.discord.DiscordAccount
+import com.anisequel.data.discord.DiscordOAuthFlow
 import com.anisequel.data.discord.DiscordRpcClient
 import com.anisequel.data.discord.DiscordRuntimeState
 import com.anisequel.domain.discord.DiscordLogin
+import com.anisequel.domain.discord.DiscordOAuth
 import com.anisequel.domain.discord.DiscordSettings
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
@@ -135,10 +137,13 @@ fun DiscordConnectionCard(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = if (settings.linked && settings.token.isNotBlank()) {
-                        "Token saved on this device · ${DiscordLogin.maskedToken(settings.token)}"
-                    } else {
-                        "Sign in with Discord in your browser, then paste your token"
+                    text = when {
+                        settings.linked && settings.token.isNotBlank() ->
+                            "Token saved on this device · ${DiscordLogin.maskedToken(settings.token)}"
+                        settings.canSignInWithDiscord ->
+                            "Sign in with Discord - no token to copy"
+                        else ->
+                            "Sign in with Discord in your browser, then paste your token"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -195,19 +200,53 @@ fun DiscordConnectionCard(
  * way to hand a token back to an app, so the token field below is how the account
  * is actually linked. That is a smaller flow, not a prettier one: it asks the reader
  * for the credential instead of pretending an in-app page captured it silently.
+ *
+ * ## What sits above it now
+ *
+ * An OAuth2 authorization-code flow with PKCE, which is the one way Discord *does*
+ * hand a token back: the code comes in on `anisequel://discord`, and this device
+ * exchanges it. [DiscordSignInPanel] draws it, and the exchange itself is handled
+ * by the page rather than by this dialog - the dialog can be dismissed while the
+ * reader is in the browser, and the callback has to survive that.
  */
 @Composable
 fun DiscordLoginDialog(
     settings: DiscordSettings,
     client: DiscordRpcClient,
     onDismiss: () -> Unit,
-    onLinked: (token: String, account: DiscordAccount) -> Unit
+    onLinked: (token: String, account: DiscordAccount) -> Unit,
+    onSaveClientId: (String) -> Unit = {},
+    oauthError: String? = null,
+    oauthBusy: Boolean = false
 ) {
     var token by remember { mutableStateOf(settings.token) }
     var error by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
+    var clientId by remember { mutableStateOf(settings.oauthClientId) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // Read from the flow object rather than a local flag: the session outlives this
+    // composition, and a `remember`ed boolean would reset to "not waiting" as soon
+    // as the reader came back from the browser on a rebuilt Activity.
+    val pending by DiscordOAuthFlow.pending.collectAsState()
+
+    fun startOAuth() {
+        if (!DiscordOAuth.isValidClientId(clientId)) {
+            error = "Enter the Discord application ID first."
+            return
+        }
+        error = null
+        onSaveClientId(clientId.trim())
+        val session = DiscordOAuthFlow.begin(clientId)
+        openExternalUrlOrCopy(
+            context,
+            DiscordOAuth.authorizationUrl(
+                clientId = session.clientId,
+                codeChallenge = session.challenge,
+                state = session.state
+            )
+        )
+    }
 
     fun submitToken(candidate: String) {
         val normalized = DiscordLogin.normalizeToken(candidate)
@@ -236,11 +275,25 @@ fun DiscordLoginDialog(
         title = { Text(if (settings.linked) "Change Discord account" else "Log in to Discord") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                DiscordSignInPanel(
+                    clientId = clientId,
+                    error = oauthError ?: error,
+                    waiting = pending != null,
+                    busy = oauthBusy,
+                    onClientIdChange = {
+                        clientId = it.filter(Char::isDigit).take(22)
+                        error = null
+                    },
+                    onSignIn = { startOAuth() }
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "Sign in on Discord's own page, which opens in your device's " +
-                        "browser - not inside AniSequel. Discord does not hand a token back " +
-                        "to a browser, so the token field is what links the account. It is " +
-                        "verified with Discord directly and stored only on this device.",
+                    text = "No application ID? Sign in on Discord's own page, which opens " +
+                        "in your device's browser - not inside AniSequel - and paste the " +
+                        "token it gives you. It is verified with Discord directly and " +
+                        "stored only on this device.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

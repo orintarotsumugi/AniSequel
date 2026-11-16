@@ -3,7 +3,9 @@ package com.anisequel
 import androidx.compose.ui.text.font.FontFamily
 import com.anisequel.data.repository.MAX_FONT_SCALE
 import com.anisequel.data.repository.MIN_FONT_SCALE
+import com.anisequel.data.repository.SystemFont
 import com.anisequel.ui.theme.anisequelTypography
+import com.anisequel.ui.theme.toFontFamily
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,5 +57,18 @@ class TypographyScaleTest {
         assertEquals(FontFamily.Serif, imported.displayLarge.fontFamily)
         assertEquals(FontFamily.Serif, imported.bodyMedium.fontFamily)
         assertEquals(FontFamily.Serif, imported.labelSmall.fontFamily)
+    }
+
+    @Test
+    fun `the five system forms map to the platform's generic families`() {
+        // The picker offers exactly the generic families Android resolves
+        // natively, so every choice renders on every device.
+        assertEquals(5, SystemFont.entries.size)
+        assertEquals(FontFamily.Default, SystemFont.DEFAULT.toFontFamily())
+        assertEquals(FontFamily.Serif, SystemFont.SERIF.toFontFamily())
+        assertEquals(FontFamily.Monospace, SystemFont.MONOSPACE.toFontFamily())
+        assertEquals(FontFamily.Cursive, SystemFont.CURSIVE.toFontFamily())
+        assertEquals(SystemFont.DEFAULT, SystemFont.fromStorage(null))
+        assertEquals(SystemFont.CURSIVE, SystemFont.fromStorage("cursive"))
     }
 }

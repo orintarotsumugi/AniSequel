@@ -39,7 +39,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
@@ -567,6 +566,8 @@ internal fun SequelStylePreview(
                             )
                         }
                     }
+                    HomeSequelStyle.TICKET -> TicketStylePreview(entry = previewEntry(entries, 0))
+                    HomeSequelStyle.POLAROID -> PolaroidStylePreview(entry = previewEntry(entries, 0))
                 }
             }
         }
@@ -610,17 +611,6 @@ private fun MiniSequelRow(
             )
         }
     }
-}
-
-@Composable
-private fun MiniBar(fraction: Float, height: Dp, color: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth(fraction)
-            .height(height)
-            .clip(CircleShape)
-            .background(color)
-    )
 }
 
 @Composable
