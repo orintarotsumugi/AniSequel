@@ -150,6 +150,17 @@ class BuildActivityCalendarUseCaseTest {
     }
 
     @Test
+    fun `history older than the drawn window is ignored`() {
+        val calendar = useCase(
+            listOf(day(LocalDate.of(2025, 1, 1), amount = 99, level = 7)),
+            weeks = 4,
+            today = today
+        )
+
+        assertEquals(0, calendar.totalChanges)
+    }
+
+    @Test
     fun `two entries on the same day add up rather than overwriting`() {
         // `activityHistory` is daily server-side, so two buckets landing on one day
         // is not expected - but overwriting would silently lose activity, and the

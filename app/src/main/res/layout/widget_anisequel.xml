@@ -45,6 +45,18 @@
             android:orientation="vertical">
 
             <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="2dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:letterSpacing="0.08"
+                android:maxLines="1"
+                android:text="@string/widget_activity_kicker"
+                android:textColor="?android:attr/colorAccent"
+                android:textSize="9sp" />
+
+            <TextView
                 android:id="@+id/widget_title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -68,8 +80,8 @@
                     android:layout_height="wrap_content"
                     android:includeFontPadding="false"
                     android:text="@string/widget_count_initial"
-                    android:textColor="?android:attr/textColorPrimary"
-                    android:textSize="28sp"
+                    android:textColor="?android:attr/colorAccent"
+                    android:textSize="32sp"
                     android:textStyle="bold" />
 
                 <TextView
