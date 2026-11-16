@@ -566,6 +566,21 @@ private fun BackgroundSection(
             modifier = Modifier.testTag("true_black_switch")
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+        // Off by default: `Modifier.blur` draws through an offscreen layer, and the
+        // new layout's backdrop reads as depth without it. The switch exists so a
+        // reader who wants the softer look can ask for it and pay for it knowingly.
+        SwitchRow(
+            title = "Home backdrop blur",
+            subtitle = "Softens the glow behind the new Home and its pages. Off by " +
+                "default because the blur costs an extra draw pass on every screen.",
+            checked = settings.novaBackdropBlur,
+            onCheckedChange = { enabled ->
+                scope.launch { themePreferences.setNovaBackdropBlur(enabled) }
+            },
+            modifier = Modifier.testTag("nova_backdrop_blur_switch")
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
         // `SettingsFieldLabel`, not a hand-rolled bold `labelMedium`: this caption
         // and the ones on the Accent and Jokes cards do the same job, and three

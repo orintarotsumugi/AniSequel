@@ -29,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import android.os.Build
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -37,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
@@ -104,10 +104,10 @@ fun NovaBackdrop(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val blurEnabled = LocalNovaBackdropBlur.current && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
-    fun Modifier.backdropBlur(radius: androidx.compose.ui.unit.Dp): Modifier =
-        if (blurEnabled) this.blur(radius) else this
+    // Read once per draw: the preference is off by default, and skipping the
+    // modifier entirely is what makes "off" mean no offscreen layer at all
+    // rather than a zero-radius blur that still pays for one.
+    val blurEnabled = LocalNovaBackdropBlur.current
 
     Box(
         modifier = modifier.background(MaterialTheme.colorScheme.background)
@@ -116,7 +116,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp)
-                .backdropBlur(24.dp)
+                .then(novaBlur(24.dp, blurEnabled))
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -130,7 +130,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .size(230.dp)
                 .offset(x = (-70).dp, y = (-30).dp)
-                .backdropBlur(28.dp)
+                .then(novaBlur(28.dp, blurEnabled))
                 .background(
                     Brush.radialGradient(
                         listOf(
@@ -144,6 +144,17 @@ fun NovaBackdrop(
         content()
     }
 }
+
+/**
+ * The backdrop's blur, applied only when the reader turned it on.
+ *
+ * `Modifier.blur` renders through an offscreen layer, so building it
+ * unconditionally and letting a 0dp radius be a no-op is not free - it would
+ * still cost the layer on every page. Returning the receiver untouched is what
+ * keeps the default (blur off) at the cost of the two gradients alone.
+ */
+private fun Modifier.novaBlur(radius: Dp, enabled: Boolean): Modifier =
+    if (enabled) blur(radius) else this
 
 /**
  * The new Home's bar: the app mark, its tagline, and the two doors out.

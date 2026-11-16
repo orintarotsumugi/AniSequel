@@ -131,16 +131,5 @@ internal fun InfoBackdropSection(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        Spacer(modifier = Modifier.height(14.dp))
-        SwitchRow(
-            title = "Home backdrop blur",
-            subtitle = "Adds a soft blur to Nova home and hub backdrops. Off by default for smoother performance.",
-            checked = settings.novaBackdropBlur,
-            onCheckedChange = { enabled ->
-                scope.launch { themePreferences.setNovaBackdropBlur(enabled) }
-            },
-            testTag = "nova_backdrop_blur_switch"
-        )
     }
 }
