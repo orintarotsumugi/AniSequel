@@ -8,6 +8,8 @@ import java.io.OutputStream
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.net.URLEncoder
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -33,42 +35,146 @@ data class DownloadableFont(
 /**
  * The free downloads the Font tab offers.
  *
- * These are deliberately *not* in `assets`: packaging three families, each with
- * a regular and a bold file, added megabytes to every install for a choice many
+ * These are deliberately *not* in `assets`: packaging families, each with a
+ * regular and a bold file, added megabytes to every install for a choice many
  * readers never open. The files are fetched once from Google Fonts and kept in
  * the app's own storage, so switching away and back does not download again.
  *
- * ## The three
- *
- * - JetBrains Mono: the coding face, for readers who want unambiguous glyphs.
- * - Inter: a neutral Google Fonts interface face.
- * - Roboto: Android's original interface face, offered as the familiar choice.
+ * [popular] is a local index for searching, not a packaged font: every family is
+ * downloaded on demand, and a name outside the index is still offered to Google's
+ * CSS endpoint as an exact family.
  *
  * Google's CSS endpoint is free and needs no API key. It is asked for TrueType
  * only - Android cannot decode the WOFF2 URLs it serves to browsers - and for
  * regular and bold only, which is what the type scale actually asks for.
  */
 object GoogleFontCatalog {
-    val fonts: List<DownloadableFont> = listOf(
-        DownloadableFont(
-            id = "jetbrains_mono",
-            displayName = "JetBrains Mono",
-            familyName = "JetBrains Mono",
-            description = "A coding face with a tall x-height and a slashed zero."
-        ),
-        DownloadableFont(
-            id = "inter",
-            displayName = "Inter",
-            familyName = "Inter",
-            description = "A neutral Google Fonts face made for small interface text."
-        ),
-        DownloadableFont(
-            id = "roboto",
-            displayName = "Roboto",
-            familyName = "Roboto",
-            description = "Android's original interface face, in its current cut."
-        )
+
+    /** The three families shown before anyone types a search. */
+    val quickPicks: List<DownloadableFont> = listOf(
+        googleFont("jetbrains_mono", "JetBrains Mono", "Monospace"),
+        googleFont("inter", "Inter", "Sans serif"),
+        googleFont("roboto", "Roboto", "Android's original")
     )
+
+    /**
+     * A local index of Google Fonts' most-used families.
+     *
+     * Google's metadata endpoint is a 2.7 MB document for every family it
+     * publishes. Downloading and parsing that on a phone to answer one search
+     * would cost more time and memory than the font being chosen, so this is the
+     * short list a reader is actually likely to type. A query that is not in it
+     * still works: [search] offers the exact name, and the CSS endpoint resolves
+     * any family Google publishes.
+     */
+    val popular: List<DownloadableFont> = listOf(
+        googleFont("inter", "Inter", "Sans serif"),
+        googleFont("roboto", "Roboto", "Android's original"),
+        googleFont("open_sans", "Open Sans", "Sans serif"),
+        googleFont("lato", "Lato", "Sans serif"),
+        googleFont("montserrat", "Montserrat", "Geometric sans"),
+        googleFont("poppins", "Poppins", "Geometric sans"),
+        googleFont("raleway", "Raleway", "Display sans"),
+        googleFont("nunito", "Nunito", "Rounded sans"),
+        googleFont("merriweather", "Merriweather", "Serif"),
+        googleFont("playfair_display", "Playfair Display", "Display serif"),
+        googleFont("oswald", "Oswald", "Condensed sans"),
+        googleFont("source_sans_3", "Source Sans 3", "Sans serif"),
+        googleFont("work_sans", "Work Sans", "Sans serif"),
+        googleFont("quicksand", "Quicksand", "Rounded sans"),
+        googleFont("rubik", "Rubik", "Rounded sans"),
+        googleFont("manrope", "Manrope", "Sans serif"),
+        googleFont("dm_sans", "DM Sans", "Sans serif"),
+        googleFont("space_grotesk", "Space Grotesk", "Display sans"),
+        googleFont("josefin_sans", "Josefin Sans", "Display sans"),
+        googleFont("bebas_neue", "Bebas Neue", "Display sans"),
+        googleFont("lobster", "Lobster", "Display"),
+        googleFont("pacifico", "Pacifico", "Handwriting"),
+        googleFont("caveat", "Caveat", "Handwriting"),
+        googleFont("dancing_script", "Dancing Script", "Handwriting"),
+        googleFont("jetbrains_mono", "JetBrains Mono", "Monospace"),
+        googleFont("fira_code", "Fira Code", "Monospace"),
+        googleFont("ibm_plex_mono", "IBM Plex Mono", "Monospace"),
+        googleFont("barlow", "Barlow", "Sans serif"),
+        googleFont("mulish", "Mulish", "Sans serif"),
+        googleFont("outfit", "Outfit", "Display sans"),
+        googleFont("figtree", "Figtree", "Sans serif"),
+        googleFont("sora", "Sora", "Display sans"),
+        googleFont("urbanist", "Urbanist", "Display sans"),
+        googleFont("plus_jakarta_sans", "Plus Jakarta Sans", "Sans serif"),
+        googleFont("noto_sans", "Noto Sans", "Sans serif"),
+        googleFont("noto_serif", "Noto Serif", "Serif"),
+        googleFont("pt_sans", "PT Sans", "Sans serif"),
+        googleFont("pt_serif", "PT Serif", "Serif"),
+        googleFont("crimson_text", "Crimson Text", "Serif"),
+        googleFont("libre_baskerville", "Libre Baskerville", "Serif"),
+        googleFont("eb_garamond", "EB Garamond", "Serif"),
+        googleFont("lora", "Lora", "Serif"),
+        googleFont("karla", "Karla", "Sans serif"),
+        googleFont("cabin", "Cabin", "Sans serif"),
+        googleFont("heebo", "Heebo", "Sans serif"),
+        googleFont("assistant", "Assistant", "Sans serif"),
+        googleFont("exo_2", "Exo 2", "Display sans"),
+        googleFont("teko", "Teko", "Condensed sans"),
+        googleFont("righteous", "Righteous", "Display"),
+        googleFont("comfortaa", "Comfortaa", "Rounded sans"),
+        googleFont("fredoka", "Fredoka", "Rounded sans"),
+        googleFont("bricolage_grotesque", "Bricolage Grotesque", "Display sans"),
+        googleFont("instrument_sans", "Instrument Sans", "Sans serif"),
+        googleFont("geist", "Geist", "Sans serif")
+    )
+
+    /**
+     * Families whose name, category or spelling contains [query].
+     *
+     * Blank shows [quickPicks]. A query with no local match is still offered as
+     * an exact family, because Google's CSS endpoint knows far more families than
+     * this index does and the download path is the same for both.
+     */
+    fun search(query: String, limit: Int = 8): List<DownloadableFont> {
+        val trimmed = query.trim().replace(Regex("\\s+"), " ")
+        if (trimmed.isEmpty()) return quickPicks
+
+        val needle = trimmed.lowercase(Locale.ROOT)
+        val local = popular
+            .filter { font ->
+                font.displayName.lowercase(Locale.ROOT).contains(needle) ||
+                    font.description.lowercase(Locale.ROOT).contains(needle)
+            }
+            .sortedWith(
+                compareBy(
+                    { !it.displayName.lowercase(Locale.ROOT).startsWith(needle) },
+                    { it.displayName.lowercase(Locale.ROOT) }
+                )
+            )
+        if (local.isNotEmpty()) return local.take(limit)
+
+        val family = trimmed.take(MAX_FAMILY_NAME_LENGTH)
+        return listOf(
+            DownloadableFont(
+                id = familySlug(family),
+                displayName = family,
+                familyName = family,
+                description = "Exact Google Fonts family"
+            )
+        )
+    }
+
+    private fun googleFont(id: String, family: String, category: String) =
+        DownloadableFont(
+            id = id,
+            displayName = family,
+            familyName = family,
+            description = "$category family from Google Fonts"
+        )
+
+    private fun familySlug(family: String): String =
+        family.lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]+"), "_")
+            .trim('_')
+            .ifBlank { "font" }
+
+    private const val MAX_FAMILY_NAME_LENGTH = 64
 }
 
 /** One `@font-face` URL from Google Fonts' CSS, with the weight it provides. */
@@ -183,7 +289,9 @@ class GoogleFontDownloader(
         }
 
     private fun fetchFaces(font: DownloadableFont): List<GoogleFontFace> {
-        val family = font.familyName.replace(" ", "+")
+        // Encode the family as one query component: a search can name any family
+        // Google publishes, including one with a space, ampersand or apostrophe.
+        val family = URLEncoder.encode(font.familyName, "UTF-8").replace("+", "%20")
         val url = "https://fonts.googleapis.com/css2" +
             "?family=$family:wght@400;700&subset=latin"
         val request = Request.Builder().url(url).build()

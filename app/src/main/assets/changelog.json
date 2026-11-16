@@ -4,8 +4,20 @@
       "version": "2.1.2",
       "entries": [
         {
-          "title": "Fonts can be downloaded inside the app",
-          "detail": "Settings > Type & reading now lists three free families - JetBrains Mono, Inter and Roboto - and fetches one from Google Fonts when you tap Download. Nothing is packaged in the APK: only the regular and bold files are kept in the app's own storage, and a family already downloaded is applied instantly without touching the network."
+          "title": "Fonts can be searched inside the app",
+          "detail": "Settings > Type & reading now has a Google Fonts search. It filters a short on-device index as you type, falls back to the exact name you typed for a family the index does not know, and fetches the chosen family's regular and 700 cuts from Google's free CSS endpoint. Nothing is packaged in the APK: only those two files are kept in the app's own storage, and a family already downloaded is applied instantly without touching the network."
+        },
+        {
+          "title": "The activity grid answers a tap",
+          "detail": "Tap any day in the Finished grid and the card names the date and its exact change count; the selected cell gets an outline so it is obvious which day the number belongs to, including a plain \"No changes\" for a quiet day. The tally now folds only the weeks the grid draws instead of all of AniList's history, so a profile does less work before the chart can appear."
+        },
+        {
+          "title": "Home widgets are easier to read at a glance",
+          "detail": "All four widgets now carry a small accent kicker - Recent Activity, Missed Sequels, Arriving Soon, Featured Sequel - and the hero count is larger and in the accent colour, with a hairline tile edge so the card separates from a similarly coloured wallpaper. The previews match the live layouts, so the picker shows what will actually be placed."
+        },
+        {
+          "title": "Covers return faster, and fonts stay out of the APK",
+          "detail": "Coil's decoded cover cache now holds 30% of the process heap instead of 25%, enough to keep a long Library or favourites wall resident when you scroll back. The font downloads still add no font files to the APK - families are fetched on demand and only regular and bold are kept - and R8 with resource shrinking stays enabled."
         },
         {
           "title": "Downloaded fonts bring their real bold",
