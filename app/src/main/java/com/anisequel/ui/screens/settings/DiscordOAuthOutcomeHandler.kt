@@ -2,6 +2,7 @@ package com.anisequel.ui.screens.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import com.anisequel.data.discord.DiscordOAuthApi
 import com.anisequel.data.discord.DiscordOAuthFlow
