@@ -31,7 +31,7 @@ class DiscordOAuthTest {
                 "&client_id=123456789012345678" +
                 // A space would be encoded as '+' by form encoding, which Discord
                 // reads as part of the scope name and refuses.
-                "&scope=identify" +
+                "&scope=identify%20connections" +
                 "&redirect_uri=https%3A%2F%2Forintarotsumugi.github.io%2FAniSequel%2Fdiscord-callback.html" +
                 "&state=state123" +
                 "&code_challenge=challenge123" +

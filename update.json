@@ -1,7 +1,7 @@
 {
-  "version": "2.1.8",
-  "version_code": 662,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.8",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.8/anisequel-universal.apk",
-  "notes": "- Discord sign-in now works for unapproved apps: `gateway.connect` is not a public scope, so requesting it made Discord reject the whole authorize request with 'The requested scope is invalid, unknown, or malformed.' The app now requests only the public `identify` scope, so login succeeds. Presence publishing needs Discord approval for `gateway.connect` and stays off until then."
+  "version": "2.1.9",
+  "version_code": 663,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.9",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.9/anisequel-universal.apk",
+  "notes": "- Discord sign-in now requests the public `identify` and `connections` scopes. `rpc` and `gateway.connect` are not public and stay out, so login succeeds. Presence still needs Discord approval for `gateway.connect`; the 4004 close message now says so instead of a generic token rejection."
 }
