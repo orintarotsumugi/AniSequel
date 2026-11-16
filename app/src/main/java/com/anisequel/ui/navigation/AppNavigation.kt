@@ -25,12 +25,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import com.anisequel.data.changelog.ChangelogRepository
+import com.anisequel.data.network.BetterPostersApi
 import com.anisequel.domain.jokes.JokeSettings
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.ui.components.cards.ListRatingVisibility
+import com.anisequel.ui.components.cards.LocalBetterPosters
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.LocalListRatings
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
+import com.anisequel.ui.components.cards.LocalPosterSource
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.markdown.ProvideMediaCovers
 import com.anisequel.data.network.NetworkClient
@@ -303,6 +306,9 @@ fun AppNavigation(
     val interfaceSettings by interfacePreferences.settings.collectAsState(
         initial = InterfacePreferences.InterfaceSettings()
     )
+
+    // One instance for the app: its answer cache is the feature (see [BetterPostersApi]).
+    val betterPosters = remember { BetterPostersApi() }
     // A float spring, not an int one: the local is fractional now so the bar's
     // flight is smooth, and the float spec is the one that can overshoot by the
     // pixels between two 4dp steps rather than by whole steps.
@@ -664,6 +670,11 @@ fun AppNavigation(
                 showMine = interfaceSettings.showMyRatings,
                 showTheirs = interfaceSettings.showTheirRatings
             ),
+            // The art behind those captions, provided here for the same reason: one
+            // picker, six card surfaces, and no way to thread it by hand that does
+            // not eventually miss one of them.
+            LocalPosterSource provides interfaceSettings.posterSource,
+            LocalBetterPosters provides betterPosters,
             LocalAppLayout provides interfaceSettings.layout,
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,

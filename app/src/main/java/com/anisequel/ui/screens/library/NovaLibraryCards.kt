@@ -43,13 +43,13 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.namespaceKey
-import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.cardCoverAspect
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.cardRatingStyle
 import com.anisequel.ui.components.cards.cardTitleMotion
 import com.anisequel.ui.components.cards.cardTitleStyle
@@ -418,7 +418,7 @@ private fun NovaPoster(
                 .background(coverTint ?: Color.Transparent)
         ) {
             AsyncImage(
-                model = media.posterUrl,
+                model = cardPosterUrl(media),
                 contentDescription = media.displayName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -577,7 +577,7 @@ private fun NovaLibraryRow(
                     .background(coverTint ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    model = media.posterUrl,
+                    model = cardPosterUrl(media),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

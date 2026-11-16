@@ -4,6 +4,18 @@
       "version": "2.3.0",
       "entries": [
         {
+          "title": "Posters from btttr.cc, if you want them",
+          "detail": "Cards can now draw a rendered poster from btttr.cc - the art with the title and score set into it - instead of AniList's key visual. Choose it in Interface > Card design > Poster art. btttr addresses posters by IMDb id, so each title's id is looked up once and remembered; a title it does not carry, or a lookup that fails, keeps the AniList cover rather than an empty card."
+        },
+        {
+          "title": "The whole app has a density setting",
+          "detail": "Interface > Layout has a Display density slider from 320 to 600 dpi, and the app now draws at 447 dpi by default instead of whatever the panel reports. Every length in the app is a dp, so the number decides how much fits: raise it for more on screen, lower it for larger cards, text and gaps. It applies to the whole app, including the page you set it on, and Reset density returns it to 447."
+        },
+        {
+          "title": "The schedule reads like the library",
+          "detail": "Schedule rows are now the library's list row, larger: a poster big enough to recognise, a bold name, the air date as a pill and your progress under it, with more space between rows and between the airing and upcoming groups - so two shows no longer read as one card."
+        },
+        {
           "title": "Card design has its own page",
           "detail": "The card-style picker now shares a sub-page with the rest of the card: how large the anime name is drawn, how large the score is, how big a card is in the grid, whether names are bold, and whether a name too long for its line scrolls instead of being cut. One preview at the top shows all of it at once, so a change lands on a card you are already looking at."
         },

@@ -64,6 +64,7 @@ import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.ui.components.cards.PosterSkeletonMosaic
 import com.anisequel.domain.card.CardTitlePlacement
@@ -1158,7 +1159,9 @@ private fun LibraryPoster(
             .testTag("library_poster")
     ) {
         MediaPosterCell(
-            coverUrl = media.coverImage?.bestUrl,
+            // The same poster source the Library draws: this is somebody else's card,
+            // but it is still a card.
+            coverUrl = cardPosterUrl(media),
             coverColor = media.coverImage?.color.toCoverColorOrNull(),
             title = title,
             score = score,

@@ -37,8 +37,8 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.cards.ListOwner
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.columnsFor
@@ -153,7 +153,7 @@ internal fun LibraryListRow(
                 .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
-                model = media.posterUrl,
+                model = cardPosterUrl(media),
                 // The title below is the row's accessible name; a description on
                 // the thumbnail makes TalkBack announce every title twice.
                 contentDescription = null,

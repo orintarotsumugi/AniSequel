@@ -35,6 +35,7 @@ import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepository
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
@@ -75,6 +76,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var authRepository: AuthRepository
     private lateinit var themePreferences: ThemePreferences
     private lateinit var appLockPreferences: AppLockPreferences
+
+    /**
+     * Read here as well as in [com.anisequel.ui.navigation.AppNavigation], for the one
+     * value that has to be in scope before a single page is composed: the display
+     * density the whole theme draws at. Two readers of the same DataStore is not two
+     * sources of truth - DataStore serialises them - and the alternative was threading
+     * the setting down from the navigation graph, which cannot apply it *above* itself.
+     */
+    private lateinit var interfacePreferences: InterfacePreferences
 
     /**
      * The stored app-lock choice, mirrored out of the flow so `onStop` can read
@@ -189,6 +199,7 @@ class MainActivity : ComponentActivity() {
         authRepository = (application as AniSequelApplication).authRepository
         themePreferences = ThemePreferences(applicationContext)
         appLockPreferences = AppLockPreferences(applicationContext)
+        interfacePreferences = InterfacePreferences(applicationContext)
 
         enableEdgeToEdge()
 
@@ -291,6 +302,14 @@ class MainActivity : ComponentActivity() {
                 )
             )
 
+            // Only the density is read at this level, and only because it has to be in
+            // scope above the theme. `initial` is the shipped default rather than the
+            // device's dpi: a first frame at the panel's own density and a second at
+            // 447 would be a visible resize of the whole app on every launch.
+            val interfaceSettings by interfacePreferences.settings.collectAsState(
+                initial = InterfacePreferences.InterfaceSettings()
+            )
+
             // A stall is the one failure a `.catch` cannot help with.
             //
             // Both preference reads now survive an `IOException`, but a DataStore
@@ -367,6 +386,7 @@ class MainActivity : ComponentActivity() {
                 animeTintStrength = themeSettings.retainedTint.strength,
                 appBackgroundColor = themeSettings.appBackgroundColor,
                 fontScale = themeSettings.fontScale,
+                displayDpi = interfaceSettings.displayDpi,
                 customFontPath = themeSettings.customFontPath,
                 customFontBoldPath = themeSettings.customFontBoldPath,
                 systemFont = themeSettings.systemFont,

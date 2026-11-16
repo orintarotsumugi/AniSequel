@@ -46,10 +46,10 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -147,7 +147,7 @@ private fun NovaContinueCard(
                 .background(coverTint ?: Color.Transparent)
         ) {
             AsyncImage(
-                model = media.posterUrl,
+                model = cardPosterUrl(media),
                 // The caption below names the card; a description on the artwork
                 // too made TalkBack read every title twice in the rail.
                 contentDescription = null,

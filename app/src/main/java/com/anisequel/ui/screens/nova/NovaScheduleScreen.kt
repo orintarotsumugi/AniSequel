@@ -52,6 +52,7 @@ import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.EntryEditor
@@ -166,10 +167,14 @@ fun NovaScheduleScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 4.dp,
-                        bottom = 28.dp
+                        top = 8.dp,
+                        bottom = 32.dp
                     ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    // 12dp rather than 8: the rows below are taller than they were, and
+                    // at the old gap two of them read as one block of artwork with a
+                    // seam - the reference the reader gave was a Library list, where a
+                    // row is a card, not a stripe.
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     if (airing.isNotEmpty()) {
                         item(key = "airing_heading", contentType = "heading") {
@@ -201,7 +206,7 @@ fun NovaScheduleScreen(
                             NovaSectionHeading(
                                 title = "Upcoming",
                                 count = upcoming.size,
-                                modifier = Modifier.padding(top = if (airing.isEmpty()) 6.dp else 14.dp)
+                                modifier = Modifier.padding(top = if (airing.isEmpty()) 6.dp else 20.dp)
                             )
                         }
                         items(
@@ -350,25 +355,33 @@ private fun ScheduleRow(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
-            ),
-        shape = RoundedCornerShape(20.dp)
+            )
+            .testTag("nova_schedule_row"),
+        shape = RoundedCornerShape(22.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(9.dp),
+                // 11dp rather than 9: the artwork below grew with the row, and equal
+                // padding on a taller card reads as a thinner card. The cover and this
+                // inset are the ones the Library's list row uses, scaled up once.
+                .padding(11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .width(62.dp)
-                    .height(88.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    // 72×104 against the old 62×88. A schedule is scanned for a title
+                    // you half-remember, and at the old size the art was a colour swatch
+                    // beside the name rather than a poster you could recognise.
+                    .width(72.dp)
+                    .height(104.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(entry.coverColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    model = entry.coverUrl,
+                    // The reader's poster source, by id: this row carries no MediaNode.
+                    model = cardPosterUrl(entry.mediaId, entry.coverUrl),
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -380,13 +393,14 @@ private fun ScheduleRow(
                     text = entry.title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(5.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 ScheduleDatePill(entry)
                 if (entry.progress != null || entry.episodes != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
                     Text(
                         text = progressLabel(entry),
                         style = MaterialTheme.typography.labelSmall,

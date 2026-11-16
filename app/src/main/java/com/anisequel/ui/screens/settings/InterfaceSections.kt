@@ -29,9 +29,11 @@ import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.PosterSource
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.rememberBoundSliderState
@@ -79,6 +81,13 @@ internal fun InterfaceLayoutSection(
     // changes the stored value.
     var liftDraft by rememberSaveable(interfaceSettings.mainBarLift) {
         mutableStateOf(interfaceSettings.mainBarLift.toFloat())
+    }
+    // The density draft, on the same rule for a sharper reason: density re-measures
+    // every dp in the app, so a live value would resize the page - and the slider's
+    // own track - while the finger is still on it. The preference is written on
+    // release, and until then the number beside the label is what will be saved.
+    var dpiDraft by rememberSaveable(interfaceSettings.displayDpi) {
+        mutableStateOf(interfaceSettings.displayDpi.toFloat())
     }
 
     SettingsScrollColumn {
@@ -153,6 +162,71 @@ internal fun InterfaceLayoutSection(
                     scope.launch { interfacePreferences.setShowContinueRail(show) }
                 },
                 modifier = Modifier.testTag("show_continue_rail_switch")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SectionCard(
+            title = "Display density",
+            icon = AppVectorIcons.Tune,
+            subtitle = "How large every card, caption and gap is drawn - " +
+                "${DisplayDpi.DEFAULT_DPI} dpi unless you say otherwise."
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SettingsFieldLabel(text = "Density")
+                Text(
+                    text = "${DisplayDpi.clamp(dpiDraft.roundToInt())} dpi",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Slider(
+                // Bound, not owned: Reset writes this preference from the button below,
+                // and a slider that only read its first value would keep the old thumb.
+                state = rememberBoundSliderState(
+                    value = dpiDraft,
+                    // The same divisor rule as the lift slider: ticks follow the range
+                    // and step in [DisplayDpi] rather than being counted by hand.
+                    steps = ((DisplayDpi.MAX_DPI - DisplayDpi.MIN_DPI) / DisplayDpi.STEP_DPI - 1)
+                        .coerceAtLeast(0),
+                    trackRange = DisplayDpi.MIN_DPI.toFloat()..DisplayDpi.MAX_DPI.toFloat()
+                ),
+                onValueChange = { dpiDraft = it },
+                onValueChangeFinished = {
+                    scope.launch { interfacePreferences.setDisplayDpi(dpiDraft.roundToInt()) }
+                },
+                modifier = Modifier.testTag("display_density_slider")
+            )
+            CollapsibleText(
+                // Said plainly because it is the surprising part: this is not the
+                // phone's panel, and it applies to this very page.
+                text = "Every length in the app is a dp, and a dp is only as big as the " +
+                    "density says: a higher number fits more on the page, a lower one draws " +
+                    "text, cards and gaps larger. The value applies to the whole app - this " +
+                    "page included, the moment you let go - and does not depend on what the " +
+                    "phone's own panel reports. ${DisplayDpi.DEFAULT_DPI} dpi is the shipped " +
+                    "default.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsButton(
+                text = "Reset density",
+                onClick = {
+                    scope.launch { interfacePreferences.setDisplayDpi(DisplayDpi.DEFAULT_DPI) }
+                },
+                icon = AppVectorIcons.Refresh,
+                variant = SettingsButtonVariant.Outlined,
+                // Disabled rather than hidden at the default: a control that vanishes
+                // when it has nothing to do looks like a missing feature, and a reader
+                // who does not know the default cannot tell where they are without it.
+                enabled = interfaceSettings.displayDpi != DisplayDpi.DEFAULT_DPI,
+                fillWidth = true,
+                testTag = "display_density_reset"
             )
         }
 
@@ -335,7 +409,7 @@ internal fun InterfaceCardDesignSection(
         SectionCard(
             title = "Card design",
             icon = AppVectorIcons.ViewGrid,
-            subtitle = "Style, title, rating and size - on every card, everywhere"
+            subtitle = "Style, poster, title, rating and size - on every card, everywhere"
         ) {
             CardDesignPreview(
                 style = style,
@@ -441,6 +515,42 @@ internal fun InterfaceCardDesignSection(
                     scope.launch { interfacePreferences.setShowTheirRatings(show) }
                 },
                 modifier = Modifier.testTag("show_their_ratings_switch")
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsFieldLabel(text = "Poster art")
+            Spacer(modifier = Modifier.height(8.dp))
+            // A picker rather than a switch, because these are two sources of one
+            // picture: AniList's own cover, or btttr's rendered poster. The blurb under
+            // it says what the reader will actually see, since "BetterPosters" alone
+            // promises art the app cannot promise for a title btttr does not carry.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("poster_source_row")
+            ) {
+                PosterSource.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.displayName,
+                        selected = option == interfaceSettings.posterSource,
+                        onClick = {
+                            if (option != interfaceSettings.posterSource) {
+                                scope.launch { interfacePreferences.setPosterSource(option) }
+                            }
+                        },
+                        minTouchTargetHeight = 48.dp,
+                        role = Role.RadioButton,
+                        onClickLabel = "Draw card posters from ${option.displayName}",
+                        modifier = Modifier.testTag("poster_source_${option.storageValue}")
+                    )
+                }
+            }
+            CollapsibleText(
+                text = interfaceSettings.posterSource.blurb,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))

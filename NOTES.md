@@ -27,6 +27,7 @@ That is this file. Read the section for the screen before you change it.
 - [The tier list](#the-tier-list)
 - [Home-screen widgets](#home-screen-widgets)
 - [Release notes](#release-notes)
+- [Card posters and display density](#card-posters-and-display-density)
 - [Crashes you cannot see](#crashes-you-cannot-see)
 - [App-wide notices](#app-wide-notices)
 - [Deliberate non-goals](#deliberate-non-goals)
@@ -1156,6 +1157,74 @@ than the settings page did.
 Shipping changes without adding a block is a broken build, not an oversight —
 [AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
 together, and `ChangelogTest` and `VersionBaselineTest` enforce it.
+
+---
+
+## Card posters and display density
+
+Two settings added together in 2.3.0, both of which look like one line of UI and are
+not.
+
+### btttr posters are two requests, and the second one is by IMDb id
+
+The reader can now choose where a card's art comes from: AniList's own cover, or a
+*rendered* poster from btttr.cc. The obvious implementation - overriding
+`MediaNode.posterUrl` - does not work, and the reason is worth writing down before
+someone tries it again.
+
+btttr addresses posters as `btttr.cc/poster/imdb/poster-default/{imdbId}.jpg`, and
+AniList has no IMDb id: `Media.idMal` is MyAnimeList's numbering, `externalLinks` are
+official sites and streaming services, and `id` is AniList's own. Answers were checked
+against the live hosts rather than inferred - an AniList or MAL id in the IMDb slot
+returns **404**, a real IMDb id returns **200 image/webp** at 500x750, and an unknown
+id redirects to a generic placeholder art - so a guessed `anilist` path would have
+been a feature that never drew a poster.
+
+So `BetterPostersApi` makes two hops: AniList id to IMDb id at `arm.haglund.dev`,
+then IMDb id to poster URL. Both answers, and the *absence* of one, are cached for
+the life of the process in a bounded LRU. The negative matters more than it looks:
+plenty of titles have no btttr poster, and without remembering that, every scroll
+re-asks a free service to learn it again.
+
+**A card draws the AniList cover while the lookup runs, and keeps it when the lookup
+fails.** The cover arrives with the list; the btttr URL needs two third parties. A
+card that waited for them would be a blank rectangle in a grid of them, and a card
+that hid its art on a miss would look broken. `cardPosterUrl` is the only place that
+decision is made, so the card surfaces that use it - the Library's grid and list, a
+profile's list, Home's sequel rows, search and the schedule - cannot disagree about
+it.
+
+One thing it deliberately does not cover: the full-screen cover viewer keeps the
+AniList banner and cover it already had, because it is a viewer for one title rather
+than a card in a list.
+
+### The density setting replaces one number and keeps the other
+
+"Draw at N dpi" is Android's own density override, offered as a preference: every
+length in this app is a dp, and a dp is only as large as the density says. The value
+is stored in dpi because that is the unit the platform prints and the reader
+recognises, and `DisplayDpi.density` is the single place the divide by 160 happens.
+
+It is applied in `AniSequelTheme`, not by wrapping the Activity, for two reasons. The
+theme is already the app's only composition root - every page, sheet and bar is
+inside it - and the type scale is built there too, so one provider reaches all of
+them. `Density` holds two numbers, and only the density is this setting's business:
+the font scale is the *system* text size, an accessibility choice made outside this
+app, and building a fresh `Density` without copying it through would silently reset
+every text size to 100% for the readers who had raised it.
+
+The page's slider keeps a draft and writes on release for a sharper reason than the
+other sliders do: density re-measures every dp, so a live value would resize the
+Settings page - including the slider track under the finger - on every frame of a
+drag.
+
+### Rows on the Schedule are the Library's row, larger
+
+The schedule used to draw a 62x88 thumbnail beside a name and an 8dp gap between
+rows, which read as a list of stripes. It is now the Library's list row anatomy -
+poster, name, a dated pill, the viewer's progress - at 72x104 with 12dp between
+cards, so a show is recognisable by its art and two of them never look like one
+block of artwork with a seam.
 
 ---
 

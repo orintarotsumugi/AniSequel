@@ -13,9 +13,11 @@ import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.PosterSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -71,6 +73,17 @@ class InterfacePreferences(private val context: Context) {
         val CARD_SCROLL_TITLES = booleanPreferencesKey("card_scroll_titles")
         val SHOW_MY_RATINGS = booleanPreferencesKey("show_my_ratings")
         val SHOW_THEIR_RATINGS = booleanPreferencesKey("show_their_ratings")
+
+        /** Which art a card draws; see [PosterSource]. */
+        val POSTER_SOURCE = stringPreferencesKey("poster_source")
+
+        /**
+         * The display density the whole app draws at, in dpi.
+         *
+         * An int because it is a whole dpi: the slider's label prints it, the
+         * preference stores it and [DisplayDpi.density] divides it once.
+         */
+        val DISPLAY_DPI = intPreferencesKey("display_dpi")
     }
 
     /** Everything about the interface that is not the colour palette. */
@@ -111,7 +124,24 @@ class InterfacePreferences(private val context: Context) {
          * you already made, and on somebody else's profile it is the thing you opened
          * the page for. A reader may want one without the other.
          */
-        val showTheirRatings: Boolean = true
+        val showTheirRatings: Boolean = true,
+        /**
+         * Where cards get their cover art.
+         *
+         * Part of this emission for the same reason the card design is: it is a fact
+         * about how a card is drawn, and the app root provides it once rather than
+         * leaving each surface to read the store for itself.
+         */
+        val posterSource: PosterSource = PosterSource.DEFAULT,
+        /**
+         * The density the whole app draws at, in dpi.
+         *
+         * Read at `MainActivity` as well as here - it is the one preference that has
+         * to be in scope above the theme - and clamped on read because the slider is
+         * not the only writer: a hand-edited file or an older build's value must land
+         * inside a drawable range rather than throw inside `Density`.
+         */
+        val displayDpi: Int = DisplayDpi.DEFAULT_DPI
     )
 
     /**
@@ -163,7 +193,11 @@ class InterfacePreferences(private val context: Context) {
                     scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true
                 ).clamped(),
                 showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
-                showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true
+                showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true,
+                posterSource = PosterSource.fromStorage(preferences[Keys.POSTER_SOURCE]),
+                displayDpi = DisplayDpi.clamp(
+                    preferences[Keys.DISPLAY_DPI] ?: DisplayDpi.DEFAULT_DPI
+                )
             )
         }
 
@@ -256,7 +290,27 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
-    /** Back to the shipped layout, density, rail, card style and bar position. */
+    /** Where cards draw their cover art from - AniList's own, or btttr's rendered art. */
+    suspend fun setPosterSource(source: PosterSource) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.POSTER_SOURCE] = source.storageValue
+        }
+    }
+
+    /**
+     * The display density, clamped rather than rejected.
+     *
+     * The slider cannot ask for a value outside the range, but this is a public
+     * setter over a plain integer: clamped so a bad write lands at the nearest
+     * drawable density instead of throwing inside the theme's `Density`.
+     */
+    suspend fun setDisplayDpi(dpi: Int) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.DISPLAY_DPI] = DisplayDpi.clamp(dpi)
+        }
+    }
+
+    /** Back to the shipped layout, density, rail, card style, poster source and bar position. */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
             preferences.remove(Keys.CARD_STYLE)
@@ -272,6 +326,8 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.CARD_SCROLL_TITLES)
             preferences.remove(Keys.SHOW_MY_RATINGS)
             preferences.remove(Keys.SHOW_THEIR_RATINGS)
+            preferences.remove(Keys.POSTER_SOURCE)
+            preferences.remove(Keys.DISPLAY_DPI)
         }
     }
 }
