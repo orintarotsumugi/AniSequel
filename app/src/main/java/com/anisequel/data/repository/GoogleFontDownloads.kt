@@ -29,7 +29,9 @@ data class DownloadableFont(
     val id: String,
     val displayName: String,
     val familyName: String,
-    val description: String
+    val description: String,
+    /** The catalogue grouping, e.g. "Serif" or "Sans serif". */
+    val category: String = ""
 )
 
 /**
@@ -138,12 +140,17 @@ object GoogleFontCatalog {
         val needle = trimmed.lowercase(Locale.ROOT)
         val local = popular
             .filter { font ->
-                font.displayName.lowercase(Locale.ROOT).contains(needle) ||
-                    font.description.lowercase(Locale.ROOT).contains(needle)
+                font.displayName.contains(needle, ignoreCase = true) ||
+                    font.category.contains(needle, ignoreCase = true)
             }
             .sortedWith(
                 compareBy(
-                    { !it.displayName.lowercase(Locale.ROOT).startsWith(needle) },
+                    // A family whose name starts with the query is the likeliest
+                    // selection. After that, a category that starts with it beats
+                    // one that merely contains it: "serif" should surface Serif
+                    // families before every "Sans serif" description.
+                    { !it.displayName.startsWith(needle, ignoreCase = true) },
+                    { !it.category.startsWith(needle, ignoreCase = true) },
                     { it.displayName.lowercase(Locale.ROOT) }
                 )
             )
@@ -165,7 +172,8 @@ object GoogleFontCatalog {
             id = id,
             displayName = family,
             familyName = family,
-            description = "$category family from Google Fonts"
+            description = "$category family from Google Fonts",
+            category = category
         )
 
     private fun familySlug(family: String): String =
