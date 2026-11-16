@@ -1,7 +1,7 @@
 {
-  "version": "2.1.7",
-  "version_code": 661,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.7",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.7/anisequel-universal.apk",
-  "notes": "- Discord sign-in redirect now actually resolves: the redirect page was shipped under docs/ but GitHub Pages for this repo is published from the repository root, so the https URL 404'd and Discord's authorize step still rejected the request. The page now lives at the repository root as discord-callback.html, served at https://orintarotsumugi.github.io/AniSequel/discord-callback.html, with a .nojekyll marker so Jekyll does not process it. Register that exact URL in the Discord portal for application 1571747436542566561."
+  "version": "2.1.8",
+  "version_code": 662,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.8",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.8/anisequel-universal.apk",
+  "notes": "- Discord sign-in now works for unapproved apps: `gateway.connect` is not a public scope, so requesting it made Discord reject the whole authorize request with 'The requested scope is invalid, unknown, or malformed.' The app now requests only the public `identify` scope, so login succeeds. Presence publishing needs Discord approval for `gateway.connect` and stays off until then."
 }
