@@ -32,7 +32,7 @@ class DiscordOAuthTest {
                 // A space would be encoded as '+' by form encoding, which Discord
                 // reads as part of the scope name and refuses.
                 "&scope=identify%20gateway.connect" +
-                "&redirect_uri=discord-1571747436542566561%3A%2Fauthorize%2Fcallback" +
+                "&redirect_uri=https%3A%2F%2Forintarotsumugi.github.io%2FAniSequel%2Fdiscord-callback.html" +
                 "&state=state123" +
                 "&code_challenge=challenge123" +
                 "&code_challenge_method=S256",
@@ -121,26 +121,34 @@ class DiscordOAuthTest {
         // as a registered redirect for a standard OAuth2 app - the sign-in never
         // left Discord, and the only evidence was that page.
         val manifest = File(projectRoot, "app/src/main/AndroidManifest.xml").readText()
-        val scheme = DiscordOAuth.REDIRECT_URI.substringBefore(':')
+        // The legacy scheme is still declared so a build already in flight on an
+        // older release (and the GitHub Pages redirect target) still lands here.
         assertTrue(
-            "the manifest must handle ${DiscordOAuth.REDIRECT_URI}",
-            manifest.contains("android:scheme=\"$scheme\"")
+            "the manifest must still handle the anisequel://discord callback",
+            manifest.contains("android:scheme=\"anisequel\"")
         )
-        assertEquals("discord-1571747436542566561:/authorize/callback", DiscordOAuth.REDIRECT_URI)
+        assertEquals(
+            "https://orintarotsumugi.github.io/AniSequel/discord-callback.html",
+            DiscordOAuth.REDIRECT_URI
+        )
     }
 
     @Test
     fun `the redirect is the mobile shape Discord registers, not an arbitrary scheme`() {
-        // The portal will not accept a made-up scheme, and the authorize endpoint
-        // answers any request that names one with "Invalid OAuth2 redirect_uri".
+        // Discord's developer portal only accepts https:// redirects for a standard
+        // (non-Social-SDK) OAuth2 app, so the redirect is a normal https URL and
+        // never a made-up scheme.
         assertTrue(
-            DiscordOAuth.REDIRECT_URI.startsWith(
-                "discord-${DiscordOAuth.DEFAULT_CLIENT_ID}:/authorize/callback"
-            )
+            "the redirect has to be an https URL the portal will accept",
+            DiscordOAuth.REDIRECT_URI.startsWith("https://")
         )
         assertFalse(
             "an unregistrable scheme is what broke this sign-in",
             DiscordOAuth.REDIRECT_URI.startsWith("anisequel://")
+        )
+        assertFalse(
+            "the Social-SDK-only scheme is not used by this standard app",
+            DiscordOAuth.REDIRECT_URI.startsWith("discord-")
         )
         // The token exchange has to carry the same URI, byte for byte: Discord
         // compares it against the one from the authorize request.
