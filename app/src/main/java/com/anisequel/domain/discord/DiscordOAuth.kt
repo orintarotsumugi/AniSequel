@@ -247,7 +247,7 @@ object DiscordOAuth {
             // A literal '+' is kept: this is a query string, not a form body, and
             // the values here are base64url codes and states with no spaces in
             // them either way.
-            bytes += char.toString().toByteArray(Charsets.UTF_8)
+            char.toString().toByteArray(Charsets.UTF_8).forEach { bytes += it }
             index++
         }
         return String(bytes.toByteArray(), Charsets.UTF_8)
