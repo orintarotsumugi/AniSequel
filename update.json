@@ -3,5 +3,5 @@
   "version_code": 661,
   "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.7",
   "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.7/anisequel-universal.apk",
-  "notes": "- Discord sign-in redirect now resolves: the redirect page was shipped under docs/ but GitHub Pages for this repo is published from the repository root, so the https URL 404'd and Discord's authorize step still rejected the request. The page now lives at the repository root as discord-callback.html, served at https://orintarotsumugi.github.io/AniSequel/discord-callback.html, with a .nojekyll marker so Jekyll does not process it. Register that exact URL in the Discord portal for application 1571747436542566561."
+  "notes": "- Discord sign-in redirect now actually resolves: the redirect page was shipped under docs/ but GitHub Pages for this repo is published from the repository root, so the https URL 404'd and Discord's authorize step still rejected the request. The page now lives at the repository root as discord-callback.html, served at https://orintarotsumugi.github.io/AniSequel/discord-callback.html, with a .nojekyll marker so Jekyll does not process it. Register that exact URL in the Discord portal for application 1571747436542566561."
 }
