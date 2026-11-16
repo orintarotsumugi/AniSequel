@@ -31,9 +31,13 @@ app is put together that way; this file is only about the constraints.
 
 ## 1. Size and structure
 
-- **Keep files focused, and under 700 lines.** The number is a ceiling, not a
-  target — a file under it that is doing two jobs still needs splitting. Past 700
-  the file is genuinely doing more than one thing.
+- **Keep files focused, and under 900 lines.** The number is a ceiling, not a
+  target — a file under it that is doing two jobs still needs splitting. Past 900
+  the file is genuinely doing more than one thing. It moved up from 700 because a
+  handful of real files (a profile's list, the navigation graph) were over the old
+  ceiling while still being one job each, so the number was arguing with the rule
+  above it: the split is by responsibility, and the ceiling is only the point at
+  which that argument has to happen.
 - **Split by responsibility, not by line count.** Splitting a large file into two
   arbitrary halves is churn. The split is worth making when the two halves have
   genuinely different reasons to change, or different owners.
@@ -43,7 +47,7 @@ app is put together that way; this file is only about the constraints.
   noise and rots. A comment recording that something looks wrong but is
   deliberate is the most valuable thing in the file — those are the traps.
 
-### Why `DashboardViewModel` is not 700 lines of helpers by accident
+### Why `DashboardViewModel` is not 900 lines of helpers by accident
 
 Its recompute pipeline (`discoveredCandidates`, `discoveryKey`, the detail cache,
 the watched-count memo, the debounce generation guard) shares about a dozen

@@ -49,7 +49,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.withListStatus
@@ -61,8 +60,12 @@ import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
+import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.cardPosterUrl
+import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.ui.components.cards.PosterSkeletonMosaic
 import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.domain.card.metaCornerFor
@@ -678,7 +681,14 @@ fun ProfileLibraryTab(
     // The mode's own column count, narrowed only where the mode asks for a
     // compact wall; the width comes from the constraint rather than from the
     // device, so a split-screen window gets the same honest answer as a phone.
-    val columns = libraryColumns(viewMode, maxWidth)
+    // Sized by the reader's card size as well as the mode: a profile's posters are
+    // the same cards as the Library's, and a reader who asked for roomy cards did not
+    // mean "except on somebody else's page".
+    val columns = libraryColumns(
+        mode = viewMode,
+        width = maxWidth,
+        size = LocalCardDesign.current.size
+    )
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
         // the grid must not reflow when the window changes, because the person's
@@ -794,6 +804,7 @@ fun ProfileLibraryTab(
                         LibraryListRow(
                             entry = entry,
                             detailed = true,
+                            owner = ListOwner.THEIRS,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                             modifier = animateLibraryItem()
                         )
@@ -808,6 +819,7 @@ fun ProfileLibraryTab(
                     ) { entry ->
                         LibraryListRow(
                             entry = entry,
+                            owner = ListOwner.THEIRS,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                             modifier = animateLibraryItem()
                         )
@@ -833,6 +845,7 @@ fun ProfileLibraryTab(
                         ) { entry ->
                             LibraryListRow(
                                 entry = entry,
+                                owner = ListOwner.THEIRS,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                                 modifier = animateLibraryItem()
                             )
@@ -854,6 +867,7 @@ fun ProfileLibraryTab(
                         ) { entry ->
                             LibraryListRow(
                                 entry = entry,
+                                owner = ListOwner.THEIRS,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                                 modifier = animateLibraryItem()
                             )
@@ -1130,12 +1144,13 @@ private fun LibraryPoster(
     val interactionSource = remember { MutableInteractionSource() }
     val style = LocalMediaCardStyle.current
     val title = media.displayName
-    // A list entry carries the *owner's* score when AniList returns one, which is
-    // the number that matters on somebody else's profile (and on your own list).
-    // Fall back to the community average only when the entry is unrated, so a
-    // poster never loses its badge just because the reader has not scored it.
-    val score = entry.score?.roundToInt()?.takeIf { it > 0 }
-        ?: media.averageScore?.takeIf { it > 0 }
+    // A list entry carries the *owner's* score when AniList returns one, which is the
+    // number that matters on somebody else's profile. It used to be preferred here
+    // unconditionally while the reader's own grid showed the community average only, so
+    // the same poster said two different things depending on whose page it was on; the
+    // shared helper now makes both answer to the reader's switches, and an unrated entry
+    // still falls back to the average so a poster never loses its only number.
+    val score = libraryRating(entry, ListOwner.THEIRS)
 
     Column(
         modifier = modifier
@@ -1144,7 +1159,9 @@ private fun LibraryPoster(
             .testTag("library_poster")
     ) {
         MediaPosterCell(
-            coverUrl = media.coverImage?.bestUrl,
+            // The same poster source the Library draws: this is somebody else's card,
+            // but it is still a card.
+            coverUrl = cardPosterUrl(media),
             coverColor = media.coverImage?.color.toCoverColorOrNull(),
             title = title,
             score = score,

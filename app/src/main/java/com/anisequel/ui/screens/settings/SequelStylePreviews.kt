@@ -16,13 +16,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
 
@@ -54,18 +57,46 @@ internal fun TicketStylePreview(entry: MediaListEntryItem?, modifier: Modifier =
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+                .padding(vertical = 10.dp, horizontal = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            MiniBar(0.46f, 4.dp, MaterialTheme.colorScheme.primary)
-            MiniBar(0.82f, 5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            // Real words rather than bars: a ticket's stub and its text column are
+            // only worth choosing if the reader can see what fits in the column, and
+            // a bar cannot show that a name wraps to a second line.
+            Text(
+                text = "SEQUEL",
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1
+            )
+            Text(
+                text = previewTitle(entry),
+                style = miniBodyStyle(),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Airing \u00b7 12 episodes",
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
             Spacer(modifier = Modifier.weight(1f))
-            Box(
+            Text(
+                text = "Watch sequel",
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(13.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.38f))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(vertical = 4.dp)
             )
         }
         // A row of dots rather than the real card's dashes: at this size a dash
@@ -114,21 +145,20 @@ internal fun PolaroidStylePreview(entry: MediaListEntryItem?, modifier: Modifier
                     .weight(1f)
             )
             Spacer(modifier = Modifier.height(4.dp))
-            MiniBar(0.75f, 4.dp, Color(0xFF23211F).copy(alpha = 0.8f))
-            Spacer(modifier = Modifier.height(3.dp))
-            MiniBar(0.4f, 3.dp, Color(0xFF23211F).copy(alpha = 0.45f))
+            Text(
+                text = previewTitle(entry),
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF23211F).copy(alpha = 0.85f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "12 episodes",
+                style = miniCaptionStyle(),
+                color = Color(0xFF23211F).copy(alpha = 0.5f),
+                maxLines = 1
+            )
         }
     }
-}
-
-/** A placeholder line of text, at preview scale. */
-@Composable
-internal fun MiniBar(fraction: Float, height: Dp, color: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth(fraction)
-            .height(height)
-            .clip(CircleShape)
-            .background(color)
-    )
 }

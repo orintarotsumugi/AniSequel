@@ -191,7 +191,7 @@ fun UpdateSectionCard(modifier: Modifier = Modifier) {
 
             is UpdateUiState.NeedsInstallPermission -> {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
+                CollapsibleText(
                     text = if (state.sentToSettings) {
                         "Still not allowed to install apps. Grant it in Settings, then " +
                             "come back - AniSequel will pick up where it left off."

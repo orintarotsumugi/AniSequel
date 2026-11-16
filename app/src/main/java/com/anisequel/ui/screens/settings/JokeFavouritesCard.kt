@@ -55,7 +55,7 @@ internal fun JokeFavouritesCard(
         subtitle = "Jokes you kept, stored on this device"
     ) {
         if (lines.isEmpty()) {
-            Text(
+            CollapsibleText(
                 text = "Tap the heart on a joke to keep it here. Saved lines survive " +
                     "\"Reset joke settings\", because they are yours rather than a setting.",
                 style = MaterialTheme.typography.bodySmall,

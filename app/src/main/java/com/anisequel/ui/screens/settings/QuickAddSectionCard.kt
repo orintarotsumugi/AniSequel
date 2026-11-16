@@ -70,7 +70,7 @@ fun QuickAddSectionCard(
                 .testTag("quick_add_preview_button")
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        CollapsibleText(
             text = "Tap it to see the confirmation, or hold it to fill toward " +
                 "Currently Watching. Nothing is saved from this page.",
             style = MaterialTheme.typography.bodySmall,
@@ -83,7 +83,7 @@ fun QuickAddSectionCard(
 
         SettingsFieldLabel(text = "Hold duration")
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        CollapsibleText(
             text = "Hold the button on any anime card to move it from Planning to " +
                 "Currently Watching without opening it.",
             style = MaterialTheme.typography.bodySmall,

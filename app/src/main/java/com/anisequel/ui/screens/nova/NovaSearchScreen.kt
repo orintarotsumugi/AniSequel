@@ -60,13 +60,13 @@ import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.JokeMomentBus
 import com.anisequel.ui.components.ShimmerBox
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
@@ -563,7 +563,7 @@ private fun SearchResultCard(media: MediaNode, onOpen: () -> Unit) {
                     .background(coverColor)
             ) {
                 AsyncImage(
-                    model = media.posterUrl,
+                    model = cardPosterUrl(media),
                     contentDescription = media.displayName,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

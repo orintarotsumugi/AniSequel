@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -30,25 +29,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import androidx.compose.ui.unit.sp
 import com.anisequel.data.model.MediaListEntryItem
-import com.anisequel.data.model.displayName
-import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.ui.AppLayout
-import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.NavBarLift
-import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 
@@ -128,14 +121,17 @@ internal fun AppLayoutPreviews(
                             // 132dp was shorter than the Nova mini's own fixed rows
                             // (header, greeting, shortcuts, covers, bar), so the bar
                             // at the bottom was clipped off - the one difference a
-                            // reader is choosing between. 184dp leaves room for every
-                            // row, a weighted gap, and the tallest lift the bar
-                            // slider can ask for, so the preview never clips the bar
-                            // it is demonstrating.
-                            .height(184.dp)
+                            // reader is choosing between. 284dp is the height at which
+                            // the miniature stops being a diagram and starts being a
+                            // page: the header, the greeting, two shortcut tiles, a row
+                            // of covers with their names and the bar, at proportions
+                            // the real screen has. The tallest bar lift still fits
+                            // above the bar's lane, so nothing it demonstrates is
+                            // clipped.
+                            .height(284.dp)
                             .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                            .padding(7.dp)
+                            .padding(9.dp)
                     ) {
                         if (layout == AppLayout.NOVA) {
                             NovaLayoutMini(entries = entries, lift = animatedLift)
@@ -164,7 +160,7 @@ internal fun AppLayoutPreviews(
 /**
  * How much of the real lift a mini shows.
  *
- * A mini is a schematic, not a phone: 184dp of card stands in for a 700dp screen,
+ * A mini is a schematic, not a phone: 284dp of card stands in for a 700dp screen,
  * so drawing a 96dp gap at 96dp inside it would push the bar into the header. A
  * quarter is the scale that keeps the *proportion* right - the full range still
  * moves the mini bar a quarter of the way up its own screen - while leaving the
@@ -196,9 +192,9 @@ private fun ClassicLayoutMini(entries: List<MediaListEntryItem>, lift: State<Flo
             // preview used to shrink to one row or none, so the shape a reader is
             // choosing disappeared precisely when they had no posters to demonstrate
             // it with. A null entry draws the themed placeholder cover.
-            repeat(2) { index ->
+            repeat(3) { index ->
                 MiniClassicRow(entry = previewEntry(entries, index), index = index)
-                Spacer(modifier = Modifier.height(5.dp))
+                Spacer(modifier = Modifier.height(6.dp))
             }
         }
         // The bar floats over the feed, which is what the real bar does; it used to
@@ -220,41 +216,59 @@ private fun NovaLayoutMini(entries: List<MediaListEntryItem>, lift: State<Float>
                 .padding(bottom = 22.dp)
         ) {
             MiniTopBar()
-            Spacer(modifier = Modifier.height(7.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.72f)
-                    .height(9.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.76f))
+            Spacer(modifier = Modifier.height(9.dp))
+            // The greeting was two grey bars. It is the first sentence of the new
+            // Home, and a reader choosing between the two layouts is choosing whether
+            // a page opens with a person's name or with a stat strip - so the words
+            // are the preview, not a rectangle standing in for them.
+            Text(
+                text = "Good evening",
+                style = miniTitleStyle(),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.5f)
-                    .height(6.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.62f))
+            Text(
+                text = "3 sequels are airing today",
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(9.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                MiniShortcut(previewEntry(entries, 0))
-                MiniShortcut(previewEntry(entries, 1))
+                MiniShortcut(
+                    entry = previewEntry(entries, 0),
+                    label = "Continue",
+                    detail = "12 / 24",
+                    modifier = Modifier.weight(1f)
+                )
+                MiniShortcut(
+                    entry = previewEntry(entries, 1),
+                    label = "Planning",
+                    detail = "8 titles",
+                    modifier = Modifier.weight(1f)
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Continue watching",
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(5.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 repeat(3) { index ->
-                    MiniCover(
+                    MiniCoverColumn(
                         entry = previewEntry(entries, index),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp)
+                        progress = index == 0,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -318,20 +332,18 @@ private fun MiniTopBar() {
         )
         Spacer(modifier = Modifier.width(5.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.62f)
-                    .height(5.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            Text(
+                text = "AniSequel",
+                style = miniBodyStyle(),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
-            Spacer(modifier = Modifier.height(3.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.4f)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
+            Text(
+                text = "Home",
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
         Box(
@@ -343,329 +355,217 @@ private fun MiniTopBar() {
     }
 }
 
+/**
+ * The three numbers the classic page opens with.
+ *
+ * Drawn as numbers and labels rather than three grey blocks: the strip is what makes
+ * the classic layout feel like a dashboard, and "watching / completed / planning"
+ * with counts is the whole difference between it and a list of covers.
+ */
 @Composable
 private fun MiniStatStrip() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(9.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(5.dp),
+            .padding(horizontal = 6.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        repeat(3) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(14.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            )
-        }
+        listOf("42" to "Watching", "61" to "Done", "25" to "Planned")
+            .forEach { (count, label) ->
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = count,
+                        style = miniCaptionStyle(),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = label,
+                        style = miniCaptionStyle(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
     }
 }
 
+/**
+ * One classic row: the cover, the name, and the line underneath it.
+ *
+ * The two grey bars this replaces said "a row has two lines of text", which the
+ * reader could already see. The name and the progress line say *where* those two
+ * lines sit against the cover and how much of the width they take - which is the
+ * thing that differs between the two layouts at the same row height.
+ */
 @Composable
 private fun MiniClassicRow(entry: MediaListEntryItem?, index: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(28.dp)
-            .clip(RoundedCornerShape(7.dp))
+            .height(46.dp)
+            .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)),
         verticalAlignment = Alignment.CenterVertically
     ) {
         MiniCover(
             entry = entry,
             modifier = Modifier
-                .width(24.dp)
-                .fillMaxHeight()
-        )
-        Column(modifier = Modifier.padding(horizontal = 5.dp)) {
-            Box(
-                modifier = Modifier
-                    .width(if (index == 0) 56.dp else 42.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .width(34.dp)
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-            )
-        }
-    }
-}
-
-@Composable
-private fun RowScope.MiniShortcut(entry: MediaListEntryItem?) {
-    Row(
-        modifier = Modifier
-            .weight(1f)
-            .height(28.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier
-            .weight(1f)
-            .padding(start = 5.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.56f)
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f))
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.78f)
-                    .height(5.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
-            )
-        }
-        MiniCover(
-            entry = entry,
-            modifier = Modifier
-                .width(22.dp)
-                .fillMaxHeight()
-        )
-    }
-}
-
-/**
- * The two shapes the new Home's sequel list can take, drawn from the reader's
- * own covers.
- *
- * Shares [MiniCover] with the layout previews above, and the sample titles fall
- * back to the same place: a reader choosing between "Rows" and "Cards" is
- * choosing how much of a poster they get, which is exactly the thing a label
- * cannot tell them.
- */
-@Composable
-internal fun SequelStylePreview(
-    style: HomeSequelStyle,
-    entries: List<MediaListEntryItem>,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Preview \u00b7 ${style.displayName}",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .padding(10.dp)
-                .testTag("home_sequel_style_preview")
-        ) {
-            Crossfade(
-                targetState = style,
-                animationSpec = ExpressiveMotion.FastEffects,
-                label = "home_sequel_style_preview_mode"
-            ) { current ->
-                when (current) {
-                    HomeSequelStyle.ROWS -> Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        // The weight is applied here, in the Column, rather than
-                        // inside MiniSequelRow: `Modifier.weight` only exists on a
-                        // Column/Row scope, and the row's own body was reaching for
-                        // it from outside one - which is a compile error the first
-                        // CI run after this preview was written.
-                        MiniSequelRow(
-                            entry = previewEntry(entries, 0),
-                            modifier = Modifier.weight(1f)
-                        )
-                        MiniSequelRow(
-                            entry = previewEntry(entries, 1),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    HomeSequelStyle.CARDS -> Column(modifier = Modifier.fillMaxSize()) {
-                        MiniCover(
-                            entry = previewEntry(entries, 0),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        MiniBar(
-                            fraction = 0.7f,
-                            height = 6.dp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        MiniBar(
-                            fraction = 0.42f,
-                            height = 4.dp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-                        )
-                        Spacer(modifier = Modifier.height(7.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(13.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.38f))
-                        )
-                    }
-                    HomeSequelStyle.BANNER -> Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                    ) {
-                        MiniCover(
-                            entry = previewEntry(entries, 0),
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
-                                    )
-                                )
-                        )
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(10.dp)
-                        ) {
-                            MiniBar(0.42f, 5.dp, Color.White.copy(alpha = 0.86f))
-                            Spacer(modifier = Modifier.height(5.dp))
-                            MiniBar(0.28f, 4.dp, Color.White.copy(alpha = 0.5f))
-                        }
-                    }
-                    HomeSequelStyle.SHELF -> Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        repeat(4) { index ->
-                            MiniCover(
-                                entry = previewEntry(entries, index),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                            )
-                        }
-                    }
-                    HomeSequelStyle.TICKET -> TicketStylePreview(entry = previewEntry(entries, 0))
-                    HomeSequelStyle.POLAROID -> PolaroidStylePreview(entry = previewEntry(entries, 0))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MiniSequelRow(
-    entry: MediaListEntryItem?,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MiniCover(
-            entry = entry,
-            modifier = Modifier
-                .width(30.dp)
+                .width(32.dp)
                 .fillMaxHeight()
         )
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 8.dp)) {
-            MiniBar(
-                fraction = 0.72f,
-                height = 5.dp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                .padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text = previewTitle(entry),
+                style = miniBodyStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.5f)
-                    .height(9.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.34f))
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (index == 0) "Episode 12 of 24" else "Completed",
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
-    }
-}
-
-@Composable
-internal fun MiniCover(
-    entry: MediaListEntryItem?,
-    modifier: Modifier = Modifier
-) {
-    // A preview with no library used to draw four flat grey boxes, so the reader
-    // choosing a layout saw placeholders rather than poster-shaped covers. The
-    // gradient is the same pair the app uses for cover fallbacks; it keeps the
-    // shape readable without inventing a fake title.
-    val cover = entry?.media?.posterColor.toCoverColorOrNull()
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .then(
-                if (cover != null) {
-                    Modifier.background(cover)
-                } else {
-                    Modifier.background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primaryContainer,
-                                MaterialTheme.colorScheme.tertiaryContainer
-                            )
-                        )
-                    )
-                }
-            )
-    ) {
-        AsyncImage(
-            model = entry?.media?.posterUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+        Text(
+            text = if (index == 0) "84%" else "${91 - index * 7}%",
+            style = miniCaptionStyle(),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = 6.dp),
+            maxLines = 1
         )
     }
 }
 
-internal fun previewTitle(entry: MediaListEntryItem?): String =
-    entry?.media?.displayName ?: "Dandadan"
+/**
+ * One shortcut tile: a word for what it does and the number it does it with.
+ *
+ * The tile's right-hand thumbnail stays - it is what makes the row read as shortcuts
+ * rather than buttons - but the label is now the label the reader will tap.
+ */
+@Composable
+private fun RowScope.MiniShortcut(
+    entry: MediaListEntryItem?,
+    label: String,
+    detail: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .height(38.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 6.dp)
+        ) {
+            Text(
+                text = label,
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            Text(
+                text = detail,
+                style = miniBodyStyle(),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
+            )
+        }
+        MiniCover(
+            entry = entry,
+            modifier = Modifier
+                .width(28.dp)
+                .fillMaxHeight()
+        )
+    }
+}
 
 /**
- * One of the reader's entries for preview slot [index], cycling when there are
- * fewer entries than slots.
+ * A cover with its name under it, and a progress capsule on the one in flight.
  *
- * The Shelf preview used to draw `entries.getOrNull(4)` and showed two empty
- * gradient slots whenever the dashboard held fewer than five covers - the mode
- * looked broken at exactly the moment the reader had a small library, which is
- * when they are most likely to be choosing a view. Repeating real covers is
- * honest preview arithmetic, not invented content: every slot is a title they
- * own, and an empty library still falls back to the themed placeholder.
+ * The capsule is drawn the way the Library draws it - top-left, over the artwork -
+ * because that corner is a design decision too, and a reader picking the shelf layout
+ * is picking where their progress will sit.
  */
-internal fun previewEntry(
-    entries: List<MediaListEntryItem>,
-    index: Int
-): MediaListEntryItem? =
-    if (entries.isEmpty()) null else entries[index % entries.size]
+@Composable
+private fun MiniCoverColumn(
+    entry: MediaListEntryItem?,
+    progress: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Box {
+            MiniCover(
+                entry = entry,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(62.dp)
+            )
+            if (progress) {
+                Text(
+                    text = "12/24",
+                    style = miniCaptionStyle(),
+                    color = Color.White,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(3.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = previewTitle(entry),
+            style = miniCaptionStyle(),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The three type steps the minis draw with.
+ *
+ * Composed from the app's own steps and scaled down rather than written as bare sp
+ * values, so a change to the type scale reaches the previews too - and so the mini's
+ * text keeps its share of the frame instead of becoming 11sp captions in a 100dp
+ * column, which is what the first attempt at real text looked like.
+ */
+@Composable
+internal fun miniTitleStyle() = MaterialTheme.typography.titleSmall.copy(
+    fontSize = 11.sp,
+    lineHeight = 13.sp
+)
+
+@Composable
+internal fun miniBodyStyle() = MaterialTheme.typography.labelSmall.copy(
+    fontSize = 9.sp,
+    lineHeight = 11.sp
+)
+
+@Composable
+internal fun miniCaptionStyle() = MaterialTheme.typography.labelSmall.copy(
+    fontSize = 7.sp,
+    lineHeight = 9.sp
+)

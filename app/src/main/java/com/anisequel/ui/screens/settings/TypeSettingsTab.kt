@@ -142,7 +142,7 @@ fun TypeSettingsTab(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(
+            CollapsibleText(
                 text = when {
                     CustomFontStore.isDownloaded(themeSettings.customFontPath) ->
                         "Downloaded from Google Fonts and kept in the app's own storage, " +
@@ -179,7 +179,7 @@ fun TypeSettingsTab(
                     .testTag("system_font_row")
             )
             Spacer(modifier = Modifier.height(6.dp))
-            Text(
+            CollapsibleText(
                 text = "Default, Sans Serif, Serif, Monospace and Cursive are the " +
                     "faces the system already has, so every one renders on every " +
                     "device. An imported file replaces this choice until you remove it.",
@@ -382,7 +382,8 @@ private fun TextSizeSection(
         Slider(
             state = rememberBoundSliderState(
                 value = draft,
-                steps = 11,
+                // 75% to 175% in fives: 21 sizes, so 19 stops between the ends.
+                steps = 19,
                 trackRange = MIN_FONT_SCALE..MAX_FONT_SCALE
             ),
             onValueChange = { draft = it },
@@ -390,13 +391,12 @@ private fun TextSizeSection(
                 val target = draft
                 scope.launch { themePreferences.setFontScale(target) }
             },
-            // Thirteen stops (80% to 140% in fives): fine enough to matter,
-            // coarse enough that every stop is a deliberate size rather than a
-            // pixel nudge. The range widened from 85-130 because a reader who
-            // needs large text was stopping at the top of a slider, not at the
-            // size that worked.
+            // The stops are five percent apart, and the ends are what widened
+            // (see MIN/MAX_FONT_SCALE): the span is a range a reader can actually
+            // read half a dense list at and, at the top, a genuinely large size
+            // rather than 140% and a shrug.
             //
-            // `stateDescription` because the platform reads the raw 0.8-1.4
+            // `stateDescription` because the platform reads the raw 0.75-1.75
             // fraction, and "0.95" is not a text size a person can judge.
             modifier = Modifier
                 .semantics {
@@ -437,7 +437,7 @@ private fun TitleMotionSection(
         icon = AppVectorIcons.SectionMotion,
         subtitle = "Scroll a name that does not fit instead of cutting it"
     ) {
-        Text(
+        CollapsibleText(
             text = "A title too long for its row scrolls once it has rested, at the " +
                 "speed below. Titles that fit stay still.",
             style = MaterialTheme.typography.bodySmall,

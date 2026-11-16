@@ -196,7 +196,7 @@ private fun TextEffectCard(
         icon = AppVectorIcons.TextBold,
         subtitle = "How a joke arrives, and a sample to judge it by"
     ) {
-        Text(
+        CollapsibleText(
             text = "Off by default. A reveal delays the sentence, so pair a writer " +
                 "with a longer dwell; the sample uses the real speed and the same " +
                 "time budget the toast has.",
@@ -351,7 +351,7 @@ private fun PersonaCard(
                 .testTag("joke_stamp_custom")
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = "The name and stamp are yours: they are stored on this device " +
                 "and appear on every line. Preview a joke to see them.",
             style = MaterialTheme.typography.bodySmall,
@@ -382,7 +382,7 @@ private fun PaceCard(
         icon = AppVectorIcons.Schedule,
         subtitle = "How often she speaks, and how long a line stays"
     ) {
-        Text(
+        CollapsibleText(
             text = "The first line arrives sooner than the rest, so a session is not " +
                 "over before the feature appears. After that, Calm waits 10 to 22 " +
                 "minutes between lines, Normal 4 to 15, and Chatty 1.5 to 3.",
@@ -427,7 +427,7 @@ private fun PaceCard(
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
-        Text(
+        CollapsibleText(
             text = "Quick stays 3 seconds, Standard 5, Relaxed 8 and Long 12. Until " +
                 "tapped waits for you instead, which suits the longest lines.",
             style = MaterialTheme.typography.bodySmall,
@@ -485,7 +485,7 @@ private fun PlacementCard(
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
-        Text(
+        CollapsibleText(
             text = "Main pages keeps jokes over Home, Library and Profile. Everywhere " +
                 "also allows them over pages you open from there, such as Settings, the " +
                 "tier list and a title. The sign-in screen stays quiet either way.",
@@ -542,7 +542,7 @@ private fun TonesCard(
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        CollapsibleText(
             text = "Mixed turns every kind back on at once, so the bag holds the " +
                 "whole pool. Switch one off below to narrow it down again.",
             style = MaterialTheme.typography.bodySmall,
@@ -566,7 +566,7 @@ private fun TonesCard(
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = "Drawing from $lineCount lines across ${active.size} of " +
                 "${JokeTone.entries.size} tones" +
                 (if (settings.isMixed) ", mixed." else ".") +
@@ -599,7 +599,7 @@ private fun MomentsCard(
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = "Each moment still waits for a quiet gap after the last line, so a " +
                 "busy tab is not a drum roll. Nothing appears over the sign-in screen.",
             style = MaterialTheme.typography.bodySmall,

@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * The two shipped bugs of 2.1.2 that a device is not needed to catch.
+ * A shipped bug of 2.1.2 that a device is not needed to catch.
  *
  * ## The style switch restarting Home
  *
@@ -19,16 +19,8 @@ import java.io.File
  * wrong, which is why only a source pin can hold the line: a dynamic local
  * invalidates only its readers, and the reader has to be inside the list item.
  *
- * ## The mangled Discord badge
- *
- * The official path was fed to Compose's path parser, and the published geometry
- * writes its arc flags without separators (`a19.7913 19.7913 0 00-4.8851-1.5152`).
- * `00` reads as one number, so every coordinate after the first arc was shifted and
- * the badge rendered as a folded blob. The mark is transcribed now, so the parser
- * must not come back for it.
- *
- * Source checks strip comments first, exactly as `DiscordLoginBrowserTest` does: an
- * explanation of what was removed must not read as a use of it.
+ * Source checks strip comments first: an explanation of what was removed must not
+ * read as a use of it.
  */
 class SequelStyleSwitchTest {
 
@@ -84,27 +76,6 @@ class SequelStyleSwitchTest {
                 code.contains("HomeSequelStyle.$style ->")
             )
         }
-    }
-
-    @Test
-    fun `the Discord badge is a transcribed mark, not a parsed path`() {
-        val catalogue = source("app/src/main/java/com/anisequel/ui/components/icons/AppExtraVectors.kt")
-        val mark = source("app/src/main/java/com/anisequel/ui/components/icons/DiscordMark.kt")
-
-        assertFalse(
-            "AppExtraVectors is handing the official Discord path to the parser again; " +
-                "its arc flags have no separators, and the parser desyncs on them",
-            catalogue.contains("addPathNodes")
-        )
-        assertTrue(
-            "the badge has to draw the transcribed mark",
-            catalogue.contains("DiscordMark")
-        )
-        assertTrue(
-            "the marked-up geometry is what keeps the arcs readable: arcToRelative names " +
-                "its own seven values, so a flag cannot be read as a coordinate",
-            mark.contains("arcToRelative")
-        )
     }
 
     private fun findProjectRoot(): File {

@@ -187,8 +187,8 @@ private enum class InterfaceSection(
         testTag = "interface_row_library"
     ),
     CARDS(
-        title = "Card style",
-        subtitle = "The shape every card in the app draws",
+        title = "Card design",
+        subtitle = "Style, title size, rating, size and scrolling",
         icon = AppVectorIcons.ViewGrid,
         testTag = "interface_row_cards"
     ),
@@ -282,7 +282,7 @@ private fun InterfaceSectionBody(
             interfacePreferences = interfacePreferences,
             previewEntries = previewEntries
         )
-        InterfaceSection.CARDS -> InterfaceCardStyleSection(
+        InterfaceSection.CARDS -> InterfaceCardDesignSection(
             interfacePreferences = interfacePreferences,
             previewEntries = previewEntries
         )

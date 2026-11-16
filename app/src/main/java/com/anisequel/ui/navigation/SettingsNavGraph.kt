@@ -15,11 +15,9 @@ import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
-import com.anisequel.data.repository.DiscordPreferences
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
-import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.ui.screens.settings.SettingsScreen
 import com.anisequel.ui.viewmodel.AuthViewModel
 
@@ -50,15 +48,6 @@ fun NavGraphBuilder.settingsDestinations(
      * the cards are not drawing.
      */
     interfacePreferences: InterfacePreferences,
-    /**
-     * The Discord presence's switches, account login and phrasing.
-     *
-     * The same instance the app root publishes through; two DataStore readers
-     * would let this page describe a presence the host never sends.
-     */
-    discordPreferences: DiscordPreferences,
-    /** The counts the presence may quote, folded by the dashboard. */
-    discordStats: DiscordStats,
     aniListRepository: AniListRepository,
     /**
      * The two dashboard counts the Settings header shows.
@@ -94,8 +83,6 @@ fun NavGraphBuilder.settingsDestinations(
             seasonalPreferences = seasonalPreferences,
             devicePreferences = devicePreferences,
             interfacePreferences = interfacePreferences,
-            discordPreferences = discordPreferences,
-            discordStats = discordStats,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
             totalWatchedCount = totalWatchedCount,

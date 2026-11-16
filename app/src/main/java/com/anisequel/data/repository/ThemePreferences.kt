@@ -719,9 +719,18 @@ class ThemePreferences(context: Context) {
  * Bounds live here rather than in the slider so the preference and the control
  * cannot disagree about what "as large as it goes" is - the value that is written
  * and the value the screen claims are one.
+ *
+ * Every stop is five percent, so the span covers 21 sizes from 75% to 175%. It
+ * widened twice: 85-130 first, because a reader who needs large text was stopping
+ * at the top of the slider rather than at the size that worked, and again to
+ * 75-175 because 140% is not large text - it is merely bigger - while the bottom
+ * of the range is the only way to fit more of a dense list on a small screen.
+ * The five-percent step is unchanged: it is fine enough that neighbouring stops
+ * are distinct sizes rather than a pixel nudge, and coarse enough that a drag
+ * lands on a deliberate one.
  */
-const val MIN_FONT_SCALE = 0.80f
-const val MAX_FONT_SCALE = 1.40f
+const val MIN_FONT_SCALE = 0.75f
+const val MAX_FONT_SCALE = 1.75f
 
 /**
  * The title-scroll range, in dp per second.

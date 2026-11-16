@@ -78,7 +78,9 @@ fun SequelPoster(
     }
 
     MediaPosterCell(
-        coverUrl = sequel.sequelCoverUrl,
+        // The poster source, not the raw cover: a sequel card on Home is as much a
+        // card as the ones in the Library.
+        coverUrl = cardPosterUrl(sequel.sequelMedia),
         coverColor = coverColor,
         title = sequel.sequelTitle,
         score = score,

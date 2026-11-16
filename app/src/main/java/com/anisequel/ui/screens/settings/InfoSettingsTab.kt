@@ -105,7 +105,7 @@ private fun BuildCard() {
         icon = AppVectorIcons.SectionAbout,
         subtitle = "Build and data source"
     ) {
-        Text(
+        CollapsibleText(
             text = "AniSequel reads your completed list, follows franchise relations, " +
                 "and finds sequels you haven't started.",
             style = MaterialTheme.typography.bodyMedium,
@@ -184,7 +184,7 @@ private fun AppAuthenticityCard() {
         icon = AppVectorIcons.CheckDouble,
         subtitle = "Why the phone asks, and how to check this copy"
     ) {
-        Text(
+        CollapsibleText(
             text = "Play Protect shows \"app scan recommended\" for an app Google has " +
                 "not seen before. It is not a finding - it is an offer to send this " +
                 "APK's hash for a scan. Tap Scan app if you want that check; nothing " +
@@ -246,7 +246,7 @@ private fun AppAuthenticityCard() {
             fillWidth = true
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        CollapsibleText(
             text = "Compare it with the fingerprint on the release page before installing " +
                 "an APK somebody sent you. If they differ, it is not this app. A " +
                 "debug-signed copy is also why an update can refuse to install over " +
@@ -407,7 +407,7 @@ private fun CrashReportCard() {
  */
 @Composable
 private fun CrashReportPromise(enabled: Boolean) {
-    Text(
+    CollapsibleText(
         text = if (enabled) {
             "The next time AniSequel closes unexpectedly, the error and your " +
                 "Android version are saved here. Nothing about your account, " +

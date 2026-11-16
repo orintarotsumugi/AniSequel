@@ -308,7 +308,7 @@ private fun PreviewCard(
         val systemAnimationsEnabled = remember(resumed) { ValueAnimator.areAnimatorsEnabled() }
         if (ExpressiveMotion.speed == MotionStyle.INSTANT) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
+            CollapsibleText(
                 text = if (systemAnimationsEnabled) {
                     "Motion style is Instant, so the particles hold still."
                 } else {
@@ -540,7 +540,7 @@ private fun WeatherCard(
             onValueChangeFinished = onWindStrengthCommit
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        CollapsibleText(
             text = "The drift gathers along the bottom edge of the screen, under the " +
                 "navigation bar rather than on top of it.",
             style = MaterialTheme.typography.labelSmall,

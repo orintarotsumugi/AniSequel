@@ -180,7 +180,7 @@ internal fun MotionSection(
         val systemAnimationsEnabled = remember(resumed) { ValueAnimator.areAnimatorsEnabled() }
         if (!systemAnimationsEnabled) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
+            CollapsibleText(
                 text = "Your phone's animations are turned off, so AniSequel is " +
                     "staying still. Your style is kept for when they are back on.",
                 style = MaterialTheme.typography.labelSmall,

@@ -46,10 +46,10 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -121,6 +121,10 @@ private fun NovaContinueCard(
     val completed = entry.status.equals("COMPLETED", ignoreCase = true)
     val progress = entry.progress ?: if (completed) total else null
     val interactionSource = remember { MutableInteractionSource() }
+    // Hex parsed once per card, not once per recomposition of the rail.
+    val coverTint = remember(media.coverImage?.color) {
+        media.coverImage?.color.toCoverColorOrNull()
+    }
 
     Column(
         modifier = Modifier
@@ -140,10 +144,10 @@ private fun NovaContinueCard(
                 .fillMaxWidth()
                 .height(158.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
+                .background(coverTint ?: Color.Transparent)
         ) {
             AsyncImage(
-                model = media.posterUrl,
+                model = cardPosterUrl(media),
                 // The caption below names the card; a description on the artwork
                 // too made TalkBack read every title twice in the rail.
                 contentDescription = null,
@@ -192,6 +196,10 @@ fun NovaSequelRow(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // The hide button's own source, shared with its `bouncyPress`. Without it the
+    // press fell back to a second pointer-input node that springs the icon on every
+    // pointer-down - twice per gesture, and an extra coroutine per row of the feed.
+    val hideSource = remember { MutableInteractionSource() }
 
     NovaSurface(
         modifier = modifier
@@ -238,9 +246,10 @@ fun NovaSequelRow(
                     )
                     IconButton(
                         onClick = onHide,
+                        interactionSource = hideSource,
                         modifier = Modifier
                             .size(28.dp)
-                            .bouncyPress(pressedScale = 0.88f)
+                            .bouncyPress(pressedScale = 0.88f, interactionSource = hideSource)
                             .testTag("nova_sequel_hide_${sequel.sequelId}")
                     ) {
                         Icon(
@@ -311,6 +320,11 @@ fun NovaSequelCard(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // Shared by the hide button and its press animation - see [NovaSequelRow].
+    val hideSource = remember { MutableInteractionSource() }
+    val coverTint = remember(sequel.sequelMedia.posterColor) {
+        sequel.sequelMedia.posterColor.toCoverColorOrNull()
+    }
 
     NovaSurface(
         modifier = modifier
@@ -329,9 +343,7 @@ fun NovaSequelCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(176.dp)
-                    .background(
-                        sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent
-                    )
+                    .background(coverTint ?: Color.Transparent)
             ) {
                 AsyncImage(
                     model = sequel.sequelCoverUrl,
@@ -366,13 +378,14 @@ fun NovaSequelCard(
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = onHide,
+                        interactionSource = hideSource,
                         modifier = Modifier
                             .size(30.dp)
                             .clip(CircleShape)
                             .background(
                                 MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.88f)
                             )
-                            .bouncyPress(pressedScale = 0.88f)
+                            .bouncyPress(pressedScale = 0.88f, interactionSource = hideSource)
                             .testTag("nova_sequel_card_hide_${sequel.sequelId}")
                     ) {
                         Icon(

@@ -419,6 +419,15 @@ fun AniSequelTheme(
     /** Scroll speed for titles that outgrow their row, in dp per second. */
     titleScrollDpPerSecond: Float =
         com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+    /**
+     * The display density the whole app draws at, in dpi.
+     *
+     * A theme parameter rather than a wrapper around the Activity's content because
+     * the theme is already the app's only composition root: every page, sheet and
+     * bar is inside it, so one provider here reaches all of them - see
+     * [AppDisplayDensity] for what it replaces and what it deliberately keeps.
+     */
+    displayDpi: Int = com.anisequel.domain.ui.DisplayDpi.DEFAULT_DPI,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -620,7 +629,12 @@ fun AniSequelTheme(
                                 com.anisequel.data.repository.MotionStyle.INSTANT
                         )
                 ) {
-                    content()
+                    // Above `content()` and nothing else: the theme has just built the
+                    // type scale, and this is the point where every page it will be
+                    // drawn on is inside the same density.
+                    AppDisplayDensity(displayDpi) {
+                        content()
+                    }
                 }
             },
         )

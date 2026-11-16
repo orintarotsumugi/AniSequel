@@ -792,22 +792,10 @@ object AppExtraVectors {
             }
         }.build()
     }
-    /**
-     * The Discord mark, for the presence settings and the preview card.
-     *
-     * Built in [DiscordMark] - the official geometry needs a long enough
-     * transcription that keeping it here would push this catalogue past the size a
-     * single glyph file is meant to be. Reading `AppVectorIcons.Discord` at a call
-     * site still finds it in the same catalogue as every other glyph.
-     */
-    val Discord: ImageVector get() = DiscordMark
     /*
      * Nearly every glyph in this file is built the same way: a builder, one `path`
      * per stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,
      * because these shapes started as SVG snippets and `PathBuilder` has no
      * `horizontalTo`/`verticalTo` - a straight line names both ends here.
-     *
-     * [Discord] lives in `DiscordMark.kt` and is the only glyph here that is not
-     * written inline; it is still the same DSL, with arcs.
      */
 }

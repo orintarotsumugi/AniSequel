@@ -144,10 +144,6 @@ object AppVectorIcons {
     // different pictures, so the settings row has one that cannot be reused by
     // accident when a third page wants a lawn.
     val Seasonal = AppExtraVectors.SeasonalSky
-    // The Discord presence page and its settings row. A brand mark like GitHub's:
-    // the row says "Discord RPC" and the glyph is how the reader finds it at a
-    // glance in a shelf of circles.
-    val Discord = AppExtraVectors.Discord
     val Play = Icons.Default.PlayArrow
     val Trailer = AppCustomVectors.TrailerPlay
     val Info = Icons.Default.Info

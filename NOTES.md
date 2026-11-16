@@ -27,6 +27,7 @@ That is this file. Read the section for the screen before you change it.
 - [The tier list](#the-tier-list)
 - [Home-screen widgets](#home-screen-widgets)
 - [Release notes](#release-notes)
+- [Card posters and display density](#card-posters-and-display-density)
 - [Crashes you cannot see](#crashes-you-cannot-see)
 - [App-wide notices](#app-wide-notices)
 - [Deliberate non-goals](#deliberate-non-goals)
@@ -1156,6 +1157,74 @@ than the settings page did.
 Shipping changes without adding a block is a broken build, not an oversight —
 [AGENTS.md §6](AGENTS.md) makes the changelog and the version bump mandatory
 together, and `ChangelogTest` and `VersionBaselineTest` enforce it.
+
+---
+
+## Card posters and display density
+
+Two settings added together in 2.3.0, both of which look like one line of UI and are
+not.
+
+### btttr posters are two requests, and the second one is by IMDb id
+
+The reader can now choose where a card's art comes from: AniList's own cover, or a
+*rendered* poster from btttr.cc. The obvious implementation - overriding
+`MediaNode.posterUrl` - does not work, and the reason is worth writing down before
+someone tries it again.
+
+btttr addresses posters as `btttr.cc/poster/imdb/poster-default/{imdbId}.jpg`, and
+AniList has no IMDb id: `Media.idMal` is MyAnimeList's numbering, `externalLinks` are
+official sites and streaming services, and `id` is AniList's own. Answers were checked
+against the live hosts rather than inferred - an AniList or MAL id in the IMDb slot
+returns **404**, a real IMDb id returns **200 image/webp** at 500x750, and an unknown
+id redirects to a generic placeholder art - so a guessed `anilist` path would have
+been a feature that never drew a poster.
+
+So `BetterPostersApi` makes two hops: AniList id to IMDb id at `arm.haglund.dev`,
+then IMDb id to poster URL. Both answers, and the *absence* of one, are cached for
+the life of the process in a bounded LRU. The negative matters more than it looks:
+plenty of titles have no btttr poster, and without remembering that, every scroll
+re-asks a free service to learn it again.
+
+**A card draws the AniList cover while the lookup runs, and keeps it when the lookup
+fails.** The cover arrives with the list; the btttr URL needs two third parties. A
+card that waited for them would be a blank rectangle in a grid of them, and a card
+that hid its art on a miss would look broken. `cardPosterUrl` is the only place that
+decision is made, so the card surfaces that use it - the Library's grid and list, a
+profile's list, Home's sequel rows, search and the schedule - cannot disagree about
+it.
+
+One thing it deliberately does not cover: the full-screen cover viewer keeps the
+AniList banner and cover it already had, because it is a viewer for one title rather
+than a card in a list.
+
+### The density setting replaces one number and keeps the other
+
+"Draw at N dpi" is Android's own density override, offered as a preference: every
+length in this app is a dp, and a dp is only as large as the density says. The value
+is stored in dpi because that is the unit the platform prints and the reader
+recognises, and `DisplayDpi.density` is the single place the divide by 160 happens.
+
+It is applied in `AniSequelTheme`, not by wrapping the Activity, for two reasons. The
+theme is already the app's only composition root - every page, sheet and bar is
+inside it - and the type scale is built there too, so one provider reaches all of
+them. `Density` holds two numbers, and only the density is this setting's business:
+the font scale is the *system* text size, an accessibility choice made outside this
+app, and building a fresh `Density` without copying it through would silently reset
+every text size to 100% for the readers who had raised it.
+
+The page's slider keeps a draft and writes on release for a sharper reason than the
+other sliders do: density re-measures every dp, so a live value would resize the
+Settings page - including the slider track under the finger - on every frame of a
+drag.
+
+### Rows on the Schedule are the Library's row, larger
+
+The schedule used to draw a 62x88 thumbnail beside a name and an 8dp gap between
+rows, which read as a list of stripes. It is now the Library's list row anatomy -
+poster, name, a dated pill, the viewer's progress - at 72x104 with 12dp between
+cards, so a show is recognisable by its art and two of them never look like one
+block of artwork with a seam.
 
 ---
 
@@ -2841,3 +2910,231 @@ rejected the authorize request. The page now lives at the root as
 Discord reject the whole authorize request. The app now requests only `identify`,
 so login succeeds. Presence publishing needs Discord approval for
 `gateway.connect` and stays off until then.
+
+## 2.2.1: the Discord integration is removed
+
+The whole feature is gone, not disabled: `data/discord/`, `domain/discord/`,
+`DiscordPreferences`, `SummarizeDiscordStats`, the `ui/components/discord/`
+package, `DiscordMark`, `DiscordPresenceHost`, the six files of the Settings
+page, both deep-link filters in the manifest, the activity branch in
+`MainActivity`, the dashboard's folded `discordStats`, `discord-callback.html`
+and its `.nojekyll` marker.
+
+Removing presence without the sign-in would have left a Settings page that logs
+into an account for no purpose, so the OAuth flow went with it. The gateway was
+also never going to publish for a standard OAuth2 app: `gateway.connect` is not
+a public scope, so every attempt ended on a close code or a timeout rather than
+a presence - which is why the notes above are a ladder of sign-in repairs that
+never shipped a working card.
+
+`SequelDetailSheet` lost the `DisposableEffect` that announced what was open to
+`DiscordActivityBus`; the sheet has no other use for a `DisposableEffect`.
+`SequelStyleSwitchTest`'s Discord-badge case went with `DiscordMark.kt` - its
+geometry rule described a glyph that no longer exists, and a source pin on a
+deleted file is a test that can only fail.
+
+The stored `anisequel_discord_prefs` DataStore is simply no longer read. Nothing
+migrates it and nothing deletes it, which is the same treatment every other
+retired preference file in this app has had: an orphan file is harmless, and a
+migration that runs on every launch to delete a few kilobytes is not.
+
+## 2.2.1: the Type page keeps what it downloads, and reads at more sizes
+
+A downloaded family used to exist only inside the search results that happened to
+include it. Download Lora, switch to Inter, and the Lora row was gone from the
+page until Lora was searched for again - so a family that was on disk looked like
+one that had been deleted, and the only way back to it was to search and tap
+Download again. The Font tab now draws a "Downloaded fonts" card above the search
+with one row per stored family, in the same shape as a search result: name, a line
+of detail, one button. The rows come from the font directory, not a remembered
+set, so they cannot claim a face the theme would fail to load, and they are right
+after a restart, after an update and for families downloaded by an older build
+that never recorded anything.
+
+The display name is written beside the files (`google_<id>.name`) rather than
+into a preference, because the directory is already the record of what exists: a
+name there cannot outlive its files, disagree with them, or be lost by a
+preference clear that leaves the bytes in place. `google_<id>.done` records that a
+completed download simply had no 700 cut, which is the fact the old cache check
+could not tell apart from "the bold file failed" - so every display and
+handwriting family that Google publishes regular-only re-fetched its CSS and file
+on every tap.
+
+Text size now spans 75% to 175% in the same five-percent steps. The old 80-140
+range had already been widened once for the same reason and did not go far
+enough: 140% is bigger text, not large text, and the bottom of the range is the
+only way to fit more of a dense list on a small screen. Bounds stay in
+`ThemePreferences` so the slider and the stored clamp cannot disagree.
+
+Two loading costs went with it. The tab now uses one process-wide
+`GoogleFontDownloader`; it used to build one in `remember { }`, which allocates an
+`OkHttpClient` - dispatcher, connection pool and threads - every time the page
+was opened. And `customFontFamily` now checks its cache before decoding: it used
+to call `Typeface.createFromFile` on both files first, so every theme rebuild,
+including a rotation or an Activity recreation, decoded a font it already had on
+the main thread before the first frame. A family the platform cannot read is
+cached too, so a broken stored path is not re-decoded on every build.
+
+The Home feed's hide button now shares its `InteractionSource` with its
+`bouncyPress`, as `SequelCard` and the library posters already do. Without one,
+the press fell back to a second pointer-input node that set "pressed" on every
+pointer-down - two springs per gesture and an extra coroutine per card. Cover
+tints are parsed once per card now instead of on every recomposition. The image
+pipeline itself was already tuned (hardware bitmaps, a 30% memory cache, a
+16-per-connection-host dispatcher) and is unchanged: `allowRgb565` was considered
+and rejected, because it would replace hardware bitmaps with 565 and cost more in
+GPU uploads than it saves in memory.
+
+`gradle.properties` gained a metaspace ceiling, the parallel collector and
+explicit incremental Kotlin/KSP flags. None of that is a measured speedup - there
+is no benchmark of build times in this repository and none was made for this
+change - it is configuration that removes avoidable work from the daemon and
+states the incremental behaviour the build relies on.
+
+## 2.2.1: an explanation is a preview, and its button lives outside the switch
+
+Settings had grown a paragraph under nearly every control, and the pages read as
+prose with switches buried in it: a reader deciding whether to change a setting
+had to move through four to eight lines of justification first, every time,
+including the tenth time they had read it. The words were not the problem - the
+length of the first screenful was.
+
+So settings text now opens as a two-line preview with "Show more" and "Show
+less" beneath it, collapsed by default, and nothing in the copy changed. Two
+lines rather than one because a single clamped line says a paragraph exists but
+nothing about whether it is worth opening; two is enough to tell a reassurance
+from a warning. The collapse lives in one `CollapsibleText` in
+`SettingsComponents.kt` rather than in each tab, and `SectionCard`'s subtitle and
+`SwitchRow`'s subtitle route through it, so a card or switch added later is
+collapsed without knowing the feature exists.
+
+The toggle only appears once the *collapsed* text has actually overflowed, read
+off `onTextLayout`'s `hasVisualOverflow`. A note that already fit gains no button
+that would reveal nothing, and the flag is latched rather than mirrored: it goes
+false the moment the paragraph is expanded, so a live toggle would delete its own
+"Show less" as it was pressed. The expanded state is `rememberSaveable` keyed on
+the text, which means a sentence that changes underneath the reader - a count
+updating, a switch rewriting the paragraph - starts collapsed again instead of
+showing new copy at an old length.
+
+On a switch row the button sits *below* the toggleable row, not inside it. The
+row is one `toggleable` node with `mergeDescendants`, so anything drawn inside it
+is part of the switch to a screen reader; a "Show more" in there would announce
+as part of the switch and never be reachable on its own. The paragraph is clamped
+in the row, where the tap target already lives, and the control that reveals the
+rest is a sibling with its own label ("Read the whole explanation") and a 40dp
+full-width target. The title and the switch are untouched: the row still answers
+the whole width and still ticks once.
+
+What is deliberately still full length: the sample line on the Type page (it is
+there to be read at the chosen size), the one-line status under a field
+("AniList Client IDs are numbers"), and the release notes, which are a list of
+titled items rather than an explanation of a setting.
+
+## 2.3.0: a card is one design, and a preview is a page
+
+The card had grown six independent renderers - the shared `MediaPosterCell`, the
+new-form `NovaPoster`, the sequel text column on Home, a profile's poster list and
+two Settings samples - and only one of them, the style picker, had anything to say
+about how the card should look. A reader who wanted their anime names larger had
+nowhere to ask: the poster knocked out its title in white over the artwork at a
+weight the style owned, and the library grid printed it underneath at whatever
+`labelMedium` was.
+
+So the parts of a card that are not the *style* became one value object,
+`CardDesign` in `domain/card`, holding the title scale, the rating scale, a
+`CardSize`, bold titles and title scrolling. A repository stores it, a
+`LocalCardDesign` in `AppNavigation` provides it, and every renderer reads it
+through the same three helpers in `CardDesignLocals.kt` - `cardTitleStyle`,
+`cardRatingStyle`, `cardTitleMotion` - so a new card added later inherits the
+design by asking for a title style instead of by copying a font size. Values are
+clamped twice, in the repository and on read: a build that once wrote 2.0 into the
+preference should draw 1.45, not nothing.
+
+Card size is a column bias, not only a multiplier. A card in a fixed-column grid
+has its width handed to it, so a "bigger card" that only scaled the poster would
+be a bigger picture in a smaller frame - the same card with more air. `CardSize`
+therefore carries `columnBias` (+1 / 0 / -1) and `coverBias` (1.08 / 1 / 0.9), and
+`columnsFor` applies the bias to the base column count with one clamp at 1..6. The
+one-wide modes - List, Grouped, Table - are left alone, because a row is not a
+card. `LibraryViewLayout.libraryColumns` takes the size as a defaulted parameter,
+so a caller that does not know about the setting keeps the columns it had.
+
+Title scrolling is a gate, not a second speed. The app-wide speed lives on the Type
+page and stays there; the switch here decides whether a card marquees at all, and
+`TitleMotion.animates` still overrides it, so a reader on Instant motion is not
+given a scrolling title behind their back. The library grid needed one more case:
+with motion off, it keeps its previous two-or-three-line ellipsis rather than
+collapsing to one clipped line, because a title scrolled off the edge and a title
+cut mid-word are both unreadable but only one of them used to be the behaviour.
+
+The previews were the other half of the request, and they were the failures a
+picture-only sample cannot fix: grey bars in a two-hundred-dp box show *where*
+things go but never *what* - and the one thing a reader choosing between List and
+Grouped needs is what the second line says. So the miniatures now draw the page
+they produce: the Library preview opens with the header every mode shares and the
+mode's own density ("3 across"), a grid cell carries its name and progress, the
+table has real columns, and the sequel, ticket and polaroid previews use a real
+title so a name too long for its line visibly wraps. The new Card design page puts
+its controls under one larger mock library - a top bar, status chips, two rows of
+the real poster cell at the chosen column count - because the settings it holds
+act on the same card and are worth seeing together rather than one at a time.
+
+`LayoutPreviews.kt` had reached 880 lines doing all of that, so it was split by
+what the previews are for: `LayoutPreviews.kt` keeps the layout minis and
+`AppLayoutPreviews`, `SequelFeedPreview.kt` the sequel-style feed and its row, and
+`PreviewSamples.kt` the shared cover-and-title helpers every one of them uses. The
+helpers are `internal` in practice - the module is the boundary - and the sample
+data moved with them so a second preview file does not need its own copies.
+
+## 2.3.0: a rating belongs to whoever's list it came from
+
+A card in a library has two candidate numbers behind it: the score the list owner
+gave the entry (`MediaListEntryItem.score`, fetched as `POINT_100` by the list
+query on every list, including other people's) and the community average
+(`MediaNode.averageScore`). The app had both and drew them inconsistently. The
+borrowed list on a profile preferred the owner's score and fell back to the
+average; the new-form Library grid drew no rating at all, and its list and table
+modes drew the average. So "84%" on your own Library was what the community
+thought while "84%" on a follower's profile was what *they* thought - the same
+glyphs, two different meanings, decided by which page you were on.
+
+The fix is one function rather than two behaviours kept in step by hand.
+`libraryRating(entry, owner)` in `ui/components/cards/ListRatings.kt` returns the
+entry's own score when AniList has one (and it is above zero - the API writes `0`
+for "not scored", and drawing that would be a verdict the owner never gave), the
+community average otherwise. Every library surface now calls it: the borrowed
+list's posters and its grid, list, grouped and table rows, and the reader's own
+posters, rows and table. `owner` is the one thing that cannot be read off the
+entry, so it is a parameter - `MINE` on the Library page, `THEIRS` on a profile -
+and the two switches in Card design decide whether that owner's number is
+preferred. Off is not "hide the rating": it means the average, which is what the
+card drew before, so a switch can never leave a card with no number at all.
+
+The grid needed a line, not just a different number. `NovaPoster` printed a name
+and a progress pill, so the score existed in the data and in the table column and
+nowhere the reader was looking. It now prints the same "★ 84" the List and Table
+modes use, styled with the card's rating size so the setting that enlarges a
+cover's caption enlarges this too. Recognisably the same number in every shape is
+the point; a second style of badge for the personal score would have made the
+reader learn two glyphs to compare one entry.
+
+The switches live on Card design under "Which rating" instead of in Library
+settings because they change what a *card* prints, beside the rating size that
+scales it. Two switches rather than one: your own score is a reminder of a verdict
+you already made, somebody else's is the reason you opened their profile, and a
+reader may reasonably want one without the other. Both default to on - the
+personal number is what a library is for, and the fallback keeps unrated entries
+readable either way.
+
+## 2.3.0: why this is a minor bump
+
+`AGENTS.md` section 6 says a release is the last digit plus one, whatever the
+size. This one is the written exception: three changes large enough that a reader
+deciding whether to update would be misled by `2.2.2` - the Card design page with
+real previews, one card design drawn by every surface, and a rating read from the
+list entry with a switch per list owner. The rule exists so nobody has to argue
+the bump every time; the counter-rule is that an exception gets recorded where
+the number is written, which is `gradle.properties`, and explained here once.
+`versionCode` ignores the argument and goes 665 -> 666, because it is the only
+number the updater compares.

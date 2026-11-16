@@ -43,8 +43,17 @@ import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.namespaceKey
-import com.anisequel.data.model.posterUrl
+import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.list.ListStatuses
+import com.anisequel.ui.components.MarqueeText
+import com.anisequel.ui.components.cards.LocalCardDesign
+import com.anisequel.ui.components.cards.ListOwner
+import com.anisequel.ui.components.cards.cardCoverAspect
+import com.anisequel.ui.components.cards.cardPosterUrl
+import com.anisequel.ui.components.cards.cardRatingStyle
+import com.anisequel.ui.components.cards.cardTitleMotion
+import com.anisequel.ui.components.cards.cardTitleStyle
+import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -146,6 +155,10 @@ internal fun NovaLibraryTable(
             LibraryListRow(
                 entry = entry,
                 detailed = true,
+                // The table is the reader's own list: this is the only caller of the
+                // shared row that is not a profile, and the column has to say whose
+                // rating it is carrying.
+                owner = ListOwner.MINE,
                 onClick = { onOpenDetail(entry.media) },
                 modifier = Modifier.animateItem(
                     placementSpec = ExpressiveMotion.DefaultSpatialOffset,
@@ -266,7 +279,14 @@ internal fun NovaLibraryGrid(
     // the named count: it is a diagram of the mode, not a measurement of the
     // device it happens to be drawn on.
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val columns = libraryColumns(viewMode, maxWidth)
+        // The reader's card size, applied to the mode's own count here rather than
+        // stored per mode: a bigger card is bigger in every grid, and a table of six
+        // modes would have to be edited to say so.
+        val columns = libraryColumns(
+            mode = viewMode,
+            width = maxWidth,
+            size = LocalCardDesign.current.size
+        )
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
@@ -358,9 +378,21 @@ private fun NovaPoster(
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
+    val design = LocalCardDesign.current
+    // The grid drew no rating at all: the list and table modes had a score column and
+    // the poster modes had a name and a progress pill, so "what did I give this" was
+    // only answerable after opening the entry. Same helper and same owner as the rows,
+    // so a title scored in one mode is scored in all of them.
+    val rating = libraryRating(entry, ListOwner.MINE)
     val total = if (isManga) media.chapters else media.episodes
     val completed = entry.status.equals("COMPLETED", ignoreCase = true)
     val progress = entry.progress ?: if (completed) total else null
+    // Parsed once per entry rather than on every recomposition. A grid recomposes
+    // its visible items whenever the list, the density or a scoped note changes,
+    // and this is hex parsing and a `Color` allocation for every card each time.
+    val coverTint = remember(media.coverImage?.color) {
+        media.coverImage?.color.toCoverColorOrNull()
+    }
 
     Column(
         modifier = modifier
@@ -378,13 +410,15 @@ private fun NovaPoster(
                 // A ratio rather than a fixed height: the grid is three columns
                 // or four, so the same card is measured at two widths - and a
                 // height literal would turn the wider one into a portrait and the
-                // narrower into a strip.
-                .aspectRatio(if (large) 0.74f else 0.68f)
+                // narrower into a strip. The ratio is then stretched by the reader's
+                // card size, which is what makes a two-across card a bigger picture
+                // instead of the same cover with more space beside it.
+                .aspectRatio(cardCoverAspect(if (large) 0.74f else 0.68f, design))
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
-                .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
+                .background(coverTint ?: Color.Transparent)
         ) {
             AsyncImage(
-                model = media.posterUrl,
+                model = cardPosterUrl(media),
                 contentDescription = media.displayName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -402,31 +436,92 @@ private fun NovaPoster(
         }
         if (showTitle) {
             Spacer(modifier = Modifier.height(5.dp))
-            Text(
-                text = media.displayName,
-                style = if (compact) {
-                    MaterialTheme.typography.labelSmall
-                } else {
-                    MaterialTheme.typography.labelMedium
-                },
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = if (large) 3 else 2,
-                overflow = TextOverflow.Ellipsis
+            NovaPosterCaption(
+                entry = entry,
+                isManga = isManga,
+                large = large,
+                rating = rating,
+                design = design
             )
-            if (large) {
-                Text(
-                    text = listOfNotNull(
-                        ListStatuses.label(entry.status, isManga),
-                        libraryProgressLabel(entry)
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
+    }
+}
+
+/**
+ * The lines a poster prints under its cover: the name, the score, and the status.
+ *
+ * Split out of [NovaPoster] rather than kept inside it, because this is where every
+ * decision on a card lives - scroll or clip, two lines or three, whether there is a
+ * score to print at all - and next to the poster's own layout it pushed that function
+ * past what a reader can scan. The poster is now geometry; the caption is the text.
+ *
+ * The two drawings of one caption are chosen by whether anything may move. With
+ * motion, a name that does not fit scrolls on one line: the reader can read the whole
+ * of it, and at three across the part an ellipsis was cutting - the season number, the
+ * subtitle - is the part that tells two entries apart. Without motion it stays the two
+ * or three ellipsized lines it always was, because a still row of text is what a reader
+ * who chose Instant asked to see.
+ */
+@Composable
+private fun NovaPosterCaption(
+    entry: MediaListEntryItem,
+    isManga: Boolean,
+    large: Boolean,
+    rating: Int?,
+    design: CardDesign
+) {
+    val media = entry.media
+    val titleStyle = cardTitleStyle(design)
+    // Asked once per caption: `cardTitleMotion` reads a composition local and the
+    // branch below decides between a scrolling line and an ellipsis, so the answer
+    // must not be asked twice with two different results.
+    val titleMotion = cardTitleMotion(design)
+    if (titleMotion.animates) {
+        MarqueeText(
+            text = media.displayName,
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            motion = titleMotion,
+            // The card's width, not the text's: a marquee needs a boundary to
+            // overflow against, and an unconstrained `Text` measures at the
+            // length of the name and never scrolls.
+            modifier = Modifier.fillMaxWidth()
+        )
+    } else {
+        Text(
+            text = media.displayName,
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (large) 3 else 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+    if (rating != null) {
+        Spacer(modifier = Modifier.height(1.dp))
+        // The same star the List and Table modes print in their score column, so the
+        // number is recognisable as the reader's own verdict rather than a second
+        // kind of badge.
+        Text(
+            text = "★ $rating",
+            style = cardRatingStyle(design),
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1
+        )
+    }
+    if (large) {
+        Text(
+            text = listOfNotNull(
+                ListStatuses.label(entry.status, isManga),
+                libraryProgressLabel(entry)
+            ).joinToString(" · "),
+            // The same step the card style's rating line uses, so a reader who
+            // enlarged the small print on their cards enlarged this too.
+            style = cardRatingStyle(design),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -446,8 +541,14 @@ private fun NovaLibraryRow(
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
-    val score = media.averageScore?.takeIf { it > 0 }
+    // The reader's own rating when AniList returned one and the switch is on, the
+    // community average otherwise - the same rule the borrowed list uses, through the
+    // same helper, so the two pages cannot print different numbers for one entry.
+    val score = libraryRating(entry, ListOwner.MINE)
     val progressLabel = libraryProgressLabel(entry)
+    val coverTint = remember(media.coverImage?.color) {
+        media.coverImage?.color.toCoverColorOrNull()
+    }
 
     NovaSurface(
         modifier = modifier
@@ -473,10 +574,10 @@ private fun NovaLibraryRow(
                     .width(48.dp)
                     .height(68.dp)
                     .clip(RoundedCornerShape(11.dp))
-                    .background(media.coverImage?.color.toCoverColorOrNull() ?: Color.Transparent)
+                    .background(coverTint ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    model = media.posterUrl,
+                    model = cardPosterUrl(media),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
