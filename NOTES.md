@@ -2775,3 +2775,35 @@ The theme transition also stopped moving all 36 roles on one spring: accents use
 the recolour arrives accent-first with the page settling behind it. Both are springs,
 so an interrupted second recolour simply retargets - no delay to queue in the wrong
 order.
+
+## 2.1.5: the Discord redirect Discord will actually accept
+
+The sign-in added in 2.1.2 asked Discord to redirect to `anisequel://discord`.
+Discord does not accept an arbitrary custom scheme as a redirect URI for a
+standard OAuth2 application: the developer portal will not register it, and the
+authorize endpoint answers a request that names one with its "Invalid OAuth2
+redirect_uri" page before the reader ever sees a login form. So the flow could
+not start, the phone was never called back, and the page looked like a button
+that did nothing.
+
+The redirect Discord documents for a native mobile app is
+`discord-<application id>:/authorize/callback` - a scheme carrying the
+application's own id, with the callback path after the colon and no authority.
+That is now `DiscordOAuth.REDIRECT_URI` (the bundled application's id), what the
+manifest's intent filter declares, and what the token exchange sends back. The
+exchange has to repeat it byte for byte or the code is refused as
+`invalid_grant`, which is why it was already read from one constant.
+
+Two consequences worth recording, because both are the kind of thing that gets
+"tidied" back:
+
+- **`anisequel://discord` stays in the manifest.** A sign-in that was already
+  in flight on an older build returns on that scheme; dropping the filter would
+  drop that callback on the floor. `parseRedirect` reads both shapes.
+- **`MainActivity` matches on the scheme, not a host.** The mobile redirect has
+  no authority, so `uri.host` is null. The old branch compared
+  `uri.host == "discord"`, which would never have matched the URI Discord sends
+  even if the portal had accepted the old scheme.
+
+A reader who supplies their own application id still uses this redirect, so the
+URI that has to be registered for their app is the one the field now prints.

@@ -1,7 +1,7 @@
 {
-  "version": "2.1.4",
-  "version_code": 658,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.4",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.4/anisequel-universal.apk",
-  "notes": "- A new AniSequel launcher icon: The app icon now uses the AniSequel artwork: the full illustration sits in the adaptive foreground on a black field, with a matching monochrome A for themed icons, so the same mark fills circular, squircle and themed shapes instead of being cropped differently on each launcher.\n- Discord sign-in works out of the box: A fresh install no longer asks for a Discord application ID before it can sign in. The build carries the public application 1571747436542566561 and its public key; the field still accepts another app, and clearing it stays cleared rather than silently restoring the bundled one."
+  "version": "2.1.5",
+  "version_code": 659,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.5",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.5/anisequel-universal.apk",
+  "notes": "- Discord sign-in no longer stops on an invalid URL: The authorize request sent Discord a redirect of anisequel://discord, an arbitrary custom scheme that Discord's developer portal will not register for a standard OAuth2 application - so the page stopped on Discord's invalid redirect URL instead of the login form, and no callback ever reached the phone. The sign-in now uses the mobile redirect Discord documents, discord-1571747436542566561:/authorize/callback, which the intent filter handles and the token exchange sends back byte for byte. The old anisequel://discord filter stays registered so a flow already in flight on an older build still lands here.\n- The application ID field prints the redirect to register: The field now shows the exact redirect URI the sign-in uses, discord-1571747436542566561:/authorize/callback, so a reader who supplies their own Discord application registers the address that works instead of the one that produced the invalid-URL page."
 }

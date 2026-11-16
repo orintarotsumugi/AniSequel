@@ -29,17 +29,18 @@ object DiscordOAuth {
     /**
      * Where Discord sends the reader back to.
      *
-     * A custom scheme, because Discord no longer accepts `http://localhost` for
-     * native apps and a loopback server would be a listener this app does not need.
-     * It has to match, exactly, the redirect registered for the application in
-     * Discord's developer portal - Discord refuses the authorize request otherwise,
-     * before the reader sees a login page.
-     *
-     * The intent filter in the manifest declares the same scheme and host; a test
-     * pins that agreement, because a typo here is a sign-in that silently returns
-     * to the home screen.
+     * Discord does not accept an arbitrary custom scheme such as
+     * `anisequel://discord` as a registered redirect URI for a standard OAuth2
+     * application - its developer portal rejects it (and its OAuth2 endpoint
+     * answers "Invalid OAuth2 redirect_uri"), so the sign-in never reached a
+     * login page. The redirect Discord documents for a native mobile app is
+     * `discord-<application id>:/authorize/callback`, which is registrable in
+     * the portal and is the scheme the platform hands back to this app. The
+     * bundled application's id is baked in so a fresh install works without
+     * the reader creating an application first; a reader who supplies their own
+     * id keeps using this redirect, which must then be registered for their app.
      */
-    const val REDIRECT_URI: String = "anisequel://discord"
+    const val REDIRECT_URI: String = "discord-1571747436542566561:/authorize/callback"
 
     const val AUTHORIZE_URL: String = "https://discord.com/oauth2/authorize"
 
@@ -175,10 +176,35 @@ object DiscordOAuth {
      */
     fun parseRedirect(uri: String?): Redirect {
         if (uri.isNullOrBlank()) return Redirect.Ignored
-        val withoutScheme = uri.substringAfter("anisequel://", missingDelimiterValue = "")
-        if (withoutScheme.isEmpty()) return Redirect.Ignored
-        val host = withoutScheme.substringBefore('?').trimEnd('/')
-        if (!host.equals("discord", ignoreCase = true)) return Redirect.Ignored
+        // Two callback shapes are accepted: the legacy `anisequel://discord`
+        // (kept so an in-flight sign-in from an older build still resolves) and
+        // the registrable `discord-<application id>:/authorize/callback` that
+        // Discord actually accepts. Either way the query carries the code.
+        val scheme = uri.substringBefore(':', missingDelimiterValue = "")
+        val isAnisequel = scheme.equals("anisequel", ignoreCase = true)
+        val isDiscordMobile = scheme.startsWith("discord-", ignoreCase = true)
+        if (!isAnisequel && !isDiscordMobile) return Redirect.Ignored
+
+        val beforeQuery = uri.substringBefore('?')
+        val validTarget = when {
+            isAnisequel -> uri.substringAfter("anisequel://", missingDelimiterValue = "")
+                .substringBefore('?')
+                .trimEnd('/')
+                .equals("discord", ignoreCase = true)
+            // The mobile redirect's only path is `/authorize/callback`. Matching
+            // on that path is what keeps a `discord-<something else>` scheme that
+            // opened this app from being read as a sign-in callback.
+            isDiscordMobile -> beforeQuery.contains("/authorize/callback", ignoreCase = true)
+            else -> false
+        }
+        if (!validTarget) return Redirect.Ignored
+
+        val withoutScheme = if (isAnisequel) {
+            uri.substringAfter("anisequel://", missingDelimiterValue = "")
+        } else {
+            uri.substringAfter(':', missingDelimiterValue = "").removePrefix("//")
+        }
+        if (withoutScheme.isBlank()) return Redirect.Ignored
 
         val query = withoutScheme.substringAfter('?', missingDelimiterValue = "")
         val parameters = query.split('&')
