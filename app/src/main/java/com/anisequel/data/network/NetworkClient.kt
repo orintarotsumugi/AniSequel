@@ -172,9 +172,9 @@ object NetworkClient {
      * fetched. The sizes below are a fraction of the heap rather than a fixed
      * number, because the right number depends on the device.
      *
-     * R8 does not strip art: `crossfade` is off deliberately because a fade on
-     * every one of hundreds of posters costs frames on the scroll that is the
-     * screen's main job.
+     * A short crossfade smooths posters appearing and BetterPosters swaps without
+     * a hard pop-in, while keeping the transition quick enough to stay out of the
+     * way during fast scrolling.
      *
      * ## A saved cover stays saved
      *
@@ -222,7 +222,7 @@ object NetworkClient {
                     .maxSizeBytes(CoverCacheCeiling.readBytes(context))
                     .build()
             }
-            .crossfade(false)
+            .crossfade(180)
             // The image client is deliberately separate from the API's, and its
             // dispatcher is tuned rather than left at OkHttp's defaults.
             //
