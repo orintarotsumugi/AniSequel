@@ -96,8 +96,9 @@ fun NovaSurface(
  * A faint wash behind a new-layout page.
  *
  * Two soft gradients that can gain a light blur for depth when enabled, kept
- * static so the seasonal sky still owns motion. Blur is off by default and only
- * applied when supported to avoid unnecessary render cost.
+ * static so the seasonal sky still owns motion. The blur is off by default:
+ * every blur is an offscreen render pass, and these gradients already read as
+ * depth without one.
  */
 @Composable
 fun NovaBackdrop(
@@ -116,7 +117,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp)
-                .then(novaBlur(24.dp, blurEnabled))
+                .then(novaBlur(blurEnabled, 24.dp))
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -130,7 +131,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .size(230.dp)
                 .offset(x = (-70).dp, y = (-30).dp)
-                .then(novaBlur(28.dp, blurEnabled))
+                .then(novaBlur(blurEnabled, 28.dp))
                 .background(
                     Brush.radialGradient(
                         listOf(
@@ -146,15 +147,15 @@ fun NovaBackdrop(
 }
 
 /**
- * The backdrop's blur, applied only when the reader turned it on.
+ * The backdrop's blur, or nothing at all when the reader left it off.
  *
- * `Modifier.blur` renders through an offscreen layer, so building it
- * unconditionally and letting a 0dp radius be a no-op is not free - it would
- * still cost the layer on every page. Returning the receiver untouched is what
- * keeps the default (blur off) at the cost of the two gradients alone.
+ * `Modifier.blur` renders its child through an offscreen layer, and a zero
+ * radius still asks for that layer, so "off" has to mean no modifier rather
+ * than a disabled one. Empty `Modifier` chains cost nothing, which is what keeps
+ * the default page to its two gradient draws.
  */
-private fun Modifier.novaBlur(radius: Dp, enabled: Boolean): Modifier =
-    if (enabled) blur(radius) else this
+private fun novaBlur(enabled: Boolean, radius: Dp): Modifier =
+    if (enabled) Modifier.blur(radius) else Modifier
 
 /**
  * The new Home's bar: the app mark, its tagline, and the two doors out.
