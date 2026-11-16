@@ -1,56 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Deep Cosmic Midnight Base -->
-    <path android:pathData="M0,0h108v108h-108z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="10"
-                android:startY="10"
-                android:endX="98"
-                android:endY="98"
-                android:type="linear">
-                <item android:offset="0.0" android:color="#FF0B0F19" />
-                <item android:offset="0.35" android:color="#FF0F172A" />
-                <item android:offset="0.75" android:color="#FF1E1B4B" />
-                <item android:offset="1.0" android:color="#FF312E81" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Ambient Electric Indigo/Cyan Glow Circle -->
-    <path android:pathData="M54,54m-42,0a42,42 0 1,0 84,0a42,42 0 1,0 -84,0">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:startX="50"
-                android:startY="46"
-                android:endX="78"
-                android:endY="78"
-                android:type="radial"
-                android:gradientRadius="44">
-                <item android:offset="0.0" android:color="#3D38BDF8" />
-                <item android:offset="0.5" android:color="#206366F1" />
-                <item android:offset="1.0" android:color="#00000000" />
-            </gradient>
-        </aapt:attr>
-    </path>
-
-    <!-- Subtle Anime Sequel Discovery Radar Arc (outer) -->
+    <!--
+        The key art is a black-and-white illustration on black. This layer is
+        the same black so the bitmap foreground's square edge disappears into
+        the adaptive background on every launcher shape; the old indigo radar
+        gradient would have drawn a visible tile behind the artwork.
+    -->
     <path
-        android:pathData="M34,54 A20,20 0 0,1 74,54"
-        android:strokeColor="#2238BDF8"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round" />
-
-    <!-- Subtle Anime Sequel Discovery Radar Arc (inner) -->
-    <path
-        android:pathData="M40,54 A14,14 0 0,1 68,54"
-        android:strokeColor="#33818CF8"
-        android:strokeWidth="1.2"
-        android:strokeLineCap="round" />
+        android:pathData="M0,0h108v108h-108z"
+        android:fillColor="#FF000000" />
 </vector>

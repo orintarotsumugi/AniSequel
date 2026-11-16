@@ -122,6 +122,19 @@ class DiscordOAuthTest {
     }
 
     @Test
+    fun `the shipped Discord application is valid and public`() {
+        assertTrue(
+            "the bundled client ID must be a snowflake",
+            DiscordOAuth.isValidClientId(DiscordOAuth.DEFAULT_CLIENT_ID)
+        )
+        assertEquals(64, DiscordOAuth.APPLICATION_PUBLIC_KEY.length)
+        assertTrue(
+            "a Discord public key is hexadecimal",
+            DiscordOAuth.APPLICATION_PUBLIC_KEY.all { it in "0123456789abcdef" }
+        )
+    }
+
+    @Test
     fun `a client ID has to look like a snowflake`() {
         assertTrue(DiscordOAuth.isValidClientId("123456789012345678"))
         assertTrue(DiscordOAuth.isValidClientId("  123456789012345678  "))

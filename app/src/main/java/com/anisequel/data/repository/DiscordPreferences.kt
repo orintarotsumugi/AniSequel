@@ -13,6 +13,7 @@ import com.anisequel.domain.discord.DiscordActivityType
 import com.anisequel.domain.discord.DiscordAuthKind
 import com.anisequel.domain.discord.DiscordJokeInterval
 import com.anisequel.domain.discord.DiscordLogin
+import com.anisequel.domain.discord.DiscordOAuth
 import com.anisequel.domain.discord.DiscordOnlineStatus
 import com.anisequel.domain.discord.DiscordPhrasing
 import com.anisequel.domain.discord.DiscordSettings
@@ -81,7 +82,12 @@ class DiscordPreferences(private val context: Context) {
             // An install linked before the OAuth flow existed holds a pasted token
             // and no kind, which reads as TOKEN and keeps behaving exactly as it did.
             authKind = DiscordAuthKind.fromStorage(preferences[Keys.AUTH_KIND]),
-            oauthClientId = preferences[Keys.OAUTH_CLIENT_ID].orEmpty(),
+            // Absent means the public application this build ships with. An
+            // explicitly stored blank is a reader who cleared the field, and is
+            // kept blank so the sign-in is not offered against an app they did
+            // not choose.
+            oauthClientId = preferences[Keys.OAUTH_CLIENT_ID]
+                ?: DiscordOAuth.DEFAULT_CLIENT_ID,
             // A relay-era install has `LINKED` set but no token, because the
             // relay held the credentials. Reading that flag as "connected" drew
             // "Connected to Discord" over a preview that could never publish, so
@@ -256,17 +262,14 @@ class DiscordPreferences(private val context: Context) {
      *
      * Kept when the account is unlinked: it describes the app, not the account, and
      * asking for it again after every log out would be a field the reader has to
-     * hunt down twice. Blank is stored as a removal, so a cleared field stops
-     * offering a sign-in that cannot work.
+     * hunt down twice. A cleared field stores an explicit blank rather than
+     * removing the key, because an absent key now resolves to the bundled
+     * [DiscordOAuth.DEFAULT_CLIENT_ID]; keeping the blank is what makes "clear"
+     * mean clear instead of snapping back to the shipped application.
      */
     suspend fun setOAuthClientId(clientId: String) {
-        val trimmed = clientId.trim()
         context.discordDataStore.edit { preferences ->
-            if (trimmed.isEmpty()) {
-                preferences.remove(Keys.OAUTH_CLIENT_ID)
-            } else {
-                preferences[Keys.OAUTH_CLIENT_ID] = trimmed
-            }
+            preferences[Keys.OAUTH_CLIENT_ID] = clientId.trim()
         }
     }
 
