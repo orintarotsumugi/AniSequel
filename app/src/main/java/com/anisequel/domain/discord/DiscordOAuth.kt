@@ -78,12 +78,15 @@ object DiscordOAuth {
      * The scopes asked for.
      *
      * `identify` is what `/users/@me` needs, so the app can name the account it
-     * linked. `gateway.connect` is the one that matters for the feature: a user
-     * token minted from an OAuth grant is only allowed on the gateway when it
-     * carries this scope, and the presence is published over the gateway. Asking
-     * for both keeps the token useful for the thing the page is for.
+     * linked. `gateway.connect` is the one that matters for the presence
+     * feature (a user token is only allowed on the gateway when it carries it),
+     * but it is not a public scope: requesting it on an application that has not
+     * been approved by Discord makes the whole authorize request fail with
+     * "The requested scope is invalid, unknown, or malformed." So only the
+     * public `identify` scope is requested here; the presence stays off unless
+     * the application is later approved for `gateway.connect`.
      */
-    const val SCOPES: String = "identify gateway.connect"
+    const val SCOPES: String = "identify"
 
     /** PKCE's S256 method: the only one Discord accepts. */
     const val CHALLENGE_METHOD: String = "S256"

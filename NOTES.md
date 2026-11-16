@@ -2834,3 +2834,10 @@ is published from the repository root, so the registered URL 404'd and Discord
 rejected the authorize request. The page now lives at the root as
 `discord-callback.html` (with a `.nojekyll` marker) and is served at
 `https://orintarotsumugi.github.io/AniSequel/discord-callback.html`.
+
+## 2.1.8: drop the non-public gateway.connect scope
+
+`gateway.connect` is not a public scope; requesting it on an unapproved app made
+Discord reject the whole authorize request. The app now requests only `identify`,
+so login succeeds. Presence publishing needs Discord approval for
+`gateway.connect` and stays off until then.
