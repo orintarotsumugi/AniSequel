@@ -90,7 +90,6 @@ class BuildActivityCalendarUseCase {
         today: LocalDate = LocalDate.now()
     ): ActivityCalendar {
         val weekCount = weeks.coerceAtLeast(1)
-        val byDay = tallyByDay(history)
 
         // Sunday-first indexing: DayOfWeek numbers Monday as 1 and Sunday as 7,
         // and the modulo turns Sunday into 0. The weekday gutter in
@@ -100,6 +99,15 @@ class BuildActivityCalendarUseCase {
         // that survives review.
         val lastColumnStart = today.minusDays((today.dayOfWeek.value % 7).toLong())
         val firstColumnStart = lastColumnStart.minusWeeks((weekCount - 1).toLong())
+
+        // Only the weeks the grid draws. AniList's history can be years long,
+        // and folding all of it into a map to then read 26 weeks out of it was
+        // work done on every profile load for cells that were never drawn.
+        val byDay = tallyByDay(
+            history = history,
+            firstEpochDay = firstColumnStart.toEpochDay(),
+            lastEpochDay = today.toEpochDay()
+        )
 
         val columns = (0 until weekCount).map { week ->
             val columnStart = firstColumnStart.plusWeeks(week.toLong())
@@ -154,13 +162,18 @@ class BuildActivityCalendarUseCase {
      * Overwriting would silently lose activity, and the calendar's whole claim is
      * that it is not losing any.
      */
-    private fun tallyByDay(history: List<ActivityHistoryDay>?): Map<Long, FoldedDay> {
+    private fun tallyByDay(
+        history: List<ActivityHistoryDay>?,
+        firstEpochDay: Long,
+        lastEpochDay: Long
+    ): Map<Long, FoldedDay> {
         val folded = HashMap<Long, FoldedDay>()
         history?.forEach { entry ->
             val date = entry.date?.let { toLocalDate(it) } ?: return@forEach
             val amount = entry.amount ?: 0
             if (amount <= 0 && (entry.level ?: 0) <= 0) return@forEach
             val epochDay = date.toEpochDay()
+            if (epochDay < firstEpochDay || epochDay > lastEpochDay) return@forEach
             val existing = folded[epochDay]
             folded[epochDay] = FoldedDay(
                 amount = (existing?.amount ?: 0) + amount,

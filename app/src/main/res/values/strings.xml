@@ -13,17 +13,20 @@
          the initialLayout shows for the moment between the tile being placed and
          its first update. -->
     <string name="widget_description">Your recent AniList list activity, one tap from the home screen</string>
+    <string name="widget_activity_kicker">RECENT ACTIVITY</string>
     <string name="widget_count_initial">0</string>
     <string name="widget_caption">recent updates</string>
     <string name="widget_caption_empty">nothing logged yet</string>
 
     <!-- Missed sequels widget -->
     <string name="widget_missed_description">Track missed franchise continuations from your home screen</string>
+    <string name="widget_missed_kicker">MISSED SEQUELS</string>
     <string name="widget_missed_caption">missed sequels</string>
     <string name="widget_missed_caption_empty">all caught up</string>
 
     <!-- Arriving sequels widget -->
     <string name="widget_arriving_description">Track arriving and airing sequel episodes from your home screen</string>
+    <string name="widget_arriving_kicker">ARRIVING SOON</string>
     <string name="widget_arriving_caption">arriving soon</string>
     <string name="widget_arriving_caption_empty">no upcoming airing</string>
 
@@ -31,6 +34,7 @@
          `widget_featured_parent_initial` are what the initialLayout shows for the
          moment between the tile being placed and its first update. -->
     <string name="widget_featured_description">The top missed sequel, poster and all, on your home screen</string>
+    <string name="widget_featured_kicker">FEATURED SEQUEL</string>
     <string name="widget_featured_title_initial">Featured sequel</string>
     <string name="widget_featured_parent_initial">Sequel to&#8230;</string>
     <string name="widget_featured_caption">missed sequels</string>

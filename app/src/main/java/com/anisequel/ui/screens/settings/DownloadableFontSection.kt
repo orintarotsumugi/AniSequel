@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,9 +42,10 @@ import kotlinx.coroutines.launch
 /**
  * The Font tab's free downloads.
  *
- * Three families are offered instead of a browser or a search field: a download
- * list is a decision, and a list of three is a decision a reader can make. The
- * families are fetched from Google Fonts' free CSS endpoint on demand and kept in
+ * The search filters a short local index of Google Fonts' most-used families and
+ * falls back to the typed name, so a family outside the index is still
+ * downloadable without shipping Google's 2.7 MB metadata document. The chosen
+ * family is fetched from Google Fonts' free CSS endpoint on demand and kept in
  * the app's private font directory, never packaged in the APK.
  *
  * Only the regular and bold cuts are fetched. The type scale asks for those two;
@@ -55,6 +60,8 @@ internal fun DownloadableFontSection(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val downloader = remember { GoogleFontDownloader() }
+    var query by rememberSaveable { mutableStateOf("") }
+    val results = remember(query) { GoogleFontCatalog.search(query) }
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
 
@@ -65,15 +72,51 @@ internal fun DownloadableFontSection(
         modifier = modifier
     ) {
         Text(
-            text = "These families are downloaded from Google Fonts when you tap " +
-                "Download, so they do not add to the APK. Only the regular and bold " +
+            text = "Search Google Fonts by name. A family is fetched when you tap " +
+                "Download, so it does not add to the APK. Only the regular and bold " +
                 "files are kept, which is what the app actually draws.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        GoogleFontCatalog.fonts.forEachIndexed { index, font ->
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("google_font_search"),
+            label = { Text("Search Google Fonts") },
+            placeholder = { Text("Inter, Lora, JetBrains Mono…") },
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = AppVectorIcons.Search,
+                    contentDescription = null
+                )
+            },
+            trailingIcon = if (query.isNotBlank()) {
+                {
+                    IconButton(onClick = { query = "" }) {
+                        Icon(
+                            imageVector = AppVectorIcons.Close,
+                            contentDescription = "Clear search"
+                        )
+                    }
+                }
+            } else {
+                null
+            }
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = if (query.isBlank()) "Popular downloads" else "Google Fonts results",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+
+        results.forEachIndexed { index, font ->
             if (index > 0) {
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant,

@@ -8,6 +8,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -52,6 +55,7 @@ import com.anisequel.domain.usecase.ActivityMonthLabel
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -109,6 +113,15 @@ fun ActivityCalendarCard(
         // rotation - or a tab switch, now that the tab's state is preserved -
         // does not hand the reader the other view back.
         var showWeek by rememberSaveable { mutableStateOf(false) }
+        // The day whose count is spelled out under the grid. Kept as an epoch
+        // day rather than an ActivityDay so a refresh that rebuilds the calendar
+        // cannot leave a selected cell pointing at the previous list's object.
+        var selectedEpochDay by rememberSaveable { mutableStateOf<Long?>(null) }
+        val selectedDay = selectedEpochDay?.let { epochDay ->
+            calendar.columns.asSequence()
+                .flatMap { it.days.asSequence() }
+                .firstOrNull { it.epochDay == epochDay }
+        }
         val week = calendar.columns.lastOrNull()?.days.orEmpty()
         val weekChanges = week.filter { it.inRange }.sumOf { it.count }
 
@@ -164,8 +177,17 @@ fun ActivityCalendarCard(
                 if (weekView) {
                     WeekBreakdown(week = week)
                 } else {
-                    CalendarGrid(calendar = calendar)
+                    CalendarGrid(
+                        calendar = calendar,
+                        selectedEpochDay = selectedEpochDay,
+                        onSelectDay = { selectedEpochDay = it }
+                    )
                 }
+            }
+
+            if (!showWeek) {
+                Spacer(modifier = Modifier.height(10.dp))
+                ActivityDaySummary(day = selectedDay)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -272,7 +294,11 @@ private fun CalendarRangeToggle(showWeek: Boolean, onChange: (Boolean) -> Unit) 
 }
 
 @Composable
-private fun CalendarGrid(calendar: ActivityCalendar) {
+private fun CalendarGrid(
+    calendar: ActivityCalendar,
+    selectedEpochDay: Long?,
+    onSelectDay: (Long) -> Unit
+) {
     val scrollState = rememberScrollState()
 
     // Opened at the newest column: the grid runs oldest to newest and the end is
@@ -293,7 +319,11 @@ private fun CalendarGrid(calendar: ActivityCalendar) {
         Row {
             WeekdayGutter()
             Spacer(modifier = Modifier.width(GutterGap))
-            ActivityCellsCanvas(calendar = calendar)
+            ActivityCellsCanvas(
+                calendar = calendar,
+                selectedEpochDay = selectedEpochDay,
+                onSelectDay = onSelectDay
+            )
         }
     }
 }
@@ -368,9 +398,14 @@ private fun WeekdayGutter() {
 private const val DAYS_PER_WEEK = 7
 
 @Composable
-private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
+private fun ActivityCellsCanvas(
+    calendar: ActivityCalendar,
+    selectedEpochDay: Long?,
+    onSelectDay: (Long) -> Unit
+) {
     val base = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.surfaceContainerHighest
+    val selectedOutline = MaterialTheme.colorScheme.onSurface
     val columnCount = calendar.columns.size
     val totalWidth = (ColumnPitch * columnCount - CellGap).coerceAtLeast(0.dp)
     val totalHeight = CellSize * DAYS_PER_WEEK + CellGap * (DAYS_PER_WEEK - 1)
@@ -379,14 +414,25 @@ private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
         modifier = Modifier
             .size(width = totalWidth, height = totalHeight)
             .testTag("activity_calendar_cells")
+            .pointerInput(calendar) {
+                val pitchPx = (CellSize + CellGap).toPx()
+                detectTapGestures { offset ->
+                    val column = (offset.x / pitchPx).toInt()
+                    val row = (offset.y / pitchPx).toInt()
+                    val day = calendar.columns.getOrNull(column)?.days?.getOrNull(row)
+                    if (day?.inRange == true) onSelectDay(day.epochDay)
+                }
+            }
             .semantics {
-                contentDescription = "${calendar.totalChanges} changes in ${calendar.weeksShown} weeks"
+                contentDescription = "${calendar.totalChanges} changes in " +
+                    "${calendar.weeksShown} weeks. Tap a day to see its count."
             }
     ) {
         val cellSizePx = CellSize.toPx()
         val cellGapPx = CellGap.toPx()
         val pitchPx = cellSizePx + cellGapPx
         val cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+        val selectedStroke = Stroke(width = 2.dp.toPx())
 
         calendar.columns.forEachIndexed { colIdx, column ->
             val left = colIdx * pitchPx
@@ -399,7 +445,58 @@ private fun ActivityCellsCanvas(calendar: ActivityCalendar) {
                     size = Size(cellSizePx, cellSizePx),
                     cornerRadius = cornerRadius
                 )
+                if (day.epochDay == selectedEpochDay) {
+                    drawRoundRect(
+                        color = selectedOutline,
+                        topLeft = Offset(left, top),
+                        size = Size(cellSizePx, cellSizePx),
+                        cornerRadius = cornerRadius,
+                        style = selectedStroke
+                    )
+                }
             }
+        }
+    }
+}
+
+/**
+ * The day a tap selected, or the invitation to tap one.
+ *
+ * The grid answers "how much" with colour; a cell is 13dp and two shades of the
+ * same accent are not a number. This row is the exact count, and it is part of
+ * the card rather than a tooltip because a tooltip would disappear before the
+ * reader could read it on a dense grid.
+ */
+@Composable
+private fun ActivityDaySummary(day: ActivityDay?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("activity_calendar_selected_day"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (day == null) {
+            Text(
+                text = "Tap a day to see how many changes it had",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            Text(
+                text = LocalDate.ofEpochDay(day.epochDay)
+                    .format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (day.count == 0) "No changes" else "${day.count} changes",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
