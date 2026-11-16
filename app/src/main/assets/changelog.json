@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.1.6",
+      "entries": [
+        {
+          "title": "Discord sign-in now uses a redirect Discord actually accepts",
+          "detail": "Discord's developer portal only accepts https:// redirect URIs for a standard (non-Social-SDK) OAuth2 application, so the discord-<app id> scheme from 2.1.5 still failed. The redirect is now an https URL on GitHub Pages that forwards the callback to the app's anisequel://discord scheme. Enable GitHub Pages (Settings -> Pages, source main /docs) and register https://orintarotsumugi.github.io/AniSequel/discord-callback.html in the Discord portal for application 1571747436542566561."
+        },
+        {
+          "title": "The sign-in still works on an older build mid-flight",
+          "detail": "The legacy anisequel://discord filter and parser stay registered, and the parser also accepts the Social-SDK discord-<app id> form and the https callback, so a redirect already in flight on any recent build still resolves instead of being dropped."
+        }
+      ]
+    },
+    {
       "version": "2.1.5",
       "entries": [
         {

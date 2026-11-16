@@ -2807,3 +2807,21 @@ Two consequences worth recording, because both are the kind of thing that gets
 
 A reader who supplies their own application id still uses this redirect, so the
 URI that has to be registered for their app is the one the field now prints.
+
+## 2.1.6: the redirect Discord's portal actually accepts
+
+2.1.5 switched to `discord-<app id>:/authorize/callback`, the form the Social
+SDK docs prescribe. That form is only registrable for applications enrolled in
+the Social SDK; this app is a standard OAuth2 (PKCE) client, so the portal
+rejected it and the authorize page still read "Invalid OAuth2 redirect_uri".
+
+The redirect is now an https URL on GitHub Pages
+(`https://orintarotsumugi.github.io/AniSequel/discord-callback.html`) that
+forwards the callback (`?code=...&state=...`) to the app's `anisequel://discord`
+scheme, which the manifest already handles. Two things have to happen outside
+the app: enable GitHub Pages (Settings -> Pages, source main /docs) and register
+that exact URL in the Discord portal for application 1571747436542566561.
+
+The parser now accepts all three callback shapes (legacy `anisequel://discord`,
+Social-SDK `discord-...:/authorize/callback`, and the https callback) so a
+redirect already in flight on any recent build still resolves.
