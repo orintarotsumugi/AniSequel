@@ -44,6 +44,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.posterUrl
+import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.cards.LocalCardDesign
@@ -378,11 +379,6 @@ private fun NovaPoster(
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
     val design = LocalCardDesign.current
-    val titleStyle = cardTitleStyle(design)
-    // Resolved once per card: `cardTitleMotion` reads a composition local and the
-    // branch below decides between a scrolling line and an ellipsis, so the answer
-    // must not be asked twice with two different results.
-    val titleMotion = cardTitleMotion(design)
     // The grid drew no rating at all: the list and table modes had a score column and
     // the poster modes had a name and a progress pill, so "what did I give this" was
     // only answerable after opening the entry. Same helper and same owner as the rows,
@@ -440,62 +436,92 @@ private fun NovaPoster(
         }
         if (showTitle) {
             Spacer(modifier = Modifier.height(5.dp))
-            // Two drawings of one caption, chosen by whether anything may move.
-            //
-            // With motion, a name that does not fit scrolls on one line: the reader
-            // can read the whole of it, and at three across the part an ellipsis was
-            // cutting - the season number, the subtitle - is the part that tells two
-            // entries apart. Without motion it stays the two or three ellipsized
-            // lines it always was, because a still row of text is what a reader who
-            // chose Instant asked to see.
-            if (titleMotion.animates) {
-                MarqueeText(
-                    text = media.displayName,
-                    style = titleStyle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    motion = titleMotion,
-                    // The card's width, not the text's: a marquee needs a boundary to
-                    // overflow against, and an unconstrained `Text` measures at the
-                    // length of the name and never scrolls.
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                Text(
-                    text = media.displayName,
-                    style = titleStyle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (large) 3 else 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (rating != null) {
-                Spacer(modifier = Modifier.height(1.dp))
-                // The same star the List and Table modes print in their score column,
-                // so the number is recognisable as the reader's own verdict rather
-                // than a second kind of badge.
-                Text(
-                    text = "★ $rating",
-                    style = cardRatingStyle(design),
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1
-                )
-            }
-            if (large) {
-                Text(
-                    text = listOfNotNull(
-                        ListStatuses.label(entry.status, isManga),
-                        libraryProgressLabel(entry)
-                    ).joinToString(" · "),
-                    // The same step the card style's rating line uses, so a reader
-                    // who enlarged the small print on their cards enlarged this too.
-                    style = cardRatingStyle(design),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            NovaPosterCaption(
+                entry = entry,
+                isManga = isManga,
+                large = large,
+                rating = rating,
+                design = design
+            )
         }
+    }
+}
+
+/**
+ * The lines a poster prints under its cover: the name, the score, and the status.
+ *
+ * Split out of [NovaPoster] rather than kept inside it, because this is where every
+ * decision on a card lives - scroll or clip, two lines or three, whether there is a
+ * score to print at all - and next to the poster's own layout it pushed that function
+ * past what a reader can scan. The poster is now geometry; the caption is the text.
+ *
+ * The two drawings of one caption are chosen by whether anything may move. With
+ * motion, a name that does not fit scrolls on one line: the reader can read the whole
+ * of it, and at three across the part an ellipsis was cutting - the season number, the
+ * subtitle - is the part that tells two entries apart. Without motion it stays the two
+ * or three ellipsized lines it always was, because a still row of text is what a reader
+ * who chose Instant asked to see.
+ */
+@Composable
+private fun NovaPosterCaption(
+    entry: MediaListEntryItem,
+    isManga: Boolean,
+    large: Boolean,
+    rating: Int?,
+    design: CardDesign
+) {
+    val media = entry.media
+    val titleStyle = cardTitleStyle(design)
+    // Asked once per caption: `cardTitleMotion` reads a composition local and the
+    // branch below decides between a scrolling line and an ellipsis, so the answer
+    // must not be asked twice with two different results.
+    val titleMotion = cardTitleMotion(design)
+    if (titleMotion.animates) {
+        MarqueeText(
+            text = media.displayName,
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            motion = titleMotion,
+            // The card's width, not the text's: a marquee needs a boundary to
+            // overflow against, and an unconstrained `Text` measures at the
+            // length of the name and never scrolls.
+            modifier = Modifier.fillMaxWidth()
+        )
+    } else {
+        Text(
+            text = media.displayName,
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = if (large) 3 else 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+    if (rating != null) {
+        Spacer(modifier = Modifier.height(1.dp))
+        // The same star the List and Table modes print in their score column, so the
+        // number is recognisable as the reader's own verdict rather than a second
+        // kind of badge.
+        Text(
+            text = "★ $rating",
+            style = cardRatingStyle(design),
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1
+        )
+    }
+    if (large) {
+        Text(
+            text = listOfNotNull(
+                ListStatuses.label(entry.status, isManga),
+                libraryProgressLabel(entry)
+            ).joinToString(" · "),
+            // The same step the card style's rating line uses, so a reader who
+            // enlarged the small print on their cards enlarged this too.
+            style = cardRatingStyle(design),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
