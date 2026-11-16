@@ -254,7 +254,7 @@ class DiscordRpcClient(
             readyDeferred = null
             teardown(closeCode = 4000, reason = "connect timeout")
             return Result.failure(
-                IOException("Discord did not answer in time. Check your connection and token.")
+                IOException("Discord did not answer in time. Check your connection and token; presence needs the gateway.connect scope, which requires Discord approval.")
             )
         }
         return result.map { it.toAccount() }
