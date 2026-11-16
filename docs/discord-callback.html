@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redirecting to AniSequel…</title>
+<script>
+(function () {
+  // Discord sends ?code=...&state=... (and sometimes error=...) here. Forward the
+  // whole query string to the app's custom scheme so Android's intent filter
+  // hands the callback to AniSequel, then the app exchanges the code for a token.
+  var target = 'anisequel://discord' + window.location.search + window.location.hash;
+  window.location.replace(target);
+})();
+</script>
+</head>
+<body>
+<p>Redirecting to AniSequel…</p>
+<p>If nothing happens, <a id="l" href="anisequel://discord">tap here</a>.</p>
+<script>
+(function () {
+  var a = document.getElementById('l');
+  if (a) a.href = 'anisequel://discord' + window.location.search + window.location.hash;
+})();
+</script>
+</body>
+</html>
