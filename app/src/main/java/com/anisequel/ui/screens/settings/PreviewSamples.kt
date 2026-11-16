@@ -15,7 +15,7 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 
 @Composable
@@ -47,7 +47,10 @@ internal fun MiniCover(
             )
     ) {
         AsyncImage(
-            model = entry?.media?.posterUrl,
+            // The same source the grid would draw. A preview that showed AniList
+            // art while the reader's library showed btttr's would be answering a
+            // question about a layout with somebody else's picture.
+            model = entry?.media?.let { media -> cardPosterUrl(media) },
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()

@@ -37,6 +37,7 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
@@ -98,7 +99,9 @@ fun StudioTitleCard(
                 modifier = Modifier.size(26.dp)
             )
 
-            media.posterUrl?.let { url ->
+            // Resolved outside the `let`: btttr's art arrives after the AniList cover
+            // and replaces it, which is the same hand-over every grid makes.
+            cardPosterUrl(media)?.let { url ->
                 AsyncImage(
                     model = url,
                     contentDescription = null,

@@ -557,7 +557,8 @@ private fun SettingsPageContent(
             themePreferences = themePreferences,
             interfacePreferences = interfacePreferences,
             quickAddPreferences = quickAddPreferences,
-            previewEntries = cardPreviewEntries
+            previewEntries = cardPreviewEntries,
+            mainTabPreferences = mainTabPreferences
         )
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)

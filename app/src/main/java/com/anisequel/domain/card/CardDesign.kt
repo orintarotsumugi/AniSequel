@@ -80,7 +80,20 @@ data class CardDesign(
      * says cards take part, because a reader who turned it off did so after seeing a
      * card scroll, and the sample they switched off was not a settings page.
      */
-    val scrollTitles: Boolean = true
+    val scrollTitles: Boolean = true,
+    /**
+     * Whether the card prints the name itself.
+     *
+     * The BetterPosters artwork is a finished poster: the title is part of the
+     * picture, set in the film's own type over the art. Drawing the card's caption
+     * under it repeats the name twice in two typefaces, which is what the reader
+     * who asked for "the things the poster already has" was looking at. Both
+     * switches exist so that choosing that art does not force the caption off - a
+     * reader on the AniList cover still wants a name.
+     */
+    val showTitles: Boolean = true,
+    /** Whether the card prints the score, for the same reason [showTitles] exists. */
+    val showScores: Boolean = true
 ) {
     /**
      * Brought back inside the sliders' span.
@@ -93,6 +106,16 @@ data class CardDesign(
         titleScale = titleScale.coerceIn(MIN_TITLE_SCALE, MAX_TITLE_SCALE),
         ratingScale = ratingScale.coerceIn(MIN_RATING_SCALE, MAX_RATING_SCALE)
     )
+
+    /**
+     * Whether a card at this design prints nothing but its artwork.
+     *
+     * The two poster switches are one decision made in two places, and a preview that
+     * only knew one of them would draw a card that cannot exist. Kept on the value
+     * rather than recomputed at each call site so "is this the bare poster?" has one
+     * answer.
+     */
+    val printsText: Boolean get() = showTitles || showScores
 
     companion object {
         /**

@@ -77,6 +77,7 @@ import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -272,6 +273,11 @@ fun InfoHero(
     val banner = media.bannerImage
         ?.takeIf { backdropSource == InfoBackdropSource.BANNER && it.isNotBlank() }
 
+    // The poster the page draws, resolved once: the lockup's cover and the blurred
+    // backdrop behind it have to be the same picture, or the tint is sampled from one
+    // artwork and laid under another.
+    val poster = cardPosterUrl(media)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -284,7 +290,7 @@ fun InfoHero(
     ) {
         InfoHeroBackdrop(
             banner = banner,
-            posterUrl = media.posterUrl,
+            posterUrl = poster,
             collapse = collapse
         )
 
@@ -525,7 +531,10 @@ fun InfoHero(
                     .testTag("detail_hero_poster")
             ) {
                 AsyncImage(
-                    model = media.posterUrl,
+                    // The Info page's poster is a card like any other: when the reader
+                    // chose btttr's rendered art, the picture they tapped and the
+                    // picture the grid draws are the same picture.
+                    model = poster,
                     // The box above carries the title as its description; a
                     // description here too would announce the poster twice.
                     contentDescription = null,

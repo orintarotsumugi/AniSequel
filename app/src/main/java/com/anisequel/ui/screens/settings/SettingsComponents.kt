@@ -259,7 +259,11 @@ private fun ExpandToggle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 40.dp)
+            // 36dp rather than the 40 this was: the control is a disclosure for a
+            // paragraph the reader has already half read, and at 40 it stood as tall
+            // as the rows around it. The label carries the tap target, which is still
+            // a fingertip wide.
+            .heightIn(min = 36.dp)
             .clip(MaterialTheme.shapes.small)
             .bouncyPress(pressedScale = 0.97f)
             .clickable(
@@ -275,7 +279,10 @@ private fun ExpandToggle(
     ) {
         Text(
             text = if (expanded) "Show less" else "Show more",
-            style = MaterialTheme.typography.labelMedium,
+            // The smallest step of the scale, not the caption's: this sits under a
+            // body paragraph nobody is reading twice, and at labelMedium it was the
+            // loudest thing in the card.
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
         )
@@ -284,7 +291,7 @@ private fun ExpandToggle(
             imageVector = if (expanded) AppVectorIcons.ExpandLess else AppVectorIcons.ExpandMore,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(14.dp)
         )
     }
 }

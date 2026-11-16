@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "2.3.1",
+      "entries": [
+        {
+          "title": "BetterPosters, everywhere a poster is drawn",
+          "detail": "The rendered poster now follows you past the grid. The Info page's poster and the blurred backdrop behind it, the full-screen artwork viewer (where it leads the sources, with the AniList cover one tap behind it), the other titles listed on a page, a studio's title cards, the sequel rows and the Settings previews all draw the art you chose, on top of every card in every list. A title btttr does not carry keeps its AniList cover, and no card waits on the lookup."
+        },
+        {
+          "title": "A UI size you can tap, in the app",
+          "detail": "Interface > UI size now leads with Small, Default and Large, and keeps the exact dpi slider under them for anything in between. The app draws at the size you choose on every screen instead of whatever the panel reports, so the same layout fits a small phone and a tablet, and Reset size brings it back to 447 dpi."
+        },
+        {
+          "title": "Previews now draw your bar, not a sample one",
+          "detail": "The phone in the layout preview and the card mock-up drew a fixed bottom bar - Home, Library, Tiers, Search, Profile - no matter what you had switched on. Both now draw the tabs you actually have, and the magnifier in the mock-up's app bar appears only when the Search tab does."
+        },
+        {
+          "title": "Let the poster carry the name and the score",
+          "detail": "Card design > Poster art has two new switches: Card names and Card scores. BetterPosters sets the title and the score on the artwork itself, so with that source you can turn either off and stop the card saying the same thing twice. Both are on by default, so no card changes until you ask."
+        },
+        {
+          "title": "Card design is three pages",
+          "detail": "Card shape (style and how many fit a row), Name and score (type size, weight, scrolling, which rating) and Poster art (where the picture comes from, and what the card adds to it) each have their own screen and their own preview. The size chips are no longer two sliders and a picker away, and Reset card design stays on the page you land on."
+        },
+        {
+          "title": "The Theme page, in four parts",
+          "detail": "Appearance and background, Accent colour, Poster colour and Anime pages are now a shelf of sub-screens with the live preview above them, instead of one scroll through a preview, a palette grid, eight canvas chips and a hue slider. Reset appearance still clears every one of them."
+        },
+        {
+          "title": "A Show more that stays out of the way",
+          "detail": "The disclosure under a collapsed paragraph is a size smaller and a little shorter, in Settings and on a profile's About card, so it reads as an offer to continue rather than as another heading."
+        }
+      ]
+    },
+    {
       "version": "2.3.0",
       "entries": [
         {

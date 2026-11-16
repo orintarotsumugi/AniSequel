@@ -3138,3 +3138,72 @@ the bump every time; the counter-rule is that an exception gets recorded where
 the number is written, which is `gradle.properties`, and explained here once.
 `versionCode` ignores the argument and goes 665 -> 666, because it is the only
 number the updater compares.
+
+## 2.3.1: posters everywhere, two more shelves, and previews that tell the truth
+
+The btttr poster shipped on cards and stopped there, which was the wrong boundary.
+A reader who chose that art met it in the Library grid and again in the Info page's
+poster, the full-screen viewer, a studio's title cards and the sequel rows as the
+old key visual - six surfaces, two pictures of one show. Every one of them now goes
+through `cardPosterUrl`, including the viewer, where the resolved poster leads the
+source pills instead of replacing the AniList cover: the viewer exists to look at a
+poster closely, so the chosen art is first and the other is one tap behind it
+rather than gone. The widget is the one drawing left alone - its data is built for
+`RemoteViews` on a background thread, and handing a network lookup to a widget
+update is a different job from this one.
+
+`CardDesign` gained `showTitles` and `showScores`, applied inside `MediaPosterCell`
+rather than at the call sites. BetterPosters prints the name and the score on the
+artwork, so a card that also prints its own caption says the title twice in two
+typefaces; but the AniList cover says nothing, and a reader on that source still
+wants a name. Both switches therefore live on the card *design* and not on the
+poster source, both default on (no card changes on upgrade), and the cell applies
+them once so a surface added later inherits the answer without knowing the switches
+exist. The card keeps its accessible name when the caption is hidden - the grid
+reads a cell by its label, and hiding text is a decision about pixels.
+
+The density setting was already the app-wide size; it just could not be found or
+explained. `UiSize` puts Small, Default and Large above the slider, because 447 is
+not a size anybody pictures and a reader who wants "a bit bigger" should not have
+to know the number goes *down*. The presets are `DisplayDpi` values, so nothing new
+is stored, and `UiSize.of` returns null between two of them rather than highlighting
+the nearest - a chip that claims "Large" for a value that is not would be the page
+agreeing with itself instead of with the preference.
+
+Two previews were drawing a bar the reader did not have. `BottomBarLiftPreview` had
+four hard-coded glyphs (including Tiers, which is off by default) and
+`CardDesignPreview` had four more plus a magnifier in its app bar. Both now take the
+list `enabledMainTabs` produced for the real bar and draw their glyphs from
+`mainTabDestinations`, so a tab the reader turned off cannot reappear inside the
+drawing of the bar they turned it off from. That is why `InterfaceTab` collects the
+four flows and passes one list down: two previews, one answer.
+
+Card design and the Theme page both became shelves, for the reason Interface did.
+Card design's single card held a preview, ten style chips, two sliders, four
+switches and a poster picker in one scroll; it is now Card shape / Name and score /
+Poster art, each with its own preview, with the slider drafts hoisted to the parent
+so a half-finished drag survives a trip to another part. The Theme page was six
+cards of pictures; its four parts are Appearance (with the canvas), Accent colour,
+Poster colour and Anime pages, with the live preview left on the shelf because it
+is the one answer a reader checks before choosing a part. Reset stays on the shelf
+of each: a reset button inside a part can only be understood as resetting that
+part, and neither of these resets does.
+
+The remaining change is the smallest: the "Show more" under a collapsed paragraph
+is `labelSmall` with a 14dp chevron and a 36dp minimum height, in Settings and on a
+profile's About card. It is a disclosure for a paragraph nobody is reading twice,
+and at the caption's size it was the loudest thing in the card.
+
+Three drawings deliberately keep AniList art, and they are worth naming so the
+next reader does not read the omission as an oversight. The home-screen widget builds
+its bitmaps for `RemoteViews` on a background thread, where a suspend lookup has no
+composable to live in. Nova's shortcut tiles and the activity feed use whatever cover
+the random artwork happened to be, which is decoration behind a label rather than a
+title's poster. And a tier board stores the addresses its covers were placed with, so
+changing the source would silently rewrite a board somebody had already arranged. A
+card or a page about one title follows the setting; artwork used as a texture does
+not.
+
+`2.3.1` is the last digit plus one, `versionCode` 666 -> 667. No exception this
+time: nothing here is large enough that a reader deciding whether to update would
+be misled by the number.

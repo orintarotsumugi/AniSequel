@@ -1,5 +1,7 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,12 +33,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -60,16 +68,41 @@ import com.anisequel.ui.theme.ThemePalette
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+/** The key the [rememberSaveableStateHolder] files the Theme shelf under. */
+private const val THEME_HUB_KEY = "theme_hub"
+
 /**
- * The dedicated Theme tab.
+ * The dedicated Theme page.
  *
- * Ordered as three questions a reader asks in sequence: how the app looks
- * (appearance mode, then how dark the background is), where the colour comes
- * from (accent colour, then the anime cover-colour adaptation), and how it
- * moves. A live preview hero leads, Reset appearance trails. The heavy colour
- * sections live in their own files so this one stays a readable index.
+ * ## Why this is a shelf now
+ *
+ * The page was six full cards in one scroll - appearance, accent colour, background,
+ * poster colour, anime pages, reset - and every one of them opens with pictures: a
+ * row of scheme tiles, a field of swatches, eight canvas chips, a colour wheel. A
+ * reader who came to turn OLED mode on was scrolling past a preview hero, three mode
+ * tiles, a palette grid and a hue slider to find a switch, and the page's own summary
+ * ("colour") had stopped describing most of what was on it.
+ *
+ * The same argument that split Settings into pages applies one level down, and the
+ * page next door - Interface - already answers it the same way: each part gets a row
+ * with a sentence under it and a sub-page of its own. Nothing was rewritten in the
+ * move; every card below is the card that used to sit here, still writing the
+ * preference it wrote.
+ *
+ * ## Why the preview stays on the shelf
+ *
+ * [ThemePreviewCard] is the page's identity, and the one answer a reader checks before
+ * choosing which part to open: is the app the colour I meant? A live sample on the
+ * shelf is worth more than one repeated at the top of four sub-pages.
+ *
+ * ## Why a sub-page still says "Theme" above it
+ *
+ * The header above this content is the page the reader came from, and the sub-header
+ * below it is the part they are in - a breadcrumb, not two titles for one screen. Back
+ * drops the sub-page before it drops the page: this composable's `BackHandler` is
+ * registered after the one in `SettingsScreen`, and the dispatcher gives the most
+ * recently added enabled callback the event.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThemeTab(
     themePreferences: ThemePreferences,
@@ -83,66 +116,203 @@ fun ThemeTab(
         )
     )
 
-    SettingsScrollColumn(modifier) {
-        ThemePreviewCard(themeSettings = themeSettings)
+    var section by rememberSaveable { mutableStateOf<ThemeSection?>(null) }
 
-        // The page is grouped the way the reference it was redrawn from groups it:
-        // the light-or-dark choice first, then where the colour comes from, then what
-        // the surfaces are painted on, then the per-title adaptation. Each label is a
-        // heading a screen reader can jump between, which the previous order - one
-        // long run of same-sized cards - gave no way to do.
-        SettingsSectionLabel("Appearance", compact = true)
-        AppearanceSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+    // The shelf and the sub-pages are separate compositions, and `AnimatedContent`
+    // disposes the outgoing one - so a sub-page's scroll position would start at the
+    // top every time the reader came back to it, and so would the shelf's.
+    val sectionStateHolder = rememberSaveableStateHolder()
 
-        SettingsSectionLabel("Themes", compact = true)
-        AccentColourSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+    // Only while a sub-page is open: disabled here, the event falls through to the
+    // Settings page's own handler, which is what Back means on the shelf.
+    BackHandler(enabled = section != null) { section = null }
+
+    AnimatedContent(
+        targetState = section,
+        // The same push in and drop away the Settings pages use, so a level deeper
+        // reads as a level deeper at both depths - see `settingsLevelTransition`.
+        transitionSpec = { settingsLevelTransition() },
+        label = "theme_section_transition",
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("theme_tab_content")
+    ) { destination ->
+        sectionStateHolder.SaveableStateProvider(
+            key = destination?.name ?: THEME_HUB_KEY
+        ) {
+            if (destination == null) {
+                ThemeHub(
+                    themePreferences = themePreferences,
+                    settings = themeSettings,
+                    scope = scope,
+                    onOpen = { section = it }
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SettingsSubHeader(
+                        title = destination.title,
+                        subtitle = destination.subtitle,
+                        onBack = { section = null },
+                        // One page out, not two - the header above already says
+                        // "Theme", and this says which part of it is open.
+                        backDescription = "Back to Theme",
+                        backTestTag = "theme_sub_back"
+                    )
+                    when (destination) {
+                        ThemeSection.APPEARANCE -> SettingsScrollColumn {
+                            AppearanceSection(
+                                themePreferences = themePreferences,
+                                settings = themeSettings,
+                                scope = scope
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            BackgroundSection(
+                                themePreferences = themePreferences,
+                                settings = themeSettings,
+                                scope = scope
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                        ThemeSection.ACCENT -> SettingsScrollColumn {
+                            AccentColourSection(
+                                themePreferences = themePreferences,
+                                settings = themeSettings,
+                                scope = scope
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                        ThemeSection.ARTWORK -> SettingsScrollColumn {
+                            AnimeColourSection(
+                                themePreferences = themePreferences,
+                                settings = themeSettings,
+                                scope = scope
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                        ThemeSection.PAGES -> SettingsScrollColumn {
+                            InfoBackdropSection(
+                                themePreferences = themePreferences,
+                                settings = themeSettings,
+                                scope = scope
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The parts of the Theme page, in the order the shelf draws them.
+ *
+ * An enum rather than four lambdas for the reason `SettingsPage` is one: the row's
+ * title and the sub-page's header come from the same two strings, so a row cannot
+ * promise a different page than the one it opens.
+ */
+private enum class ThemeSection(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val testTag: String
+) {
+    APPEARANCE(
+        title = "Appearance",
+        subtitle = "Light, dark or the device, and the canvas under it",
+        icon = AppVectorIcons.ThemeDark,
+        testTag = "theme_row_appearance"
+    ),
+    ACCENT(
+        title = "Accent colour",
+        subtitle = "The palette the app is painted from",
+        icon = AppVectorIcons.SectionAppearance,
+        testTag = "theme_row_accent"
+    ),
+    ARTWORK(
+        title = "Poster colour",
+        subtitle = "Tint the app from the anime you open",
+        icon = AppVectorIcons.AnimeSparkle,
+        testTag = "theme_row_artwork"
+    ),
+    PAGES(
+        title = "Anime pages",
+        subtitle = "The backdrop an opened title sits on",
+        icon = AppVectorIcons.SectionBackground,
+        testTag = "theme_row_pages"
+    )
+}
+
+/**
+ * The shelf: the live sample, the four parts, and the one control that takes all of
+ * them back.
+ *
+ * Reset sits on the shelf rather than inside a part because it resets every part - it
+ * clears the mode, the palette, the canvas, the retained cover colour and the backdrop
+ * in one write - so a button inside "Accent colour" would be a button that clears
+ * controls the reader cannot see from there.
+ */
+@Composable
+private fun ThemeHub(
+    themePreferences: ThemePreferences,
+    settings: ThemePreferences.ThemeSettings,
+    scope: CoroutineScope,
+    onOpen: (ThemeSection) -> Unit
+) {
+    SettingsScrollColumn {
+        ThemePreviewCard(themeSettings = settings)
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionLabel("Look", compact = true)
+        SettingsHubGroup(
+            entries = listOf(
+                themeEntry(ThemeSection.APPEARANCE, onOpen),
+                themeEntry(ThemeSection.ACCENT, onOpen)
+            )
+        )
 
         // Full screen moved to Device Manager, and motion to the Interface page:
         // neither is about what colour the app is, and this page is only about that.
-        SettingsSectionLabel("Wallpaper", compact = true)
-        BackgroundSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
+        SettingsSectionLabel("Artwork", compact = true)
+        SettingsHubGroup(
+            entries = listOf(
+                themeEntry(ThemeSection.ARTWORK, onOpen),
+                themeEntry(ThemeSection.PAGES, onOpen)
+            )
+        )
 
-        SettingsSectionLabel("Poster colour", compact = true)
-        AnimeColourSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
-
-        // An opened title's page is an appearance surface too, and it is the one
-        // this page can change without a title being open. Kept beside the anime
-        // colour section because both are about borrowing a title's artwork.
-        SettingsSectionLabel("Anime pages", compact = true)
-        InfoBackdropSection(themePreferences = themePreferences, settings = themeSettings, scope = scope)
-
-        val appearanceChanged = themeSettings.themeMode != ThemeMode.DEFAULT ||
-            themeSettings.useDynamicColor ||
-            themeSettings.paletteId != ThemePalette.ANISDK.id ||
-            themeSettings.motionStyle != MotionStyle.DEFAULT ||
-            themeSettings.trueBlack ||
-            themeSettings.customColorHex != null ||
+        val appearanceChanged = settings.themeMode != ThemeMode.DEFAULT ||
+            settings.useDynamicColor ||
+            settings.paletteId != ThemePalette.ANISDK.id ||
+            settings.motionStyle != MotionStyle.DEFAULT ||
+            settings.trueBlack ||
+            settings.customColorHex != null ||
             // The switch is stored, the layer is not, so testing the stored one is
             // what answers "is there anything here to reset" on a screen where no
             // sheet is open.
-            themeSettings.animeThemeEnabled ||
-            themeSettings.animeThemeActive ||
+            settings.animeThemeEnabled ||
+            settings.animeThemeActive ||
             // A retained cover colour is a theme override in its own right now: it
             // tints the scheme after the sheet, so Reset appearance has to be
             // offered for it even if the accent it wrote is cleared some other way.
-            themeSettings.retainedAnimeColorHex != null ||
+            settings.retainedAnimeColorHex != null ||
             // Retain and revert are cleared by `reset()` like everything else here,
             // so leaving them out meant a reader who changed only those two had
             // something to reset and no button offering to reset it. Retention
             // defaults to on, which is why the test is negated.
-            !themeSettings.animeThemeRetainColor ||
-            themeSettings.retainedTint != RetainedTint.DEFAULT ||
-            themeSettings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
-            themeSettings.appBackgroundColor != null ||
+            !settings.animeThemeRetainColor ||
+            settings.retainedTint != RetainedTint.DEFAULT ||
+            settings.animeThemeRevertDuration != DEFAULT_ANIME_REVERT_SECONDS ||
+            settings.appBackgroundColor != null ||
             // Both are Reset appearance's to clear: the backdrop is part of the
             // app's look, not a per-title choice, and leaving it behind would make
             // the button restore everything but the page a title opens on.
-            themeSettings.infoBackdropSource != InfoBackdropSource.DEFAULT ||
-            themeSettings.infoBackdropBlur != InfoBackdropBlur.DEFAULT ||
-            themeSettings.infoBackdropTint != InfoBackdropTint.DEFAULT ||
+            settings.infoBackdropSource != InfoBackdropSource.DEFAULT ||
+            settings.infoBackdropBlur != InfoBackdropBlur.DEFAULT ||
+            settings.infoBackdropTint != InfoBackdropTint.DEFAULT ||
             // Full screen is off by default; turning it on is a change, so the
             // reset row has to offer itself for exactly that case.
-            themeSettings.immersive
+            settings.immersive
 
         // The button used to appear with a bare `if`, fully drawn on the next
         // frame - so the page jumped by a button's height the moment the reader
@@ -172,6 +342,18 @@ fun ThemeTab(
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+/** One shelf row, named and described by the sub-page it opens. */
+private fun themeEntry(
+    section: ThemeSection,
+    onOpen: (ThemeSection) -> Unit
+): SettingsHubEntry = SettingsHubEntry(
+    icon = section.icon,
+    title = section.title,
+    subtitle = section.subtitle,
+    testTag = section.testTag,
+    onClick = { onOpen(section) }
+)
 
 @Composable
 private fun AppearanceSection(
