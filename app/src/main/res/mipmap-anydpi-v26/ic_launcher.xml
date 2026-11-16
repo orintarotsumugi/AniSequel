@@ -3,10 +3,12 @@
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
     <!--
-        Its own silhouette rather than the foreground. The system tints this
-        layer with a single wallpaper colour, so reusing the three-colour
-        foreground flattened all three fills to one shade and the icon became a
-        solid blob. See ic_launcher_monochrome.xml.
+        Its own silhouette rather than the foreground. The foreground is a
+        full-colour bitmap of the key art; the system tints this layer with one
+        wallpaper colour, so reusing that bitmap would flatten the face and the
+        wordmark into a single dark plate. The monochrome layer keeps the
+        AniSequel A, which still reads at launcher sizes. See
+        drawable-xxxhdpi/ic_launcher_monochrome.webp.
     -->
     <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

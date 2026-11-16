@@ -404,9 +404,11 @@ adding any would be a large, avoidable regression. What that buys:
   raise of `minSdk` cannot quietly leave one behind.
 - `dex.useLegacyPackaging = true` keeps `classes.dex` DEFLATEd — see
   `ApkPackagingTest` for the 1.9 MB this is worth.
-- The launcher is a pure adaptive icon (`mipmap-anydpi-v26`). The density-bucket
-  PNGs that Android Studio generates by default were unreachable on every
-  supported configuration and were removed.
+- The launcher is an adaptive icon (`mipmap-anydpi-v26`). The legacy
+  `mipmap-*` PNGs that Android Studio generates by default were unreachable on
+  every supported configuration and were removed. The current foreground and
+  monochrome layers do use density buckets, but they live in `drawable-*dpi`
+  and are resolved by the adaptive icon, so each bucket is reachable.
 
 ## Minimum Android version
 

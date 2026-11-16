@@ -155,7 +155,7 @@ UpdateController / UI              UpdateManager                     GitHub Asse
         ├── main/
         │   ├── AndroidManifest.xml          # Permissions, FileProvider, OAuth intent filter
         │   ├── assets/changelog.json        # Release history and feature logs
-        │   ├── res/                         # Adaptive vector launcher icon & XML configs
+        │   ├── res/                         # Adaptive launcher icon (bitmap key art) & XML configs
         │   └── java/com/anisequel/
         │       ├── AniSequelApplication.kt  # Global Application class
         │       ├── MainActivity.kt          # Edge-to-edge Activity entry point
@@ -379,8 +379,9 @@ AniSequel adopts Material 3 Expressive UI standards (`ui/components/expressive/`
 3. **Capsule Geometry**: Capsule UI elements strictly use `RoundedCornerShape(percent = 50)`. Using `RoundedPolygon.toShape()` on non-square bounds produces stretched ellipses; standard rounded corner shapes preserve clean capsule geometry.
 
 4. **Zero-Raster Vector Icon Policy**:
-   - All icons are pure Compose `ImageVector` instances (`AppVectorIcons`, `AppCustomVectors`, `AppExtraVectors`).
+   - All application UI icons are pure Compose `ImageVector` instances (`AppVectorIcons`, `AppCustomVectors`, `AppExtraVectors`).
    - Zero PNG/WEBP/SVG drawables or emojis are used in the application UI, minimizing APK overhead.
+   - The launcher is the one exception: its adaptive foreground and monochrome layers are density-specific WebP bitmaps of the supplied key art. They are resolved by the adaptive icon, not legacy `mipmap-*` resources, so every bucket is reachable.
 
 5. **Dynamic Color & Theme Palettes (`ui/theme/`)**:
    - Supports system Material You dynamic colors on Android 12+ (`minSdk = 31`).

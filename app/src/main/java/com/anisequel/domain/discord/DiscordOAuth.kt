@@ -52,6 +52,27 @@ object DiscordOAuth {
     const val DEVELOPER_PORTAL_URL: String = "https://discord.com/developers/applications"
 
     /**
+     * The public Discord application this build ships with.
+     *
+     * Its redirect is registered as [REDIRECT_URI], so a fresh install can offer
+     * the one-tap sign-in without making the reader create an application first.
+     * The ID is public by design; the token endpoint still requires PKCE, and no
+     * client secret is shipped in an APK.
+     */
+    const val DEFAULT_CLIENT_ID: String = "1571747436542566561"
+
+    /**
+     * The application's public key, as shown in Discord's developer portal.
+     *
+     * Discord uses it to verify interaction payloads. The current RPC/OAuth
+     * features do not receive interactions, so nothing reads this at runtime yet;
+     * it is recorded here with the application it belongs to rather than left to
+     * be copied out of a chat message when an interaction endpoint is added.
+     */
+    const val APPLICATION_PUBLIC_KEY: String =
+        "4d3ce4d546bc9f7949e02b1be4abd0d032054d7515c6e9579d7a93427f52dd5d"
+
+    /**
      * The scopes asked for.
      *
      * `identify` is what `/users/@me` needs, so the app can name the account it
