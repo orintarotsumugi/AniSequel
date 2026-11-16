@@ -108,7 +108,7 @@ internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): Conten
  * navigation contract.
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
-    APPEARANCE("Appearance", "Theme, background, accent and motion"),
+    APPEARANCE("Appearance", "Theme, background and accent colour"),
     // How the app is laid out, kept apart from what colour it is: the card style
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
@@ -428,14 +428,14 @@ private fun SettingsRoot(
                         "settings_row_type",
                         onOpen
                     ),
-                    SettingsPage.SEASONAL.entry(
-                        AppVectorIcons.Seasonal,
-                        "settings_row_seasonal",
-                        onOpen
-                    ),
                     SettingsPage.JOKES.entry(
                         AppVectorIcons.AnimeSparkle,
                         "settings_row_jokes",
+                        onOpen
+                    ),
+                    SettingsPage.SEASONAL.entry(
+                        AppVectorIcons.Seasonal,
+                        "settings_row_seasonal",
                         onOpen
                     )
                 ),

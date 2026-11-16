@@ -201,25 +201,26 @@ internal fun CardPosterPart(
             }
         }
         CollapsibleText(
-            text = posterSource.blurb,
+            text = posterSource.blurb +
+                " By default the card draws only the poster. Turn the name or score " +
+                "back on below if you want the app to add them.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(4.dp))
         SwitchRow(
-            title = "Card names",
-            subtitle = "Draw the title under the artwork. Turn it off when the poster " +
-                "already carries the name - BetterPosters sets it on the art - so the " +
-                "card shows one title rather than two.",
+            title = "Show card name",
+            subtitle = "Draw the title under the artwork. Leave this off when the " +
+                "poster already includes the name, such as BetterPosters art.",
             checked = design.showTitles,
             onCheckedChange = { show -> onCommit(design.copy(showTitles = show)) },
             modifier = Modifier.testTag("card_show_titles_switch")
         )
         SwitchRow(
-            title = "Card scores",
-            subtitle = "Draw the score on the card. BetterPosters prints its own on " +
-                "the art; turning this off keeps that one and drops the second badge.",
+            title = "Show card score",
+            subtitle = "Draw the score on the card. Leave this off when the poster " +
+                "already shows a score and you do not want a second one.",
             checked = design.showScores,
             onCheckedChange = { show -> onCommit(design.copy(showScores = show)) },
             modifier = Modifier.testTag("card_show_scores_switch")

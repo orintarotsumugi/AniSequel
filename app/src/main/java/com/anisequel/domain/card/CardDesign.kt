@@ -82,18 +82,15 @@ data class CardDesign(
      */
     val scrollTitles: Boolean = true,
     /**
-     * Whether the card prints the name itself.
+     * Whether the card prints the title under the artwork.
      *
-     * The BetterPosters artwork is a finished poster: the title is part of the
-     * picture, set in the film's own type over the art. Drawing the card's caption
-     * under it repeats the name twice in two typefaces, which is what the reader
-     * who asked for "the things the poster already has" was looking at. Both
-     * switches exist so that choosing that art does not force the caption off - a
-     * reader on the AniList cover still wants a name.
+     * Off by default so a card is just the poster: BetterPosters art already sets
+     * the name on the image, and a plain cover reads as the poster first. Turn it
+     * on when you want the app to label the card.
      */
-    val showTitles: Boolean = true,
+    val showTitles: Boolean = false,
     /** Whether the card prints the score, for the same reason [showTitles] exists. */
-    val showScores: Boolean = true
+    val showScores: Boolean = false
 ) {
     /**
      * Brought back inside the sliders' span.

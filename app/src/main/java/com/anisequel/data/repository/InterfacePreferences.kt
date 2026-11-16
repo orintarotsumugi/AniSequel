@@ -200,8 +200,8 @@ class InterfacePreferences(private val context: Context) {
                     size = CardSize.fromStorage(preferences[Keys.CARD_SIZE]),
                     boldTitles = preferences[Keys.CARD_BOLD_TITLES] ?: false,
                     scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true,
-                    showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: true,
-                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: true
+                    showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: false,
+                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: false
                 ).clamped(),
                 showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
                 showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true,

@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
@@ -35,6 +38,7 @@ import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.PosterSource
 import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
@@ -678,19 +682,50 @@ private fun CardDesignPartBody(
                 },
                 onCommit = onCommit
             )
-            CardDesignPart.POSTER -> CardPosterPart(
-                design = draft,
-                entries = entries,
-                barTabs = barTabs,
-                style = style,
-                posterSource = interfaceSettings.posterSource,
-                onPosterSource = { option ->
-                    if (option != interfaceSettings.posterSource) {
-                        scope.launch { interfacePreferences.setPosterSource(option) }
-                    }
-                },
-                onCommit = onCommit
-            )
+            CardDesignPart.POSTER -> {
+                val context = LocalContext.current
+                var pendingPosterSource by remember { mutableStateOf<PosterSource?>(null) }
+                CardPosterPart(
+                    design = draft,
+                    entries = entries,
+                    barTabs = barTabs,
+                    style = style,
+                    posterSource = interfaceSettings.posterSource,
+                    onPosterSource = { option ->
+                        if (option != interfaceSettings.posterSource) {
+                            scope.launch { interfacePreferences.setPosterSource(option) }
+                            pendingPosterSource = option
+                        }
+                    },
+                    onCommit = onCommit
+                )
+                val asked = pendingPosterSource
+                if (asked != null) {
+                    AlertDialog(
+                        onDismissRequest = { pendingPosterSource = null },
+                        title = { Text("Clear saved AniList covers?") },
+                        text = {
+                            Text(
+                                "If you switched poster sources, you can clear the saved " +
+                                    "AniList cover images so the app reloads artwork. " +
+                                    "Clearing can use more data and AniList requests later " +
+                                    "because covers will be downloaded again."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                context.clearCoverCache()
+                                pendingPosterSource = null
+                            }) { Text("Clear cache") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { pendingPosterSource = null }) {
+                                Text("Keep cache")
+                            }
+                        }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

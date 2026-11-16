@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.posterUrl
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
@@ -62,10 +63,11 @@ internal fun InfoPageBackdrop(
     collapse: () -> Float,
     modifier: Modifier = Modifier
 ) {
+    val chosenPoster = cardPosterUrl(media)
     val artwork = when (source) {
         InfoBackdropSource.BANNER -> media.bannerImage?.takeIf { it.isNotBlank() }
-            ?: media.posterUrl
-        InfoBackdropSource.COVER -> media.posterUrl
+            ?: chosenPoster
+        InfoBackdropSource.COVER -> chosenPoster
         InfoBackdropSource.OFF -> null
     }
     val surface = MaterialTheme.colorScheme.surface
