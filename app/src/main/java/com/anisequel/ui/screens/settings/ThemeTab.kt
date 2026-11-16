@@ -310,6 +310,7 @@ private fun ThemeHub(
             settings.infoBackdropSource != InfoBackdropSource.DEFAULT ||
             settings.infoBackdropBlur != InfoBackdropBlur.DEFAULT ||
             settings.infoBackdropTint != InfoBackdropTint.DEFAULT ||
+            settings.novaBackdropBlur ||
             // Full screen is off by default; turning it on is a change, so the
             // reset row has to offer itself for exactly that case.
             settings.immersive

@@ -419,6 +419,8 @@ fun AniSequelTheme(
     /** Scroll speed for titles that outgrow their row, in dp per second. */
     titleScrollDpPerSecond: Float =
         com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+    /** Subtle blur accents on Nova/home backdrops; off by default for performance. */
+    novaBackdropBlur: Boolean = false,
     /**
      * The display density the whole app draws at, in dpi.
      *
@@ -601,7 +603,8 @@ fun AniSequelTheme(
         // tone 40 or 80 has to ask the same question the scheme asked, or a
         // reader who forced Light on a dark phone gets the dark tone on a light
         // card - see [LocalAppDarkTheme].
-        LocalAppDarkTheme provides darkTheme
+        LocalAppDarkTheme provides darkTheme,
+        LocalNovaBackdropBlur provides novaBackdropBlur
     ) {
         // MaterialExpressiveTheme rather than MaterialTheme: the difference that
         // matters is the motion scheme it installs, which is what every

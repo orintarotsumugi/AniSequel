@@ -128,3 +128,7 @@ val LocalTierTopBarShortcut = staticCompositionLocalOf { false }
  * value changes only when the reader changes the theme, never per frame.
  */
 val LocalAppDarkTheme = staticCompositionLocalOf { false }
+
+/** Whether Nova backdrop accent blur is enabled; off by default for performance. */
+val LocalNovaBackdropBlur = staticCompositionLocalOf { false }
+

@@ -390,7 +390,8 @@ class MainActivity : ComponentActivity() {
                 customFontPath = themeSettings.customFontPath,
                 customFontBoldPath = themeSettings.customFontBoldPath,
                 systemFont = themeSettings.systemFont,
-                titleScrollDpPerSecond = themeSettings.titleScrollDpPerSecond
+                titleScrollDpPerSecond = themeSettings.titleScrollDpPerSecond,
+                novaBackdropBlur = themeSettings.novaBackdropBlur
             ) {
                 CompositionLocalProvider(
                     LocalImmersiveMode provides themeSettings.immersive

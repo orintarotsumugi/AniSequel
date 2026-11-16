@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.os.Build
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -41,6 +42,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.LocalNovaBackdropBlur
 
 /**
  * The new look's shared surfaces.
@@ -93,15 +95,20 @@ fun NovaSurface(
 /**
  * A faint wash behind a new-layout page.
  *
- * Two soft gradients with a light blur for depth, kept static so the seasonal sky
- * still owns motion. The wash sits behind page content and only shows through
- * transparent areas.
+ * Two soft gradients that can gain a light blur for depth when enabled, kept
+ * static so the seasonal sky still owns motion. Blur is off by default and only
+ * applied when supported to avoid unnecessary render cost.
  */
 @Composable
 fun NovaBackdrop(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val blurEnabled = LocalNovaBackdropBlur.current && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    fun Modifier.backdropBlur(radius: androidx.compose.ui.unit.Dp): Modifier =
+        if (blurEnabled) this.blur(radius) else this
+
     Box(
         modifier = modifier.background(MaterialTheme.colorScheme.background)
     ) {
@@ -109,7 +116,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp)
-                .blur(28.dp)
+                .backdropBlur(24.dp)
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -123,7 +130,7 @@ fun NovaBackdrop(
             modifier = Modifier
                 .size(230.dp)
                 .offset(x = (-70).dp, y = (-30).dp)
-                .blur(36.dp)
+                .backdropBlur(28.dp)
                 .background(
                     Brush.radialGradient(
                         listOf(
