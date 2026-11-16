@@ -1,7 +1,7 @@
 {
-  "version": "2.1.6",
-  "version_code": 660,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.6",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.6/anisequel-universal.apk",
-  "notes": "- Discord sign-in now uses a redirect Discord actually accepts: Discord's developer portal only accepts https:// redirect URIs for a standard (non-Social-SDK) OAuth2 application, so the discord-<app id> scheme from 2.1.5 still failed. The redirect is now an https URL on GitHub Pages that forwards the callback to the app's anisequel://discord scheme. Enable GitHub Pages (Settings -> Pages, source main /docs) and register https://orintarotsumugi.github.io/AniSequel/discord-callback.html in the Discord portal for application 1571747436542566561.\n- The sign-in still works on an older build mid-flight: The legacy anisequel://discord filter and parser stay registered, and the parser also accepts the Social-SDK discord-<app id> form and the https callback, so a redirect already in flight on any recent build still resolves instead of being dropped."
+  "version": "2.1.7",
+  "version_code": 661,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.7",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.7/anisequel-universal.apk",
+  "notes": "- Discord sign-in redirect now resolves: the redirect page was shipped under docs/ but GitHub Pages for this repo is published from the repository root, so the https URL 404'd and Discord's authorize step still rejected the request. The page now lives at the repository root as discord-callback.html, served at https://orintarotsumugi.github.io/AniSequel/discord-callback.html, with a .nojekyll marker so Jekyll does not process it. Register that exact URL in the Discord portal for application 1571747436542566561."
 }
