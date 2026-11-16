@@ -202,6 +202,22 @@ private fun DiscordPresencePublisher(
                 DiscordPresenceRuntime.update(DiscordRuntimeState.PreviewOnly)
             }
             else -> {
+                // An OAuth token never carries `gateway.connect` (it is not a
+                // public scope), so attempting the gateway connection only ever
+                // ends in a 4004 or a 15-second timeout. Say so immediately
+                // instead of making the reader wait for a failure.
+                if (bearer) {
+                    publishJob?.cancel()
+                    runCatching { client.disconnect() }
+                    lastLiveToken = null
+                    DiscordPresenceRuntime.update(
+                        DiscordRuntimeState.Failed(
+                            "Presence needs Discord approval for the gateway.connect scope. " +
+                                "Login works; publishing stays off until it is granted."
+                        )
+                    )
+                    return@LaunchedEffect
+                }
                 publishJob?.cancel()
                 DiscordPresenceRuntime.update(DiscordRuntimeState.Connecting)
                 val token = settings.token

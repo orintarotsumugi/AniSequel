@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "2.1.9",
+      "entries": [
+        {
+          "title": "Discord sign-in now requests the public identify and connections scopes",
+          "detail": "`rpc` and `gateway.connect` are not public and stay out, so login succeeds. Presence still needs Discord approval for `gateway.connect`; the 4004 close message now says so instead of a generic token rejection."
+        }
+      ]
+    },
+    {
       "version": "2.1.8",
       "entries": [
         {

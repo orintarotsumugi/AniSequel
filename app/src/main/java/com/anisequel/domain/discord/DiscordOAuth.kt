@@ -78,15 +78,15 @@ object DiscordOAuth {
      * The scopes asked for.
      *
      * `identify` is what `/users/@me` needs, so the app can name the account it
-     * linked. `gateway.connect` is the one that matters for the presence
-     * feature (a user token is only allowed on the gateway when it carries it),
-     * but it is not a public scope: requesting it on an application that has not
-     * been approved by Discord makes the whole authorize request fail with
-     * "The requested scope is invalid, unknown, or malformed." So only the
-     * public `identify` scope is requested here; the presence stays off unless
-     * the application is later approved for `gateway.connect`.
+     * linked. `connections` is public and reads the reader's linked third-party
+     * accounts. `gateway.connect` (presence) and `rpc` (local Rich Presence) are
+     * NOT public: requesting either on an unapproved application makes Discord
+     * reject the whole authorize request with "The requested scope is invalid,
+     * unknown, or malformed." They are deliberately left out so login succeeds;
+     * presence needs Discord approval for `gateway.connect` and stays off until
+     * then.
      */
-    const val SCOPES: String = "identify"
+    const val SCOPES: String = "identify connections"
 
     /** PKCE's S256 method: the only one Discord accepts. */
     const val CHALLENGE_METHOD: String = "S256"

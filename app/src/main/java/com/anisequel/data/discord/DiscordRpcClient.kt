@@ -254,7 +254,7 @@ class DiscordRpcClient(
             readyDeferred = null
             teardown(closeCode = 4000, reason = "connect timeout")
             return Result.failure(
-                IOException("Discord did not answer in time. Check your connection and token.")
+                IOException("Discord did not answer in time. Check your connection and token; presence needs the gateway.connect scope, which requires Discord approval.")
             )
         }
         return result.map { it.toAccount() }
@@ -454,7 +454,7 @@ class DiscordRpcClient(
     }
 
     private fun closeReason(code: Int, reason: String): String = when (code) {
-        4004 -> "Discord rejected this token. Sign in again or paste a fresh token."
+        4004 -> "Discord rejected this token. Presence needs the gateway.connect scope, which requires Discord approval; sign in again once it is granted, or paste a fresh token."
         4014 -> "Discord does not allow this connection for your account."
         else -> if (reason.isNotBlank()) "Discord closed the connection: $reason" else "Discord closed the connection ($code)."
     }
