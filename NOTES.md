@@ -2819,10 +2819,18 @@ The redirect is now an https URL on GitHub Pages
 (`https://orintarotsumugi.github.io/AniSequel/discord-callback.html`) that
 forwards the callback (`?code=...&state=...`) to the app's `anisequel://discord`
 scheme, which the manifest already handles. Two things have to happen outside
-the app: enable GitHub Pages (Settings -> Pages, source main /docs) and register
+the app: enable GitHub Pages (Settings -> Pages, source main / (root)) and register
 that exact URL in the Discord portal for application 1571747436542566561.
 
 The parser still accepts the legacy `anisequel://discord` and the Social-SDK
 `discord-...:/authorize/callback` forms, so a redirect already in flight on any
 recent build still resolves; the browser follows the https redirect to
 `anisequel://discord`, so that is the scheme the parser actually sees.
+
+## 2.1.7: the redirect page is actually served
+
+2.1.6 shipped the redirect page under `docs/`, but this repository's GitHub Pages
+is published from the repository root, so the registered URL 404'd and Discord
+rejected the authorize request. The page now lives at the root as
+`discord-callback.html` (with a `.nojekyll` marker) and is served at
+`https://orintarotsumugi.github.io/AniSequel/discord-callback.html`.

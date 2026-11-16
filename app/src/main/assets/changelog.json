@@ -1,11 +1,20 @@
 {
   "versions": [
     {
+      "version": "2.1.7",
+      "entries": [
+        {
+          "title": "Discord sign-in redirect now actually resolves",
+          "detail": "The redirect page was shipped under docs/ but GitHub Pages for this repository is published from the repository root, so https://orintarotsumugi.github.io/AniSequel/discord-callback.html returned a 404 and Discord's authorize step still rejected the request. The page now lives at the repository root as discord-callback.html, served at that URL, with a .nojekyll marker so Jekyll does not process it. Register that exact URL in the Discord portal for application 1571747436542566561."
+        }
+      ]
+    },
+    {
       "version": "2.1.6",
       "entries": [
         {
           "title": "Discord sign-in now uses a redirect Discord actually accepts",
-          "detail": "Discord's developer portal only accepts https:// redirect URIs for a standard (non-Social-SDK) OAuth2 application, so the discord-<app id> scheme from 2.1.5 still failed. The redirect is now an https URL on GitHub Pages that forwards the callback to the app's anisequel://discord scheme. Enable GitHub Pages (Settings -> Pages, source main /docs) and register https://orintarotsumugi.github.io/AniSequel/discord-callback.html in the Discord portal for application 1571747436542566561."
+          "detail": "Discord's developer portal only accepts https:// redirect URIs for a standard (non-Social-SDK) OAuth2 application, so the discord-<app id> scheme from 2.1.5 still failed. The redirect is now an https URL on GitHub Pages that forwards the callback to the app's anisequel://discord scheme. Enable GitHub Pages (Settings -> Pages, source main / (root)) and register https://orintarotsumugi.github.io/AniSequel/discord-callback.html in the Discord portal for application 1571747436542566561."
         },
         {
           "title": "The sign-in still works on an older build mid-flight",
