@@ -103,7 +103,7 @@ internal fun DiscordSignInPanel(
         Spacer(modifier = Modifier.height(8.dp))
         SettingsButton(
             text = when {
-                busy -> "Finishing sign-in…"
+                busy -> "Loading your account…"
                 waiting -> "Waiting for Discord…"
                 else -> "Sign in with Discord"
             },

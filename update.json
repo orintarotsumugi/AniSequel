@@ -1,7 +1,7 @@
 {
-  "version": "2.1.9",
-  "version_code": 663,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.1.9",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.1.9/anisequel-universal.apk",
-  "notes": "- Discord sign-in now requests the public identify and connections scopes: `rpc` and `gateway.connect` are not public and stay out, so login succeeds. Presence still needs Discord approval for `gateway.connect`; the 4004 close message now says so instead of a generic token rejection."
+  "version": "2.2.0",
+  "version_code": 664,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.2.0",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.2.0/anisequel-universal.apk",
+  "notes": "- Discord sign-in and Rich Presence: login uses the public identify and connections scopes, the redirect resolves on GitHub Pages, OAuth accounts no longer hang on a 15-second gateway timeout, and the busy indicator now says Loading your account while the account is fetched. Presence publishing still needs Discord approval for the gateway.connect scope; the 4004 and timeout messages say so."
 }

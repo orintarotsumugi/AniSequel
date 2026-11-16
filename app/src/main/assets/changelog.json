@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "2.2.0",
+      "entries": [
+        {
+          "title": "Discord sign-in and Rich Presence",
+          "detail": "Login uses the public identify and connections scopes, the redirect resolves on GitHub Pages, OAuth accounts no longer hang on a 15-second gateway timeout, and the busy indicator now says Loading your account while the account is fetched. Presence publishing still needs Discord approval for the gateway.connect scope; the 4004 and timeout messages say so."
+        }
+      ]
+    },
+    {
       "version": "2.1.9",
       "entries": [
         {
