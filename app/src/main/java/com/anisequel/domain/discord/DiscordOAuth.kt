@@ -180,17 +180,14 @@ object DiscordOAuth {
         // Callback shapes accepted:
         //  - the legacy `anisequel://discord` (kept so an in-flight sign-in from
         //    an older build still resolves, and the GitHub Pages redirect target),
-        //  - the Social-SDK `discord-<application id>:/authorize/callback`,
-        //  - the https GitHub Pages redirect itself, in case a device hands the
-        //    https URL straight to the app instead of following it.
+        //  - the Social-SDK `discord-<application id>:/authorize/callback`.
+        // The browser follows the https GitHub Pages redirect to anisequel://discord,
+        // so this parser only ever sees those two schemes in practice.
         // Either way the query carries the code.
         val scheme = uri.substringBefore(':', missingDelimiterValue = "")
         val isAnisequel = scheme.equals("anisequel", ignoreCase = true)
         val isDiscordMobile = scheme.startsWith("discord-", ignoreCase = true)
-        val isHttpsCallback = scheme.equals("https", ignoreCase = true) &&
-            (uri.contains("discord-callback", ignoreCase = true) ||
-                uri.contains("AniSequel", ignoreCase = true))
-        if (!isAnisequel && !isDiscordMobile && !isHttpsCallback) return Redirect.Ignored
+        if (!isAnisequel && !isDiscordMobile) return Redirect.Ignored
 
         val beforeQuery = uri.substringBefore('?')
         val validTarget = when {
@@ -198,17 +195,14 @@ object DiscordOAuth {
                 .substringBefore('?')
                 .trimEnd('/')
                 .equals("discord", ignoreCase = true)
-            isDiscordMobile -> beforeQuery.contains("/authorize/callback", ignoreCase = true)
-            isHttpsCallback -> beforeQuery.contains("discord-callback", ignoreCase = true) ||
-                beforeQuery.contains("callback", ignoreCase = true)
-            else -> false
+            else -> beforeQuery.contains("/authorize/callback", ignoreCase = true)
         }
         if (!validTarget) return Redirect.Ignored
 
-        val withoutScheme = when {
-            isAnisequel -> uri.substringAfter("anisequel://", missingDelimiterValue = "")
-            isHttpsCallback -> uri
-            else -> uri.substringAfter(':', missingDelimiterValue = "").removePrefix("//")
+        val withoutScheme = if (isAnisequel) {
+            uri.substringAfter("anisequel://", missingDelimiterValue = "")
+        } else {
+            uri.substringAfter(':', missingDelimiterValue = "").removePrefix("//")
         }
         if (withoutScheme.isBlank()) return Redirect.Ignored
 

@@ -2822,6 +2822,7 @@ scheme, which the manifest already handles. Two things have to happen outside
 the app: enable GitHub Pages (Settings -> Pages, source main /docs) and register
 that exact URL in the Discord portal for application 1571747436542566561.
 
-The parser now accepts all three callback shapes (legacy `anisequel://discord`,
-Social-SDK `discord-...:/authorize/callback`, and the https callback) so a
-redirect already in flight on any recent build still resolves.
+The parser still accepts the legacy `anisequel://discord` and the Social-SDK
+`discord-...:/authorize/callback` forms, so a redirect already in flight on any
+recent build still resolves; the browser follows the https redirect to
+`anisequel://discord`, so that is the scheme the parser actually sees.
