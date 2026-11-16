@@ -306,17 +306,7 @@ object NetworkClient {
             }
             .build()
 
-    /**
-     * Thirty percent of the process heap, up from twenty-five.
-     *
-     * The Library, the profile favourites and the tier board are all walls of
-     * covers; 25% was just short enough that a long scroll evicted the first
-     * screenful before the reader scrolled back to it. The extra five points
-     * keep that working set resident without taking memory the rest of the
-     * screen needs - Coil's cache is bytes of decoded artwork, not a second copy
-     * of every image.
-     */
-    private const val MEMORY_CACHE_PERCENT = 0.30
+    private const val MEMORY_CACHE_PERCENT = 0.25
 
     /**
      * User-Agent for image requests only. A generic desktop browser string,

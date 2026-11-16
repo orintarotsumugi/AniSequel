@@ -492,7 +492,7 @@ data class DiscordAccount(
          * the avatar arithmetic had already drifted between them. Whatever answers
          * the account now goes through here.
          */
-        fun from(user: DiscordUser?): DiscordAccount {
+        internal fun from(user: DiscordUser?): DiscordAccount {
             val name = user?.globalName?.takeIf { it.isNotBlank() }
                 ?: user?.username?.takeIf { it.isNotBlank() }
                 ?: "Discord"
