@@ -13,43 +13,26 @@ import org.junit.Test
  *
  * The network is not exercised here: Google owns those URLs, and a test that
  * depends on them would fail when Google changes a version suffix rather than
- * when this app does. What is pinned is the part this repo owns - the quick
- * picks, the search and its exact-name fallback, the shape of the CSS the parser
- * accepts, and the refusal of the WOFF2 response a browser user agent would get.
+ * when this app does. What is pinned is the part this repo owns - the three
+ * families offered, the shape of the CSS the parser accepts, and the refusal of
+ * the WOFF2 response a browser user agent would get.
  */
 class GoogleFontDownloadsTest {
 
     @Test
-    fun `the catalog starts with JetBrains Mono, Inter and Roboto`() {
+    fun `the catalog offers JetBrains Mono, Inter and Roboto`() {
         assertEquals(
             listOf("jetbrains_mono", "inter", "roboto"),
-            GoogleFontCatalog.quickPicks.map { it.id }
+            GoogleFontCatalog.fonts.map { it.id }
         )
         assertEquals(
             listOf("JetBrains Mono", "Inter", "Roboto"),
-            GoogleFontCatalog.quickPicks.map { it.displayName }
+            GoogleFontCatalog.fonts.map { it.displayName }
         )
         assertTrue(
             "every download needs a CSS family name",
-            GoogleFontCatalog.quickPicks.all { it.familyName.isNotBlank() }
+            GoogleFontCatalog.fonts.all { it.familyName.isNotBlank() }
         )
-    }
-
-    @Test
-    fun `search finds Google families by name and category`() {
-        assertTrue(GoogleFontCatalog.search("lora").any { it.familyName == "Lora" })
-        assertTrue(GoogleFontCatalog.search("mono").any { it.familyName == "JetBrains Mono" })
-        assertTrue(
-            GoogleFontCatalog.search("serif").any { it.familyName == "Merriweather" }
-        )
-    }
-
-    @Test
-    fun `an unknown name is still offered as an exact family`() {
-        val result = GoogleFontCatalog.search("My Fancy Font").single()
-
-        assertEquals("My Fancy Font", result.familyName)
-        assertEquals("my_fancy_font", result.id)
     }
 
     @Test
