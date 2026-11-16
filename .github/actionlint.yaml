@@ -1,0 +1,11 @@
+# Extra runner labels actionlint should accept.
+#
+# The bundled label list predates Ubuntu 26.04, so `runs-on: ubuntu-26.04` - the
+# image `ubuntu-latest` is migrating to between October and November 2026 - was
+# reported as "label is unknown" and failed the validate step before any build
+# ran. actionlint's documented way to allow a label its list does not know yet
+# is this file; the runner is GitHub-hosted, not self-hosted, and the key name is
+# actionlint's, not a claim about where the job runs.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
