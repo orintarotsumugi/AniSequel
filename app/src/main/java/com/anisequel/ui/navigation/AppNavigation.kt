@@ -27,6 +27,9 @@ import androidx.navigation.compose.rememberNavController
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.domain.jokes.JokeSettings
 import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.ui.components.cards.ListRatingVisibility
+import com.anisequel.ui.components.cards.LocalCardDesign
+import com.anisequel.ui.components.cards.LocalListRatings
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.markdown.ProvideMediaCovers
@@ -43,11 +46,9 @@ import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.OnboardingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
-import com.anisequel.data.repository.DiscordPreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
-import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
@@ -142,10 +143,6 @@ private fun drawRestoringPlaceholder(
     return true
 }
 
-/** The folded presence numbers, or none before the dashboard has answered. */
-private fun DashboardUiState?.discordStatsOrEmpty(): DiscordStats =
-    (this as? DashboardUiState.Success)?.discordStats ?: DiscordStats.Empty
-
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -211,14 +208,6 @@ fun AppNavigation(
     // A separate flow because saved lines are the reader's content rather than a
     // switch; the host needs them to draw the heart filled in the pill.
     val jokeFavourites by jokePreferences.favourites.collectAsState(initial = emptySet())
-
-    // Discord presence, application-scoped for the same reason as every other
-    // preference here: the publishing host at this root and the page in Settings
-    // are two readers of one store, so the preview cannot describe a presence the
-    // gateway never receives.
-    val discordPreferences = remember(context) {
-        DiscordPreferences(context.applicationContext)
-    }
 
     // The Library page's remembered media type. Application-scoped and built here
     // for the same reason as the rest: one DataStore reader per process, so the
@@ -500,13 +489,6 @@ fun AppNavigation(
         derivedStateOf { (dashboardState as? DashboardUiState.Success)?.totalMissedCount }
     }
 
-    // The Discord presence's numbers. Derived for the same reason as the counts
-    // above: `uiState` is replaced per keystroke, and the presence host only needs
-    // to hear when the folded value actually changes.
-    val discordStats by remember(dashboardFlow) {
-        derivedStateOf { dashboardState.discordStatsOrEmpty() }
-    }
-
     // The three entries Settings' card preview draws. Derived for the same reason
     // as the counts above: `uiState` is replaced on every recompute, and a plain
     // read here would subscribe the app root to all of them to discover that the
@@ -669,6 +651,19 @@ fun AppNavigation(
     ProvideMediaCovers(aniListRepository) {
         CompositionLocalProvider(
             LocalMediaCardStyle provides cardStyle,
+            // The card design beside the card style it belongs with. Both are facts
+            // about the same card, so they are provided at the same place and read by
+            // the same surfaces - a size supplied anywhere else would be the one copy
+            // that disagreed.
+            LocalCardDesign provides interfaceSettings.cardDesign,
+            // Whose rating a card prints, provided beside the card design for the
+            // same reason: it is read by the Library grid, a profile's list and the
+            // Settings preview, and a value threaded by hand stops reaching one of
+            // them the day a fourth surface is added.
+            LocalListRatings provides ListRatingVisibility(
+                showMine = interfaceSettings.showMyRatings,
+                showTheirs = interfaceSettings.showTheirRatings
+            ),
             LocalAppLayout provides interfaceSettings.layout,
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
@@ -839,8 +834,6 @@ fun AppNavigation(
                         seasonalPreferences = seasonalPreferences,
                         devicePreferences = devicePreferences,
                         interfacePreferences = interfacePreferences,
-                        discordPreferences = discordPreferences,
-                        discordStats = discordStats,
                         aniListRepository = aniListRepository,
                         totalWatchedCount = totalWatchedCount,
                         totalMissedCount = totalMissedCount,
@@ -886,16 +879,6 @@ fun AppNavigation(
                     preferences = jokePreferences,
                     settings = jokeSettings,
                     favourites = jokeFavourites
-                )
-
-                // The Discord presence host. Mounted beside the bar and the joke
-                // toast because the presence describes whichever page is on
-                // screen, and a screen cannot draw something that outlives it.
-                // Draws nothing itself; it composes and publishes.
-                DiscordPresenceHost(
-                    navController = navController,
-                    preferences = discordPreferences,
-                    stats = discordStats
                 )
 
                 FirstRunSetupHost(

@@ -124,7 +124,11 @@ class SettingsLayoutTest {
     @Test
     fun `every card surface draws the same cell`() {
         val surfaces = listOf(
-            settings + "InterfaceSections.kt" to "the picker's preview",
+            // The picker's preview moved out of `InterfaceSections` when the card
+            // design page outgrew it; the assertion follows the drawing, not the file
+            // name, so a page that handed its cards to a sample widget of its own
+            // would still fail here.
+            settings + "CardDesignPreview.kt" to "the picker's preview",
             "app/src/main/java/com/anisequel/ui/screens/profile/ProfileLibraryTab.kt" to
                 "the Library grid",
             "app/src/main/java/com/anisequel/ui/components/cards/SequelPoster.kt" to

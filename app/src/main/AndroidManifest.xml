@@ -44,28 +44,6 @@
                 <data android:scheme="anisequel" android:host="oauth" />
             </intent-filter>
 
-            <!--
-              Discord's OAuth2 callback.
-
-              Discord only accepts `discord-<application id>:/authorize/callback`
-              as a registered redirect URI for a native mobile app, so that is
-              the scheme the authorize request sends the reader back on. The
-              legacy `anisequel://discord` filter is kept so a sign-in that was
-              already in flight on an older build still lands here instead of
-              being dropped.
-            -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="discord-1571747436542566561" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="anisequel" android:host="discord" />
-            </intent-filter>
         </activity>
 
         <!-- Profile-activity widget.

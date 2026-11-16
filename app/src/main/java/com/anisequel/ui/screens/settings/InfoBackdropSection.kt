@@ -63,7 +63,7 @@ internal fun InfoBackdropSection(
                 .testTag("info_backdrop_source_row")
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = "Banner keeps the wide key visual under the page. Cover uses the " +
                 "poster, which is the picture you tapped in the grid. Off returns the " +
                 "page to the app's surface.",
@@ -90,7 +90,7 @@ internal fun InfoBackdropSection(
                 .testTag("info_backdrop_blur_row")
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = if (backdropOn) {
                 "Crisp is the artwork itself; Soft keeps its colour and removes the " +
                     "detail that competes with the cards; Heavy leaves only the palette."
@@ -121,7 +121,7 @@ internal fun InfoBackdropSection(
                 .testTag("info_backdrop_tint_row")
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = if (backdropOn) {
                 "Natural keeps the cover's own colours; Tinted blends the active theme " +
                     "accent into the blur so the page belongs to the app around it."

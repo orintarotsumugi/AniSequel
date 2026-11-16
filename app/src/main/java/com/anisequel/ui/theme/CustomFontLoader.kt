@@ -34,10 +34,21 @@ import java.io.File
  * use fresh file names each time, so the path alone would usually be enough; the
  * lengths also cover a file replaced by something outside the app, where a path
  * stays the same but the bytes do not.
+ *
+ * ## The cache is read before the decode
+ *
+ * This used to validate both files - `Typeface.createFromFile` on each - and only
+ * then look at the cache, so every rebuild of the theme decoded a font it already
+ * had. Opening the app is one rebuild; rotating the device or recreating the
+ * Activity is another, and both paid two decodes on the main thread before the
+ * first frame. The key needs two `stat` calls, so a hit is now free of the only
+ * expensive part. A family the platform cannot read is cached too, which stops a
+ * broken stored path from being re-decoded on every theme build.
  */
 internal fun customFontFamily(path: String?, boldPath: String? = null): FontFamily? {
-    val regularFile = loadableFont(path) ?: return null
-    val boldFile = loadableFont(boldPath)
+    if (path.isNullOrBlank()) return null
+    val regularFile = File(path).takeIf { it.isFile } ?: return null
+    val boldFile = boldPath?.takeIf { it.isNotBlank() }?.let(::File)?.takeIf { it.isFile }
     val regularBytes = regularFile.length()
     val boldBytes = boldFile?.length() ?: 0L
 
@@ -53,6 +64,11 @@ internal fun customFontFamily(path: String?, boldPath: String? = null): FontFami
     }
 
     val family = runCatching {
+        // The same decoder the platform will use, for both cuts: a file that is
+        // not a font must be refused here rather than at the first draw, on every
+        // screen.
+        Typeface.createFromFile(regularFile)
+        boldFile?.let { Typeface.createFromFile(it) }
         val fonts = buildList {
             add(Font(regularFile))
             boldFile?.let { add(Font(it, weight = FontWeight.Bold)) }
@@ -68,14 +84,6 @@ internal fun customFontFamily(path: String?, boldPath: String? = null): FontFami
         family = family
     )
     return family
-}
-
-/** A file the platform's font decoder accepts, or null. */
-private fun loadableFont(path: String?): File? {
-    if (path.isNullOrBlank()) return null
-    val file = File(path)
-    if (!file.isFile) return null
-    return file.takeIf { runCatching { Typeface.createFromFile(it) }.isSuccess }
 }
 
 private data class CachedFont(

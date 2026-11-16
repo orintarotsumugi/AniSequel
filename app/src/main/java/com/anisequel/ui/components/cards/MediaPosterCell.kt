@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -150,6 +151,13 @@ fun MediaPosterCell(
     val titleOverlaid = titleVisible && style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
     val titleHidden = !titleVisible || style.titlePlacement == CardTitlePlacement.HIDDEN
 
+    // The reader's card design, resolved once here rather than per `Text`. The name
+    // and the rating are two factors, the size one bias and the scrolling one switch -
+    // reading them once keeps every part of the card on one frame of the same answer.
+    val design = LocalCardDesign.current
+    val titleStyle = cardTitleStyle(design)
+    val ratingStyle = cardRatingStyle(design)
+
     Column(modifier = modifier) {
         PosterArtwork(
             coverUrl = coverUrl,
@@ -161,7 +169,11 @@ fun MediaPosterCell(
             style = style,
             contentDescription = contentDescription,
             posterModifier = posterModifier,
-            aspect = aspect,
+            titleStyle = titleStyle,
+            ratingStyle = ratingStyle,
+            // Stretched with the chosen size so a two-across card is a bigger
+            // picture rather than the same cover with a wider gap beside it.
+            aspect = cardCoverAspect(aspect, design),
             overlay = overlay
         )
 
@@ -170,10 +182,16 @@ fun MediaPosterCell(
             // The title in the body is the accessible name for the whole cell, which
             // is why the image above is handed a null description here: the grid would
             // otherwise read the same name twice in a row on every swipe.
+            // The marquee rather than a plain `Text`: a two-across card leaves a long
+            // name nowhere to go, and cutting it at the first line is how two seasons
+            // end up with the same caption. The design's switch decides whether this
+            // card takes part in the app-wide scroll, and the app's motion style still
+            // has the last word.
             MarqueeText(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
+                style = titleStyle,
                 color = MaterialTheme.colorScheme.onSurface,
+                motion = cardTitleMotion(design),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -181,11 +199,19 @@ fun MediaPosterCell(
         if (score != null && scoreCorner == null && !titleHidden) {
             Spacer(modifier = Modifier.height(if (titleOverlaid) 6.dp else 1.dp))
             if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE) {
-                ScoreBanner(score = score)
+                // The banner's own step of the type scale, multiplied by the reader's
+                // rating factor - not the caption's size borrowed and scaled again.
+                ScoreBanner(
+                    score = score,
+                    textStyle = cardRatingStyle(
+                        design,
+                        base = MaterialTheme.typography.labelMedium
+                    )
+                )
             } else {
                 Text(
                     text = "$score%",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = ratingStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -204,7 +230,11 @@ fun MediaPosterCell(
  * artwork closely enough to disappear.
  */
 @Composable
-private fun PosterScoreBadge(score: Int?, modifier: Modifier = Modifier) {
+private fun PosterScoreBadge(
+    score: Int?,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle = MaterialTheme.typography.labelSmall
+) {
     if (score == null) return
     Row(
         modifier = modifier
@@ -222,7 +252,7 @@ private fun PosterScoreBadge(score: Int?, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.width(3.dp))
         Text(
             text = "$score%",
-            style = MaterialTheme.typography.labelSmall,
+            style = textStyle,
             color = Color.White,
             fontWeight = FontWeight.Bold
         )
@@ -237,7 +267,16 @@ private fun PosterScoreBadge(score: Int?, modifier: Modifier = Modifier) {
  * reads as part of the card, so it takes the card's own colour.
  */
 @Composable
-fun ScoreBanner(score: Int, modifier: Modifier = Modifier) {
+fun ScoreBanner(
+    score: Int,
+    modifier: Modifier = Modifier,
+    /**
+     * The reader's rating size, already resolved. A default rather than a required
+     * parameter so the one other caller that draws the same band - the sequel card's
+     * details - keeps its own step of the scale and only inherits the factor.
+     */
+    textStyle: TextStyle = MaterialTheme.typography.labelMedium
+) {
     val strong = score >= 80
     Row(
         modifier = modifier
@@ -263,7 +302,7 @@ fun ScoreBanner(score: Int, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = "$score%",
-            style = MaterialTheme.typography.labelMedium,
+            style = textStyle,
             fontWeight = FontWeight.Bold,
             color = if (strong) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
         )
@@ -290,6 +329,8 @@ private fun PosterArtwork(
     style: MediaCardStyle,
     contentDescription: String?,
     posterModifier: Modifier,
+    titleStyle: TextStyle,
+    ratingStyle: TextStyle,
     aspect: Float,
     overlay: @Composable BoxScope.() -> Unit
 ) {
@@ -355,6 +396,7 @@ private fun PosterArtwork(
         if (scoreCorner != null) {
             PosterScoreBadge(
                 score = score,
+                textStyle = ratingStyle,
                 modifier = Modifier
                     .align(scoreCorner.toAlignment())
                     .padding(5.dp)
@@ -364,8 +406,7 @@ private fun PosterArtwork(
         if (titleOverlaid) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
+                style = titleStyle,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

@@ -106,7 +106,7 @@ fun EditSettingsTab(
             icon = AppVectorIcons.SectionAniList,
             subtitle = "The app identity AniList signs you in with"
         ) {
-            Text(
+            CollapsibleText(
                 text = "The default works. Change it only if you registered your own " +
                     "AniList client and want AniSequel to use that one.",
                 style = MaterialTheme.typography.bodySmall,
@@ -183,7 +183,7 @@ private fun DemoIdentityCard() {
             }
         }
     ) {
-        Text(
+        CollapsibleText(
             text = "You are browsing a built-in sample list. Sign in with your AniList " +
                 "account to scan your own completed list, follow franchise trees, and add " +
                 "sequels to Planning in one tap.",
@@ -386,7 +386,7 @@ private fun CommentMediaCard(context: android.content.Context) {
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Text(
+        CollapsibleText(
             text = "Photos you attach are uploaded to an anonymous image host and " +
                 "the comment carries the link. catbox.moe is tried first; if it is " +
                 "paused or down the file goes to imgbb.com next, then to pomf.lain.la. " +

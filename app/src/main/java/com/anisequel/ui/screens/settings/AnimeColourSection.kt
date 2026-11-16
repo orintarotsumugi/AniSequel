@@ -211,7 +211,7 @@ internal fun AnimeColourSection(
             enabled = tintEnabled
         )
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
+        CollapsibleText(
             text = "Full keeps the sheet's whole background. Balanced moves the " +
                 "surface ramp halfway toward the show's colour; Subtle keeps it " +
                 "mostly in the accent and buttons with only a hint in the " +
@@ -252,7 +252,7 @@ internal fun AnimeColourSection(
             enabled = revertEnabled
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
+        CollapsibleText(
             text = if (settings.animeThemeRetainColor) {
                 "Being kept: the colour survives the sheet and the next launch, tinted " +
                     "background included. Pick a palette, a hue, or Reset appearance to " +

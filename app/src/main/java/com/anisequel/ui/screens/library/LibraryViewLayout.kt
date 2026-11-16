@@ -38,6 +38,10 @@ import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
+import com.anisequel.ui.components.cards.ListOwner
+import com.anisequel.ui.components.cards.libraryRating
+import com.anisequel.domain.card.CardSize
+import com.anisequel.domain.card.columnsFor
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -62,11 +66,25 @@ import com.anisequel.ui.screens.profile.libraryProgressLabel
  * a cover can show a face at; reducing it further would change the mode rather
  * than make it fit. The floor is the same 68dp the new Library documented.
  */
-internal fun libraryColumns(mode: LibraryViewMode, width: Dp): Int {
+internal fun libraryColumns(
+    mode: LibraryViewMode,
+    width: Dp,
+    /**
+     * The reader's card size, which nudges the mode's own count by one.
+     *
+     * A parameter with a default rather than a composition-local read in here, so this
+     * stays the pure arithmetic it is and the two grids that call it - the Library and
+     * a profile's - pass the same value from the same local.
+     */
+    size: CardSize = CardSize.STANDARD
+): Int {
+    // Only the modes that draw a grid are nudged: `columnsFor` returns a one-wide mode
+    // unchanged, since turning a table into two columns would not be a bigger card.
+    val requested = columnsFor(mode.columns, size)
     if (mode != LibraryViewMode.COMPACT && mode != LibraryViewMode.SHELF) {
-        return mode.columns.coerceAtLeast(1)
+        return requested.coerceAtLeast(1)
     }
-    var columns = mode.columns
+    var columns = requested
     while (columns > 3) {
         val gaps = 8.dp * (columns - 1).toFloat()
         val cell = (width - 32.dp - gaps) / columns.toFloat()
@@ -94,13 +112,20 @@ internal fun LibraryListRow(
      * Table adds the score and the format line. List does not: the mode is for
      * finding a title, and a third number on every row is noise while scanning.
      */
-    detailed: Boolean = false
+    detailed: Boolean = false,
+    /**
+     * Whose list this row is part of, which decides whose rating the score column
+     * shows - the reader's on their own Library, the profile owner's on a profile.
+     * Defaulted to the reader's because that is the larger list of callers, and a row
+     * that is drawn without saying whose it is should print the number it always did.
+     */
+    owner: ListOwner = ListOwner.MINE
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
     val coverColor = media.posterColor.toCoverColorOrNull()
     val progress = libraryProgressLabel(entry)
-    val score = media.averageScore?.takeIf { it > 0 }
+    val score = libraryRating(entry, owner)
 
     Row(
         modifier = modifier

@@ -5,9 +5,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anisequel.domain.card.CardDesign
+import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
@@ -53,6 +56,21 @@ class InterfacePreferences(private val context: Context) {
         val SHOW_CONTINUE_RAIL = booleanPreferencesKey("show_continue_rail")
         val HOME_SEQUEL_STYLE = stringPreferencesKey("home_sequel_style")
         val MAIN_BAR_LIFT = intPreferencesKey("main_bar_lift_dp")
+
+        /**
+         * The card-design block. Five keys rather than one serialised string: a
+         * preferences file is readable and editable, and a blob that fails to parse
+         * loses every value in it - a broken title size would also reset bold titles.
+         * Separate keys also let a future build migrate one of them without knowing
+         * the format of the other four.
+         */
+        val CARD_TITLE_SCALE = floatPreferencesKey("card_title_scale")
+        val CARD_RATING_SCALE = floatPreferencesKey("card_rating_scale")
+        val CARD_SIZE = stringPreferencesKey("card_size")
+        val CARD_BOLD_TITLES = booleanPreferencesKey("card_bold_titles")
+        val CARD_SCROLL_TITLES = booleanPreferencesKey("card_scroll_titles")
+        val SHOW_MY_RATINGS = booleanPreferencesKey("show_my_ratings")
+        val SHOW_THEIR_RATINGS = booleanPreferencesKey("show_their_ratings")
     }
 
     /** Everything about the interface that is not the colour palette. */
@@ -67,7 +85,33 @@ class InterfacePreferences(private val context: Context) {
          * Whole dp because the slider is discrete; see [NavBarLift]. The default
          * keeps the shipped bar on the device's navigation inset.
          */
-        val mainBarLift: Int = NavBarLift.DEFAULT_DP
+        val mainBarLift: Int = NavBarLift.DEFAULT_DP,
+        /**
+         * How big and heavy a card's own text is, and how many fit a row.
+         *
+         * Part of this emission so the app root provides it once, beside the card
+         * style it belongs with: the two settings describe the same card, and a
+         * separate flow would rebuild the navigation graph a second time per tap.
+         */
+        val cardDesign: CardDesign = CardDesign.DEFAULT,
+        /**
+         * Whether a card prints the score *the reader* gave, on their own list.
+         *
+         * Off is not "hide the rating": it is "show the community average instead",
+         * which is what every card drew before there was a choice. AniList keeps both
+         * numbers, and which one a card should print is a reader's preference rather
+         * than a fact about the entry.
+         */
+        val showMyRatings: Boolean = true,
+        /**
+         * Whether a card prints the score the *profile's owner* gave, on their list.
+         *
+         * Separate from [showMyRatings] because the two are read in different
+         * contexts: on your own Library the personal number is a reminder of a verdict
+         * you already made, and on somebody else's profile it is the thing you opened
+         * the page for. A reader may want one without the other.
+         */
+        val showTheirRatings: Boolean = true
     )
 
     /**
@@ -105,7 +149,21 @@ class InterfacePreferences(private val context: Context) {
                 // off the page.
                 mainBarLift = NavBarLift.clamp(
                     preferences[Keys.MAIN_BAR_LIFT] ?: NavBarLift.DEFAULT_DP
-                )
+                ),
+                // Clamped on read for the same reason the lift is: a scale written
+                // by an older build is still a number this app has to draw, and the
+                // page clamps its slider but the grid does not know the slider.
+                cardDesign = CardDesign(
+                    titleScale = preferences[Keys.CARD_TITLE_SCALE]
+                        ?: CardDesign.DEFAULT_TITLE_SCALE,
+                    ratingScale = preferences[Keys.CARD_RATING_SCALE]
+                        ?: CardDesign.DEFAULT_RATING_SCALE,
+                    size = CardSize.fromStorage(preferences[Keys.CARD_SIZE]),
+                    boldTitles = preferences[Keys.CARD_BOLD_TITLES] ?: false,
+                    scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true
+                ).clamped(),
+                showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
+                showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true
             )
         }
 
@@ -159,6 +217,45 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
+    /**
+     * The whole card design, written at once.
+     *
+     * One write rather than four setters because the page commits a drag on release:
+     * the reader moved a title size, and everything that belongs to that title moved
+     * with it. A per-field setter would still be here if a screen needed to change one
+     * in isolation - none does.
+     */
+    suspend fun setCardDesign(design: CardDesign) {
+        val clamped = design.clamped()
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.CARD_TITLE_SCALE] = clamped.titleScale
+            preferences[Keys.CARD_RATING_SCALE] = clamped.ratingScale
+            preferences[Keys.CARD_SIZE] = clamped.size.storageValue
+            preferences[Keys.CARD_BOLD_TITLES] = clamped.boldTitles
+            preferences[Keys.CARD_SCROLL_TITLES] = clamped.scrollTitles
+        }
+    }
+
+    /**
+     * Whether the reader's own rating is preferred over the community average.
+     *
+     * Two setters rather than one pair-of-booleans call: the two switches sit under
+     * one heading and are saved independently, so a single write would re-emit the
+     * other half from a value the page happened to be holding.
+     */
+    suspend fun setShowMyRatings(show: Boolean) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.SHOW_MY_RATINGS] = show
+        }
+    }
+
+    /** Whether the profile owner's rating is preferred over the community average. */
+    suspend fun setShowTheirRatings(show: Boolean) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.SHOW_THEIR_RATINGS] = show
+        }
+    }
+
     /** Back to the shipped layout, density, rail, card style and bar position. */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
@@ -168,6 +265,13 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.SHOW_CONTINUE_RAIL)
             preferences.remove(Keys.HOME_SEQUEL_STYLE)
             preferences.remove(Keys.MAIN_BAR_LIFT)
+            preferences.remove(Keys.CARD_TITLE_SCALE)
+            preferences.remove(Keys.CARD_RATING_SCALE)
+            preferences.remove(Keys.CARD_SIZE)
+            preferences.remove(Keys.CARD_BOLD_TITLES)
+            preferences.remove(Keys.CARD_SCROLL_TITLES)
+            preferences.remove(Keys.SHOW_MY_RATINGS)
+            preferences.remove(Keys.SHOW_THEIR_RATINGS)
         }
     }
 }

@@ -1,6 +1,80 @@
 {
   "versions": [
     {
+      "version": "2.3.0",
+      "entries": [
+        {
+          "title": "Card design has its own page",
+          "detail": "The card-style picker now shares a sub-page with the rest of the card: how large the anime name is drawn, how large the score is, how big a card is in the grid, whether names are bold, and whether a name too long for its line scrolls instead of being cut. One preview at the top shows all of it at once, so a change lands on a card you are already looking at."
+        },
+        {
+          "title": "One card design, everywhere",
+          "detail": "The size and weight you choose apply to every card in the app - the library grid, a profile's poster list and the sequel rows on Home - because they all draw the same card. A value written by an older build is brought back inside the slider's range instead of being drawn, and Reset card design returns everything to the shipped card."
+        },
+        {
+          "title": "Card size decides how many fit",
+          "detail": "Compact, Standard and Roomy add or remove one cover from the row in every poster grid, and the poster stretches with it so a two-across card is a bigger picture rather than the same cover with a wider gap. List, Grouped and Table keep their single column, because a row is not a card."
+        },
+        {
+          "title": "Previews show the page, not a diagram",
+          "detail": "The layout, library and sequel previews are now full page-shaped draws with real names, scores and progress instead of grey bars: the new Home opens with a greeting, its shortcut tiles say what they do, and the classic page shows its three counts. The library preview has the header every mode shares, plus the headings, columns and captions that tell the modes apart."
+        },
+        {
+          "title": "Your own rating, on your own list",
+          "detail": "The library grid printed a name, a progress pill and nothing else, so what you gave a title was only visible after opening the entry. Every poster now carries the score you gave it, in the same star the list and table columns use, and the rating size on the Card design page scales it. This is AniList's own score for your entry, not the community average."
+        },
+        {
+          "title": "Two switches for whose rating a card shows",
+          "detail": "Card design now asks which rating to print: yours on your list, and the profile owner's on somebody else's. Each is a switch, so you can see what you gave a title without turning every profile into a scoreboard, or the other way round. Off means the community average, which is what every card drew before - a title you never scored keeps that average either way, so no card loses its only number."
+        },
+        {
+          "title": "Their score, in every list shape",
+          "detail": "On a profile's library the owner's own score is read from the list entry, so it is their verdict and not the app's guess, and it now appears in the grid, list, grouped and table shapes alike. AniList only returns those scores for a list it will show you, and an entry the owner never scored keeps the community average rather than an empty slot."
+        }
+      ]
+    },
+    {
+      "version": "2.2.1",
+      "entries": [
+        {
+          "title": "The Discord integration is gone",
+          "detail": "Rich Presence, the Discord sign-in, its Settings page, the deep-link callbacks and the GitHub Pages redirect page are all removed. Nothing in the app talks to Discord any more, no Discord scopes are requested, and the download is smaller by the whole feature."
+        },
+        {
+          "title": "Settings keeps only the pages that do something",
+          "detail": "The Discord RPC row is gone from the Settings shelf. Your other settings and your AniList session are untouched, and the app's own jokes are unaffected."
+        },
+        {
+          "title": "A downloaded font is a font you keep",
+          "detail": "Fonts you download now appear in their own list above the search, drawn like every other font row, with a Use button. The list is read from the app's own font folder, so a family you downloaded months ago is still there after a restart or an update and applies without downloading again. Families Google publishes no bold cut for no longer look half-downloaded and are not fetched over and over."
+        },
+        {
+          "title": "Text size goes further, both ways",
+          "detail": "The reading scale now runs from 75% to 175% in five-percent steps - twenty-one sizes instead of thirteen - so dense lists can be fitted on a small screen and large text is actually large. Reset still returns to 100%."
+        },
+        {
+          "title": "The Font tab opens faster",
+          "detail": "The tab shares one font connection instead of building a new one every time it is opened, the downloaded list is read in the background, and the app checks whether it already decoded your font before doing it again - which is what made rotating the device or recreating the screen re-read the font on the main thread."
+        },
+        {
+          "title": "Cards do less work while you scroll",
+          "detail": "The hide button on a sequel card now shares the card's press gesture instead of running a second one, so a touch no longer springs the icon twice and each card carries one fewer gesture handler. A cover's tint colour is also read once per card rather than on every redraw."
+        },
+        {
+          "title": "Builds repeat less work",
+          "detail": "The Gradle daemon now has a metaspace ceiling and a collector suited to build throughput, and incremental Kotlin and annotation processing are stated explicitly rather than left to plugin defaults. This is configuration, not a benchmark - no build timings have been measured yet."
+        },
+        {
+          "title": "Explanations start as a preview",
+          "detail": "Every long explanation in Settings now opens as a two-line preview with a Show more button beneath it, and Show less puts it back. None of the wording changed: the rest of the sentence is one tap below the first two lines, and a note short enough to already fit gains no button at all."
+        },
+        {
+          "title": "Cards and switches collapse the same way",
+          "detail": "Section subtitles and the paragraph under a switch share that preview. On a switch the button sits below the row rather than inside it, so a screen reader reaches it as its own control instead of losing it in the row that already announces the switch."
+        }
+      ]
+    },
+    {
       "version": "2.2.0",
       "entries": [
         {

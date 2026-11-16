@@ -19,7 +19,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -29,8 +31,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.CustomFontStore
+import com.anisequel.data.repository.DownloadedFamily
 import com.anisequel.data.repository.GoogleFontCatalog
 import com.anisequel.data.repository.GoogleFontDownloader
 import com.anisequel.data.repository.ThemePreferences
@@ -50,6 +54,16 @@ import kotlinx.coroutines.launch
  *
  * Only the regular and bold cuts are fetched. The type scale asks for those two;
  * a family's italics and display weights would be dead bytes on every device.
+ *
+ * ## Downloaded is a list, not a badge
+ *
+ * A family used to be reachable only from the search results that happened to
+ * contain it: download Lora, switch to Inter, and the Lora row was gone from the
+ * page until it was searched for again - so "downloaded" was indistinguishable
+ * from "deleted" for anyone who did not know the file was still there. The list
+ * above the search reads the font directory instead of a remembered set, so every
+ * stored family is a row that can be applied again, with no download, after a
+ * restart or an update.
  */
 @Composable
 internal fun DownloadableFontSection(
@@ -59,11 +73,38 @@ internal fun DownloadableFontSection(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val downloader = remember { GoogleFontDownloader() }
+    val downloader = GoogleFontDownloader.shared
     var query by rememberSaveable { mutableStateOf("") }
     val results = remember(query) { GoogleFontCatalog.search(query) }
     var downloadingId by remember { mutableStateOf<String?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
+
+    // `null` until the directory has been read, so "nothing downloaded yet" and
+    // "not answered yet" are not the same empty list - the card would otherwise
+    // appear and disappear on the first frame. The read itself is a handful of
+    // `listFiles` calls on the IO dispatcher, not a decode.
+    var storedFamilies by remember { mutableStateOf<List<DownloadedFamily>?>(null) }
+    var storedRevision by remember { mutableIntStateOf(0) }
+    LaunchedEffect(storedRevision) {
+        storedFamilies = CustomFontStore.downloadedFamilies(context)
+    }
+
+    val stored = storedFamilies.orEmpty()
+    if (stored.isNotEmpty()) {
+        DownloadedFontsCard(
+            families = stored,
+            currentFontPath = currentFontPath,
+            onUse = { family ->
+                scope.launch {
+                    themePreferences.setCustomFont(
+                        path = family.path,
+                        name = family.displayName,
+                        boldPath = family.boldPath
+                    )
+                }
+            }
+        )
+    }
 
     SectionCard(
         title = "Download fonts",
@@ -71,7 +112,7 @@ internal fun DownloadableFontSection(
         subtitle = "Free Google Fonts, fetched once and kept in the app",
         modifier = modifier
     ) {
-        Text(
+        CollapsibleText(
             text = "Search Google Fonts by name. A family is fetched when you tap " +
                 "Download, so it does not add to the APK. Only the regular and bold " +
                 "files are kept, which is what the app actually draws.",
@@ -159,6 +200,10 @@ internal fun DownloadableFontSection(
                                                 name = downloaded.name,
                                                 boldPath = downloaded.boldPath
                                             )
+                                            // The new family belongs in the stored
+                                            // list on this same frame, not after the
+                                            // next visit to the page.
+                                            storedRevision++
                                         },
                                         onFailure = { failure ->
                                             downloadError = failure.message
@@ -199,6 +244,67 @@ internal fun DownloadableFontSection(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(14.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The families already stored, each one applicable with a tap.
+ *
+ * Deliberately the same row shape as a search result - name, a line of detail, one
+ * button - so a downloaded family looks like a font rather than like a receipt for
+ * one. There is no delete action: removing a family is not something the page
+ * offers, and a row that only ever applies cannot lose a file by accident.
+ */
+@Composable
+private fun DownloadedFontsCard(
+    families: List<DownloadedFamily>,
+    currentFontPath: String?,
+    onUse: (DownloadedFamily) -> Unit
+) {
+    SectionCard(
+        title = "Downloaded fonts",
+        icon = AppVectorIcons.Download,
+        subtitle = "Kept in the app, so a family is only ever downloaded once"
+    ) {
+        families.forEachIndexed { index, family ->
+            if (index > 0) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+            }
+            val applied = currentFontPath == family.path
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = family.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (family.boldPath != null) {
+                            "Google Fonts · regular and bold"
+                        } else {
+                            "Google Fonts · regular, bold is synthesised"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                FilledTonalButton(
+                    onClick = { onUse(family) },
+                    enabled = !applied,
+                    modifier = Modifier.testTag("apply_downloaded_font_${family.id}")
+                ) {
+                    Text(if (applied) "Applied" else "Use")
                 }
             }
         }

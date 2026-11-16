@@ -167,6 +167,16 @@ object GoogleFontCatalog {
         )
     }
 
+    /**
+     * The index entry for [id], or null when this short list does not know it.
+     *
+     * A family downloaded by an exact-name search is deliberately outside the
+     * index, so this is a lookup for the name and description only - the downloaded
+     * files are the record of what exists, never this.
+     */
+    fun byId(id: String): DownloadableFont? =
+        popular.firstOrNull { it.id == id } ?: quickPicks.firstOrNull { it.id == id }
+
     private fun googleFont(id: String, family: String, category: String) =
         DownloadableFont(
             id = id,
@@ -259,13 +269,23 @@ class GoogleFontDownloader(
                 val dir = File(context.filesDir, "fonts").apply { mkdirs() }
                 val regular = File(dir, "google_${font.id}_400.ttf")
                 val bold = File(dir, "google_${font.id}_700.ttf")
+                val finished = File(dir, "google_${font.id}.done")
 
-                if (isUsable(regular) && isUsable(bold)) {
+                // A family that has already been downloaded is served from disk.
+                //
+                // The marker is what makes that true for a family Google publishes
+                // no 700 cut for, which is common among display and handwriting
+                // faces: the old check required a usable bold file, so those
+                // families looked half-downloaded forever and every tap fetched the
+                // CSS and the regular file again.
+                val storedBold = bold.takeIf { isUsable(it) }?.absolutePath
+                if (isUsable(regular) && (storedBold != null || finished.isFile)) {
+                    recordFamily(dir, font)
                     return@withContext Result.success(
                         ImportedFont(
                             path = regular.absolutePath,
                             name = font.displayName,
-                            boldPath = bold.absolutePath
+                            boldPath = storedBold
                         )
                     )
                 }
@@ -282,6 +302,7 @@ class GoogleFontDownloader(
                     ?.let { downloadFace(it.url, bold) }
                     ?: bold.takeIf { isUsable(it) }?.absolutePath
 
+                recordFamily(dir, font)
                 Result.success(
                     ImportedFont(
                         path = regularPath,
@@ -351,6 +372,27 @@ class GoogleFontDownloader(
         }
     }
 
+    /**
+     * Writes the two sidecars that describe a finished download.
+     *
+     * A name file rather than a stored preference: the fonts directory is already
+     * the record of what exists, and a name written beside its files cannot
+     * outlive them, disagree with them, or survive a preference clear that leaves
+     * the bytes in place. `.done` records that a completed download simply had no
+     * bold cut, which is a different fact from "the bold file failed" and is why
+     * such a family is not fetched again.
+     *
+     * Best effort by design: a family that downloaded successfully must still be
+     * applied if these two tiny writes fail. The consequences are a fallback name
+     * and one unnecessary re-download, not a broken font.
+     */
+    private fun recordFamily(dir: File, font: DownloadableFont) {
+        runCatching {
+            File(dir, "google_${font.id}.name").writeText(font.displayName)
+            File(dir, "google_${font.id}.done").createNewFile()
+        }
+    }
+
     private fun isUsable(file: File): Boolean =
         file.isFile &&
             file.length() > 0 &&
@@ -385,11 +427,21 @@ class GoogleFontDownloader(
         }
     }
 
-    private companion object {
+    companion object {
+        /**
+         * The process-wide downloader.
+         *
+         * The Font tab used to build one inside `remember { }`, which allocates an
+         * `OkHttpClient` - a dispatcher, a connection pool and their threads - each
+         * time the reader opens Type & reading. One client also keeps the
+         * connections to fonts.gstatic.com warm between downloads.
+         */
+        val shared: GoogleFontDownloader by lazy { GoogleFontDownloader() }
+
         /** A CSS response is a handful of blocks; anything near this is not one. */
-        const val MAX_CSS_BYTES = 256 * 1024
+        private const val MAX_CSS_BYTES = 256 * 1024
 
         /** One static face is normally 150-650 KB. */
-        const val MAX_FONT_BYTES = 8L * 1024 * 1024
+        private const val MAX_FONT_BYTES = 8L * 1024 * 1024
     }
 }

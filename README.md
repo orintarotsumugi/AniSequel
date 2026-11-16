@@ -23,17 +23,19 @@ middleman server.
 
 ---
 
-## What's new - 2.1.1
+## What's new - 2.2.1
 
-Sign-in happens in your browser, the colour follows the show further, and the
-follow-up round fixes the Discord session, theme, updater and version-guard
-flaws the first pass left behind.
+The Discord integration is gone, entirely.
 
-- **The browser is the sign-in.** AniList and Discord both open in the browser you already use instead of a page inside the app. AniList still returns straight to AniSequel; Discord's page is now the real browser's, with its address bar and password manager. The app ships no web view at all.
-- **A Discord log-out that is immediate.** Log out no longer waits behind a slow gateway connect, a stale socket can no longer close the replacement that reconnected after it, and rotating the device no longer drops the live session before the stored settings arrive.
-- **The accent follows the app's theme.** The title page's backdrop and the cover swatch take their tone from the mode the app is drawing, not the phone's. During a recolour, text now travels on the same spring as the surface under it, so the pair is never momentarily mismatched.
-- **Richer palettes.** Surfaces carry more of the cover's hue, every text pair stays on Material's tone ladder, and the swatch is a three-tone gradient centred on the scheme's own accent.
-- **Updater and release guards.** A downloaded update is no longer replaced by an offline check on rotation, and the version tests now compare whole versions instead of a patch digit that could not see a minor bump.
+- **Rich Presence is removed.** No presence publishing, no RPC socket, no activity composer, no toggles.
+- **The Discord sign-in is removed with it.** It existed only to authorize presence publishing, so the OAuth flow, the stored token and the account card went too. The app now requests no Discord scopes at all.
+- **The settings page, the icon, the deep links and the GitHub Pages redirect page are gone.** The app's own jokes and every other setting are untouched.
+
+And the Type page was reworked:
+
+- **A downloaded font is one you keep.** Every stored family is listed above the search, in the same rows as a search result, and applies with one tap - after a restart or an update, without downloading again. Families with no bold cut are no longer fetched over and over.
+- **Text size goes to 75-175%** in five-percent steps: 21 sizes instead of 13.
+- **Less work behind the page.** One shared font connection, a background read of the stored list, and no re-decoding of your font on a rotation. The Home feed's card hide buttons no longer run a second press gesture.
 
 The full block-by-block notes live in
 [`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
@@ -110,7 +112,8 @@ and the GitHub release body read.
   blurred key visual behind every title, and a theme that can follow the cover you
   are looking at.
 - **Five motion styles**, each with its own glyph and a preview that travels and
-  presses; type size (80-140%) and an imported font of your own; five palettes,
+  presses; type size (75-175%) and an imported font of your own, or a Google Font
+  you downloaded once and can pick again from the list of stored families; five palettes,
   Material You, true black, and background canvases.
 - **Ani-chan**, the joke pill: name, stamp, compact mode, five tones (dark
   included), opt-in moments for app open, tab change and refresh, and optional

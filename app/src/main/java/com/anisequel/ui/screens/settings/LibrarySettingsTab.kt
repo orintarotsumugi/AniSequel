@@ -279,7 +279,7 @@ private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
         icon = AppVectorIcons.List,
         subtitle = "What the Library reopens with"
     ) {
-        Text(
+        CollapsibleText(
             text = when (remembered) {
                 null -> "Reading the view saved on this device."
                 true -> "The Library reopens with the type, status filter and sort you " +
@@ -354,7 +354,7 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
         icon = AppVectorIcons.Schedule,
         subtitle = "How fresh your scan stays"
     ) {
-        Text(
+        CollapsibleText(
             text = "AniSequel re-reads your list when you come back to the app if it is " +
                 "older than this, and on its own while it stays open. Pull down or " +
                 "use the refresh button any time to check immediately.",

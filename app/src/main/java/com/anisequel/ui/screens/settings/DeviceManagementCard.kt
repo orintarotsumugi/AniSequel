@@ -193,7 +193,7 @@ internal fun DeviceCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
+            CollapsibleText(
                 text = "Coil fixes a disk cache's ceiling when it builds the loader, so a " +
                     "new ceiling takes hold the next time the app opens. Clearing empties " +
                     "what is on disk now.",

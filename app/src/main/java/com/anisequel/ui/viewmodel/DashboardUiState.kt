@@ -6,7 +6,6 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.network.AniListErrorKind
-import com.anisequel.domain.discord.DiscordStats
 import com.anisequel.domain.usecase.RecentActivitySummary
 
 /**
@@ -118,17 +117,7 @@ sealed interface DashboardUiState {
          * the public-profile scan have no viewer list - and the preview falls back
          * to sample titles in that case.
          */
-        val cardPreview: List<MediaListEntryItem> = emptyList(),
-        /**
-         * The counts the Discord presence may quote.
-         *
-         * Folded from the same collection as everything above, not fetched: a
-         * presence that costs a request every time the reader changes tab would
-         * be the most expensive thing this app does. Defaulted so every existing
-         * `Success` construction - tests, previews, the demo - keeps compiling and
-         * honestly says "nothing to quote" until the walk has run.
-         */
-        val discordStats: DiscordStats = DiscordStats.Empty
+        val cardPreview: List<MediaListEntryItem> = emptyList()
     ) : DashboardUiState
 
     data class Error(

@@ -28,6 +28,20 @@ data class ImportedFont(
 )
 
 /**
+ * A Google Fonts family [GoogleFontDownloader] stored and that is still on disk.
+ *
+ * [boldPath] is null when the family has no usable 700 cut - many display and
+ * handwriting families do not - in which case the platform synthesises bold from
+ * the regular face.
+ */
+data class DownloadedFamily(
+    val id: String,
+    val displayName: String,
+    val path: String,
+    val boldPath: String?
+)
+
+/**
  * The one imported font, kept inside the app's own storage.
  *
  * ## Why a copy, not the document URI
@@ -129,7 +143,74 @@ object CustomFontStore {
 
     /** True when [path] points at a family downloaded by `GoogleFontDownloader`. */
     fun isDownloaded(path: String?): Boolean =
-        path?.substringAfterLast('/')?.startsWith("google_") == true
+        path?.substringAfterLast('/')?.startsWith(GOOGLE_PREFIX) == true
+
+    /**
+     * Every downloaded family that is still stored, sorted by the name it is drawn
+     * under.
+     *
+     * The directory is the source of truth rather than a preference: a family is
+     * downloaded while its regular file is there, so this list cannot promise a face
+     * the theme would fail to load. That also means the list is right after a
+     * restart, after an update, and for a family downloaded by an older build that
+     * never recorded anything - the reason `isDownloaded` was path-based in the
+     * first place.
+     *
+     * Names are read from the `.name` sidecar the downloader writes, then from the
+     * local index, then from the id itself. The download keeps the display name
+     * because an exact-name search can pick a family this app has never heard of
+     * ("Abril Fatface"), and an id-derived name would draw it as "Abril Fatface"
+     * only by luck.
+     */
+    suspend fun downloadedFamilies(context: Context): List<DownloadedFamily> =
+        withContext(Dispatchers.IO) {
+            val dir = fontsDir(context)
+            dir.listFiles()
+                ?.asSequence()
+                ?.filter { it.name.startsWith(GOOGLE_PREFIX) && it.name.endsWith(REGULAR_SUFFIX) }
+                ?.mapNotNull { file ->
+                    if (!file.isFile || file.length() == 0L) return@mapNotNull null
+                    val id = file.name
+                        .removePrefix(GOOGLE_PREFIX)
+                        .removeSuffix(REGULAR_SUFFIX)
+                        .takeIf { it.isNotBlank() }
+                        ?: return@mapNotNull null
+                    val bold = File(dir, "$GOOGLE_PREFIX${id}_700.ttf")
+                    DownloadedFamily(
+                        id = id,
+                        displayName = storedName(dir, id)
+                            ?: GoogleFontCatalog.byId(id)?.displayName
+                            ?: humanizeFontId(id),
+                        path = file.absolutePath,
+                        boldPath = bold.takeIf { it.isFile && it.length() > 0 }?.absolutePath
+                    )
+                }
+                ?.sortedBy { it.displayName.lowercase(Locale.ROOT) }
+                ?.toList()
+                .orEmpty()
+        }
+
+    private fun storedName(dir: File, id: String): String? =
+        runCatching { File(dir, "$GOOGLE_PREFIX$id.name").readText() }
+            .getOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && it.length <= MAX_STORED_NAME_LENGTH }
+
+    /** "plus_jakarta_sans" -> "Plus Jakarta Sans", for a family outside the index. */
+    private fun humanizeFontId(id: String): String =
+        id.split('_')
+            .filter { it.isNotBlank() }
+            .joinToString(" ") { part -> part.replaceFirstChar { it.titlecase() } }
+            .ifBlank { "Downloaded font" }
+
+    /**
+     * Downloaded files share the directory with imported ones, so the prefix and
+     * suffix a stored family is recognised by are named here rather than repeated
+     * inside the filter that reads them.
+     */
+    private const val GOOGLE_PREFIX = "google_"
+    private const val REGULAR_SUFFIX = "_400.ttf"
+    private const val MAX_STORED_NAME_LENGTH = 64
 
     private fun isImportedFile(file: File): Boolean =
         file.name.startsWith("custom_font") || file.name == "font.importing"

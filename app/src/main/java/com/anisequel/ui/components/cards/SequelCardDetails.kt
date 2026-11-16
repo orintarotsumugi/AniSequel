@@ -45,6 +45,10 @@ fun SequelCardDetails(
     // The poster's own badge is decided by the same table, so exactly one of the
     // three surfaces draws the number and none of them can drop a low score.
     val scoreOwner = style.scoreOwner
+    // The reader's card design. This column is the other half of a sequel card, so it
+    // scales with the poster beside it: a bigger name on the artwork next to an
+    // unchanged one in the text would read as two cards, not one.
+    val design = LocalCardDesign.current
 
     Column(modifier = modifier) {
         // A marquee rather than a two-line ellipsis: the sequel's name is the one
@@ -57,8 +61,15 @@ fun SequelCardDetails(
         if (!titleOverlaid && !titleHidden) {
             MarqueeText(
                 text = sequel.sequelTitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
+                // The card header keeps its own step of the type scale - it is a
+                // heading, not a caption - and inherits only the reader's factor. Bold
+                // rather than the shared weight helper: this title was bold before the
+                // setting existed and "not bold" is not a state it had.
+                style = cardTitleStyle(
+                    design = design,
+                    base = MaterialTheme.typography.titleMedium
+                ).copy(fontWeight = FontWeight.Bold),
+                motion = cardTitleMotion(design),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -68,7 +79,13 @@ fun SequelCardDetails(
         // facts, and it is drawn where the title used to leave off.
         if (scoreOwner == CardScoreOwner.BANNER && scoreValue != null) {
             Spacer(modifier = Modifier.height(if (titleOverlaid || titleHidden) 0.dp else 6.dp))
-            ScoreBanner(score = scoreValue)
+            ScoreBanner(
+                score = scoreValue,
+                textStyle = cardRatingStyle(
+                    design = design,
+                    base = MaterialTheme.typography.labelMedium
+                )
+            )
         }
 
         // Romaji and English title tiles
