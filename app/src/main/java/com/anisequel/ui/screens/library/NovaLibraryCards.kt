@@ -407,12 +407,6 @@ private fun NovaPoster(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // A ratio rather than a fixed height: the grid is three columns
-                // or four, so the same card is measured at two widths - and a
-                // height literal would turn the wider one into a portrait and the
-                // narrower into a strip. The ratio is then stretched by the reader's
-                // card size, which is what makes a two-across card a bigger picture
-                // instead of the same cover with more space beside it.
                 .aspectRatio(cardCoverAspect(if (large) 0.74f else 0.68f, design))
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
                 .background(coverTint ?: Color.Transparent)
@@ -434,7 +428,8 @@ private fun NovaPoster(
                 )
             }
         }
-        if (showTitle) {
+        val captionVisible = showTitle && (design.showTitles || design.showScores)
+        if (captionVisible) {
             Spacer(modifier = Modifier.height(5.dp))
             NovaPosterCaption(
                 entry = entry,
@@ -472,37 +467,31 @@ private fun NovaPosterCaption(
 ) {
     val media = entry.media
     val titleStyle = cardTitleStyle(design)
-    // Asked once per caption: `cardTitleMotion` reads a composition local and the
-    // branch below decides between a scrolling line and an ellipsis, so the answer
-    // must not be asked twice with two different results.
     val titleMotion = cardTitleMotion(design)
-    if (titleMotion.animates) {
-        MarqueeText(
-            text = media.displayName,
-            style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-            motion = titleMotion,
-            // The card's width, not the text's: a marquee needs a boundary to
-            // overflow against, and an unconstrained `Text` measures at the
-            // length of the name and never scrolls.
-            modifier = Modifier.fillMaxWidth()
-        )
-    } else {
-        Text(
-            text = media.displayName,
-            style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = if (large) 3 else 2,
-            overflow = TextOverflow.Ellipsis
-        )
+    val shownRating = rating?.takeIf { design.showScores }
+    if (design.showTitles) {
+        if (titleMotion.animates) {
+            MarqueeText(
+                text = media.displayName,
+                style = titleStyle,
+                color = MaterialTheme.colorScheme.onSurface,
+                motion = titleMotion,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            Text(
+                text = media.displayName,
+                style = titleStyle,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = if (large) 3 else 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
-    if (rating != null) {
-        Spacer(modifier = Modifier.height(1.dp))
-        // The same star the List and Table modes print in their score column, so the
-        // number is recognisable as the reader's own verdict rather than a second
-        // kind of badge.
+    if (shownRating != null) {
+        if (design.showTitles) Spacer(modifier = Modifier.height(1.dp))
         Text(
-            text = "★ $rating",
+            text = "★ $shownRating",
             style = cardRatingStyle(design),
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -619,7 +608,8 @@ private fun NovaLibraryRow(
                     }
                 }
             }
-            if (score != null) {
+            val design = LocalCardDesign.current
+            if (score != null && design.showScores) {
                 Text(
                     text = "★ $score",
                     style = MaterialTheme.typography.labelMedium,

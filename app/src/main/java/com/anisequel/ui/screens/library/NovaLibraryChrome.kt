@@ -159,16 +159,18 @@ internal fun NovaLibraryHeader(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary),
+                                .heightIn(min = 18.dp)
+                                .clip(ExpressiveShapes.pill)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .padding(horizontal = 5.dp, vertical = 1.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = activeFilterCount.toString(),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1
                             )
                         }
                     }
@@ -346,31 +348,35 @@ private fun NovaTypeSwitch(
                     tint = content,
                     modifier = Modifier.size(15.dp)
                 )
-                Spacer(modifier = Modifier.width(5.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = when {
-                        // The selected half is the one whose spinner the reader is
-                        // waiting behind, so it says "Loading..." rather than
-                        // looking like a type switch that did nothing. The other
-                        // half keeps its name and a trailing ellipsis, so it does
-                        // not impersonate a label for a list that has not arrived.
-                        option == LibraryType.MANGA && isLoadingManga && selected -> "Loading..."
-                        option == LibraryType.MANGA && isLoadingManga -> "Manga..."
+                        option == LibraryType.MANGA && isLoadingManga && selected -> "Loading"
+                        option == LibraryType.MANGA && isLoadingManga -> "Manga"
                         option == LibraryType.MANGA -> "Manga"
                         else -> "Anime"
                     },
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                     color = content,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = content.copy(alpha = 0.72f),
-                    maxLines = 1
-                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(ExpressiveShapes.pill)
+                        .background(content.copy(alpha = if (selected) 0.18f else 0.10f))
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = count.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = content,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }
@@ -389,7 +395,7 @@ private fun NovaFilterPill(
         targetValue = if (selected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
+            MaterialTheme.colorScheme.surfaceContainerHigh
         },
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "nova_filter_container"
@@ -399,44 +405,51 @@ private fun NovaFilterPill(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    // Shared with bouncyPress so the press is cancelled the moment a horizontal
-    // drag claims the gesture. Without a source the fallback pointer loop kept
-    // the pill squashed under a finger that was actually scrolling the filter row.
     val interactionSource = remember { MutableInteractionSource() }
 
     Row(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                role = Role.Button,
+                role = Role.RadioButton,
                 onClick = onClick
             )
-            .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+            .semantics { this.selected = selected }
+            .padding(start = 14.dp, end = 10.dp, top = 9.dp, bottom = 9.dp)
             .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = content,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.width(6.dp))
         Box(
             modifier = Modifier
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(content.copy(alpha = 0.13f)),
+                .heightIn(min = 22.dp)
+                .clip(ExpressiveShapes.pill)
+                .background(
+                    if (selected) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                    } else {
+                        content.copy(alpha = 0.12f)
+                    }
+                )
+                .padding(horizontal = 8.dp, vertical = 2.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = count.toString(),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = content,
                 maxLines = 1
             )

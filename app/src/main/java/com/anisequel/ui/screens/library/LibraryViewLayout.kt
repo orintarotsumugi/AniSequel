@@ -38,6 +38,7 @@ import com.anisequel.data.model.formatLabel
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.ui.components.cards.ListOwner
+import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.domain.card.CardSize
@@ -125,7 +126,8 @@ internal fun LibraryListRow(
     val interactionSource = remember { MutableInteractionSource() }
     val coverColor = media.posterColor.toCoverColorOrNull()
     val progress = libraryProgressLabel(entry)
-    val score = libraryRating(entry, owner)
+    val design = LocalCardDesign.current
+    val score = libraryRating(entry, owner)?.takeIf { design.showScores }
 
     Row(
         modifier = modifier
@@ -185,7 +187,7 @@ internal fun LibraryListRow(
         }
 
         Column(
-            modifier = Modifier.widthIn(min = 54.dp),
+            modifier = Modifier.widthIn(min = if (detailed) 64.dp else 54.dp),
             horizontalAlignment = Alignment.End
         ) {
             Text(
@@ -195,10 +197,16 @@ internal fun LibraryListRow(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1
             )
-            if (detailed) {
+        }
+        if (detailed) {
+            Column(
+                modifier = Modifier.widthIn(min = 44.dp),
+                horizontalAlignment = Alignment.End
+            ) {
                 Text(
                     text = score?.let { "★ $it" } ?: "—",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (score != null) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -255,7 +263,7 @@ internal fun LibraryTableHeader(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 2.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -272,7 +280,15 @@ internal fun LibraryTableHeader(modifier: Modifier = Modifier) {
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.widthIn(min = 54.dp),
+            modifier = Modifier.widthIn(min = 64.dp),
+            textAlign = TextAlign.End
+        )
+        Text(
+            text = "Score",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.widthIn(min = 44.dp),
             textAlign = TextAlign.End
         )
     }
