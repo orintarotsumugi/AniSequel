@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,15 +55,13 @@ import com.anisequel.ui.components.expressive.bouncyPress
  */
 
 /** The shape every shelf and header in the new layout shares. */
-private val NovaSurfaceShape = RoundedCornerShape(26.dp)
+private val NovaSurfaceShape = RoundedCornerShape(18.dp)
 
 /**
  * A translucent panel that reads as sitting above the page.
  *
- * No blur: a real backdrop blur is a render effect, and this app draws a full
- * list over it while scrolling. A translucent container plus a hairline border
- * gives the same layering cue at a fraction of the cost - and it is what makes
- * the cards legible on both the dark and the light palettes.
+ * A translucent container with a crisp hairline border for a light glassy
+ * layering effect that stays legible and scroll-friendly on both palettes.
  */
 @Composable
 fun NovaSurface(
@@ -83,7 +82,7 @@ fun NovaSurface(
         color = tint,
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         shadowElevation = if (tonalElevation) 2.dp else 0.dp
     ) {
@@ -94,10 +93,9 @@ fun NovaSurface(
 /**
  * A faint wash behind a new-layout page.
  *
- * Two gradients and nothing animated: the seasonal sky already owns movement in
- * this app, and a second full-screen clock would spend frames competing with it.
- * The gradient is drawn behind the page's own opaque content, so it only shows
- * where the content is transparent - which is the point.
+ * Two soft gradients with a light blur for depth, kept static so the seasonal sky
+ * still owns motion. The wash sits behind page content and only shows through
+ * transparent areas.
  */
 @Composable
 fun NovaBackdrop(
@@ -111,10 +109,11 @@ fun NovaBackdrop(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp)
+                .blur(28.dp)
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.13f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                             Color.Transparent
                         )
                     )
@@ -124,10 +123,11 @@ fun NovaBackdrop(
             modifier = Modifier
                 .size(230.dp)
                 .offset(x = (-70).dp, y = (-30).dp)
+                .blur(36.dp)
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
                             Color.Transparent
                         )
                     ),
@@ -180,7 +180,7 @@ fun NovaTopBar(
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(RoundedCornerShape(13.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             Brush.linearGradient(
                                 listOf(

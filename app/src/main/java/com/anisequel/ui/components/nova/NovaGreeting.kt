@@ -170,7 +170,7 @@ fun NovaGreeting(viewerName: String, modifier: Modifier = Modifier) {
     ) {
         Crossfade(
             targetState = greeting,
-            animationSpec = ExpressiveMotion.FastEffects,
+            animationSpec = ExpressiveMotion.DefaultEffects,
             label = "nova_greeting"
         ) { current ->
             Column(
@@ -252,7 +252,7 @@ private fun TypewriterLine(
         shown = 0
         while (shown < text.length) {
             withFrameNanos { }
-            shown = (shown + 2).coerceAtMost(text.length)
+            shown = (shown + 3).coerceAtMost(text.length)
         }
     }
     val typing = shown < text.length

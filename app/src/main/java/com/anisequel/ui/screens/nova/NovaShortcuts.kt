@@ -90,17 +90,20 @@ fun NovaShortcutCard(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 12.dp, end = 4.dp, top = 9.dp, bottom = 10.dp),
+                    .padding(start = 12.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(12.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
                         text = meta,
                         style = MaterialTheme.typography.labelSmall,
@@ -108,28 +111,26 @@ fun NovaShortcutCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.width(1.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
                     Icon(
                         imageVector = AppVectorIcons.ChevronRight,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(11.dp)
+                        modifier = Modifier.size(12.dp)
                     )
                 }
                 Text(
                     text = title,
-                    // Two lines are deliberate: the list doors share a 360dp
-                    // phone, so "ANIME LIST" is two short words, not one long
-                    // title. ExtraBold at titleSmall reads as a label without
-                    // inventing a third heading size for a 96dp column.
+                    // Two short words fit clearly in a narrow door; keep spacing tight
+                    // so labels like "MANGA LIST" don't crowd or clip.
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = MaterialTheme.typography.titleSmall.lineHeight * 0.94f
+                    lineHeight = MaterialTheme.typography.titleSmall.lineHeight * 0.96f
                 )
             }
             ShortcutArtwork(
@@ -137,7 +138,7 @@ fun NovaShortcutCard(
                 icon = icon,
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(0.36f)
+                    .fillMaxWidth(0.35f)
             )
         }
     }
@@ -180,7 +181,7 @@ fun NovaOtherShortcut(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+                    .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -200,7 +201,7 @@ fun NovaOtherShortcut(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Spacer(modifier = Modifier.width(2.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Icon(
                         imageVector = AppVectorIcons.ChevronRight,
                         contentDescription = null,
@@ -220,7 +221,7 @@ fun NovaOtherShortcut(
                 icon = AppVectorIcons.AnimeSparkle,
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(0.34f)
+                    .fillMaxWidth(0.33f)
             )
         }
     }

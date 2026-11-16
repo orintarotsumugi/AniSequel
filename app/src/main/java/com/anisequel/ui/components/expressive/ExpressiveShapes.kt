@@ -114,8 +114,8 @@ object ExpressiveShapes {
     // makes unrelated screens feel like they were drawn by different people.
     //
     // **These are the theme's values, not Material's.** The app already had a
-    // deliberate shape scale in `ExpressiveTheme.kt` - 10 / 14 / 20 / 28 / 36,
-    // rounder than M3's 4 / 8 / 12 / 16 / 28 on purpose, so cards read as curved
+    // deliberate shape scale in `ExpressiveTheme.kt` - 6 / 10 / 14 / 18 / 24,
+    // crisper than M3's 4 / 8 / 12 / 16 / 28 while staying rounded on purpose, so cards read as curved
     // panels rather than hard rectangles. The literals simply had not been moved
     // onto it. These are the five steps of *that* scale, named, and read by
     // [ExpressiveTheme.kt].
@@ -126,20 +126,20 @@ object ExpressiveShapes {
     // `RoundedCornerShape(percent = 50)` is deliberately absent - that is [pill],
     // and a percentage is not a radius.
 
-    /** 10dp — the theme's `extraSmall`. Chips, badges, dense list rows. */
-    val ExtraSmallCorner = 10.dp
+    /** 6dp — the theme's `extraSmall`. Chips, badges, dense list rows. */
+    val ExtraSmallCorner = 6.dp
 
-    /** 14dp — the theme's `small`. Small cards and controls. */
-    val SmallCorner = 14.dp
+    /** 10dp — the theme's `small`. Small cards and controls. */
+    val SmallCorner = 10.dp
 
-    /** 20dp — the theme's `medium`. The default: cards, sheets, list items. */
-    val MediumCorner = 20.dp
+    /** 14dp — the theme's `medium`. The default: cards, sheets, list items. */
+    val MediumCorner = 14.dp
 
-    /** 28dp — the theme's `large`. Panels and prominent surfaces. */
-    val LargeCorner = 28.dp
+    /** 18dp — the theme's `large`. Panels and prominent surfaces. */
+    val LargeCorner = 18.dp
 
-    /** 36dp — the theme's `extraLarge`. Prominent sheets and hero cards. */
-    val ExtraLargeCorner = 36.dp
+    /** 24dp — the theme's `extraLarge`. Prominent sheets and hero cards. */
+    val ExtraLargeCorner = 24.dp
 
     /**
      * 24dp — half of a 48dp button, so a control at this radius is a true

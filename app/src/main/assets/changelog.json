@@ -34,6 +34,10 @@
                 {
                     "title": "Smoother poster loading and clearer motion",
                     "detail": "Posters now fade in gently when they load or switch to BetterPosters art instead of popping into place. Settings page transitions and in-app loading motion were polished so movement feels more consistent and easier to follow."
+                },
+                {
+                    "title": "Sharper surfaces, blur accents, and UI polish",
+                    "detail": "Corner radii are crisper across the app, home shortcut cards (including the manga list under the greeting) have clearer spacing and text layout, and backdrop surfaces use subtle blur for depth. Loading and tap interactions were refined with smoother transitions, clearer semantics on list rows, and small performance-minded UI tweaks."
                 }
             ]
         },
