@@ -47,13 +47,19 @@
             <!--
               Discord's OAuth2 callback.
 
-              A second filter rather than a second `data` element in the one above:
-              the two sign-ins are separate flows with separate handlers, and one
-              filter would make the manifest read as if one host were an alias for
-              the other. The host has to match `DiscordOAuth.REDIRECT_URI` exactly -
-              Discord compares the whole redirect URI and refuses the authorize
-              request when it differs, before the reader ever sees a login page.
+              Discord only accepts `discord-<application id>:/authorize/callback`
+              as a registered redirect URI for a native mobile app, so that is
+              the scheme the authorize request sends the reader back on. The
+              legacy `anisequel://discord` filter is kept so a sign-in that was
+              already in flight on an older build still lands here instead of
+              being dropped.
             -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="discord-1571747436542566561" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

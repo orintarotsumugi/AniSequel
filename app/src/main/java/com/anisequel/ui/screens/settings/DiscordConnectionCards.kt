@@ -204,8 +204,8 @@ fun DiscordConnectionCard(
  * ## What sits above it now
  *
  * An OAuth2 authorization-code flow with PKCE, which is the one way Discord *does*
- * hand a token back: the code comes in on `anisequel://discord`, and this device
- * exchanges it. [DiscordSignInPanel] draws it, and the exchange itself is handled
+ * hand a token back: the code comes in on [DiscordOAuth.REDIRECT_URI], and this
+ * device exchanges it. [DiscordSignInPanel] draws it, and the exchange is handled
  * by the page rather than by this dialog - the dialog can be dismissed while the
  * reader is in the browser, and the callback has to survive that.
  */

@@ -33,10 +33,10 @@ import com.anisequel.ui.components.openExternalUrlOrCopy
  * login that had simply failed.
  *
  * With an application ID this is a single tap: Discord's page opens, the reader
- * approves, Discord redirects to `anisequel://discord`, and the app exchanges the
- * code for a token with a verifier that never left the device. The paste path
- * stays below as the fallback for an install with no ID configured, because
- * removing it would leave those readers with no way to link anything.
+ * approves, Discord redirects to [DiscordOAuth.REDIRECT_URI], and the app
+ * exchanges the code for a token with a verifier that never left the device. The
+ * paste path stays below as the fallback for an install with no ID configured,
+ * because removing it would leave those readers with no way to link anything.
  *
  * ## Why the ID is a field
  *

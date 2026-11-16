@@ -32,7 +32,7 @@ class DiscordOAuthTest {
                 // A space would be encoded as '+' by form encoding, which Discord
                 // reads as part of the scope name and refuses.
                 "&scope=identify%20gateway.connect" +
-                "&redirect_uri=anisequel%3A%2F%2Fdiscord" +
+                "&redirect_uri=discord-1571747436542566561%3A%2Fauthorize%2Fcallback" +
                 "&state=state123" +
                 "&code_challenge=challenge123" +
                 "&code_challenge_method=S256",
@@ -75,7 +75,7 @@ class DiscordOAuthTest {
     @Test
     fun `a code comes back with the state it was started with`() {
         val redirect = DiscordOAuth.parseRedirect(
-            "anisequel://discord?code=the-code&state=the-state"
+            "discord-1571747436542566561:/authorize/callback?code=the-code&state=the-state"
         )
         assertEquals(DiscordOAuth.Redirect.Code("the-code", "the-state"), redirect)
     }
@@ -83,7 +83,7 @@ class DiscordOAuthTest {
     @Test
     fun `a refusal is reported as a sentence, not an empty code`() {
         val redirect = DiscordOAuth.parseRedirect(
-            "anisequel://discord?error=access_denied&state=the-state"
+            "discord-1571747436542566561:/authorize/callback?error=access_denied&state=the-state"
         )
         assertTrue(redirect is DiscordOAuth.Redirect.Failure)
         assertTrue(
@@ -94,11 +94,15 @@ class DiscordOAuthTest {
 
     @Test
     fun `a callback for another flow is not this app's callback`() {
-        // The AniList sign-in shares the scheme, so the host is the only thing that
-        // separates the two callbacks.
+        // The AniList sign-in and Discord's callback share the phone's scheme space,
+        // so each parser has to refuse the other's redirect.
         assertEquals(
             DiscordOAuth.Redirect.Ignored,
             DiscordOAuth.parseRedirect("anisequel://oauth?code=the-code")
+        )
+        assertEquals(
+            DiscordOAuth.Redirect.Ignored,
+            DiscordOAuth.parseRedirect("https://example.com/callback?code=the-code")
         )
         assertEquals(DiscordOAuth.Redirect.Ignored, DiscordOAuth.parseRedirect(null))
         assertEquals(DiscordOAuth.Redirect.Ignored, DiscordOAuth.parseRedirect(""))
@@ -110,15 +114,44 @@ class DiscordOAuthTest {
 
     @Test
     fun `the manifest declares the redirect URI Discord is told about`() {
-        // Discord compares the whole redirect URI; a host in the manifest that does
-        // not match `DiscordOAuth.REDIRECT_URI` is a sign-in that never comes back.
+        // Discord compares the whole redirect URI and refuses an unregistered one
+        // with "Invalid OAuth2 redirect_uri", so the intent filter has to declare
+        // exactly the scheme the authorize request sends the reader back on. This
+        // test used to accept `anisequel://discord`, which Discord does not allow
+        // as a registered redirect for a standard OAuth2 app - the sign-in never
+        // left Discord, and the only evidence was that page.
         val manifest = File(projectRoot, "app/src/main/AndroidManifest.xml").readText()
+        val scheme = DiscordOAuth.REDIRECT_URI.substringBefore(':')
         assertTrue(
             "the manifest must handle ${DiscordOAuth.REDIRECT_URI}",
-            manifest.contains("android:host=\"discord\"") &&
-                manifest.contains("android:scheme=\"anisequel\"")
+            manifest.contains("android:scheme=\"$scheme\"")
         )
-        assertEquals("anisequel://discord", DiscordOAuth.REDIRECT_URI)
+        assertEquals("discord-1571747436542566561:/authorize/callback", DiscordOAuth.REDIRECT_URI)
+    }
+
+    @Test
+    fun `the redirect is the mobile shape Discord registers, not an arbitrary scheme`() {
+        // The portal will not accept a made-up scheme, and the authorize endpoint
+        // answers any request that names one with "Invalid OAuth2 redirect_uri".
+        assertTrue(
+            DiscordOAuth.REDIRECT_URI.startsWith(
+                "discord-${DiscordOAuth.DEFAULT_CLIENT_ID}:/authorize/callback"
+            )
+        )
+        assertFalse(
+            "an unregistrable scheme is what broke this sign-in",
+            DiscordOAuth.REDIRECT_URI.startsWith("anisequel://")
+        )
+        // The token exchange has to carry the same URI, byte for byte: Discord
+        // compares it against the one from the authorize request.
+        val exchange = File(
+            projectRoot,
+            "app/src/main/java/com/anisequel/data/discord/DiscordOAuthApi.kt"
+        ).readText()
+        assertTrue(
+            "the exchange must send DiscordOAuth.REDIRECT_URI",
+            exchange.contains(".add(\"redirect_uri\", DiscordOAuth.REDIRECT_URI)")
+        )
     }
 
     @Test

@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.1.5",
+      "entries": [
+        {
+          "title": "Discord sign-in no longer stops on an invalid URL",
+          "detail": "The authorize request sent Discord a redirect of anisequel://discord, an arbitrary custom scheme that Discord's developer portal will not register for a standard OAuth2 application - so the page stopped on Discord's invalid redirect URL instead of the login form, and no callback ever reached the phone. The sign-in now uses the mobile redirect Discord documents, discord-1571747436542566561:/authorize/callback, which the intent filter handles and the token exchange sends back byte for byte. The old anisequel://discord filter stays registered so a flow already in flight on an older build still lands here."
+        },
+        {
+          "title": "The application ID field prints the redirect to register",
+          "detail": "The field now shows the exact redirect URI the sign-in uses, discord-1571747436542566561:/authorize/callback, so a reader who supplies their own Discord application registers the address that works instead of the one that produced the invalid-URL page."
+        }
+      ]
+    },
+    {
       "version": "2.1.4",
       "entries": [
         {

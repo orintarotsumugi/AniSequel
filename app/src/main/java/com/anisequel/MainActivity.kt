@@ -630,7 +630,14 @@ class MainActivity : ComponentActivity() {
             // verifier the flow was started with, and that lives with the flow rather
             // than with the AniList session. Handed over as text so the parse - and
             // the state check - can be tested off-device.
+            //
+            // The scheme is `discord-<application id>` and it has no authority, so
+            // `uri.host` is null here: this used to compare the host against
+            // "discord" on an `anisequel://` URI, which is not a redirect Discord
+            // will register and never matched the real callback either.
             uri.scheme == "anisequel" && uri.host == "discord" ->
+                DiscordOAuthFlow.deliver(uri.toString())
+            uri.scheme?.startsWith("discord-") == true ->
                 DiscordOAuthFlow.deliver(uri.toString())
         }
     }
