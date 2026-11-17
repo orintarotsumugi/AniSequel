@@ -136,135 +136,23 @@ internal fun ViewerDetailsCard(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // What is on screen, in words: the provider is not obvious from the
-                // picture alone, and btttr's four renders differ only by an overlay
-                // the reader cannot name without being told which one is up.
-                val onScreenLabel = when {
-                    imageCount > 1 && image?.variant != null ->
-                        "$provider · ${image.variant} · ${imageIndex + 1} of $imageCount"
-                    imageCount > 1 ->
-                        "$provider · Image ${imageIndex + 1} of $imageCount"
-                    image?.variant != null -> "$provider · ${image.variant}"
-                    else -> provider.takeIf { it.isNotBlank() && seriesSeason != null }
-                }?.let { label ->
-                    // The caption is where a reader reads what the picture is, so
-                    // the correction belongs at the end of it rather than as a
-                    // second caption; the line below explains the term.
-                    if (seriesSeason != null) "$label · series art" else label
-                }
-                if (onScreenLabel != null) {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = onScreenLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.testTag("cover_image_caption")
-                    )
-                }
+                CoverOnScreenCaption(
+                    provider = provider,
+                    image = image,
+                    imageIndex = imageIndex,
+                    imageCount = imageCount,
+                    seriesSeason = seriesSeason
+                )
 
-                if (seriesSeason != null) {
-                    // "Series art" is a term of art, not an explanation. Without
-                    // this line it reads as a label the reader has to decode, and
-                    // the alternative - hiding the render - is worse: btttr has one
-                    // picture per series and this is the only screen that can show
-                    // it at its own size.
-                    // "Final Season" has no number - [SequelSeason] answers 99 for it,
-                    // which must not reach the reader as "Season 99".
-                    val seasonName =
-                        if (seriesSeason == SequelSeason.FINAL_SEASON) "the final season"
-                        else "Season $seriesSeason"
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "BetterPosters has one render per series, so this is " +
-                            "the series artwork rather than $seasonName's.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.testTag("cover_series_art_note")
-                    )
-                }
+                ViewerSourcePills(
+                    sources = sources,
+                    sourceIndex = sourceIndex,
+                    onSelectSource = onSelectSource
+                )
 
-                // Which provider - and, inside btttr, which of its renders. Only
-                // drawn when there is a choice: a title with no banner and no btttr
-                // art would otherwise get a single pill that does nothing, which
-                // reads as a broken control.
-                if (sources.size > 1) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        sources.forEachIndexed { index, candidate ->
-                            ViewerPill(
-                                label = candidate.label,
-                                selected = index == sourceIndex,
-                                modifier = Modifier.widthIn(min = 88.dp),
-                                onClick = { onSelectSource(index) }
-                            )
-                        }
-                    }
-                }
+                ViewerTitleChips(media = media)
 
-                // Romaji & English Titles
-                val romaji = media.romajiName
-                val english = media.englishName
-
-                if (!romaji.isNullOrBlank() || !english.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (!romaji.isNullOrBlank()) {
-                            TitleChip(
-                                label = "ROMAJI",
-                                value = romaji,
-                                labelColor = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        if (!english.isNullOrBlank()) {
-                            TitleChip(
-                                label = "ENGLISH",
-                                value = english,
-                                labelColor = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                // Where the reader can look at more of this title's artwork. AniList
-                // is the page this viewer was opened from; LiveChart is the only other
-                // site the app can honestly send them to for the airing schedule. Its
-                // poster also appears up above as a third image source - the owner
-                // reversed the earlier no-scrape rule (see [FullScreenCoverViewer] and
-                // [com.anisequel.ui.components.LiveChart]) - but this pill is still
-                // just the outbound link it has always been, to the search page.
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ViewerActionPill(
-                        icon = AppVectorIcons.OpenInNew,
-                        label = "AniList",
-                        modifier = Modifier.weight(1f),
-                        onClick = { openExternalUrlOrCopy(context, media.pageUrl) }
-                    )
-                    if (!media.isManga) {
-                        ViewerActionPill(
-                            icon = AppVectorIcons.CalendarClock,
-                            label = "LiveChart",
-                            modifier = Modifier.weight(1f),
-                            onClick = { openExternalUrlOrCopy(context, media.liveChartUrl) }
-                        )
-                    }
-                }
+                ViewerOutboundLinks(media = media, context = context)
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -278,6 +166,151 @@ internal fun ViewerDetailsCard(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+private fun CoverOnScreenCaption(
+    provider: String,
+    image: CoverImage?,
+    imageIndex: Int,
+    imageCount: Int,
+    seriesSeason: Int?
+) {
+    // What is on screen, in words: the provider is not obvious from the picture
+    // alone, and btttr's four renders differ only by an overlay the reader cannot
+    // name without being told which one is up.
+    val onScreenLabel = when {
+        imageCount > 1 && image?.variant != null ->
+            "$provider · ${image.variant} · ${imageIndex + 1} of $imageCount"
+        imageCount > 1 ->
+            "$provider · Image ${imageIndex + 1} of $imageCount"
+        image?.variant != null -> "$provider · ${image.variant}"
+        else -> provider.takeIf { it.isNotBlank() && seriesSeason != null }
+    }?.let { label ->
+        // The caption is where a reader reads what the picture is, so the correction
+        // belongs at the end of it rather than as a second caption; the line below
+        // explains the term.
+        if (seriesSeason != null) "$label · series art" else label
+    }
+    if (onScreenLabel != null) {
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = onScreenLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.testTag("cover_image_caption")
+        )
+    }
+
+    if (seriesSeason == null) return
+    // "Series art" is a term of art, not an explanation. Without this line it reads
+    // as a label the reader has to decode, and the alternative - hiding the render -
+    // is worse: btttr has one picture per series and this is the only screen that
+    // can show it at its own size.
+    // "Final Season" has no number - [SequelSeason] answers 99 for it, which must not
+    // reach the reader as "Season 99".
+    val seasonName =
+        if (seriesSeason == SequelSeason.FINAL_SEASON) "the final season"
+        else "Season $seriesSeason"
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        text = "BetterPosters has one render per series, so this is " +
+            "the series artwork rather than $seasonName's.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.testTag("cover_series_art_note")
+    )
+}
+
+@Composable
+private fun ViewerSourcePills(
+    sources: List<CoverSource>,
+    sourceIndex: Int,
+    onSelectSource: (Int) -> Unit
+) {
+    // Which provider - and, inside btttr, which of its renders. Only drawn when
+    // there is a choice: a title with no banner and no btttr art would otherwise get
+    // a single pill that does nothing, which reads as a broken control.
+    if (sources.size <= 1) return
+    Spacer(modifier = Modifier.height(10.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        sources.forEachIndexed { index, candidate ->
+            ViewerPill(
+                label = candidate.label,
+                selected = index == sourceIndex,
+                modifier = Modifier.widthIn(min = 88.dp),
+                onClick = { onSelectSource(index) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewerTitleChips(media: MediaNode) {
+    val romaji = media.romajiName
+    val english = media.englishName
+    if (romaji.isNullOrBlank() && english.isNullOrBlank()) return
+
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (!romaji.isNullOrBlank()) {
+            TitleChip(
+                label = "ROMAJI",
+                value = romaji,
+                labelColor = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        if (!english.isNullOrBlank()) {
+            TitleChip(
+                label = "ENGLISH",
+                value = english,
+                labelColor = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ViewerOutboundLinks(media: MediaNode, context: android.content.Context) {
+    // Where the reader can look at more of this title's artwork. AniList is the
+    // page this viewer was opened from; LiveChart is the only other site the app can
+    // honestly send them to for the airing schedule. Its poster also appears up above
+    // as a third image source - the owner reversed the earlier no-scrape rule (see
+    // [FullScreenCoverViewer] and [com.anisequel.ui.components.LiveChart]) - but this
+    // pill is still just the outbound link it has always been, to the search page.
+    Spacer(modifier = Modifier.height(10.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ViewerActionPill(
+            icon = AppVectorIcons.OpenInNew,
+            label = "AniList",
+            modifier = Modifier.weight(1f),
+            onClick = { openExternalUrlOrCopy(context, media.pageUrl) }
+        )
+        if (!media.isManga) {
+            ViewerActionPill(
+                icon = AppVectorIcons.CalendarClock,
+                label = "LiveChart",
+                modifier = Modifier.weight(1f),
+                onClick = { openExternalUrlOrCopy(context, media.liveChartUrl) }
+            )
         }
     }
 }
