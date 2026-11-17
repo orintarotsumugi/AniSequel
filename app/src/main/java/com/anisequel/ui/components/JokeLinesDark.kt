@@ -16,6 +16,18 @@ package com.anisequel.ui.components
 internal object JokeLinesDark {
 
     val lines = listOf(
+        "The sequel was greenlit after the studio that made the first one closed.",
+        "The final chapter was released posthumously and the obituary got more edits.",
+        "The memorial episode aired before the manga confirmed the death.",
+        "The character's grave has a merch link in the official post.",
+        "The remake will fix the ending, said the studio that cancelled the original.",
+        "The film's post-credits scene is a job listing for the sequel.",
+        "Your comfort show is about grief. That is why it is comforting. Sit with that.",
+        "The fandom held a funeral for a character the author later said was fine.",
+        "The author apologised for the delay from a hospital bed. The publisher thanked them for their dedication.",
+        "The finale's memorial montage reused recap frames. Cheaper, and somehow worse.",
+        "The spin-off follows the survivors because the dead cannot sell figures.",
+        "The show's final message is that the world moves on. So did the merchandise line.",
         "The sequel is coming eventually, which is industry code for please stop asking.",
         "The cliffhanger has outlived three phones and still has no resolution.",
         "Your favourite ship sailed. The author set it on fire at the harbour.",

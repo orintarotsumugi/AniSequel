@@ -50,7 +50,12 @@ internal fun MiniCover(
             // The same source the grid would draw. A preview that showed AniList
             // art while the reader's library showed btttr's would be answering a
             // question about a layout with somebody else's picture.
-            model = entry?.media?.let { media -> cardPosterUrl(media) },
+            // An empty library still gets a poster. The gradient below was a
+            // placeholder for a cover, but every layout preview in Settings reads
+            // this one cell, so an empty list made all of them look like the same
+            // grey card and hid the difference between the modes.
+            model = entry?.media?.let { media -> cardPosterUrl(media) }
+                ?: SAMPLE_COVER,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -60,6 +65,9 @@ internal fun MiniCover(
 
 internal fun previewTitle(entry: MediaListEntryItem?): String =
     entry?.media?.displayName ?: "Dandadan"
+
+/** The fallback art matches [previewTitle]'s fallback name. */
+private const val SAMPLE_COVER = "https://img.anili.st/media/171018"
 
 /**
  * One of the reader's entries for preview slot [index], cycling when there are

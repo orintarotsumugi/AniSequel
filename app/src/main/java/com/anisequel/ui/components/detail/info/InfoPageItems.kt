@@ -16,6 +16,7 @@ import com.anisequel.data.model.characterList
 import com.anisequel.data.model.genreList
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.streamingLinks
@@ -112,22 +113,29 @@ internal fun LazyListScope.infoPageItems(
         }
     }
 
+    // The actions are the first thing below the artwork, and they used to sit
+    // directly on the page's backdrop with a transparent outlined button. At the
+    // hero's bottom edge that read as a control cut in half - the artwork ended,
+    // the button continued, and nothing drew a boundary between the two surfaces.
+    // A card gives the row its own ground, so the hand-off from title art to page
+    // UI is a card edge rather than a seam through a button.
     cardItem(key = "actions", index = 2, entranceKey = revealKey) {
-        DetailActionRow(
-            subject = subject,
-            canWriteToAniList = canWriteToAniList,
-            quickAddStatus = quickAddStatus,
-            onAddMediaToPlanning = onAddMediaToPlanning,
-            onAddMediaToWatching = onAddMediaToWatching,
-            onAddToPlanning = onAddToPlanning,
-            onAddToWatching = onAddToWatching,
-            isDetailLoading = isDetailLoading,
-            holdDurationSeconds = holdDurationSeconds,
-            swipeEnabled = swipeEnabled,
-            onEditEntry = onEditEntry,
-            context = context,
-            modifier = it
-        )
+        InfoCard(modifier = it) {
+            DetailActionRow(
+                subject = subject,
+                canWriteToAniList = canWriteToAniList,
+                quickAddStatus = quickAddStatus,
+                onAddMediaToPlanning = onAddMediaToPlanning,
+                onAddMediaToWatching = onAddMediaToWatching,
+                onAddToPlanning = onAddToPlanning,
+                onAddToWatching = onAddToWatching,
+                isDetailLoading = isDetailLoading,
+                holdDurationSeconds = holdDurationSeconds,
+                swipeEnabled = swipeEnabled,
+                onEditEntry = onEditEntry,
+                context = context
+            )
+        }
     }
 
     cardItem(
@@ -162,7 +170,13 @@ internal fun LazyListScope.infoPageItems(
         index = 5,
         entranceKey = revealKey,
         visible = sections.streamingLinks.isNotEmpty()
-    ) { InfoWhereToWatchCard(links = sections.streamingLinks, modifier = it) }
+    ) {
+        InfoWhereToWatchCard(
+            links = sections.streamingLinks,
+            modifier = it,
+            isManga = media.isManga
+        )
+    }
 
     cardItem(key = "synopsis", index = 6, entranceKey = revealKey) {
         InfoSynopsisCard(media = media, isDetailLoading = isDetailLoading, modifier = it)

@@ -81,6 +81,7 @@ class InterfacePreferences(private val context: Context) {
          */
         val CARD_SHOW_TITLES = booleanPreferencesKey("card_show_titles")
         val CARD_SHOW_SCORES = booleanPreferencesKey("card_show_scores")
+        val CARD_CORNER_RADIUS = floatPreferencesKey("card_corner_radius")
         val SHOW_MY_RATINGS = booleanPreferencesKey("show_my_ratings")
         val SHOW_THEIR_RATINGS = booleanPreferencesKey("show_their_ratings")
 
@@ -239,7 +240,11 @@ class InterfacePreferences(private val context: Context) {
                     // and the switch that would bring it back described itself as
                     // already on.
                     showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: true,
-                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: true
+                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: true,
+                    // A radius written before this key existed is the shipped
+                    // 12dp, so an upgrade does not change how every cover looks.
+                    cornerRadius = preferences[Keys.CARD_CORNER_RADIUS]
+                        ?: CardDesign.DEFAULT_CORNER_RADIUS
                 ).clamped(),
                 showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
                 showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true,
@@ -327,6 +332,7 @@ class InterfacePreferences(private val context: Context) {
             preferences[Keys.CARD_SCROLL_TITLES] = clamped.scrollTitles
             preferences[Keys.CARD_SHOW_TITLES] = clamped.showTitles
             preferences[Keys.CARD_SHOW_SCORES] = clamped.showScores
+            preferences[Keys.CARD_CORNER_RADIUS] = clamped.cornerRadius
         }
     }
 
@@ -413,6 +419,7 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.CARD_SCROLL_TITLES)
             preferences.remove(Keys.CARD_SHOW_TITLES)
             preferences.remove(Keys.CARD_SHOW_SCORES)
+            preferences.remove(Keys.CARD_CORNER_RADIUS)
             preferences.remove(Keys.SHOW_MY_RATINGS)
             preferences.remove(Keys.SHOW_THEIR_RATINGS)
             preferences.remove(Keys.POSTER_SOURCE)

@@ -187,14 +187,27 @@ fun ProfileErrorView(
             modifier = Modifier.widthIn(max = 420.dp)
         )
         if (quip != null) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = quip,
-                style = MaterialTheme.typography.bodySmall,
-                fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.tertiary,
-                textAlign = TextAlign.Center
-            )
+            Spacer(modifier = Modifier.height(14.dp))
+            // The line used to be bodySmall italic: at the bottom of a mostly
+            // empty error screen it read as a footnote to the failure, which is
+            // exactly the wrong weight for the one thing on the page that is
+            // allowed to be funny. A tinted capsule gives it a body of its own.
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
+                modifier = Modifier.widthIn(max = 420.dp)
+            ) {
+                Text(
+                    text = quip,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontStyle = FontStyle.Italic
+                    ),
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(20.dp))
         if (isAuthError) {

@@ -23,8 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.anisequel.ui.components.icons.Icons
-import com.anisequel.ui.components.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,8 +60,9 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.icons.Icons
+import com.anisequel.ui.components.icons.automirrored.filled.ArrowBack
 import com.anisequel.ui.components.nova.NovaBackdrop
-import com.anisequel.ui.components.nova.NovaSectionHeading
 import com.anisequel.ui.components.nova.NovaSurface
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPersonProfileHost
@@ -77,14 +76,11 @@ import java.util.Locale
 /**
  * The viewer's own airing and announced titles, as a schedule.
  *
- * This replaces the Activity door in the new look's hub. Activity was a page about
- * what had already happened; a schedule is the question the list can answer before
- * it happens, and it is built from the same `ArrivingEntry` rows Home already
- * carries - no second request, and no separate account of which titles exist.
- *
- * The rows are deliberately vertical rather than the Home rail's posters: a date
- * is the content here, and a horizontal card leaves no room for "Starts 5 Oct"
- * without setting it over the cover.
+ * The shape follows the list reference rather than the old poster rail: a section
+ * heading with a live count, then one calm card per title, the poster large enough
+ * to recognise, and the next episode in a filled pill where the eye lands first.
+ * A schedule is read in a hurry - "what is on, and when" - so the date is the
+ * loudest line and the progress is the quiet one beneath it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,100 +129,95 @@ fun NovaScheduleScreen(
                 onBack = onBack
             )
 
-            // The body gets what the header leaves, not the whole window.
-            // `fillMaxSize` here (and on the list below) measured against the
-            // Column's full height and was then placed under a header, so its
-            // last rows sat past the bottom edge and could not be scrolled to.
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-            when {
-                isLoading -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(30.dp),
-                        color = MaterialTheme.colorScheme.primary
+                when {
+                    isLoading -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ExpressiveLoadingIndicator(
+                            modifier = Modifier.size(30.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    error != null -> ScheduleNote(
+                        text = "Couldn't load your schedule - $error"
                     )
-                }
 
-                error != null -> ScheduleNote(
-                    text = "Couldn't load your schedule - $error"
-                )
+                    entries.isEmpty() -> ScheduleNote(
+                        text = "Nothing in your list is airing or announced yet. " +
+                            "Titles you plan to watch will appear here with their start date."
+                    )
 
-                entries.isEmpty() -> ScheduleNote(
-                    text = "Nothing in your list is airing or announced yet. " +
-                        "Titles you plan to watch will appear here with their start date."
-                )
-
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 8.dp,
-                        bottom = 32.dp
-                    ),
-                    // 12dp rather than 8: the rows below are taller than they were, and
-                    // at the old gap two of them read as one block of artwork with a
-                    // seam - the reference the reader gave was a Library list, where a
-                    // row is a card, not a stripe.
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (airing.isNotEmpty()) {
-                        item(key = "airing_heading", contentType = "heading") {
-                            NovaSectionHeading(
-                                title = "Airing now",
-                                count = airing.size,
-                                modifier = Modifier.padding(top = 6.dp)
-                            )
-                        }
-                        items(
-                            items = airing,
-                            key = { "airing_${it.mediaId}" },
-                            contentType = { "schedule_row" }
-                        ) { entry ->
-                            ScheduleRow(
-                                entry = entry,
-                                onClick = { selectedMedia = entry.toDetailMedia() },
-                                modifier = Modifier.animateItem(
-                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 4.dp,
+                            bottom = 32.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (airing.isNotEmpty()) {
+                            item(key = "airing_heading", contentType = "heading") {
+                                ScheduleSectionHeading(
+                                    title = "Airing now",
+                                    count = airing.size,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
                                 )
-                            )
-                        }
-                    }
-
-                    if (upcoming.isNotEmpty()) {
-                        item(key = "upcoming_heading", contentType = "heading") {
-                            NovaSectionHeading(
-                                title = "Upcoming",
-                                count = upcoming.size,
-                                modifier = Modifier.padding(top = if (airing.isEmpty()) 6.dp else 20.dp)
-                            )
-                        }
-                        items(
-                            items = upcoming,
-                            key = { "upcoming_${it.mediaId}" },
-                            contentType = { "schedule_row" }
-                        ) { entry ->
-                            ScheduleRow(
-                                entry = entry,
-                                onClick = { selectedMedia = entry.toDetailMedia() },
-                                modifier = Modifier.animateItem(
-                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            }
+                            items(
+                                items = airing,
+                                key = { "airing_${it.mediaId}" },
+                                contentType = { "schedule_row" }
+                            ) { entry ->
+                                ScheduleRow(
+                                    entry = entry,
+                                    onClick = { selectedMedia = entry.toDetailMedia() },
+                                    modifier = Modifier.animateItem(
+                                        placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                        fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                        fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                    )
                                 )
-                            )
+                            }
+                        }
+
+                        if (upcoming.isNotEmpty()) {
+                            item(key = "upcoming_heading", contentType = "heading") {
+                                ScheduleSectionHeading(
+                                    title = "Upcoming",
+                                    count = upcoming.size,
+                                    modifier = Modifier.padding(
+                                        top = if (airing.isEmpty()) 8.dp else 18.dp,
+                                        bottom = 2.dp
+                                    )
+                                )
+                            }
+                            items(
+                                items = upcoming,
+                                key = { "upcoming_${it.mediaId}" },
+                                contentType = { "schedule_row" }
+                            ) { entry ->
+                                ScheduleRow(
+                                    entry = entry,
+                                    onClick = { selectedMedia = entry.toDetailMedia() },
+                                    modifier = Modifier.animateItem(
+                                        placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                        fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                        fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                    )
+                                )
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -268,7 +259,7 @@ private fun ScheduleHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 10.dp, end = 16.dp, top = 8.dp, bottom = 6.dp),
+            .padding(start = 10.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
@@ -284,23 +275,24 @@ private fun ScheduleHeader(
                 contentDescription = "Back to Other Features"
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "Schedule",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "$airingCount airing · $upcomingCount upcoming",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(15.dp))
+                .size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
@@ -308,7 +300,42 @@ private fun ScheduleHeader(
                 imageVector = AppVectorIcons.Calendar,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(21.dp)
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScheduleSectionHeading(
+    title: String,
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Box(
+            modifier = Modifier
+                .clip(ExpressiveShapes.pill)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .padding(horizontal = 9.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
     }
@@ -357,32 +384,23 @@ private fun ScheduleRow(
                 onClick = onClick
             )
             .testTag("nova_schedule_row"),
-        shape = RoundedCornerShape(22.dp)
+        shape = RoundedCornerShape(26.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                // 11dp rather than 9: the artwork below grew with the row, and equal
-                // padding on a taller card reads as a thinner card. The cover and this
-                // inset are the ones the Library's list row uses, scaled up once.
-                .padding(11.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    // 72×104 against the old 62×88. A schedule is scanned for a title
-                    // you half-remember, and at the old size the art was a colour swatch
-                    // beside the name rather than a poster you could recognise.
-                    .width(72.dp)
-                    .height(104.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .width(84.dp)
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(18.dp))
                     .background(entry.coverColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    // The reader's poster source, by id: this row carries no MediaNode,
-                    // but it does carry the title - which is what keeps a sequel season
-                    // on its own cover instead of the series poster.
                     model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title),
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
@@ -393,30 +411,29 @@ private fun ScheduleRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = entry.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 ScheduleDatePill(entry)
-                if (entry.progress != null || entry.episodes != null) {
-                    Spacer(modifier = Modifier.height(5.dp))
-                    Text(
-                        text = progressLabel(entry),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
+                Spacer(modifier = Modifier.height(7.dp))
+                Text(
+                    text = progressLabel(entry),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Icon(
                 imageVector = AppVectorIcons.SequelArrow,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }
@@ -435,39 +452,35 @@ private fun ScheduleDatePill(entry: ArrivingEntry) {
         entry.startLabel != null -> "Starts ${entry.startLabel}"
         else -> "Date to be announced"
     }
+    val container = if (entry.isAiring) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+    val content = if (entry.isAiring) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Row(
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
-            .background(
-                if (entry.isAiring) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                }
-            )
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .background(container)
+            .padding(start = 9.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = if (entry.isAiring) AppVectorIcons.Play else AppVectorIcons.Calendar,
             contentDescription = null,
-            tint = if (entry.isAiring) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.size(11.dp)
+            tint = content,
+            modifier = Modifier.size(13.dp)
         )
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(5.dp))
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = if (entry.isAiring) {
-                MaterialTheme.colorScheme.onPrimaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = content,
             maxLines = 1
         )
     }
@@ -478,7 +491,8 @@ private fun progressLabel(entry: ArrivingEntry): String {
     val total = entry.episodes
     return when {
         progress != null && total != null -> "$progress of $total episodes"
-        progress != null -> "$progress episodes watched"
+        progress != null && progress > 0 -> "$progress episodes watched"
+        progress != null -> "0 episodes watched"
         total != null -> "$total episodes"
         else -> "Episode count to be announced"
     }
