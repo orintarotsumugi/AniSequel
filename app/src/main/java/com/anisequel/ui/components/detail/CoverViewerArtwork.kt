@@ -1,5 +1,9 @@
 package com.anisequel.ui.components.detail
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -8,9 +12,9 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -18,11 +22,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.Painter
@@ -32,11 +36,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.cards.unseamedCover
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 
 /**
  * The artwork and its gestures, split out of [FullScreenCoverViewer].
@@ -60,6 +67,16 @@ private const val MAX_ZOOM = 4.5f
 
 /** AniList's cover shape, used until the image's own dimensions arrive. */
 internal const val DEFAULT_COVER_ASPECT = 2f / 3f
+
+/**
+ * How far the full-bleed copy of the artwork is blurred.
+ *
+ * Enough that the picture reads as colour and shape rather than as a second copy of
+ * the poster competing with the sharp one, and low enough that it still costs one
+ * offscreen pass rather than a blur chain per frame. The Info page's backdrop uses
+ * the same order of magnitude for the same reason.
+ */
+private val BACKDROP_BLUR = 26.dp
 
 /**
  * The viewer's zoom and pan.
@@ -127,12 +144,86 @@ internal fun coverAspectOf(intrinsic: Size, source: CoverSource?): Float =
     }
 
 /**
- * The artwork between the header and the details card.
+ * The picture behind everything: the image on screen, cropped to the display.
  *
- * [BoxWithConstraints] gives it the space the header and footer leave, and the
- * cover takes the largest box that fits it at its own ratio - the 340x440 frame
- * this replaced letterboxed a 2:3 cover on one axis, so the "full screen" viewer
- * drew a poster smaller than the hero it was opened from.
+ * This is what makes the viewer full screen rather than a poster on a dark page.
+ * A 2:3 cover that fits a 19.5:9 phone leaves a wide band on each side; drawing the
+ * *same* image at full bleed behind it means those bands are the title's own colour
+ * and art instead of empty space, and the sharp copy in the middle reads as the
+ * subject of a lit room rather than as an object on a table.
+ *
+ * Blurred, because an unblurred copy at 2x scale is a second poster competing with
+ * the one the reader is looking at - the eye cannot tell which is the image and
+ * which is the decoration.
+ *
+ * [presence] is a lambda so the fade is read in the draw phase: this covers the
+ * whole window, and recomposing it per fade frame would re-ask Coil for a painter
+ * on every one of them.
+ */
+@Composable
+internal fun CoverViewerBackdrop(
+    url: String?,
+    coverBg: Color,
+    presence: () -> Float,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .graphicsLayer { alpha = presence() }
+            .background(coverBg)
+            .testTag("cover_viewer_backdrop")
+    ) {
+        if (url != null) {
+            AnimatedContent(
+                targetState = url,
+                transitionSpec = {
+                    fadeIn(ExpressiveMotion.FastEffects)
+                        .togetherWith(fadeOut(ExpressiveMotion.FastEffects)) using null
+                },
+                contentKey = { it },
+                label = "cover_viewer_backdrop_art",
+                modifier = Modifier.fillMaxSize()
+            ) { activeUrl ->
+                AsyncImage(
+                    model = activeUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(BACKDROP_BLUR)
+                        .unseamedCover()
+                )
+            }
+
+            // The legibility layer. Black rather than the scheme's surface: this is
+            // the inside of a lightbox, and a `surface` wash went pale-grey in the
+            // light theme where the chrome's `onSurface` text needed a dark ground.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.45f),
+                            0.35f to Color.Black.copy(alpha = 0.30f),
+                            1f to Color.Black.copy(alpha = 0.70f)
+                        )
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * The artwork between the header and the details sheet, at its own ratio.
+ *
+ * [BoxWithConstraints] gives it the space the chrome leaves, and the cover takes
+ * the largest box that fits it at its own ratio - the 340x440 frame this replaced
+ * letterboxed a 2:3 cover on one axis, so the "full screen" viewer drew a poster
+ * smaller than the hero it was opened from.
+ *
+ * No rounded corners and no shadow: this is now the picture on a screen rather than
+ * a card floating over one, and the travelling copy in `CoverViewerReveal` has to
+ * land on exactly this shape, so both are square.
  */
 @Composable
 internal fun CoverArtwork(
@@ -141,6 +232,8 @@ internal fun CoverArtwork(
     coverAspect: Float,
     coverBg: Color,
     zoom: CoverZoomState,
+    /** A single tap: the viewer resets a zoom or closes, and it decides which. */
+    onTap: () -> Unit,
     /** False for the copy that is only on screen to fade out. See the call site. */
     reportsFrame: Boolean = true,
     /**
@@ -163,20 +256,22 @@ internal fun CoverArtwork(
             modifier = Modifier
                 .width(frameWidth)
                 .height(frameHeight)
-                .shadow(
-                    elevation = 24.dp,
-                    shape = MaterialTheme.shapes.large,
-                    ambientColor = coverBg,
-                    spotColor = Color.Black
-                )
-                .clip(MaterialTheme.shapes.large)
                 .background(coverBg)
                 .onSizeChanged { if (reportsFrame) zoom.frameSize = it }
                 .onGloballyPositioned {
                     if (reportsFrame) onFrameBounds?.invoke(it.boundsInWindow())
                 }
-                .pointerInput(zoom) {
-                    detectTapGestures(onDoubleTap = { zoom.toggleDoubleTap() })
+                // Single tap and double tap on one detector: the artwork covers most
+                // of the screen now, and "tap anywhere to close" (which the sheet
+                // still promises) cannot be left to the dialog's background when the
+                // picture is in the way. `detectTapGestures` holds a single tap for
+                // the double-tap window, so opening the zoom never also closes the
+                // viewer.
+                .pointerInput(zoom, onTap) {
+                    detectTapGestures(
+                        onTap = { onTap() },
+                        onDoubleTap = { zoom.toggleDoubleTap() }
+                    )
                 }
                 // Only a pinch, or a drag while already zoomed, claims the
                 // pointer. The old `detectTransformGestures` consumed every

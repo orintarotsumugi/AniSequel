@@ -4,10 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -37,6 +35,14 @@ import kotlin.math.roundToInt
  * input: two rectangles and a fraction. The viewer decides *when* to run it; this
  * file only knows how to draw a frame of it.
  *
+ * ## Square, like the frame it lands on
+ *
+ * It used to clip to `shapes.large` while the pager's copy was a rounded card, so
+ * the corners matched. The pager's artwork is now square and full bleed (see
+ * [CoverArtwork]), and a rounded flying copy would visibly round its corners off at
+ * the exact frame the hand-off happens - the one frame where the illusion has to be
+ * perfect. No clip at all: both are rectangles of the same size at the same place.
+ *
  * [progress] is a lambda so the value is read inside `graphicsLayer`. Passing the
  * `Float` would recompose this composable - and ask Coil for a painter again - on
  * every frame of a full-screen spring.
@@ -54,8 +60,9 @@ internal fun CoverRevealOverlay(
     val width = with(density) { target.width.toDp() }
     val height = with(density) { target.height.toDp() }
     // A poster is 2:3 and so is the frame, so the two scales are nearly equal;
-    // keeping both axes means a rare wide image still starts from the rectangle
-    // the reader tapped rather than from a letterboxed guess.
+    // keeping both axes means a rare wide image - AniList's banner, a LiveChart
+    // key visual - still starts from the rectangle the reader tapped rather than
+    // from a letterboxed guess.
     val startScaleX = origin.width / target.width
     val startScaleY = origin.height / target.height
 
@@ -74,7 +81,6 @@ internal fun CoverRevealOverlay(
                 translationX = lerp(origin.left - target.left, 0f, p)
                 translationY = lerp(origin.top - target.top, 0f, p)
             }
-            .clip(MaterialTheme.shapes.large)
             .background(coverBg)
             .testTag("cover_reveal_artwork")
     ) {

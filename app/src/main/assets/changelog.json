@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "2.3.6",
+      "entries": [
+        {
+          "title": "Every BetterPosters render, in one swipe",
+          "detail": "BetterPosters renders four overlay combinations of the same key art - with and without the score, with and without the genre line - and the cover viewer could only ever show the one your cards were configured for. The viewer now pages through all four, opening on your chosen render, with the current one named on the sheet (\"Score only\", \"Clean poster\") and the saved file named after it, so four saves are a set instead of four unlabelled duplicates. btttr has no higher-resolution file to offer: every size path and query returns the same 500x750 image."
+        },
+        {
+          "title": "The artwork viewer is full screen",
+          "detail": "The viewer now owns the whole display instead of sitting in a platform-width dialog with a poster letterboxed inside it. The picture runs under the status bar and behind the sheet, the image on screen is drawn again at full bleed and blurred behind it, and the header and details sheet are glass over the artwork rather than bands above and below it. Tapping the picture closes the viewer (or resets a zoom first), a one-finger swipe changes page, and pinching is what holds the finger."
+        },
+        {
+          "title": "An entrance and exit that settle",
+          "detail": "Opening used to spring the artwork past the frame it was landing on and snap it back, while the header and the sheet arrived over a picture still a fraction of its size. The artwork now travels on a spring that stops where it is asked to, the chrome follows it in, and on the way out the chrome leaves first so the shrinking picture is not hidden behind two more fades."
+        }
+      ]
+    },
+    {
       "version": "2.3.5",
       "entries": [
         {

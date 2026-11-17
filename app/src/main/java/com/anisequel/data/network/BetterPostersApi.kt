@@ -153,6 +153,43 @@ class BetterPostersApi(
     }
 
     /**
+     * Every poster btttr renders for [anilistId], the reader's chosen overlay first.
+     *
+     * ## Why a title has more than one poster
+     *
+     * btttr does not publish a gallery - it renders *one* piece of key art at four
+     * overlay combinations, addressed by the first path segment (`poster`,
+     * `poster-r`, `poster-g`, `poster-n`). A card only ever wants the variant the
+     * reader configured, but the full-screen viewer is where art is looked at: the
+     * clean render, the one with the score, the one with the genre line and the full
+     * poster are four genuinely different pictures of the same title, and they were
+     * unreachable from the app because [posterUrl] answers with one string.
+     *
+     * The chosen variant leads so the viewer opens on the picture the reader's cards
+     * already show; see [btttrVariantOverlays] for the order of the rest.
+     *
+     * Empty - not null - when btttr has nothing: no IMDb match, both requests failed,
+     * or [skipSequels] ruled out a later season. A caller draws no BetterPosters
+     * source at all, exactly as it would for a null from [posterUrl].
+     *
+     * This shares [posterMapping]'s caches with the cards, so a title the Library has
+     * already drawn costs no request at all, and it never writes [posterUrls]: that
+     * cache answers "the URL for this variant", which is a different question.
+     */
+    suspend fun posterVariants(
+        anilistId: Int,
+        overlays: PosterOverlays = PosterOverlays.DEFAULT,
+        skipSequels: Boolean = false
+    ): List<BetterPosterVariant> {
+        val mapping = posterMapping(anilistId)
+        if (skipSequels && (mapping?.season ?: 0) > 1) return emptyList()
+        val imdb = mapping?.imdb ?: return emptyList()
+        return btttrVariantOverlays(overlays).map { variant ->
+            BetterPosterVariant(url = betterPosterUrl(imdb, variant), overlays = variant)
+        }
+    }
+
+    /**
      * AniList id to IMDb id and season, shared by every caller asking for the same
      * title.
      *
@@ -378,4 +415,42 @@ internal fun betterPosterUrl(
     val variant = if (code.isEmpty()) "poster" else "poster-$code"
     val trend = if (overlays.showTrendTags) "" else "?tag=none"
     return "https://btttr.cc/$variant/imdb/poster-default/$imdbId.jpg$trend"
+}
+
+/**
+ * One of btttr's renders of a title: the URL to draw with, and which overlays it
+ * was rendered with.
+ *
+ * The overlays travel with the URL because the viewer names the page after them -
+ * "Score only", "Clean" - and re-deriving that from the URL would mean parsing a
+ * path segment back into the settings it came from.
+ */
+data class BetterPosterVariant(
+    val url: String,
+    val overlays: PosterOverlays
+)
+
+/**
+ * Every overlay set btttr renders for one poster, [chosen] first.
+ *
+ * The four are btttr's own path letters (see [betterPosterUrl]) and the set is the
+ * whole choice space: score on/off against genre on/off. `showTrendTags` is copied
+ * from [chosen] rather than varied, because it is a query parameter on the same
+ * render rather than a different path - a gallery that also flipped the trend strip
+ * would double for a difference the reader set once in Settings.
+ *
+ * The remaining three follow in the order a reader is most likely to want them: the
+ * full poster, then the two single overlays, then the clean one. [chosen] is dropped
+ * from that tail so the list never pages onto the same URL twice, which reads as a
+ * broken swipe.
+ */
+internal fun btttrVariantOverlays(chosen: PosterOverlays): List<PosterOverlays> {
+    val trend = chosen.showTrendTags
+    val rendered = listOf(
+        PosterOverlays(showRating = true, showGenre = true, showTrendTags = trend),
+        PosterOverlays(showRating = true, showGenre = false, showTrendTags = trend),
+        PosterOverlays(showRating = false, showGenre = true, showTrendTags = trend),
+        PosterOverlays(showRating = false, showGenre = false, showTrendTags = trend)
+    )
+    return (listOf(chosen) + rendered.filter { it != chosen }).distinct()
 }
