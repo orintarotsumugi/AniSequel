@@ -170,20 +170,6 @@ fun InfoHero(
      * and this is the first place it is drawn.
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
-    /**
-     * Whether the page behind this hero draws the same artwork.
-     *
-     * The hero's bottom gradient used to end on an **opaque** `surface`, while
-     * `InfoPageBackdrop` painted the same picture behind the whole page at a much
-     * lighter wash. The two met at the hero's last pixel, so the artwork was fully
-     * there above the line and back at thirty percent below it - a hard horizontal
-     * edge across the page that read as the banner being cut off and the content
-     * not belonging to it. When the page draws art, this ends on the page's own top
-     * wash instead, so the handover is continuous; when it does not (backdrop
-     * `OFF`) it still ends on `surface`, because there is nothing below to hand
-     * over to.
-     */
-    handOffToPageArtwork: Boolean = false,
     /** Which artwork the hero draws: the banner, the cover, or the cover as a fallback. */
     backdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
     /** Natural or tinted; the same choice the page below the hero draws with. */
@@ -382,14 +368,13 @@ fun InfoHero(
                         0.30f to Color.Black.copy(alpha = 0.22f),
                         0.58f to Color.Black.copy(alpha = 0.52f),
                         0.82f to Color.Black.copy(alpha = 0.74f),
-                        // The same 0.30 the page backdrop starts on, so the two
-                        // layers agree at the seam instead of meeting an opaque
-                        // edge. See [handOffToPageArtwork].
-                        1f to if (handOffToPageArtwork) {
-                            surface.copy(alpha = PAGE_ARTWORK_TOP_WASH)
-                        } else {
-                            surface
-                        }
+                        // Opaque surface, always. The old hand-off tried to match
+                        // the page backdrop's 0.30 wash, but the two draw the same
+                        // banner at different scales - matching alpha cannot match
+                        // the pixels, so the boundary was still a visible line. The
+                        // first card below now owns that edge: the hero lands on
+                        // the page's own surface and the card begins the UI.
+                        1f to surface
                     )
                 )
         )
@@ -643,65 +628,11 @@ fun InfoHero(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (relationLabel != null) {
-                        HeroChip(
-                            icon = AppVectorIcons.FranchiseBranch,
-                            label = relationLabel,
-                            accent = true
-                        )
-                    }
-                    // The main studio, when AniList flagged one. `studioCredits`
-                    // sorts those first and falls back to the flat list for the
-                    // queries that carry no edges - so this still headlines the
-                    // animation studio on a node whose studios arrived unordered.
-                    media.studioCredits.firstOrNull()?.let { studio ->
-                        HeroChip(
-                            icon = AppVectorIcons.Studio,
-                            label = studio.name,
-                            // Null id, null tap: a credit AniList gave no id for
-                            // cannot be opened, and a chip that looks tappable and
-                            // is not is worse than a plain one.
-                            onClick = studio.id?.let { id -> { onOpenStudio(id, studio.name) } }
-                        )
-                    }
-                    // The score is the number most people open a title to check, and
-                    // it lived half a page down in the Details card between "Source"
-                    // and "Popularity". It belongs in the lockup with the rest of the
-                    // "what is this" answers. `averageScore` is AniList's 0-100 mean,
-                    // which is already a percentage, so it is not rescaled here.
-                    media.averageScore?.let { score ->
-                        HeroChip(icon = AppVectorIcons.Star, label = "$score%")
-                    }
-                    // Gated on a real status. `statusLabel` answers "Unknown" for a
-                    // null, which is honest on the Details grid but reads as a fact
-                    // in a chip: "UNKNOWN" beside the score says the app looked and
-                    // found nothing, when the truth is that AniList did not send it.
-                    if (media.status != null) {
-                        HeroChip(
-                            icon = AppVectorIcons.Info,
-                            label = media.statusLabel.uppercase()
-                        )
-                    }
-                    HeroChip(
-                        icon = when {
-                            media.isManga -> AppVectorIcons.SourceBook
-                            // Read off the raw field, not `formatLabel`: that is
-                            // now spelled for a reader ("TV Short"), so comparing
-                            // it to `"MOVIE"` would silently never match and every
-                            // movie would draw the TV icon.
-                            media.format.equals("MOVIE", ignoreCase = true) -> AppVectorIcons.Movie
-                            else -> AppVectorIcons.Tv
-                        },
-                        // Small caps, the way the other hero chips are set. This
-                        // used to be `.uppercase()` on a raw enum, which printed
-                        // `TV_SHORT` on screen; `formatLabel` now spells it.
-                        label = media.formatLabel.uppercase()
-                    )
-                }
+                HeroChips(
+                    media = media,
+                    relationLabel = relationLabel,
+                    onOpenStudio = onOpenStudio
+                )
             }
         }
     }
@@ -710,14 +641,87 @@ fun InfoHero(
 private val HERO_HEIGHT = 340.dp
 
 /**
- * The page backdrop's top scrim alpha, repeated here because the hero's last
- * gradient stop has to equal it.
+ * The lockup's fact chips.
  *
- * Not imported: it is a constant of the other file's gradient, and the two are one
- * decision (the seam between them), so it is named on both sides with a comment
- * rather than left as a bare `0.30f` in one of them.
+ * Extracted from [InfoHero] because these six conditionals are the bulk of its
+ * branch count, and CodeFactor counts the hero's layout and scroll work already.
+ * They are also the one part of the lockup that is pure "what does AniList know
+ * about this title" - moving them keeps the hero about layout and this about the
+ * facts.
  */
-private const val PAGE_ARTWORK_TOP_WASH = 0.30f
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HeroChips(
+    media: MediaNode,
+    relationLabel: String?,
+    onOpenStudio: (Int, String?) -> Unit
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (relationLabel != null) {
+            HeroChip(
+                icon = AppVectorIcons.FranchiseBranch,
+                label = relationLabel,
+                accent = true
+            )
+        }
+        // The medium, before the format. "TV" beside "AIRING" says how it is
+        // packaged but not what it is, so a manga page and an anime page could
+        // carry the same chips; this one names the catalogue half the title
+        // belongs to, and uses the book glyph so the answer survives a glance.
+        HeroChip(
+            icon = if (media.isManga) AppVectorIcons.SourceBook else AppVectorIcons.Tv,
+            label = if (media.isManga) "MANGA" else "ANIME"
+        )
+        // The main studio, when AniList flagged one. `studioCredits` sorts those
+        // first and falls back to the flat list for the queries that carry no
+        // edges - so this still headlines the animation studio on a node whose
+        // studios arrived unordered.
+        media.studioCredits.firstOrNull()?.let { studio ->
+            HeroChip(
+                icon = AppVectorIcons.Studio,
+                label = studio.name,
+                // Null id, null tap: a credit AniList gave no id for cannot be
+                // opened, and a chip that looks tappable and is not is worse than
+                // a plain one.
+                onClick = studio.id?.let { id -> { onOpenStudio(id, studio.name) } }
+            )
+        }
+        // The score is the number most people open a title to check. `averageScore`
+        // is AniList's 0-100 mean, already a percentage, so it is not rescaled.
+        media.averageScore?.let { score ->
+            HeroChip(icon = AppVectorIcons.Star, label = "$score%")
+        }
+        // Gated on a real status. `statusLabel` answers "Unknown" for a null,
+        // which is honest on the Details grid but reads as a fact in a chip:
+        // "UNKNOWN" beside the score says the app looked and found nothing, when
+        // the truth is that AniList did not send it.
+        if (media.status != null) {
+            HeroChip(icon = AppVectorIcons.Info, label = media.statusLabel.uppercase())
+        }
+        // A manga's format is usually the word MANGA, which the medium chip above
+        // already says; a Novel or a One Shot still gets its own chip because
+        // those add something.
+        val mediumLabel = if (media.isManga) "MANGA" else "ANIME"
+        if (media.formatLabel.uppercase() != mediumLabel || !media.isManga) {
+            HeroChip(
+                icon = when {
+                    media.isManga -> AppVectorIcons.SourceBook
+                    // Read off the raw field, not `formatLabel`: that is spelled
+                    // for a reader ("TV Short"), so comparing it to "MOVIE" would
+                    // silently never match and every movie would draw the TV icon.
+                    media.format.equals("MOVIE", ignoreCase = true) -> AppVectorIcons.Movie
+                    else -> AppVectorIcons.Tv
+                },
+                // Small caps, the way the other hero chips are set; `formatLabel`
+                // spells the enum instead of printing `TV_SHORT`.
+                label = media.formatLabel.uppercase()
+            )
+        }
+    }
+}
 
 /**
  * How far the hero's placeholder sits toward the show's colour.

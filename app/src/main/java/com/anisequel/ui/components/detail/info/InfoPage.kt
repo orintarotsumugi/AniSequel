@@ -249,9 +249,6 @@ fun AnimeInfoPage(
                     },
                     onClose = onClose,
                     onOpenStudio = onOpenStudio,
-                    // The page draws its own artwork unless the reader turned the
-                    // backdrop off; only then does the hero end on solid surface.
-                    handOffToPageArtwork = infoBackdropSource != InfoBackdropSource.OFF,
                     backdropSource = infoBackdropSource,
                     tint = infoBackdropTint,
                     onOpenAppearance = onOpenAppearance

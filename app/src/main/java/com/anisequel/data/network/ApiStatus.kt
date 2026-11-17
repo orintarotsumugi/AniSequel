@@ -234,7 +234,13 @@ fun AniListErrorKind.friendlyCopy(): ApiErrorCopy = when (this) {
             "Ani-chan looked. Twice.",
             "This profile is in the witness protection program now.",
             "Ani-chan searched the whole wardrobe. Nothing.",
-            "It exists in your heart, not in the database."
+            "It exists in your heart, not in the database.",
+            "The account did not log out. It left.",
+            "Ani-chan found the username. It was in the obituary section.",
+            "Somebody deleted their whole personality and took the watch history with it.",
+            "The profile was last seen arguing about filler and then the signal cut out.",
+            "No such user. The internet has finally granted them privacy.",
+            "Ani-chan checked the blocked list. That is where hope goes to die."
         )
     )
 

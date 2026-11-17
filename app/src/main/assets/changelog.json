@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "2.3.3",
+      "entries": [
+        {
+          "title": "The schedule, rebuilt as a list",
+          "detail": "The schedule now uses the list shape from the reference: a section heading with a live count, one card per title with an 84x120 poster, the next episode in a filled pill, the watched count underneath and a chevron to open the title. Airing and Upcoming stay separate, the header carries the two totals, and rows animate in place when AniList refreshes them."
+        },
+        {
+          "title": "Info no longer cuts between the artwork and the page",
+          "detail": "The hero used to fade into a wash that was supposed to match the page backdrop, but the two draw the same banner at different scales, so the boundary still read as a seam through the AniList button. The hero now lands on the page's own surface and the action row has its own card, so the artwork ends and the UI begins instead of being sliced together. The hero on a manga also says MANGA instead of implying the medium through a TV format chip."
+        },
+        {
+          "title": "Where to Read, for manga",
+          "detail": "AniList stores streaming and reading links in one field. The Info card now says Where to Read for a manga, with the book icon and reading wording, instead of telling a reader where to watch a book."
+        },
+        {
+          "title": "Layout sharpness",
+          "detail": "Card design > Style and cover now has a Layout sharpness slider from 0 to 28 dp. It controls the cover's corner radius across every grid, shelf, profile list and the live preview above it, so the whole layout can be hard-edged or soft without changing the theme."
+        },
+        {
+          "title": "Card previews always show posters",
+          "detail": "The sample cards under Card design used placeholder colour rectangles whenever the preview needed more slots than the library had, so the preview never showed a poster. They now carry real AniList covers and ids, go through the same BetterPosters lookup as the grid, and pass the title so a sequel sample keeps its own season art."
+        },
+        {
+          "title": "Bigger jokes when a profile is missing",
+          "detail": "The quip under a missing AniList profile was a bodySmall footnote. It is now a tinted capsule at title size, with more sharp lines for the not-found state, so the joke is the second thing you read rather than the last."
+        },
+        {
+          "title": "More dark lines",
+          "detail": "The dark joke pool gained twelve new lines about posthumous chapters, memorial merchandise, cancelled studios and comfort shows about grief."
+        }
+      ]
+    },
+    {
       "version": "2.3.2",
       "entries": [
         {

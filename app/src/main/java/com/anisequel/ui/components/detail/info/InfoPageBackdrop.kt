@@ -147,6 +147,23 @@ internal fun InfoPageBackdrop(
                 )
             }
 
+            // The hand-off from the hero. The hero ends on opaque `surface`; if
+            // the page's own copy of the artwork started at full strength in the
+            // 16dp gap below it, that gap would be the same hard line the hero
+            // gradient just removed. Fading the backdrop in from `surface` over
+            // roughly the hero's height makes the artwork arrive under the first
+            // card instead of at the edge above it.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to surface,
+                            0.42f to surface.copy(alpha = 0f)
+                        )
+                    )
+            )
+
             // The legibility layer. Weighted from light at the top - where the hero
             // has already painted its own scrim - to heavier where the page's dense
             // cards are. `surface`, not black: see the KDoc.

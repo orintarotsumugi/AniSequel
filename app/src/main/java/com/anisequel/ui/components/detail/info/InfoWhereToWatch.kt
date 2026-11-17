@@ -54,7 +54,14 @@ import com.anisequel.ui.components.openExternalUrlOrCopy
 @Composable
 fun InfoWhereToWatchCard(
     links: List<MediaExternalLink>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Manga links are reading services, not streaming services. The same AniList
+     * field carries both, so the card has to say which question it is answering -
+     * "Where to Watch" over a MangaDex chip was the page telling a reader the
+     * wrong verb about their own medium.
+     */
+    isManga: Boolean = false
 ) {
     val available = remember(links) {
         links.filter { !it.site.isNullOrBlank() && !it.url.isNullOrBlank() }
@@ -65,11 +72,15 @@ fun InfoWhereToWatchCard(
 
     InfoCard(
         modifier = modifier.testTag("info_streaming_card"),
-        title = "Where to Watch",
-        icon = AppVectorIcons.Play
+        title = if (isManga) "Where to Read" else "Where to Watch",
+        icon = if (isManga) AppVectorIcons.SourceBook else AppVectorIcons.Play
     ) {
         Text(
-            text = "AniList's streaming links for this title. Availability depends on your region.",
+            text = if (isManga) {
+                "AniList's reading links for this title. Availability depends on your region."
+            } else {
+                "AniList's streaming links for this title. Availability depends on your region."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

@@ -481,6 +481,11 @@ internal fun CardShapeSection(
                 if (option != design.size) {
                     scope.launch { interfacePreferences.setCardDesign(design.copy(size = option)) }
                 }
+            },
+            onCorner = { radius ->
+                scope.launch {
+                    interfacePreferences.setCardDesign(design.copy(cornerRadius = radius))
+                }
             }
         )
         Spacer(modifier = Modifier.height(24.dp))
@@ -639,8 +644,16 @@ private fun CardShapePart(
     entries: List<MediaListEntryItem>,
     barTabs: List<MainTab>,
     onStyle: (MediaCardStyle) -> Unit,
-    onSize: (CardSize) -> Unit
+    onSize: (CardSize) -> Unit,
+    onCorner: (Float) -> Unit
 ) {
+    // The slider's live value while the finger is down. The preview reads this,
+    // not the preference, so the corners move under the thumb; the preference is
+    // written once on release, like the two type sliders.
+    var cornerDraft by rememberSaveable(design.cornerRadius) {
+        mutableStateOf(design.cornerRadius)
+    }
+
     SectionCard(
         title = "Style and cover",
         icon = AppVectorIcons.ViewGrid,
@@ -648,7 +661,7 @@ private fun CardShapePart(
     ) {
         CardDesignPreview(
             style = style,
-            design = design,
+            design = design.copy(cornerRadius = cornerDraft),
             entries = entries,
             barTabs = barTabs
         )
@@ -715,8 +728,27 @@ private fun CardShapePart(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        CardDesignSlider(
+            label = "Layout sharpness",
+            valueLabel = "${cornerDraft.roundToInt()} dp",
+            value = cornerDraft,
+            range = CardDesign.MIN_CORNER_RADIUS..CardDesign.MAX_CORNER_RADIUS,
+            steps = CORNER_RADIUS_STEPS,
+            testTag = "card_corner_radius_slider",
+            supporting = "How sharp the cover's corners are. 0 dp is a hard tile; " +
+                "higher values soften the frame. The preview above and every grid, " +
+                "shelf and profile list move together, so this is the one control " +
+                "that decides how soft the whole layout looks.",
+            onValueChange = { cornerDraft = it },
+            onCommit = { onCorner(cornerDraft) }
+        )
     }
 }
+
+/** 2dp between 0 and 28, as Slider's step count excludes both ends. */
+private const val CORNER_RADIUS_STEPS = 13
 
 /**
  * One labelled slider: a name, the value it is on, the track and a sentence about

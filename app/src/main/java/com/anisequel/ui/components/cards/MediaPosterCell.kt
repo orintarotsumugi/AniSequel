@@ -348,6 +348,10 @@ private fun PosterArtwork(
     aspect: Float,
     overlay: @Composable BoxScope.() -> Unit
 ) {
+    // One shape for the shadow, the clip and the border. The old
+    // `MaterialTheme.shapes.small` was a second answer to the same question, and it
+    // is why the settings preview could disagree with the grid after a theme change.
+    val artworkShape = RoundedCornerShape(LocalCardDesign.current.cornerRadius.dp)
     Box(
         modifier = posterModifier
             .fillMaxWidth()
@@ -356,7 +360,7 @@ private fun PosterArtwork(
                 if (style.glowing) {
                     Modifier.shadow(
                         elevation = 10.dp,
-                        shape = MaterialTheme.shapes.small,
+                        shape = artworkShape,
                         ambientColor = coverColor ?: Color.Black,
                         spotColor = coverColor ?: Color.Black
                     )
@@ -364,14 +368,14 @@ private fun PosterArtwork(
                     Modifier
                 }
             )
-            .clip(MaterialTheme.shapes.small)
+            .clip(artworkShape)
             .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (style.bordered) {
                     Modifier.border(
                         1.dp,
                         MaterialTheme.colorScheme.outlineVariant,
-                        MaterialTheme.shapes.small
+                        artworkShape
                     )
                 } else {
                     Modifier

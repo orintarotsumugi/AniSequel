@@ -86,7 +86,19 @@ data class CardDesign(
      */
     val showTitles: Boolean = true,
     /** Whether the card prints the score, for the same reason [showTitles] exists. */
-    val showScores: Boolean = true
+    val showScores: Boolean = true,
+    /**
+     * The artwork's corner radius, in dp.
+     *
+     * The same card is drawn in a grid, a shelf and a settings preview, and the
+     * one thing those three could not agree on was how sharp the frame looked: the
+     * cell used `MaterialTheme.shapes.small`, which a theme or a display-size change
+     * could quietly move. Storing the radius with the rest of the card design makes
+     * the preview and the grid answer with the same number, and gives a reader who
+     * wants covers to read as hard-edged tiles (0dp) or soft capsules (28dp) one
+     * control instead of a theme change.
+     */
+    val cornerRadius: Float = DEFAULT_CORNER_RADIUS
 ) {
     /**
      * Brought back inside the sliders' span.
@@ -97,7 +109,8 @@ data class CardDesign(
      */
     fun clamped(): CardDesign = copy(
         titleScale = titleScale.coerceIn(MIN_TITLE_SCALE, MAX_TITLE_SCALE),
-        ratingScale = ratingScale.coerceIn(MIN_RATING_SCALE, MAX_RATING_SCALE)
+        ratingScale = ratingScale.coerceIn(MIN_RATING_SCALE, MAX_RATING_SCALE),
+        cornerRadius = cornerRadius.coerceIn(MIN_CORNER_RADIUS, MAX_CORNER_RADIUS)
     )
 
     /**
@@ -127,6 +140,11 @@ data class CardDesign(
         const val MIN_RATING_SCALE = 0.8f
         const val MAX_RATING_SCALE = 1.4f
         const val DEFAULT_RATING_SCALE = 1f
+
+        /** 0dp is a hard tile; 28dp is soft enough to read as a rounded card. */
+        const val MIN_CORNER_RADIUS = 0f
+        const val MAX_CORNER_RADIUS = 28f
+        const val DEFAULT_CORNER_RADIUS = 12f
 
         val DEFAULT = CardDesign()
     }

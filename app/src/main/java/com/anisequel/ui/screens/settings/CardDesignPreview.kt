@@ -385,7 +385,10 @@ private data class PreviewSample(
 @Composable
 private fun sampleCoverUrl(sample: PreviewSample): String? {
     val id = sample.mediaId ?: return sample.coverUrl
-    return cardPosterUrl(mediaId = id, fallback = sample.coverUrl)
+    // The title is part of the lookup, not decoration: btttr resolves by IMDb
+    // series, and without it a sequel sample would draw season one's poster under
+    // the sequel's name - the exact mismatch the schedule row already avoids.
+    return cardPosterUrl(mediaId = id, fallback = sample.coverUrl, title = sample.title)
 }
 
 /**
@@ -408,32 +411,63 @@ private fun previewSamples(entries: List<MediaListEntryItem>): List<PreviewSampl
             mediaId = entry.media.id
         )
     }
+    // Real AniList ids and their covers. The placeholders used to be null covers
+    // with a colour rectangle, which meant a reader with an empty library designed
+    // cards against three flat swatches and never saw a poster. AniList's cover is
+    // the fallback the grid uses too, and btttr can replace it through the same
+    // lookup the real cards use.
     val placeholders = listOf(
-        Triple("Dandadan", 84, "12/24"),
-        Triple("Frieren: Beyond Journey's End Season 2", 91, "3/12"),
-        Triple("Kaiju No. 8", 76, "8/8"),
+        PreviewSample(
+            title = "Dandadan",
+            coverUrl = "https://img.anili.st/media/171018",
+            coverColor = Color(0xFF3B4A6B),
+            score = 84,
+            progress = "12/24",
+            mediaId = 171018
+        ),
+        PreviewSample(
+            title = "Frieren: Beyond Journey's End",
+            coverUrl = "https://img.anili.st/media/154587",
+            coverColor = Color(0xFF5A3B4A),
+            score = 91,
+            progress = "3/12",
+            mediaId = 154587
+        ),
+        PreviewSample(
+            title = "Kaiju No. 8",
+            coverUrl = "https://img.anili.st/media/164212",
+            coverColor = Color(0xFF2F5148),
+            score = 76,
+            progress = "8/8",
+            mediaId = 164212
+        ),
         // Long on purpose: the one sample that shows what a name does when it does
         // not fit - scroll, or clip - at the size the reader has picked.
-        Triple("That Time I Got Reincarnated as a Slime Season 3 Part 2", 82, "24/24"),
-        Triple("Solo Leveling", 79, "6/13"),
-        Triple("Delicious in Dungeon", 88, "2/10")
+        PreviewSample(
+            title = "That Time I Got Reincarnated as a Slime Season 3 Part 2",
+            coverUrl = "https://img.anili.st/media/157295",
+            coverColor = Color(0xFF3B4A6B),
+            score = 82,
+            progress = "24/24",
+            mediaId = 157295
+        ),
+        PreviewSample(
+            title = "Solo Leveling",
+            coverUrl = "https://img.anili.st/media/151807",
+            coverColor = Color(0xFF5A3B4A),
+            score = 79,
+            progress = "6/13",
+            mediaId = 151807
+        ),
+        PreviewSample(
+            title = "Delicious in Dungeon",
+            coverUrl = "https://img.anili.st/media/153518",
+            coverColor = Color(0xFF2F5148),
+            score = 88,
+            progress = "2/10",
+            mediaId = 153518
+        )
     )
-    val fills = placeholders
-        .drop(fromLibrary.size)
-        .mapIndexed { index, (title, score, progress) ->
-            PreviewSample(
-                title = title,
-                coverUrl = null,
-                // Scheme containers rather than a colour picked off a poster: the
-                // fallback has to read on a light theme and a dark one.
-                coverColor = when (index % 3) {
-                    0 -> Color(0xFF3B4A6B)
-                    1 -> Color(0xFF5A3B4A)
-                    else -> Color(0xFF2F5148)
-                },
-                score = score,
-                progress = progress
-            )
-        }
+    val fills = placeholders.drop(fromLibrary.size)
     return fromLibrary + fills
 }
