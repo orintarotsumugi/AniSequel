@@ -23,8 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import com.anisequel.ui.components.icons.Icons
+import com.anisequel.ui.components.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -380,8 +380,10 @@ private fun ScheduleRow(
                     .background(entry.coverColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    // The reader's poster source, by id: this row carries no MediaNode.
-                    model = cardPosterUrl(entry.mediaId, entry.coverUrl),
+                    // The reader's poster source, by id: this row carries no MediaNode,
+                    // but it does carry the title - which is what keeps a sequel season
+                    // on its own cover instead of the series poster.
+                    model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title),
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

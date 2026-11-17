@@ -10,7 +10,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.network.BetterPostersApi
+import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.SequelSeason
 
 /**
  * Where cards get their cover art, handed down from the app root.
@@ -24,6 +26,25 @@ import com.anisequel.domain.ui.PosterSource
 val LocalPosterSource = staticCompositionLocalOf { PosterSource.DEFAULT }
 
 /**
+ * What btttr prints on its own poster, handed down beside [LocalPosterSource].
+ *
+ * A second local rather than a field on the source because the two answer different
+ * questions - which picture, and what is written on it - and a reader can change
+ * either without the other. Provided at the app root so no card surface can be the
+ * one still asking for the full poster after the reader stripped it.
+ */
+val LocalPosterOverlays = staticCompositionLocalOf { PosterOverlays.DEFAULT }
+
+/**
+ * Whether a sequel season keeps its own cover, handed down beside the poster source.
+ *
+ * Its own local rather than a fourth field on [PosterOverlays], because it is not an
+ * overlay btttr draws: it is the decision not to ask btttr at all for a season it
+ * cannot tell apart from season one - see [SequelSeason].
+ */
+val LocalPosterUniqueSeasons = staticCompositionLocalOf { true }
+
+/**
  * The btttr lookup every card shares.
  *
  * One instance for the whole app, because its answer cache is the point: a second
@@ -32,6 +53,19 @@ val LocalPosterSource = staticCompositionLocalOf { PosterSource.DEFAULT }
  * reads as "no BetterPosters poster" rather than as a reason to crash.
  */
 val LocalBetterPosters = staticCompositionLocalOf<BetterPostersApi?> { null }
+
+/**
+ * Every name AniList sent for [media], joined for the season check.
+ *
+ * Not just the preferred title: a sequel's English title often drops the "Season 2"
+ * that its romaji title still carries, and the check must not miss the season because
+ * of which translation the reader happens to show.
+ */
+internal fun posterLookupTitle(media: MediaNode): String? = listOfNotNull(
+    media.title?.english,
+    media.title?.romaji,
+    media.title?.displayTitle
+).joinToString(" ").takeIf { it.isNotBlank() }
 
 /**
  * The model a card hands to its image loader: btttr's rendered poster when the reader
@@ -49,7 +83,11 @@ val LocalBetterPosters = staticCompositionLocalOf<BetterPostersApi?> { null }
  * answer from `BetterPostersApi`'s cache instead of asking again.
  */
 @Composable
-fun cardPosterUrl(media: MediaNode): String? = cardPosterUrl(media.id, media.posterUrl)
+fun cardPosterUrl(media: MediaNode): String? = cardPosterUrl(
+    mediaId = media.id,
+    fallback = media.posterUrl,
+    title = posterLookupTitle(media)
+)
 
 /**
  * The same answer for a card that carries an id and a cover but not the node.
@@ -60,13 +98,25 @@ fun cardPosterUrl(media: MediaNode): String? = cardPosterUrl(media.id, media.pos
  * reader's chosen source instead of being the one list still drawing AniList art.
  */
 @Composable
-fun cardPosterUrl(mediaId: Int, fallback: String?): String? {
+fun cardPosterUrl(mediaId: Int, fallback: String?, title: String? = null): String? {
     if (LocalPosterSource.current != PosterSource.BETTER_POSTERS) return fallback
+    // btttr addresses the IMDb *series*, so every season resolves to one picture.
+    // A sequel keeps its own AniList cover instead of repeating season one's art;
+    // the cover is the version that carries that season's name and key visual.
+    // The title check is the fast path; the API applies the same rule from ARM's
+    // season number for sequels whose name does not say "Season 2" - Nisemonogatari
+    // is season 2 of the same IMDb series as Bakemonogatari.
+    val uniqueSeasons = LocalPosterUniqueSeasons.current
+    if (uniqueSeasons && SequelSeason.isSequel(title)) return fallback
     val api = LocalBetterPosters.current ?: return fallback
+    // Part of the key, not just of the request: the same title at a different
+    // overlay variant is a different URL, and reusing the previous answer would
+    // keep drawing the score the reader had just removed.
+    val overlays = LocalPosterOverlays.current
 
-    var better by remember(mediaId) { mutableStateOf<String?>(null) }
-    LaunchedEffect(mediaId, api) {
-        better = api.posterUrl(mediaId)
+    var better by remember(mediaId, overlays, uniqueSeasons) { mutableStateOf<String?>(null) }
+    LaunchedEffect(mediaId, api, overlays, uniqueSeasons) {
+        better = api.posterUrl(mediaId, overlays, skipSequels = uniqueSeasons)
     }
     return better ?: fallback
 }

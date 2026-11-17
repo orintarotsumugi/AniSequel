@@ -10,6 +10,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.anisequel.domain.color.CoverColorQuantizer
+import com.anisequel.domain.color.CoverPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -54,13 +55,16 @@ import kotlinx.coroutines.withContext
  */
 object CoverColorRepository {
 
-    private const val SAMPLE_SIZE = 128
-    private const val CACHE_ENTRIES = 64
+    private const val SAMPLE_SIZE = 96
+    private const val CACHE_ENTRIES = 96
 
-    private val seeds = object : LruCache<String, Int>(CACHE_ENTRIES) {}
+    private val palettes = object : LruCache<String, CoverPalette>(CACHE_ENTRIES) {}
+
+    /** The palette already extracted for [url], if this session has seen it. */
+    fun cachedPalette(url: String?): CoverPalette? = url?.let(palettes::get)
 
     /** A seed already extracted for [url], if this session has seen it. */
-    fun cached(url: String?): Int? = url?.let(seeds::get)
+    fun cached(url: String?): Int? = cachedPalette(url)?.seed
 
     /**
      * Extracts a seed for [url], or null when the image cannot be read.
@@ -69,9 +73,20 @@ object CoverColorRepository {
      * colour and then to the brand. The only failure worth catching is an image
      * that will not decode; a colour is never worth crashing a detail sheet for.
      */
-    suspend fun extract(context: Context, url: String?): Int? {
+    suspend fun extract(context: Context, url: String?): Int? =
+        extractPalette(context, url)?.seed
+
+    /**
+     * The seed *and* the artwork's second hue, from one decode.
+     *
+     * Both come out of the same pixel array on purpose: a second Coil request for
+     * the accent would double the decode cost to answer a question about the same
+     * image. The pair is cached, so a sheet reopened in the same session - or the
+     * hero asking for the colour the sheet already read - costs nothing.
+     */
+    suspend fun extractPalette(context: Context, url: String?): CoverPalette? {
         if (url.isNullOrBlank()) return null
-        cached(url)?.let { return it }
+        cachedPalette(url)?.let { return it }
 
         return withContext(Dispatchers.IO) {
             try {
@@ -94,9 +109,13 @@ object CoverColorRepository {
 
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-                val seed = CoverColorQuantizer.seedFrom(pixels)
-                if (seed != null) seeds.put(url, seed)
-                seed
+                val seed = CoverColorQuantizer.seedFrom(pixels) ?: return@withContext null
+                val palette = CoverPalette(
+                    seed = seed,
+                    accent = CoverColorQuantizer.accentFrom(pixels, seed)
+                )
+                palettes.put(url, palette)
+                palette
             } catch (cancellation: kotlinx.coroutines.CancellationException) {
                 // Coil throws this when the sheet closes mid-decode. Swallowing it
                 // would make the cancellation look like a failed image, and the

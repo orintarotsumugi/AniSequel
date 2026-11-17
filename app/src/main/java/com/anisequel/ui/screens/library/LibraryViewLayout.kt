@@ -41,8 +41,6 @@ import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
-import com.anisequel.domain.card.CardSize
-import com.anisequel.domain.card.columnsFor
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -60,32 +58,25 @@ import com.anisequel.ui.screens.profile.libraryProgressLabel
  */
 
 /**
- * The columns a mode asks for, narrowed until a compact cover is still readable.
+ * The columns a view mode asks for, narrowed until a compact cover is still readable.
  *
- * Only the modes that deliberately cram covers - compact, shelf and the cover
- * wall - are narrowed. A three-column poster grid at 96dp is already at the floor
- * a cover can show a face at; reducing it further would change the mode rather
- * than make it fit. The floor is the same 68dp the new Library documented.
+ * The mode's own count is the answer. It is deliberately not a starting point for the
+ * card size to nudge: "Big cards" is two across and "Cover wall" three, and those are
+ * the decisions the reader made on the Library page. Card size now shapes the cover's
+ * proportions only - before 2.3.2 it added or removed a column, so picking Compact
+ * under Big cards silently turned a two-up grid into three, which is the card design
+ * overriding the view rather than the view choosing.
+ *
+ * Only the modes that deliberately cram covers - compact and shelf - are narrowed
+ * further. A three-column poster grid at 96dp is already at the floor a cover can
+ * show a face at; reducing it further would change the mode rather than make it fit.
+ * The floor is the same 68dp the new Library documented.
  */
-internal fun libraryColumns(
-    mode: LibraryViewMode,
-    width: Dp,
-    /**
-     * The reader's card size, which nudges the mode's own count by one.
-     *
-     * A parameter with a default rather than a composition-local read in here, so this
-     * stays the pure arithmetic it is and the two grids that call it - the Library and
-     * a profile's - pass the same value from the same local.
-     */
-    size: CardSize = CardSize.STANDARD
-): Int {
-    // Only the modes that draw a grid are nudged: `columnsFor` returns a one-wide mode
-    // unchanged, since turning a table into two columns would not be a bigger card.
-    val requested = columnsFor(mode.columns, size)
+internal fun libraryColumns(mode: LibraryViewMode, width: Dp): Int {
+    var columns = mode.columns.coerceAtLeast(1)
     if (mode != LibraryViewMode.COMPACT && mode != LibraryViewMode.SHELF) {
-        return requested.coerceAtLeast(1)
+        return columns
     }
-    var columns = requested
     while (columns > 3) {
         val gaps = 8.dp * (columns - 1).toFloat()
         val cell = (width - 32.dp - gaps) / columns.toFloat()

@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.3.1"
-val BASELINE_VERSION_CODE = 667
+val BASELINE_VERSION_NAME = "2.3.2"
+val BASELINE_VERSION_CODE = 668
 
 plugins {
   alias(libs.plugins.android.application)
@@ -124,12 +124,11 @@ android {
 
   buildTypes {
     release {
-      // Shrinking is the single biggest lever on APK size: without R8 every one
-      // of the ~8,000 icons in material-icons-extended, all of Compose and all
-      // of Retrofit ships whether the app uses it or not. `isShrinkResources`
-      // then drops the unreachable drawables and strings that code shrinking
-      // leaves behind. See app/proguard-rules.pro for the reflection keep rules
-      // this requires.
+      // Shrinking is the single biggest lever on APK size: without R8 all of
+      // Compose and all of Retrofit ships whether the app uses it or not.
+      // `isShrinkResources` then drops the unreachable drawables and strings that
+      // code shrinking leaves behind. See app/proguard-rules.pro for the
+      // reflection keep rules this requires.
       isMinifyEnabled = true
       isShrinkResources = true
       isCrunchPngs = true
@@ -242,13 +241,11 @@ android {
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(libs.androidx.activity.compose)
-  implementation(libs.androidx.compose.material.icons.core)
-  // material-icons-extended ships ~30,000 icon classes; R8 prunes the ones this
-  // app never draws, which is why shrinking is enabled above. Dropping the
-  // artifact is not an option - FilterList, Movie, Tv, Visibility, BookmarkAdd,
-  // Login, Logout and friends only exist there. AppVectorIcons is the single
-  // place those names are listed, so the reachable set stays small and reviewable.
-  implementation(libs.androidx.compose.material.icons.extended)
+  // The Material icons are vendored under
+  // `com.anisequel.ui.components.icons` (see Icons.kt there): the extended
+  // artifact ships ~30,000 icon classes, and R8 spent ~11 minutes per release
+  // shrinking the ones this app never draws. The 79 vectors it does use are
+  // copied Apache-2.0 sources, and adding one is a file, not a dependency.
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.graphics.shapes)
   implementation(libs.androidx.compose.ui)

@@ -496,7 +496,16 @@ jobs:
           # `test`, not `testReleaseUnitTest`: the per-variant task is not present
           # under this AGP, and the lifecycle task runs every unit-test variant
           # that does exist, which is what is wanted here anyway.
-          ./gradlew test --stacktrace
+          #
+          # The same version flags the APK step passes, deliberately. `BuildConfig`
+          # is an input to KSP and to the Kotlin compile, so a test run without
+          # them and an APK run with them are two different release variants - the
+          # second has to re-run both compilers before R8 even starts. Passing the
+          # resolved version here means the build step inherits this one's
+          # compiled release classes instead of rebuilding them.
+          ./gradlew test --stacktrace \
+            -PanisequelVersionCode="${{ github.run_number }}" \
+            -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
 
       - name: Build Release APK

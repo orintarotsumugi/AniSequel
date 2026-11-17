@@ -2,9 +2,11 @@ package com.anisequel.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -46,28 +48,28 @@ private const val INTERFACE_HUB_KEY = "interface_hub"
  * reach a layout control, and the reference the readers pointed at splits them the
  * same way: a UI page for the interface, a Theme page for the colour.
  *
- * ## Why this page is a shelf of sub-screens
+ * ## Why this page is a shelf of sub-screens, with one header at a time
  *
- * The page had grown into six full cards in one scroll - layout, sequels, library view,
- * card style, motion and gestures - each of which opens with a preview several hundred
- * pixels tall. The same argument that split Settings into pages applies one level down:
- * a reader who came to turn the bottom bar down was scrolling past a motion sample and a
- * quick-add button to reach it, and the page's own name ("Card style, layout and motion")
- * had already drifted from its contents.
+ * The page grew into six full cards in one scroll, so every part got a row and a
+ * sub-page. Then the sub-pages themselves nested - Interface > Card design > Card
+ * shape - and each level drew its own header under the one above: three rows of
+ * title and subtitle, a third of the screen, before the first control. The fix is
+ * not cosmetic: **the screen that is open draws the header, and the screens under it
+ * are gone**. Card design's three parts now sit beside "Card design" in this page's
+ * own stack, and `SettingsScreen` lets this composable draw the page header too, so
+ * "Interface" is a level of this stack rather than a frame drawn around it.
  *
- * So every part gets a row with a sentence under it, and a sub-page of its own. The
- * parts did not change: each body in `InterfaceSections.kt` is the card that used to
- * sit in this file, and every one of them still writes the preference it wrote before.
- * Nothing
- * is drawn twice, so there is no page where two controls over one value can disagree.
+ * Back still walks the stack one level at a time: a card part returns to the Card
+ * design shelf, a shelf leaves for the Interface hub, and the hub returns to
+ * Settings. Every handler is registered in the screen that owns the level, so the
+ * most recently added enabled callback wins - see `SettingsScreen`.
  *
- * ## Why a sub-page still says "Interface" above it
+ * ## Why the sub-pages are not a second navigation graph
  *
- * The header above this content is the page the reader came from, and the sub-header
- * below it is the part they are in - a breadcrumb, not two titles for one screen. Back
- * drops the sub-page before it drops the page: this composable's `BackHandler` is
- * registered after the one in `SettingsScreen`, and the dispatcher gives the most
- * recently added enabled callback the event.
+ * They are not destinations a link or a back stack should reach on their own: the
+ * shelf is the only entrance, and the `BackHandler` chain is the whole navigation
+ * contract. Making them routes would add a second way to arrive at a screen whose
+ * back arrow promises the shelf.
  */
 @Composable
 fun InterfaceTab(
@@ -82,6 +84,18 @@ fun InterfaceTab(
      * control before deciding whether the tick is worth it.
      */
     quickAddPreferences: QuickAddPreferences,
+    /**
+     * The header this page shows on its own shelf.
+     *
+     * Supplied by `SettingsScreen` from the same `SettingsPage` enum the shelf row
+     * read, so the row and the page it opens still cannot describe different
+     * things - they are just drawn by the same composable now instead of one
+     * around the other.
+     */
+    pageTitle: String,
+    pageSubtitle: String,
+    /** Leaves the Interface page for the Settings shelf. */
+    onClosePage: () -> Unit,
     modifier: Modifier = Modifier,
     /**
      * Up to three of the reader's own entries, for the previews to draw.
@@ -142,8 +156,10 @@ fun InterfaceTab(
     val sectionStateHolder = rememberSaveableStateHolder()
 
     // Only while a sub-page is open: disabled here, the event falls through to the
-    // Settings page's own handler, which is what Back means on the shelf.
-    BackHandler(enabled = section != null) { section = null }
+    // Settings page's own handler, which is what Back means on the shelf. A card
+    // part steps back to the Card design shelf, not all the way out - see
+    // [InterfaceSection.parent].
+    BackHandler(enabled = section != null) { section = section?.parent() }
 
     AnimatedContent(
         targetState = section,
@@ -158,30 +174,53 @@ fun InterfaceTab(
         sectionStateHolder.SaveableStateProvider(
             key = destination?.name ?: INTERFACE_HUB_KEY
         ) {
-            if (destination == null) {
-                InterfaceHub(onOpen = { section = it })
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    SettingsSubHeader(
-                        title = destination.title,
-                        subtitle = destination.subtitle,
-                        onBack = { section = null },
-                        // Not "Back to settings": this goes one page out, not two,
-                        // and the wrong sentence on the one control every sub-page
-                        // is left through is worse than no sentence.
-                        backDescription = "Back to Interface",
-                        backTestTag = "interface_sub_back"
-                    )
-                    InterfaceSectionBody(
-                        section = destination,
-                        themePreferences = themePreferences,
-                        themeSettings = themeSettings,
-                        interfacePreferences = interfacePreferences,
-                        quickAddPreferences = quickAddPreferences,
-                        scope = scope,
-                        previewEntries = previewEntries,
-                        barTabs = barTabs
-                    )
+            Column(modifier = Modifier.fillMaxSize()) {
+                // One header for what is actually on screen. The title comes from
+                // the same enum the row that opened it read, and the page's own
+                // title when the shelf is showing.
+                SettingsSubHeader(
+                    title = destination?.title ?: pageTitle,
+                    subtitle = destination?.subtitle ?: pageSubtitle,
+                    onBack = {
+                        if (destination == null) onClosePage() else section = destination.parent()
+                    },
+                    backDescription = when {
+                        destination == null -> "Back to settings"
+                        // A card part goes back to the Card design shelf, which is
+                        // one step out - not two, which is what "Back to Interface"
+                        // would promise from there.
+                        destination?.parent() != null -> "Back to Card design"
+                        else -> "Back to Interface"
+                    },
+                    backTestTag = if (destination == null) {
+                        "settings_sub_back"
+                    } else {
+                        "interface_sub_back"
+                    }
+                )
+                // The body takes the rest of the screen. Without the weight a
+                // `fillMaxSize` body inside the Column measured against the whole
+                // page and pushed its own last row under the bar.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    if (destination == null) {
+                        InterfaceHub(onOpen = { section = it })
+                    } else {
+                        InterfaceSectionBody(
+                            section = destination,
+                            themePreferences = themePreferences,
+                            themeSettings = themeSettings,
+                            interfacePreferences = interfacePreferences,
+                            quickAddPreferences = quickAddPreferences,
+                            scope = scope,
+                            previewEntries = previewEntries,
+                            barTabs = barTabs,
+                            onOpenCardPart = { part -> section = part.section }
+                        )
+                    }
                 }
             }
         }
@@ -194,6 +233,11 @@ fun InterfaceTab(
  * An enum rather than six lambdas for the reason `SettingsPage` is one: the row's
  * title and the sub-page's header come from the same two strings, so a row cannot
  * promise a different page than the one it opens.
+ *
+ * The three card-design parts are in this list rather than in a nested enum of their
+ * own so the page has one stack and one header. Their titles and subtitles are taken
+ * from [CardDesignPart], which the Card design shelf's rows also use - the row and the
+ * screen stay one description.
  */
 private enum class InterfaceSection(
     val title: String,
@@ -215,15 +259,33 @@ private enum class InterfaceSection(
     ),
     LIBRARY(
         title = "Library view",
-        subtitle = "Poster grid, compact grid or list",
+        subtitle = "Poster grid, cover wall, big cards, list and more",
         icon = AppVectorIcons.Library,
         testTag = "interface_row_library"
     ),
     CARDS(
         title = "Card design",
-        subtitle = "Style, title size, rating, size and scrolling",
+        subtitle = "Shape, name and score, and poster art",
         icon = AppVectorIcons.ViewGrid,
         testTag = "interface_row_cards"
+    ),
+    CARD_SHAPE(
+        title = CardDesignPart.SHAPE.title,
+        subtitle = CardDesignPart.SHAPE.subtitle,
+        icon = CardDesignPart.SHAPE.icon,
+        testTag = CardDesignPart.SHAPE.testTag
+    ),
+    CARD_TEXT(
+        title = CardDesignPart.TEXT.title,
+        subtitle = CardDesignPart.TEXT.subtitle,
+        icon = CardDesignPart.TEXT.icon,
+        testTag = CardDesignPart.TEXT.testTag
+    ),
+    CARD_POSTER(
+        title = CardDesignPart.POSTER.title,
+        subtitle = CardDesignPart.POSTER.subtitle,
+        icon = CardDesignPart.POSTER.icon,
+        testTag = CardDesignPart.POSTER.testTag
     ),
     MOTION(
         title = "Motion",
@@ -236,8 +298,29 @@ private enum class InterfaceSection(
         subtitle = "Hold or swipe to add to Currently Watching",
         icon = AppVectorIcons.Play,
         testTag = "interface_row_gestures"
-    )
+    );
+
+    /**
+     * The screen Back returns to, or null when Back leaves this page.
+     *
+     * The card parts are one level below the Card design shelf; everything else is
+     * one level below the Interface shelf. Spelling it here rather than at the
+     * `BackHandler` keeps the two callers - Back and the header's arrow - answering
+     * the same way.
+     */
+    fun parent(): InterfaceSection? = when (this) {
+        CARD_SHAPE, CARD_TEXT, CARD_POSTER -> CARDS
+        else -> null
+    }
 }
+
+/** The entry this part has in [InterfaceSection]'s stack. */
+private val CardDesignPart.section: InterfaceSection
+    get() = when (this) {
+        CardDesignPart.SHAPE -> InterfaceSection.CARD_SHAPE
+        CardDesignPart.TEXT -> InterfaceSection.CARD_TEXT
+        CardDesignPart.POSTER -> InterfaceSection.CARD_POSTER
+    }
 
 /**
  * The shelf itself: what the page is made of, grouped by the question each part
@@ -301,7 +384,8 @@ private fun InterfaceSectionBody(
     quickAddPreferences: QuickAddPreferences,
     scope: CoroutineScope,
     previewEntries: List<MediaListEntryItem>,
-    barTabs: List<MainTab>
+    barTabs: List<MainTab>,
+    onOpenCardPart: (CardDesignPart) -> Unit
 ) {
     when (section) {
         InterfaceSection.LAYOUT -> InterfaceLayoutSection(
@@ -317,7 +401,23 @@ private fun InterfaceSectionBody(
             interfacePreferences = interfacePreferences,
             previewEntries = previewEntries
         )
-        InterfaceSection.CARDS -> InterfaceCardDesignSection(
+        InterfaceSection.CARDS -> CardDesignShelf(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries,
+            barTabs = barTabs,
+            onOpen = onOpenCardPart
+        )
+        InterfaceSection.CARD_SHAPE -> CardShapeSection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries,
+            barTabs = barTabs
+        )
+        InterfaceSection.CARD_TEXT -> CardTextSection(
+            interfacePreferences = interfacePreferences,
+            previewEntries = previewEntries,
+            barTabs = barTabs
+        )
+        InterfaceSection.CARD_POSTER -> CardPosterSection(
             interfacePreferences = interfacePreferences,
             previewEntries = previewEntries,
             barTabs = barTabs

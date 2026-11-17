@@ -31,6 +31,7 @@ object CoverColors {
     private const val MAX_ENTRIES = 96
 
     private val colors = mutableStateMapOf<String, String>()
+    private val accents = mutableStateMapOf<String, String>()
     private val insertionOrder = ArrayDeque<String>()
 
     /** Stores [argb] for [url]. Safe to call on every recomposition. */
@@ -43,7 +44,31 @@ object CoverColors {
         insertionOrder.remove(url)
         insertionOrder.addLast(url)
         while (insertionOrder.size > MAX_ENTRIES) {
-            colors.remove(insertionOrder.removeFirst())
+            val dropped = insertionOrder.removeFirst()
+            colors.remove(dropped)
+            accents.remove(dropped)
+        }
+    }
+
+    /**
+     * Stores a second, distinct hue from the same artwork.
+     *
+     * The seed answers "what colour is this title"; the accent answers "what else
+     * is in the picture". A gradient built from both reads as artwork rather than
+     * as one colour washed over the screen, and the hue is the quantizer's, not a
+     * rotation of the seed's.
+     */
+    fun putAccent(url: String?, argb: Int) {
+        if (url.isNullOrBlank()) return
+        val hex = ArgbHex.format(argb)
+        if (accents[url] == hex) return
+        accents[url] = hex
+        insertionOrder.remove(url)
+        insertionOrder.addLast(url)
+        while (insertionOrder.size > MAX_ENTRIES) {
+            val dropped = insertionOrder.removeFirst()
+            colors.remove(dropped)
+            accents.remove(dropped)
         }
     }
 
@@ -53,9 +78,14 @@ object CoverColors {
     /** The extracted colour for [url], or null. Reads snapshot state. */
     fun color(url: String?): Color? = hex(url)?.let { ArgbHex.parse(it) }?.let { Color(it) }
 
+    /** The artwork's second hue for [url], or null. Reads snapshot state. */
+    fun accent(url: String?): Color? =
+        url?.let(accents::get)?.let { ArgbHex.parse(it) }?.let { Color(it) }
+
     /** For tests and for a full reset; the app has no reason to call this. */
     fun clear() {
         colors.clear()
+        accents.clear()
         insertionOrder.clear()
     }
 }

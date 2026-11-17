@@ -1,49 +1,42 @@
 package com.anisequel.domain.card
 
 /**
- * The three sizes a card can be drawn at, expressed as how many covers share a row.
+ * The three shapes a cover can be drawn at.
  *
- * Size is not a multiplier, because a grid cannot honour one: the columns decide a
- * card's width, so "20% bigger" is not a width the page can draw. What the reader
- * actually feels when a card gets bigger is that fewer of them fit, so the setting
- * asks the same question the view mode does - how many across - and answers it one
- * step either side of the mode's own answer. [coverBias] then stretches the artwork
- * with it, so a two-across card is not the same picture with a wider gap.
+ * Size is deliberately **not** a column count. The Library view already answers how
+ * many covers share a row - "Big cards" is two across, "Cover wall" three - and a
+ * card size that also nudged that count silently overrode the view the reader had
+ * just chosen: picking Big cards and Compact together produced three across, which
+ * is neither. (That is what `columnBias` did before 2.3.2, and why it is gone.)
  *
- * [columnBias] is applied by [columnsFor] rather than stored on the mode, because a
- * reader who picks a bigger card wants it bigger in every grid - the library, their
- * profile list and any poster grid - and a per-mode table would have to be edited
- * in three places to say so.
+ * What a reader feels when a card grows is the artwork, so [coverBias] stretches the
+ * poster's own proportions: a compact card is a little wider and shorter, a roomy one
+ * taller. Every grid keeps the columns its own view asked for.
  */
 enum class CardSize(
     val storageValue: String,
     val displayName: String,
     /** What the reader sees change, in the words they would use for it. */
     val blurb: String,
-    /** Columns added to the view mode's own count: positive means smaller cards. */
-    val columnBias: Int,
     /** Multiplier on a poster's width/height ratio; below 1 is a taller picture. */
     val coverBias: Float
 ) {
     COMPACT(
         storageValue = "compact",
         displayName = "Compact",
-        blurb = "One more to the row - the most titles per screen.",
-        columnBias = 1,
+        blurb = "A wider, shorter cover - the artwork crops to its middle band.",
         coverBias = 1.08f
     ),
     STANDARD(
         storageValue = "standard",
         displayName = "Standard",
-        blurb = "The shipped size: three across on a phone.",
-        columnBias = 0,
+        blurb = "The shipped cover's proportions.",
         coverBias = 1f
     ),
     ROOMY(
         storageValue = "roomy",
         displayName = "Roomy",
-        blurb = "One fewer to the row, so a long name has space to read.",
-        columnBias = -1,
+        blurb = "A taller cover, so the poster shows more of its own art.",
         coverBias = 0.9f
     );
 
@@ -84,13 +77,16 @@ data class CardDesign(
     /**
      * Whether the card prints the title under the artwork.
      *
-     * Off by default so a card is just the poster: BetterPosters art already sets
-     * the name on the image, and a plain cover reads as the poster first. Turn it
-     * on when you want the app to label the card.
+     * **On by default.** 2.3.1 shipped this off while its own release notes promised
+     * "both are on by default, so no card changes until you ask" - so every grid
+     * that used to draw a caption silently stopped, and a reader who never opened
+     * Settings had no way to know a switch existed. On is also the behaviour every
+     * build before the switch had. Turn it off when the art already carries the name
+     * (BetterPosters sets it on the image) and a second line reads as a duplicate.
      */
-    val showTitles: Boolean = false,
+    val showTitles: Boolean = true,
     /** Whether the card prints the score, for the same reason [showTitles] exists. */
-    val showScores: Boolean = false
+    val showScores: Boolean = true
 ) {
     /**
      * Brought back inside the sliders' span.
@@ -134,18 +130,4 @@ data class CardDesign(
 
         val DEFAULT = CardDesign()
     }
-}
-
-/**
- * The columns a view mode draws with [size] applied.
- *
- * Modes that are one wide - List, Grouped, Table - are left alone: a row is not a
- * card, and turning a table into two columns would not be a bigger card, it would be
- * a broken table. Everything else is nudged by one and kept inside the range a cover
- * can still show a face in, which is the same floor
- * `com.anisequel.ui.screens.library.libraryColumns` enforces.
- */
-fun columnsFor(baseColumns: Int, size: CardSize): Int {
-    if (baseColumns <= 1) return baseColumns
-    return (baseColumns + size.columnBias).coerceIn(1, 6)
 }

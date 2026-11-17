@@ -235,7 +235,15 @@ fun InfoHero(
     // conversion itself - an HCT conversion and a palette sample - is what is
     // memoised, because the hero recomposes several times inside one open and the
     // seed only changes once.
-    val coverSeed = CoverColors.color(media.posterUrl)
+    // The poster the page draws, resolved once: the lockup's cover and the blurred
+    // backdrop behind it have to be the same picture, or the tint is sampled from
+    // one artwork and laid under another. Resolved *before* the seed now, because
+    // the seed is read from this picture - the BetterPosters art when the reader
+    // chose it, the AniList cover otherwise.
+    val poster = cardPosterUrl(media)
+
+    val coverSeed = CoverColors.color(poster)
+        ?: CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
     // The app's resolved mode, not the phone's: the theme can be forced to Light or
     // Dark, and `accentColor` picks tone 40 or 80 from this flag. Asking the phone
@@ -248,13 +256,29 @@ fun InfoHero(
             DynamicThemeBuilder.accentColor(it, dark = dark)
         } ?: coverFallback
     }
+    // The artwork's second colour: the vibrancy pass in the quantizer picks a
+    // distinct hue from the same pixels, and this is it in the scheme's tone. A
+    // gradient between it and the primary seed gives the hero depth without
+    // inventing a colour the poster does not contain; a cover with only one hue
+    // falls back to the seed itself, so the gradient is flat rather than borrowed.
+    val accentSeed = CoverColors.accent(poster) ?: CoverColors.accent(media.posterUrl)
+    val coverAccent = remember(accentSeed, dark, coverColor) {
+        accentSeed?.let {
+            DynamicThemeBuilder.accentColor(it, dark = dark)
+        } ?: coverColor
+    }
     val surface = MaterialTheme.colorScheme.surface
     // The box behind the full-bleed artwork. The accent at full strength is right
     // for the small poster and its shadow, and wrong here: tone 80 in a dark sheet
     // is a light panel, so the frames before the poster decodes flashed white at
     // 340dp. Held back toward the sheet's own surface, it is still the show's
     // colour and still a colour you can look at.
-    val heroBackdrop = lerp(surface, coverColor, BACKDROP_TINT)
+    val heroBackdrop = Brush.verticalGradient(
+        listOf(
+            lerp(surface, coverColor, BACKDROP_TINT),
+            lerp(surface, coverAccent, BACKDROP_TINT * 0.72f)
+        )
+    )
     // The banner when there is one, the key visual before that.
     //
     // The sheet used to draw the key visual twice - as the lockup's cover and again
@@ -272,11 +296,6 @@ fun InfoHero(
     // it switches off the *page* wash, not the title's artwork.
     val banner = media.bannerImage
         ?.takeIf { backdropSource == InfoBackdropSource.BANNER && it.isNotBlank() }
-
-    // The poster the page draws, resolved once: the lockup's cover and the blurred
-    // backdrop behind it have to be the same picture, or the tint is sampled from one
-    // artwork and laid under another.
-    val poster = cardPosterUrl(media)
 
     Box(
         modifier = modifier

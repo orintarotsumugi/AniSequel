@@ -46,7 +46,8 @@ fun QuickAddSectionCard(
     )
 
     SectionCard(
-        title = "Quick add gestures",
+        // The screen's header carries "Quick add gestures" now.
+        title = "Gestures",
         icon = AppVectorIcons.Play,
         subtitle = "Hold or swipe to add to Currently Watching",
         modifier = modifier.testTag("quick_add_settings_card")

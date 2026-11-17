@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,11 +28,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.domain.card.CardScorePlacement
 import com.anisequel.domain.card.PosterCorner
 import com.anisequel.domain.card.scoreCornerOf
@@ -376,8 +379,20 @@ private fun PosterArtwork(
             )
     ) {
         if (coverUrl != null) {
+            val url = coverUrl
+            val context = LocalContext.current
+            // Remembered rather than built inline: Coil compares requests by value,
+            // and a new instance on every recomposition is a lookup that can never
+            // hit. The crossfade is what makes BetterPosters arriving, or the
+            // reader switching poster source, a dissolve rather than a flicker.
+            val request = remember(url, context) {
+                ImageRequest.Builder(context)
+                    .data(url)
+                    .crossfade(true)
+                    .build()
+            }
             AsyncImage(
-                model = coverUrl,
+                model = request,
                 contentDescription = contentDescription,
                 // One percent of overdraw from the top edge, so `Crop`'s whole-pixel
                 // rounding cannot leave a row of the box's own tint showing across

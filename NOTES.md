@@ -3207,3 +3207,165 @@ not.
 `2.3.1` is the last digit plus one, `versionCode` 666 -> 667. No exception this
 time: nothing here is large enough that a reader deciding whether to update would
 be misled by the number.
+
+## 2.3.2: one header per screen, and btttr's variant paths
+
+### The stacking, and why it happened
+
+Settings is an `AnimatedContent` whose content is the page, and `SettingsScreen` drew
+a `SettingsSubHeader` *around* that content. Interface and Theme then opened a second
+`AnimatedContent` for their parts and drew a second header inside their own content,
+and Card design opened a third. Three levels deep the reader saw "Interface" above
+"Card design" above "Card shape" - three title-and-subtitle rows, about a third of a
+phone screen, above the first control - because each level was a correct screen that
+assumed it was the whole screen.
+
+The fix is not "make the headers smaller". **A screen that owns a nested stack draws
+the header for whatever level is open, and its parent stops drawing one.**
+`SettingsPage.ownsHeader` marks Interface and Appearance; their tabs draw the page
+header on the shelf and the part's header inside a part. Card design's parts were
+flattened into `InterfaceSection` beside "Card design" rather than nested under it,
+so a part is a peer with one header, not a third composition with a third one.
+`InterfaceSection.parent()` is the back edge: a card part returns to the Card design
+shelf, a shelf to the Interface hub, the hub to Settings.
+
+The general trap is worth stating because it will be tempting again: **nesting a
+scrollable body under a header inside a `Box(weight = 1f)` that already sits under
+another header multiplies the chrome.** If a level needs its own header, it needs the
+whole screen. The tests that fail if this comes back are in
+`CardDisplayDefaultsTest` (header counts per file).
+
+### btttr's path has the variant first, not third
+
+The poster source's overlay switches ask btttr for a different *picture* - the words
+are pixels in the render, so the app cannot hide them the way it hides its caption.
+Reading its Jellyfin integration settled the spelling: the variant is the **first**
+path segment and `poster-default` is the size/style slot that stays put.
+
+`https://btttr.cc/poster-n/imdb/poster-default/tt123.jpg?tag=none`
+
+- `poster` - genre and score; the URL 2.3.0 shipped and verified
+- `poster-r` - score only
+- `poster-g` - genre only
+- `poster-n` - neither
+- `?tag=none` - drop the "New Series" / "Limited Series" trend label
+
+An earlier draft of `betterPosterUrl` put the letter in the third segment
+(`poster/imdb/poster-n/…`), which is a 404, not a poster. `BetterPostersApi`'s cache
+is keyed on the id **and** the overlay value: asking for a stripped poster after
+caching the full one must not hand back the full one. Poster overlays and the card's
+own name/score switches are separate controls because they act on different pictures;
+both being on can be a deliberate duplicate, and neither should quietly turn the other
+off.
+
+### The captions were off by default, against the release notes
+
+2.3.1's notes said the name and score switches were "on by default, so no card changes
+until you ask". `InterfacePreferences` stored `?: false` and `CardDesign` defaulted to
+`false`, so every grid lost its caption on upgrade and the switch that would bring it
+back read as already on. Both defaults are `true` now and `CardDisplayDefaultsTest`
+pins it. This is also what makes the Library section's explanatory copy honest: the
+card design changes the type and the cover, and the view mode decides the grid.
+
+### The Library view owns its grid
+
+`CardSize.columnBias` (and `columnsFor`) added or removed a column and were applied by
+`libraryColumns`, so choosing "Big cards" (two across) with the Compact card size drew
+three. The card design was overriding the view. The bias is gone: the view mode's
+count is the answer, narrowed only where compact/shelf would otherwise fall below the
+68dp cover floor. Card size still shapes the cover (`coverBias`), which is the thing a
+reader actually sees get bigger, and the Settings preview is a fixed three-across
+diagram rather than a claim about the Library's grid.
+
+### Clean posters by default, and the season btttr cannot tell apart
+
+btttr's rendered poster always carries the show's **name** - verified by fetching
+`poster-n`, which drops the score/genre block but keeps the title - and its configure
+page exposes no title or season override. `?season=2` is ignored; the only difference
+between two requests is the dynamic trend label. So "no name" is not a switch the app
+can honestly offer. What it can do is make the three overlays it *can* remove opt-in:
+`PosterOverlays.DEFAULT` is now all false, which requests `poster-n` plus `tag=none`,
+and the preference layer's absent keys default to false so an upgrade lands there too.
+Poster art draws a live sketch above the switches instead of downloading an example:
+the page must not wait on a third party to explain a toggle.
+
+The duplicate-season complaint has the same root: btttr addresses the IMDb **series**,
+and every AniList season of a show maps to that one series id. `SequelSeason` parses
+the season out of the names AniList actually uses (`Season 2`, `3rd Season`, `Part 2`,
+`Final Season`, roman numerals), and `cardPosterUrl` returns the AniList cover for a
+sequel when `posterUniqueSeasons` is on (default). That cover is the season-specific
+picture and usually carries the season's name in its artwork. Titles without a season
+marker keep the btttr poster, and a false positive is avoided on purpose: a year like
+2049 is not a season.
+
+The lookup is also faster and kinder to ARM: the AniList-to-IMDb map is cached on its
+own key (changing an overlay no longer re-asks), concurrent cards share one in-flight
+request, and the positive half persists in `filesDir/better_posters_ids.json` so a
+cold start draws btttr posters without a network round trip. Negatives stay in memory,
+because a stale negative on disk would outlive the service's own fix.
+
+### The colour comes from the picture on screen
+
+The sheet used to extract its seed from `media.posterUrl` even when btttr was drawing
+a different image, so the theme and the poster could disagree. It now resolves the
+same URL the card resolves and writes the palette under both keys; `InfoHero` reads
+the resolved URL first and keeps the AniList URL as its fallback. The quantizer gained
+a second pass - `accentFrom` - which rewards chroma, requires a real region and rejects
+hues within 40 degrees of the seed, so a two-colour gradient only exists when the
+artwork has two colours. The hero backdrop and the Info page wash use it. One 96px
+decode produces both colours and the pair is cached.
+
+### Blur at radius zero is still a layer
+
+`InfoBackdropBlur.CRISP` is `0.dp`, and `Modifier.blur(0.dp)` still asks Compose for an
+offscreen render layer. Both the Info page and the appearance preview now skip the
+modifier when the radius is zero. The preview also draws `cardPosterUrl(media)` rather
+than the AniList cover, so the sample reflects the BetterPosters source the reader
+chose - a preview of an app they do not have is worse than none.
+
+### Dark mode on the shelf, UI size with reading
+
+The Light/Dark/System tiles were the only content of the Appearance sub-page, so the
+page was a door to one card the reader already knew they wanted. They live on the
+Theme shelf now, under the preview; the Appearance row is gone and OLED mode, the Home
+backdrop blur and the canvas chips own a shorter Background row. On Interface, the UI
+size card moved to Type & reading, where it sits beside the text scale that answers
+the same question. Interface's "Layout and bar" card is now only about the layout and
+the bar.
+
+### A sequel ARM can name
+
+The season guard only understood titles that say "Season 2", "3rd Season", "Part 2"
+or "Final Season", so Nisemonogatari - a sequel whose name is just a word - kept the
+btttr poster for `tt1480925`, the one IMDb series the whole Monogatari run shares
+with Bakemonogatari. ARM's answer already carries `themoviedb-season` and
+`thetvdb-season`; the mapper now keeps the larger of the two beside the IMDb id,
+on disk as `tt…|2`, and `posterUrl(skipSequels = true)` declines season 2+. The
+title parser stays as the fast path, and the skipped null is never cached so the
+switch can be turned back off without a restart.
+
+### A dissolve instead of a snap
+
+Home's Nova/Classic body was an `if`, so changing the layout in Settings replaced the
+entire screen in one frame. It is a `Crossfade` on `ExpressiveMotion.FastEffects`
+now: the two layouts share a view model, and Instant still swaps in one frame. Card
+covers build one remembered Coil request with `crossfade(true)`, which also covers
+BetterPosters arriving after its lookup and the reader switching poster source.
+
+### The release build's second compile
+
+The unit-test step ran without the release version flags and the APK step ran with
+them. `BuildConfig` is an input to KSP and Kotlin, so that difference rebuilt the
+release variant before R8 could start. Both invocations now receive the resolved
+version. R8 itself remains a single pass; optimized resource shrinking is already
+AGP 9's default with `isShrinkResources = true`.
+
+### R8 was the build, and the icons were R8
+
+The 2.3.2 release run measured `minifyReleaseWithR8` at **11m10s** of a 15m21s
+job; KSP and Kotlin together were under 70 seconds. The input was almost all
+`material-icons-extended`: ~30,000 generated icon classes, of which the app draws
+79. Those 79 vectors are copied Apache-2.0 sources under
+`com.anisequel.ui.components.icons` now, with the same package suffixes and
+property names, so no screen changed its import beyond the root. R8 fell to
+**1m40s** and the job to **6m49s**. Adding an icon is a file, not the artifact.

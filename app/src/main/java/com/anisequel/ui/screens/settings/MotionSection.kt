@@ -116,7 +116,8 @@ internal fun MotionSection(
     scope: CoroutineScope
 ) {
     SectionCard(
-        title = "Motion",
+        // The screen's header already says "Motion"; this card is about which feel.
+        title = "Style and sample",
         icon = AppVectorIcons.SectionMotion,
         subtitle = "How much the app animates",
         iconContainer = MaterialTheme.colorScheme.tertiaryContainer,

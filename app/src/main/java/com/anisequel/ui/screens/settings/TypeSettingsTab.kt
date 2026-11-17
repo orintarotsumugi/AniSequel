@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.CustomFontStore
 import com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND
+import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MAX_FONT_SCALE
 import com.anisequel.data.repository.MAX_TITLE_SCROLL_DP_PER_SECOND
 import com.anisequel.data.repository.MIN_FONT_SCALE
@@ -75,6 +76,13 @@ import kotlin.math.roundToInt
 @Composable
 fun TypeSettingsTab(
     themePreferences: ThemePreferences,
+    /**
+     * UI size lives on this page rather than under Interface.
+     *
+     * It is a reading size - the same question the text scale above it answers -
+     * and this is the page a reader opens when the app is too small to read.
+     */
+    interfacePreferences: InterfacePreferences,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -124,6 +132,9 @@ fun TypeSettingsTab(
             committedScale = themeSettings.fontScale,
             scope = scope
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        UiSizeSectionCard(interfacePreferences = interfacePreferences)
 
         SectionCard(
             title = "Font",

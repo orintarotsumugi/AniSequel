@@ -36,7 +36,6 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.MediaCardStyle
-import com.anisequel.domain.card.columnsFor
 import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalCardDesign
@@ -106,10 +105,13 @@ internal fun CardDesignPreview(
      */
     barTabs: List<MainTab> = enabledMainTabs(tierListTab = false)
 ) {
-    // The columns the reader's card size produces at the shipped three-across, which
-    // is what makes the sliders and chips show their effect on *this* page rather than
-    // only after a trip to the Library.
-    val columns = columnsFor(3, design.size)
+    // Three across, deliberately fixed. The frame is a diagram of the card, not a
+    // claim about the Library's grid: the Library view owns its own column count
+    // (Big cards is two, Cover wall three), and a card size that moved this preview
+    // while the real grid stayed put would be the preview describing a page the app
+    // does not draw. The sliders and switches still show their effect here because
+    // they change the card's own type and artwork.
+    val columns = 3
     val samples = remember(entries) { previewSamples(entries) }
     val cards = remember(samples, columns) {
         // Exactly two full rows: a half row would read as a layout the grid cannot
