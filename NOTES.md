@@ -3359,3 +3359,13 @@ them. `BuildConfig` is an input to KSP and Kotlin, so that difference rebuilt th
 release variant before R8 could start. Both invocations now receive the resolved
 version. R8 itself remains a single pass; optimized resource shrinking is already
 AGP 9's default with `isShrinkResources = true`.
+
+### R8 was the build, and the icons were R8
+
+The 2.3.2 release run measured `minifyReleaseWithR8` at **11m10s** of a 15m21s
+job; KSP and Kotlin together were under 70 seconds. The input was almost all
+`material-icons-extended`: ~30,000 generated icon classes, of which the app draws
+79. Those 79 vectors are copied Apache-2.0 sources under
+`com.anisequel.ui.components.icons` now, with the same package suffixes and
+property names, so no screen changed its import beyond the root. R8 fell to
+**1m40s** and the job to **6m49s**. Adding an icon is a file, not the artifact.
