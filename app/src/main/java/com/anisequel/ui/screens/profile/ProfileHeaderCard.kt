@@ -2,8 +2,10 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,9 +26,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +49,9 @@ import coil.compose.AsyncImage
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.PannableBackdrop
 import com.anisequel.ui.components.SavedCopyPill
+import com.anisequel.domain.profile.ProfileBannerShape
+import com.anisequel.domain.profile.ProfileBannerSizing
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.viewmodel.UserOverviewUiState
 
@@ -52,17 +62,17 @@ import com.anisequel.ui.viewmodel.UserOverviewUiState
  *
  * The banner was 180dp with a scrim that faded to the page colour across its
  * whole height, so the artwork it exists to show was mostly hidden behind the
- * gradient meant to keep text legible over it. It is now a **260dp** hero with the
- * scrim weighted to the bottom two-thirds: the top of the image reads as art, the
- * bottom reads as a surface for the identity line, and the two meet without the
- * hard band a single-stop gradient leaves.
+ * gradient meant to keep text legible over it. It became a fixed-height hero with
+ * the scrim weighted to the bottom two-thirds: the top of the image reads as art,
+ * the bottom reads as a surface for the identity line, and the two meet without
+ * the hard band a single-stop gradient leaves.
  *
- * That 260 is the value, and this paragraph said 200dp for a long time after the
- * constant was raised - which is worse than a stale number, because the file read
- * as though it were describing itself accurately. A reader trusting it would have
- * reasoned about the wrong amount of screen. The height is intentional and the
- * thing that will change it is the collapsing header in [TO-DO.md](TO-DO.md) §5.2,
- * not an edit to this line.
+ * That fixed height is gone, and this paragraph used to defend it. It was 260, then
+ * 320, and both numbers were right for the fraction of banners that happened to
+ * share their ratio - which is the one thing a banner's owner never controls. The
+ * height now comes from the picture (see [Banner] and [ProfileBannerShape]), and
+ * what is left here is the rule: the banner is the reader's own artwork, so the
+ * page makes room for it instead of cropping it to a shape the page chose.
  *
  * The avatar sits on the banner's bottom edge as a rounded squircle with a
  * surface ring *and* a hairline outline - the ring alone is invisible on a dark
@@ -78,7 +88,9 @@ import com.anisequel.ui.viewmodel.UserOverviewUiState
 fun ProfileHeaderCard(
     state: UserOverviewUiState.Success,
     modifier: Modifier = Modifier,
-    maxWidth: Dp = ProfileMaxContentWidth
+    maxWidth: Dp = ProfileMaxContentWidth,
+    /** How tall the banner is; see [ProfileBannerShape]. */
+    bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT
 ) {
     Column(
         modifier = modifier
@@ -93,7 +105,7 @@ fun ProfileHeaderCard(
                 // a little air before the username.
                 .padding(bottom = 46.dp)
         ) {
-            Banner(state = state)
+            Banner(state = state, shape = bannerShape)
 
             AsyncImage(
                 model = state.avatarUrl,
@@ -274,78 +286,102 @@ private fun SummaryDivider() {
 }
 
 /**
- * The banner artwork with its scrim.
+ * The banner artwork with its scrim, sized to the picture it is drawing.
  *
- * A cover-less account still gets something worth looking at: the themed
- * gradient and the sparkle mark, rather than the flat rectangle a null URL used
- * to leave behind.
+ * ## Why the height is measured rather than a constant
+ *
+ * It was one fixed height for every profile, which is right for exactly the
+ * pictures that happen to share its ratio. AniList hands over whatever its owner
+ * uploaded - a 16:9 key visual, a 4:1 panorama, a vertical illustration - and a
+ * fixed box crops the first two to their middle band and the third to a slice. The
+ * banner now asks [ProfileBannerSizing] how tall to be, and the answer is the
+ * picture's own ratio within the two clamps documented there.
+ *
+ * The measurement comes from [PannableBackdrop] (`onImageSize`), because that is
+ * the component holding the decoded painter. Until it arrives - and for the
+ * gradient fallback, which has no picture at all - the height is the landscape
+ * ratio, so the first frame is a header rather than a collapsed strip, and the
+ * settle from that to a portrait banner is the one animation here.
  */
 @Composable
-private fun Banner(state: UserOverviewUiState.Success, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // 300dp. This was 260 with a note saying the extra height is a real
-            // cost because the bio and the pinned favourites fall below the fold -
-            // and that is still true, which is why the collapse-on-scroll header in
-            // [TO-DO.md](TO-DO.md) §5.2 is the right long-term answer. The height
-            // went up anyway because a profile banner is the one picture a reader
-            // chose for themselves, and at 260dp a 16:9 banner is cropped to its
-            // middle band. The sides stay cropped: the automatic sweep that used
-            // to reach them started with a visible jump and left the picture
-            // moving under the name, which is worse than a still banner with a
-            // decided crop.
-            // 320 rather than 300 now that the width is the whole screen: a
-            // 16:9 banner at full bleed needs the extra height to keep its own
-            // aspect instead of being cropped to a strip. Only the bottom edge
-            // is rounded, so the artwork meets the status bar cleanly.
-            .height(320.dp)
-            .clip(
-                RoundedCornerShape(
-                    bottomStart = ExpressiveShapes.LargeCorner,
-                    bottomEnd = ExpressiveShapes.LargeCorner
-                )
-            )
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-    ) {
-        // The themed base is drawn for *every* profile, not only the ones with no
-        // banner URL.
-        //
-        // Two kinds of account used to fall through to nothing: one with no banner
-        // at all, and - the case a `if (banner != null)` cannot see - one whose
-        // banner URL exists but will not load. The second left a flat
-        // `surfaceContainerHigh` rectangle where the picture should be, which looks
-        // less like "no artwork" than like a broken image. Painting the gradient and
-        // the sparkle underneath means a failed load reveals a designed header, and
-        // a successful one covers it completely.
-        BannerFallback()
+private fun Banner(
+    state: UserOverviewUiState.Success,
+    shape: ProfileBannerShape,
+    modifier: Modifier = Modifier
+) {
+    val banner = state.bannerUrl
+    // Keyed on the URL: a different picture is a different measurement, and reusing
+    // the last one drew a portrait banner at the previous landscape height for the
+    // frame before its own size landed.
+    var imageSize by remember(banner) { mutableStateOf(Size.Zero) }
 
-        val banner = state.bannerUrl
-        if (banner != null) {
-            PannableBackdrop(
-                model = banner,
-                contentDescription = "Profile Banner"
-            )
-            // Weighted toward the bottom so the artwork stays visible at the top
-            // while the identity line below has a surface to sit on.
-            //
-            // The stops are `Copy` of black at a *low* alpha above the midpoint
-            // rather than the previous 0.10/0.28: a scrim that darkens a banner the
-            // reader can now drag sideways darkens whichever part of the picture is
-            // currently on screen, so a heavy one darkens different artwork
-            // depending on where they stopped scrolling.
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0.0f to Color.Black.copy(alpha = 0.06f),
-                            0.40f to Color.Transparent,
-                            0.72f to Color.Black.copy(alpha = 0.22f),
-                            1.0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
-                        )
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val aspect = ProfileBannerSizing.aspectFor(
+            shape = shape,
+            imageWidth = imageSize.width,
+            imageHeight = imageSize.height
+        )
+        val targetHeight = ProfileBannerSizing.heightDp(maxWidth.value, aspect).dp
+        // Spring physics, and `FastSpatialDp` rather than a literal: this is a
+        // layout adaptation the reader did not ask for, so it has to feel like the
+        // picture settling into place, not like a settings control responding.
+        val height by animateDpAsState(
+            targetValue = targetHeight,
+            animationSpec = ExpressiveMotion.FastSpatialDp,
+            label = "profile_banner_height"
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height)
+                .clip(
+                    RoundedCornerShape(
+                        bottomStart = ExpressiveShapes.LargeCorner,
+                        bottomEnd = ExpressiveShapes.LargeCorner
                     )
-            )
+                )
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            // The themed base is drawn for *every* profile, not only the ones with no
+            // banner URL.
+            //
+            // Two kinds of account used to fall through to nothing: one with no banner
+            // at all, and - the case a `if (banner != null)` cannot see - one whose
+            // banner URL exists but will not load. The second left a flat
+            // `surfaceContainerHigh` rectangle where the picture should be, which looks
+            // less like "no artwork" than like a broken image. Painting the gradient and
+            // the sparkle underneath means a failed load reveals a designed header, and
+            // a successful one covers it completely.
+            BannerFallback()
+
+            if (banner != null) {
+                PannableBackdrop(
+                    model = banner,
+                    contentDescription = "Profile Banner",
+                    onImageSize = { imageSize = it }
+                )
+                // Weighted toward the bottom so the artwork stays visible at the top
+                // while the identity line below has a surface to sit on.
+                //
+                // The stops are `Copy` of black at a *low* alpha above the midpoint
+                // rather than the previous 0.10/0.28: a scrim that darkens a banner the
+                // reader can now drag sideways darkens whichever part of the picture is
+                // currently on screen, so a heavy one darkens different artwork
+                // depending on where they stopped scrolling.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.0f to Color.Black.copy(alpha = 0.06f),
+                                0.40f to Color.Transparent,
+                                0.72f to Color.Black.copy(alpha = 0.22f),
+                                1.0f to MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                            )
+                        )
+                )
+            }
         }
     }
 }

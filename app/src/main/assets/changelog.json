@@ -4,6 +4,10 @@
       "version": "2.3.6",
       "entries": [
         {
+          "title": "A profile banner that fits its own picture",
+          "detail": "The banner at the top of a profile was one fixed height, so a square or vertical upload was cropped to its middle band and a wide one lost its sides. It now sizes itself to the picture it is showing, and the Profile layout editor gained a Banner shape control - Adapt, Landscape, Square or Portrait - for readers who want every profile to share one shape instead. Extreme uploads are clamped, so a panorama never collapses into a strip and a vertical illustration never fills the whole screen."
+        },
+        {
           "title": "Every BetterPosters render, in one swipe",
           "detail": "BetterPosters renders four overlay combinations of the same key art - with and without the score, with and without the genre line - and the cover viewer could only ever show the one your cards were configured for. The viewer now pages through all four, opening on your chosen render, with the current one named on the sheet (\"Score only\", \"Clean poster\") and the saved file named after it, so four saves are a set instead of four unlabelled duplicates. btttr has no higher-resolution file to offer: every size path and query returns the same 500x750 image."
         },

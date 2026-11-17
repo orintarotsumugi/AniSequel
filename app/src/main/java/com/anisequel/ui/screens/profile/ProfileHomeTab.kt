@@ -108,7 +108,8 @@ fun ProfileHomeTab(
         item(key = "header") {
             ProfileHeaderCard(
                 state = state,
-                modifier = Modifier.testTag("profile_header_card")
+                modifier = Modifier.testTag("profile_header_card"),
+                bannerShape = layout.bannerShape
             )
         }
 
