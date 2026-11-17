@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.3.5",
+      "entries": [
+        {
+          "title": "Completed shows stop offering Add to Planning",
+          "detail": "The Info page's status badge from 2.3.4 could not see the status on a title opened from the Library, search, the tier board, a studio page or somebody's profile: the list query keeps your status on the list entry rather than on the title, and the detail answer that does carry it was discarded when the two were merged. A finished show therefore still drew Add to Planning - and that button's AniList mutation overwrites the entry, so tapping it would have moved the show back to Planning. The merge now keeps the list entry from whichever side has it, so a title you track shows the status you gave it."
+        },
+        {
+          "title": "Rewatching says Rewatching",
+          "detail": "A title on its second pass was grouped with Watching because AniList models both as a watching status, so the row drew the generic Currently Watching badge over an entry you had explicitly put in Rewatching. The badge and the edit control now use the exact status - Completed, On-Hold, Dropped or Rewatching - and none of them ever offers the add button."
+        }
+      ]
+    },
+    {
       "version": "2.3.4",
       "entries": [
         {

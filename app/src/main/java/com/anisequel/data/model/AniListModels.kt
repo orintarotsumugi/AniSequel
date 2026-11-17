@@ -400,6 +400,11 @@ data class MediaNode(
         characters = detail.characters ?: characters,
         staff = detail.staff ?: staff,
         relations = detail.relations ?: relations,
+        // The one field where the summary wins rather than the detail. Left
+        // uncopied, this dropped the status on a title opened from a list (the
+        // list query keeps it on the entry, not the media) and the Info page
+        // offered Add to Planning on a completed show. See [mergeListEntry].
+        mediaListEntry = mergeListEntry(mediaListEntry, detail.mediaListEntry),
         // Field-wise, and `extraLarge` is the field this was missing.
         //
         // It used to copy `detail.coverImage.large` and nothing else, so a node whose

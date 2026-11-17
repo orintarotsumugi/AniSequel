@@ -878,7 +878,11 @@ fun MediaNode.withListStatus(status: String?): MediaNode {
  *
  * [MediaNode.withDetail] is the merge this app already uses everywhere else, and it
  * is directional in the one way that matters: a field the detail *answered* wins, a
- * field it left null keeps whatever the summary had.
+ * field it left null keeps whatever the summary had. The viewer's own
+ * `mediaListEntry` is the deliberate exception - the summary's copy wins there,
+ * because a list row's status was folded into it at the tap site and a cached
+ * detail must not outrank it. `mergeListEntry` carries that reasoning, and
+ * `TrackedListStatusTest` pins it in both directions.
  */
 fun Map<Int, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
     this[summary.id]?.takeIf { detail ->

@@ -45,12 +45,19 @@ class DetailActionStateTest {
         assertFalse(busy.showEntryEdit)
     }
 
+    /**
+     * A rewatch is not a plain watch. It used to be folded into [isWatching], which
+     * drew the quick add's generic "Currently Watching" badge over an entry the
+     * reader had explicitly put on its second pass; the exact token is now kept so
+     * the badge says "Rewatching". See `TrackedListStatusTest`.
+     */
     @Test
-    fun `repeating entries keep their status and watching confirmation`() {
+    fun `repeating entries keep their own status instead of the watching badge`() {
         val result = state(status = ListStatuses.REPEATING, loading = true)
-        assertTrue(result.isWatching)
-        assertTrue(result.showMediaAction)
+        assertFalse(result.isWatching)
+        assertFalse(result.showMediaAction)
         assertTrue(result.showEntryEdit)
+        assertEquals(ListStatuses.REPEATING, result.trackedStatus)
         assertEquals(ListStatuses.REPEATING, result.editableStatus)
     }
 

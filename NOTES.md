@@ -157,6 +157,19 @@ where the fetched detail *replaces* the activity row's node. Opening a title fro
 an Activity row therefore rendered a page headed "Unknown Title" above a correct
 studio, status, synopsis and cast. `MediaDetailQueryTest` pins the field.
 
+**The viewer's own entry is merged, not taken from one side.** `withDetail` used
+to copy every field of the answer except `mediaListEntry`, so the arrival case and
+the list case disagreed about who owns it. `MediaListCollection` puts the status
+on the *entry*, and the list query does not select `mediaListEntry` on the entry's
+own media — so a Library row's node reached the title page with no entry, the
+detail's `mediaListEntry { status progress }` was discarded, and the Info page
+offered "Add to Planning" on a finished show. The merge is field-wise with the
+summary winning what it has: a list row and an arriving row carry viewer-scoped
+data the detail only repeats, while the detail fills the blanks, which is the case
+that was broken. Offering the add there was not just a wrong label — AniList's
+mutation overwrites the entry, so it would have moved the show back to Planning.
+`TrackedListStatusTest` pins both directions.
+
 **The relation nodes share `RELATED_NODE_FIELDS` with the list query.** They used
 to carry a second, thinner field list of their own — a title, a format, an
 episode count and a small cover — so the one screen whose job is to show the rest

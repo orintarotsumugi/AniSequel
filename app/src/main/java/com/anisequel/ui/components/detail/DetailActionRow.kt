@@ -58,10 +58,13 @@ import com.anisequel.ui.viewmodel.QuickAddStatus
  * A title that is already tracked shows a badge instead of an add button. That
  * is not decoration: AniList's mutations *overwrite* the entry, so offering
  * "Add to Planning" on a completed show would silently move it back to Planning
- * and lose the status the reader chose. The status is read from the viewer's
- * own `mediaListEntry` (the detail query is viewer-scoped), and the hosts that
+ * and lose the status the reader chose. The badge names the status exactly -
+ * completed, on-hold, dropped, and rewatching, which used to be drawn as the
+ * generic watching badge. The status is read from the viewer's own
+ * `mediaListEntry` (the detail query is viewer-scoped), and the hosts that
  * open titles straight off a list fold the list entry's status into the summary
- * they hand the sheet so the badge is right on the first frame.
+ * they hand the sheet so the badge is right on the first frame. See
+ * [DetailActionState.trackedStatus].
  *
  * It sits in the page's own scroll rather than pinned to the bottom of the sheet,
  * because the sheet's bottom edge belongs to the capsule that switches between the

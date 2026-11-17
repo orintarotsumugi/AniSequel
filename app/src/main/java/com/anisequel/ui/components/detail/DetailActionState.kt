@@ -11,17 +11,32 @@ internal class DetailActionState(
     private val hasSequel: Boolean
 ) {
     private val canonicalStatus = ListStatuses.normalize(listStatus)
+
+    // A confirmed or in-flight write on this page knows more than a detail fetch,
+    // and the quick add only ever writes these two statuses.
     val isPlanned = quickAddStatus.isAddedToPlanning || canonicalStatus == ListStatuses.PLANNING
-    val isWatching = quickAddStatus.isAddedToWatching ||
-        canonicalStatus == ListStatuses.CURRENT || canonicalStatus == ListStatuses.REPEATING
+    val isWatching = quickAddStatus.isAddedToWatching || canonicalStatus == ListStatuses.CURRENT
 
-    // AniList's add mutation overwrites existing entries, including completed titles.
-    private val isOnAnotherList = listStatus != null && !isPlanned && !isWatching
+    /**
+     * The viewer's status for a title the quick add does not represent:
+     * completed, paused, dropped - and **rewatching**.
+     *
+     * Rewatching used to be folded into [isWatching] because the API calls it a
+     * watching state, which made the row draw its generic "Currently Watching"
+     * badge over an entry the reader had explicitly put in a second pass. The
+     * exact token is kept here so the badge and the edit control both say
+     * "Rewatching", which is what AniList calls it.
+     *
+     * A title in this state never offers the quick add. That is not decoration:
+     * AniList's add mutation *overwrites* the entry, so offering "Add to Planning"
+     * on a completed show silently moves it back to Planning and loses the status
+     * the reader chose.
+     */
+    val trackedStatus: String? = canonicalStatus
+        ?.takeUnless { it == ListStatuses.CURRENT || it == ListStatuses.PLANNING }
+        ?.takeUnless { isPlanned || isWatching }
 
-    // A title the viewer already tracks under a status the quick add does not
-    // represent (completed, paused, dropped, repeating): it keeps its badge and
-    // never offers to plan it again.
-    val trackedStatus: String? = if (isOnAnotherList) listStatus else null
+    private val isOnAnotherList = trackedStatus != null
 
     // A confirmed or in-flight write knows more than a detail fetch still in flight.
     private val hasKnownAddState = isPlanned || isWatching || quickAddStatus.isBusy

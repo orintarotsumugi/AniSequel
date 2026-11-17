@@ -1,7 +1,7 @@
 {
-  "version": "2.3.4",
-  "version_code": 670,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.3.4",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.3.4/anisequel-universal.apk",
-  "notes": "- Info page respects your list status: A title already on your list no longer offers to add it to Planning on the Info page: it shows the status you gave it (watching, completed, paused, dropped, repeating) instead, so a finished show cannot be silently moved back to Planning.\n- Downloadable poster: The Info page's Extras card now saves the best available artwork - BetterPosters when you chose it, otherwise AniList's cover - to your gallery, so a poster you like can be kept at full resolution."
+  "version": "2.3.5",
+  "version_code": 671,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.3.5",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.3.5/anisequel-universal.apk",
+  "notes": "- Completed shows stop offering Add to Planning: The Info page's status badge from 2.3.4 could not see the status on a title opened from the Library, search, the tier board, a studio page or somebody's profile: the list query keeps your status on the list entry rather than on the title, and the detail answer that does carry it was discarded when the two were merged. A finished show therefore still drew Add to Planning - and that button's AniList mutation overwrites the entry, so tapping it would have moved the show back to Planning. The merge now keeps the list entry from whichever side has it, so a title you track shows the status you gave it.\n- Rewatching says Rewatching: A title on its second pass was grouped with Watching because AniList models both as a watching status, so the row drew the generic Currently Watching badge over an entry you had explicitly put in Rewatching. The badge and the edit control now use the exact status - Completed, On-Hold, Dropped or Rewatching - and none of them ever offers the add button."
 }
