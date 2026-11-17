@@ -628,92 +628,100 @@ fun InfoHero(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (relationLabel != null) {
-                        HeroChip(
-                            icon = AppVectorIcons.FranchiseBranch,
-                            label = relationLabel,
-                            accent = true
-                        )
-                    }
-                    // The medium, before the format. "TV" beside "AIRING" says
-                    // how it is packaged but not what it is, so a manga page and
-                    // an anime page could carry the same chips; this one names the
-                    // catalogue half the title belongs to, and uses the book glyph
-                    // so the answer survives a glance.
-                    HeroChip(
-                        icon = if (media.isManga) {
-                            AppVectorIcons.SourceBook
-                        } else {
-                            AppVectorIcons.Tv
-                        },
-                        label = if (media.isManga) "MANGA" else "ANIME"
-                    )
-                    // The main studio, when AniList flagged one. `studioCredits`
-                    // sorts those first and falls back to the flat list for the
-                    // queries that carry no edges - so this still headlines the
-                    // animation studio on a node whose studios arrived unordered.
-                    media.studioCredits.firstOrNull()?.let { studio ->
-                        HeroChip(
-                            icon = AppVectorIcons.Studio,
-                            label = studio.name,
-                            // Null id, null tap: a credit AniList gave no id for
-                            // cannot be opened, and a chip that looks tappable and
-                            // is not is worse than a plain one.
-                            onClick = studio.id?.let { id -> { onOpenStudio(id, studio.name) } }
-                        )
-                    }
-                    // The score is the number most people open a title to check, and
-                    // it lived half a page down in the Details card between "Source"
-                    // and "Popularity". It belongs in the lockup with the rest of the
-                    // "what is this" answers. `averageScore` is AniList's 0-100 mean,
-                    // which is already a percentage, so it is not rescaled here.
-                    media.averageScore?.let { score ->
-                        HeroChip(icon = AppVectorIcons.Star, label = "$score%")
-                    }
-                    // Gated on a real status. `statusLabel` answers "Unknown" for a
-                    // null, which is honest on the Details grid but reads as a fact
-                    // in a chip: "UNKNOWN" beside the score says the app looked and
-                    // found nothing, when the truth is that AniList did not send it.
-                    if (media.status != null) {
-                        HeroChip(
-                            icon = AppVectorIcons.Info,
-                            label = media.statusLabel.uppercase()
-                        )
-                    }
-                    // A manga's format is usually the word MANGA, which the
-                    // medium chip above already says. Keeping both printed the
-                    // same fact twice on every manga page; a Novel or a One Shot
-                    // still gets its own chip because those add something.
-                    val mediumLabel = if (media.isManga) "MANGA" else "ANIME"
-                    if (media.formatLabel.uppercase() != mediumLabel || !media.isManga) {
-                        HeroChip(
-                            icon = when {
-                                media.isManga -> AppVectorIcons.SourceBook
-                                // Read off the raw field, not `formatLabel`: that is
-                                // now spelled for a reader ("TV Short"), so
-                                // comparing it to `"MOVIE"` would silently never
-                                // match and every movie would draw the TV icon.
-                                media.format.equals("MOVIE", ignoreCase = true) ->
-                                    AppVectorIcons.Movie
-                                else -> AppVectorIcons.Tv
-                            },
-                            // Small caps, the way the other hero chips are set. This
-                            // used to be `.uppercase()` on a raw enum, which printed
-                            // `TV_SHORT` on screen; `formatLabel` now spells it.
-                            label = media.formatLabel.uppercase()
-                        )
-                    }
-                }
+                HeroChips(
+                    media = media,
+                    relationLabel = relationLabel,
+                    onOpenStudio = onOpenStudio
+                )
             }
         }
     }
 }
 
 private val HERO_HEIGHT = 340.dp
+
+/**
+ * The lockup's fact chips.
+ *
+ * Extracted from [InfoHero] because these six conditionals are the bulk of its
+ * branch count, and CodeFactor counts the hero's layout and scroll work already.
+ * They are also the one part of the lockup that is pure "what does AniList know
+ * about this title" - moving them keeps the hero about layout and this about the
+ * facts.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HeroChips(
+    media: MediaNode,
+    relationLabel: String?,
+    onOpenStudio: (Int, String?) -> Unit
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (relationLabel != null) {
+            HeroChip(
+                icon = AppVectorIcons.FranchiseBranch,
+                label = relationLabel,
+                accent = true
+            )
+        }
+        // The medium, before the format. "TV" beside "AIRING" says how it is
+        // packaged but not what it is, so a manga page and an anime page could
+        // carry the same chips; this one names the catalogue half the title
+        // belongs to, and uses the book glyph so the answer survives a glance.
+        HeroChip(
+            icon = if (media.isManga) AppVectorIcons.SourceBook else AppVectorIcons.Tv,
+            label = if (media.isManga) "MANGA" else "ANIME"
+        )
+        // The main studio, when AniList flagged one. `studioCredits` sorts those
+        // first and falls back to the flat list for the queries that carry no
+        // edges - so this still headlines the animation studio on a node whose
+        // studios arrived unordered.
+        media.studioCredits.firstOrNull()?.let { studio ->
+            HeroChip(
+                icon = AppVectorIcons.Studio,
+                label = studio.name,
+                // Null id, null tap: a credit AniList gave no id for cannot be
+                // opened, and a chip that looks tappable and is not is worse than
+                // a plain one.
+                onClick = studio.id?.let { id -> { onOpenStudio(id, studio.name) } }
+            )
+        }
+        // The score is the number most people open a title to check. `averageScore`
+        // is AniList's 0-100 mean, already a percentage, so it is not rescaled.
+        media.averageScore?.let { score ->
+            HeroChip(icon = AppVectorIcons.Star, label = "$score%")
+        }
+        // Gated on a real status. `statusLabel` answers "Unknown" for a null,
+        // which is honest on the Details grid but reads as a fact in a chip:
+        // "UNKNOWN" beside the score says the app looked and found nothing, when
+        // the truth is that AniList did not send it.
+        if (media.status != null) {
+            HeroChip(icon = AppVectorIcons.Info, label = media.statusLabel.uppercase())
+        }
+        // A manga's format is usually the word MANGA, which the medium chip above
+        // already says; a Novel or a One Shot still gets its own chip because
+        // those add something.
+        val mediumLabel = if (media.isManga) "MANGA" else "ANIME"
+        if (media.formatLabel.uppercase() != mediumLabel || !media.isManga) {
+            HeroChip(
+                icon = when {
+                    media.isManga -> AppVectorIcons.SourceBook
+                    // Read off the raw field, not `formatLabel`: that is spelled
+                    // for a reader ("TV Short"), so comparing it to "MOVIE" would
+                    // silently never match and every movie would draw the TV icon.
+                    media.format.equals("MOVIE", ignoreCase = true) -> AppVectorIcons.Movie
+                    else -> AppVectorIcons.Tv
+                },
+                // Small caps, the way the other hero chips are set; `formatLabel`
+                // spells the enum instead of printing `TV_SHORT`.
+                label = media.formatLabel.uppercase()
+            )
+        }
+    }
+}
 
 /**
  * How far the hero's placeholder sits toward the show's colour.
