@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.posterUrl
+import com.anisequel.data.network.BetterPosterVariant
 import com.anisequel.data.network.BetterPostersApi
 import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
@@ -119,4 +120,49 @@ fun cardPosterUrl(mediaId: Int, fallback: String?, title: String? = null): Strin
         better = api.posterUrl(mediaId, overlays, skipSequels = uniqueSeasons)
     }
     return better ?: fallback
+}
+
+/**
+ * Every poster btttr has for [media], the reader's chosen overlay first - empty when
+ * there is nothing to add.
+ *
+ * ## Why the viewer does not use [cardPosterUrl]
+ *
+ * A card asks "what should I draw", and its answer for a title btttr does not carry
+ * is the AniList cover, because a blank card would be worse. The viewer asks a
+ * different question - "what else does btttr have for this title" - and handing it
+ * the fallback was a real defect: with the reader on AniList, `cardPosterUrl` answers
+ * with the AniList URL, so the full-screen viewer drew a **BetterPosters pill holding
+ * the AniList picture** next to the actual Poster pill holding the same picture.
+ * Two pills, one image, one of them mislabelled.
+ *
+ * It also deliberately ignores [LocalPosterSource]: that local says which provider a
+ * *card* should draw, and the viewer is where every provider's art is on offer. A
+ * reader who leaves their cards on AniList can still look at btttr's posters here,
+ * the same way they can look at LiveChart's.
+ *
+ * ## Why the season rule stops at the cards
+ *
+ * [LocalPosterUniqueSeasons] exists because btttr addresses one IMDb id for a whole
+ * series, so season 2 and up would wear season one's art under a different name. A
+ * grid has no room to explain that - three entries, one picture - so the cards keep
+ * the reader's AniList covers. The viewer does have room: it has a sheet with the
+ * title, a source switch and a caption. Hiding art there on the grounds that it is
+ * not season-specific removed the only place the series render could be looked at
+ * whole, so the gallery is offered for every season and *labelled* as the series
+ * artwork (see [com.anisequel.domain.ui.SequelSeason] and the viewer's caption).
+ * Nothing is passed off as season two's poster; it says what it is.
+ */
+@Composable
+fun betterPosterGallery(media: MediaNode): List<BetterPosterVariant> {
+    val api = LocalBetterPosters.current ?: return emptyList()
+    val overlays = LocalPosterOverlays.current
+
+    var variants by remember(media.id, overlays) {
+        mutableStateOf(emptyList<BetterPosterVariant>())
+    }
+    LaunchedEffect(media.id, api, overlays) {
+        variants = api.posterVariants(media.id, overlays, skipSequels = false)
+    }
+    return variants
 }

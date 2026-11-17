@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileLayout
 import com.anisequel.domain.profile.ProfileSection
 import kotlinx.coroutines.flow.Flow
@@ -36,6 +37,7 @@ class ProfileLayoutPreferences(context: Context) {
         val ORDER = stringPreferencesKey("profile_section_order")
         val HIDDEN = stringSetPreferencesKey("profile_hidden_sections")
         val CHARACTERS_TWO_COLUMN = booleanPreferencesKey("profile_characters_two_column")
+        val BANNER_SHAPE = stringPreferencesKey("profile_banner_shape")
     }
 
     val layout: Flow<ProfileLayout> = appContext.profileLayoutDataStore.data.map { preferences ->
@@ -50,7 +52,8 @@ class ProfileLayoutPreferences(context: Context) {
             order = ProfileSection.fromStorageList(storedOrder)
                 .ifEmpty { ProfileSection.entries.toList() },
             hidden = ProfileSection.fromStorage(preferences[Keys.HIDDEN] ?: emptySet()),
-            charactersTwoColumn = preferences[Keys.CHARACTERS_TWO_COLUMN] ?: false
+            charactersTwoColumn = preferences[Keys.CHARACTERS_TWO_COLUMN] ?: false,
+            bannerShape = ProfileBannerShape.fromStorage(preferences[Keys.BANNER_SHAPE])
         )
     }
 
@@ -72,12 +75,19 @@ class ProfileLayoutPreferences(context: Context) {
         }
     }
 
+    suspend fun setBannerShape(shape: ProfileBannerShape) {
+        appContext.profileLayoutDataStore.edit { preferences ->
+            preferences[Keys.BANNER_SHAPE] = shape.storageValue
+        }
+    }
+
     /** Back to the shipped arrangement, which is every section, in declared order. */
     suspend fun reset() {
         appContext.profileLayoutDataStore.edit { preferences ->
             preferences.remove(Keys.ORDER)
             preferences.remove(Keys.HIDDEN)
             preferences.remove(Keys.CHARACTERS_TWO_COLUMN)
+            preferences.remove(Keys.BANNER_SHAPE)
         }
     }
 }

@@ -49,7 +49,15 @@ data class ProfileLayout(
      * strip. The strip favours looking at one portrait closely; the grid favours
      * seeing all of them at once.
      */
-    val charactersTwoColumn: Boolean = false
+    val charactersTwoColumn: Boolean = false,
+    /**
+     * How tall the banner at the top of the page is, and what makes it that tall.
+     *
+     * Part of the layout rather than the theme because it is the header's shape -
+     * the same page the editor is arranging - and because the editor can then show
+     * it next to the order instead of in a different settings screen.
+     */
+    val bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT
 ) {
     /** Stored order, de-duplicated, unknown entries dropped, missing ones appended. */
     val resolvedOrder: List<ProfileSection>

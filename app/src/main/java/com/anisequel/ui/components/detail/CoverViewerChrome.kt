@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -17,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +30,8 @@ import com.anisequel.data.model.statusLabel
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 
 /**
  * The viewer's fixed furniture: the header row, the format chips, the save and
@@ -37,6 +41,11 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
  * the zoom, the pager or the entrance geometry. It reads the *state* the viewer
  * owns - which source, which page, whether a save is in flight - and draws it;
  * that is a different reason to change from the window choreography next door.
+ *
+ * It also owns its own top edge: the gradient that keeps white-on-artwork legible
+ * and the insets that keep the buttons off a cutout. The viewer below it no longer
+ * pads the whole window, because the artwork is meant to run to the corners - so
+ * the clearance has to live on the chrome that needs it.
  *
  * A save's lifecycle lives here too, because the button's glyph is its whole
  * acknowledgement: making the enum public to another package would invite a
@@ -53,22 +62,44 @@ internal fun CoverViewerHeader(
     onDismiss: () -> Unit,
     startSave: () -> Unit
 ) {
-    val imageCount = source?.urls?.size ?: 0
-    val onScreen = source?.urls?.getOrNull(currentPage) != null
-    CoverViewerTopBar(
-        media = media,
-        canSave = onScreen,
-        saveState = saveState,
-        pageLabel = if (imageCount > 1) {
-            "${currentPage + 1} / $imageCount"
-        } else {
-            null
-        },
-        onSave = {
-            if (onScreen && saveState != CoverSaveState.SAVING) startSave()
-        },
-        onDismiss = onDismiss
-    )
+    val imageCount = source?.images?.size ?: 0
+    val onScreen = source?.images?.getOrNull(currentPage) != null
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Painted before the insets below, so the wash reaches the top edge of
+            // the display and the status bar has something to sit on - a gradient
+            // that started below the bar would leave the artwork bare exactly where
+            // the clock is.
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.62f),
+                    1f to Color.Transparent
+                )
+            )
+            // With the bars hidden (and this window edge to edge, see the dialog's
+            // `decorFitsSystemWindows`), `statusBarsPadding()` is zero and the
+            // shared helper restores the cutout and a little breathing room; with
+            // them showing, the real inset is what keeps the row clear of the clock.
+            .then(Modifier.immersiveDisplayInsets(LocalImmersiveMode.current))
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        CoverViewerTopBar(
+            media = media,
+            canSave = onScreen,
+            saveState = saveState,
+            pageLabel = if (imageCount > 1) {
+                "${currentPage + 1} / $imageCount"
+            } else {
+                null
+            },
+            onSave = {
+                if (onScreen && saveState != CoverSaveState.SAVING) startSave()
+            },
+            onDismiss = onDismiss
+        )
+    }
 }
 
 /**

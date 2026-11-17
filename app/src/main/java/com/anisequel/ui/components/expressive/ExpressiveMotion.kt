@@ -68,6 +68,20 @@ object ExpressiveMotion {
     val DefaultSpatial: FiniteAnimationSpec<Float> get() =
         spatial(expressiveDamping = 0.65f, expressiveStiffness = Spring.StiffnessMediumLow)
 
+    /**
+     * A spatial spring that arrives and stays.
+     *
+     * For a distance where crossing the target is a glitch rather than a flourish.
+     * The cover viewer's artwork grows from a poster-sized rectangle to the whole
+     * display, and [DefaultSpatial]'s overshoot carried it a few percent *past* that
+     * frame and back - a picture that grew larger than the screen and then shrank
+     * onto it, which read as the viewer failing to settle. Same stiffness as the
+     * expressive styles, no bounce: layout still moves, it just stops where it was
+     * asked to.
+     */
+    val SettleSpatial: FiniteAnimationSpec<Float> get() =
+        spatial(expressiveDamping = Spring.DampingRatioNoBouncy)
+
     /** Bouncy spatial spring for celebratory interactions, buttons, and icon reveals. */
     val BouncySpatial: FiniteAnimationSpec<Float> get() =
         spatial(expressiveStiffness = Spring.StiffnessLow)

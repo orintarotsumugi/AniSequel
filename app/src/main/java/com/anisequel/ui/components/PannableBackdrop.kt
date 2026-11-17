@@ -116,6 +116,16 @@ fun PannableBackdrop(
      * holds a zoom of their own.
      */
     drift: Boolean = false,
+    /**
+     * Reports the source picture's own pixel size once it is known, and
+     * `Size.Zero` when the painter cannot measure it.
+     *
+     * The profile banner sizes itself from the picture it is handed (see
+     * `ProfileBannerShape`), and this component is the only place that has the
+     * measurement: the painter is composed here, and a caller re-creating one to
+     * ask the same question would fetch and decode the image twice.
+     */
+    onImageSize: ((Size) -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
     var containerWidth by remember { mutableFloatStateOf(0f) }
@@ -256,6 +266,7 @@ fun PannableBackdrop(
                     // at its plain fill size instead.
                     val measured = state.painter.intrinsicSize
                     imageSize = if (measured.isUsableBackdropSize()) measured else Size.Zero
+                    onImageSize?.invoke(imageSize)
                 },
                 modifier = Modifier
                     .fillMaxSize()

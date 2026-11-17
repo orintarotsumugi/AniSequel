@@ -23,12 +23,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileLayout
 import com.anisequel.domain.profile.ProfileSection
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
+import com.anisequel.ui.components.expressive.SegmentedOption
 
 /**
- * The profile's layout editor: order, visibility and the two-column characters.
+ * The profile's layout editor: the banner's shape, order, visibility and the
+ * two-column characters.
  *
  * A sheet rather than a settings page, because the thing being edited is the page
  * behind it - the reader can dismiss it and see the result immediately, and the
@@ -44,6 +48,7 @@ internal fun ProfileLayoutSheet(
     onMove: (ProfileSection, Int) -> Unit,
     onToggle: (ProfileSection) -> Unit,
     onCharactersTwoColumn: (Boolean) -> Unit,
+    onBannerShape: (ProfileBannerShape) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -71,6 +76,38 @@ internal fun ProfileLayoutSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // The header's shape, in the editor for the page it heads rather than
+            // in Settings: the sheet sits over the page, so a tap here is a change
+            // the reader can see behind it - the same reason the order is live.
+            Text(
+                text = "Banner shape",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            ExpressivePolygonSegmentedBar(
+                options = ProfileBannerShape.entries.map {
+                    SegmentedOption(label = it.displayName)
+                },
+                selectedIndex = ProfileBannerShape.entries.indexOf(layout.bannerShape)
+                    .coerceAtLeast(0),
+                onSelect = { index ->
+                    ProfileBannerShape.entries.getOrNull(index)?.let(onBannerShape)
+                },
+                modifier = Modifier.testTag("profile_layout_banner_shape")
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Adapt makes the banner as tall as its own picture needs. " +
+                    "The other three give every profile the same shape.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(10.dp))
 
             val order = layout.resolvedOrder

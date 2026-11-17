@@ -595,6 +595,11 @@ fun UserProfileScreen(
                                         layoutPreferences.setCharactersTwoColumn(twoColumn)
                                     }
                                 },
+                                onBannerShape = { shape ->
+                                    layoutScope.launch {
+                                        layoutPreferences.setBannerShape(shape)
+                                    }
+                                },
                                 onReset = {
                                     layoutScope.launch { layoutPreferences.reset() }
                                 },

@@ -288,6 +288,11 @@ private fun PosterOverlayPreview(overlays: PosterOverlays) {
  * The overlay switches start off (see `PosterOverlays.DEFAULT`), and the unique-season
  * switch is the one control here that is not an overlay: btttr has one series poster,
  * so it is the app's way of not repeating season one for every sequel.
+ *
+ * That switch is about **cards and lists** only. The full-screen viewer still offers
+ * btttr's render to a sequel and labels it "series art", because a grid has no room
+ * to explain that one picture covers three entries and the viewer does - hiding it
+ * there as well removed the only place the series art could be seen whole.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -379,11 +384,14 @@ internal fun CardPosterPart(
             // The one switch that is not an overlay: btttr has one poster per IMDb
             // series, so seasons 2 and up repeat season one's picture. On, a sequel
             // keeps its own AniList cover - the art that carries its season name.
+            // Cards and lists only: the viewer names the series render and shows it.
             SwitchRow(
                 title = "Unique art for sequels",
                 subtitle = "btttr draws one series poster, so Season 2 would repeat " +
                     "Season 1's art under a different name. On, a sequel season keeps " +
-                    "its own AniList cover, which is specific to that season.",
+                    "its own AniList cover on cards and in lists, which is specific to " +
+                    "that season. The full-screen viewer still offers the series art, " +
+                    "labelled as such.",
                 checked = uniqueSeasons,
                 onCheckedChange = onUniqueSeasons,
                 modifier = Modifier.testTag("poster_unique_seasons_switch")
