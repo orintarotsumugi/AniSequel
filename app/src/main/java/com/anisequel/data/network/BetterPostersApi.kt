@@ -190,6 +190,22 @@ class BetterPostersApi(
     }
 
     /**
+     * The season ARM places [anilistId] at, or null when it does not know or puts it
+     * at season one.
+     *
+     * This is the answer the title cannot always give: "Nisemonogatari" is season two
+     * of `tt1480925` with no number anywhere in its name, which is exactly the entry
+     * that would otherwise wear season one's artwork under a different title. Cards
+     * already act on it (see [posterVariants]'s `skipSequels`); the viewer uses it to
+     * label the render it shows as the series art.
+     *
+     * Shares [posterMapping]'s caches, so a title whose gallery the viewer has
+     * already loaded costs no request at all.
+     */
+    suspend fun seasonFor(anilistId: Int): Int? =
+        posterMapping(anilistId)?.season?.takeIf { it >= 2 }
+
+    /**
      * AniList id to IMDb id and season, shared by every caller asking for the same
      * title.
      *

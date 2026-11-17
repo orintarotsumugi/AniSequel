@@ -48,8 +48,11 @@ import com.anisequel.data.network.BetterPosterVariant
 import com.anisequel.data.network.LiveChartArtwork
 import com.anisequel.data.repository.LiveChartCovers
 import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.SequelSeason
+import com.anisequel.ui.components.cards.LocalBetterPosters
 import com.anisequel.ui.components.cards.LocalPosterSource
 import com.anisequel.ui.components.cards.betterPosterGallery
+import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -180,6 +183,29 @@ fun FullScreenCoverViewer(
     val selectedIndex = sources.indexOfFirst { it.label == selectedLabel }.takeIf { it >= 0 } ?: 0
     val source = sources.getOrNull(selectedIndex)
     val images = source?.images.orEmpty()
+    // Which season btttr's render is *not*, when it is the series artwork. The
+    // viewer shows those renders for every season now, so this is the one fact the
+    // caption and the saved file name need to stay honest about it.
+    //
+    // Two sources, because neither is complete: the title carries most of them
+    // ("Frieren Season 2"), and ARM carries the ones the name hides
+    // ("Nisemonogatari"). ARM's answer comes from the mapping the gallery request
+    // already made, so this costs no second lookup.
+    val titleSeason = seriesSeasonOf(media, source)
+    val posterApi = LocalBetterPosters.current
+    val armSeason by produceState<Int?>(
+        initialValue = null,
+        posterApi,
+        media.id,
+        source?.label
+    ) {
+        value = if (source?.label == PosterSource.BETTER_POSTERS.displayName) {
+            posterApi?.seasonFor(media.id)
+        } else {
+            null
+        }
+    }
+    val seriesSeason = listOfNotNull(titleSeason, armSeason).maxOrNull()
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -376,7 +402,8 @@ fun FullScreenCoverViewer(
                                 context = context,
                                 media = media,
                                 source = source,
-                                imageIndex = currentPage
+                                imageIndex = currentPage,
+                                seriesSeason = seriesSeason
                             )
                         }
                     }
@@ -392,6 +419,7 @@ fun FullScreenCoverViewer(
                     image = currentImage,
                     imageIndex = currentPage,
                     imageCount = images.size,
+                    seriesSeason = seriesSeason,
                     onSelectSource = { index ->
                         sources.getOrNull(index)?.label?.let { selectedLabel = it }
                     },
@@ -579,25 +607,86 @@ private fun rememberLiveChartArtwork(media: MediaNode): LiveChartArtwork? {
     }.value
 }
 
+/**
+ * The season btttr's render for [media] actually depicts, or null when the render is
+ * the entry's own art.
+ *
+ * btttr addresses one IMDb id per series, so a Season 2 entry gets the series
+ * picture - which is season one's key art with the overlays the reader chose. The
+ * viewer offers it anyway (see [com.anisequel.ui.components.cards.betterPosterGallery])
+ * and this is what lets it say so, rather than drawing season one's art under season
+ * two's name.
+ *
+ * The number comes from the title first, because that is what the card, the caption
+ * and the file name all already have, and a reader renaming a title in AniList should
+ * move the label with it. [armSeason] covers the titles whose name says nothing:
+ * "Nisemonogatari" is season two of its series and carries no number at all, which is
+ * the entry that would otherwise be labelled as if the picture were its own. When the
+ * two disagree the larger wins, because either naming a later season means the render
+ * is not this entry's art.
+ */
+internal fun seriesSeasonOf(
+    media: MediaNode,
+    source: CoverSource?,
+    armSeason: Int? = null
+): Int? =
+    if (source?.label == PosterSource.BETTER_POSTERS.displayName) {
+        listOfNotNull(
+            SequelSeason.numberIn(posterLookupTitle(media))?.takeIf { it >= 2 },
+            armSeason?.takeIf { it >= 2 }
+        ).maxOrNull()
+    } else {
+        null
+    }
+
+/**
+ * The name a saved render is filed under.
+ *
+ * A gallery of four saved under one name is four unlabelled files in the gallery, so
+ * a btttr variant is named after its overlay and an AniList pair after its index.
+ *
+ * The two "series" cases exist because of the season rule. A sequel's btttr render is
+ * not that season's art, and the title alone cannot say so: a Save from "Frieren
+ * Season 2" produced "Frieren Season 2 clean poster", which claimed something the
+ * picture is not. The name now carries "- series poster" and the overlay in brackets,
+ * so a season's save is recognisable as the series artwork next to the AniList cover
+ * saved from the same title.
+ */
+internal fun coverSaveName(
+    displayName: String,
+    source: CoverSource?,
+    image: CoverImage?,
+    imageIndex: Int,
+    seriesSeason: Int?
+): String = buildString {
+    append(displayName)
+    if (source?.label == ANILIST_BANNER) append(" banner")
+    if (seriesSeason != null) append(" - series poster")
+    val variant = image?.variant
+    when {
+        variant != null && seriesSeason != null ->
+            append(" (").append(variant.lowercaseFirst()).append(")")
+        variant != null -> append(" ").append(variant.lowercaseFirst())
+        (source?.images?.size ?: 0) > 1 -> append(" ").append(imageIndex + 1)
+    }
+}
+
 /** One save, from the CDN to the gallery. */
 private suspend fun saveCover(
     context: Context,
     media: MediaNode,
     source: CoverSource?,
-    imageIndex: Int
+    imageIndex: Int,
+    seriesSeason: Int?
 ): CoverSaveState {
     val image = source?.images?.getOrNull(imageIndex) ?: return CoverSaveState.FAILED
-    val title = buildString {
-        append(media.displayName)
-        if (source.label == ANILIST_BANNER) append(" banner")
-        // A gallery of four saved under one name is four unlabelled files in the
-        // gallery; the variant is what makes them a set rather than duplicates.
-        // AniList's two images have no variant, so the index is their only name.
-        when {
-            image.variant != null -> append(" ").append(image.variant.lowercaseFirst())
-            source.images.size > 1 -> append(" ").append(imageIndex + 1)
-        }
-    }
+    val title = coverSaveName(
+        displayName = media.displayName,
+        source = source,
+        image = image,
+        imageIndex = imageIndex,
+        seriesSeason = seriesSeason
+    )
     return if (saveCoverToGallery(context = context, coverUrl = image.url, title = title)) {
         CoverSaveState.SAVED
     } else {

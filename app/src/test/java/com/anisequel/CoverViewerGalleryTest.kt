@@ -191,7 +191,8 @@ class CoverViewerGalleryTest {
         assertTrue(
             "four renders saved under one name are four unlabelled files in the " +
                 "gallery, indistinguishable from duplicates",
-            source(viewer).contains("image.variant.lowercaseFirst()")
+            source(viewer).contains("fun coverSaveName(") &&
+                source(viewer).contains("lowercaseFirst()")
         )
         assertTrue(
             "nothing names a btttr render in words, so the sheet cannot say which " +

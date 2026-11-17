@@ -141,22 +141,28 @@ fun cardPosterUrl(mediaId: Int, fallback: String?, title: String? = null): Strin
  * reader who leaves their cards on AniList can still look at btttr's posters here,
  * the same way they can look at LiveChart's.
  *
- * The season rule is the cards' rule, unchanged: btttr addresses one IMDb id for a
- * whole series, so a later season keeps its own AniList cover rather than repeating
- * season one's art (see [SequelSeason] and `BetterPostersApi.posterVariants`).
+ * ## Why the season rule stops at the cards
+ *
+ * [LocalPosterUniqueSeasons] exists because btttr addresses one IMDb id for a whole
+ * series, so season 2 and up would wear season one's art under a different name. A
+ * grid has no room to explain that - three entries, one picture - so the cards keep
+ * the reader's AniList covers. The viewer does have room: it has a sheet with the
+ * title, a source switch and a caption. Hiding art there on the grounds that it is
+ * not season-specific removed the only place the series render could be looked at
+ * whole, so the gallery is offered for every season and *labelled* as the series
+ * artwork (see [com.anisequel.domain.ui.SequelSeason] and the viewer's caption).
+ * Nothing is passed off as season two's poster; it says what it is.
  */
 @Composable
 fun betterPosterGallery(media: MediaNode): List<BetterPosterVariant> {
     val api = LocalBetterPosters.current ?: return emptyList()
     val overlays = LocalPosterOverlays.current
-    val uniqueSeasons = LocalPosterUniqueSeasons.current
-    if (uniqueSeasons && SequelSeason.isSequel(posterLookupTitle(media))) return emptyList()
 
-    var variants by remember(media.id, overlays, uniqueSeasons) {
+    var variants by remember(media.id, overlays) {
         mutableStateOf(emptyList<BetterPosterVariant>())
     }
-    LaunchedEffect(media.id, api, overlays, uniqueSeasons) {
-        variants = api.posterVariants(media.id, overlays, skipSequels = uniqueSeasons)
+    LaunchedEffect(media.id, api, overlays) {
+        variants = api.posterVariants(media.id, overlays, skipSequels = false)
     }
     return variants
 }

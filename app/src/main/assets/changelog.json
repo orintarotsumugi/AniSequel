@@ -4,6 +4,10 @@
       "version": "2.3.6",
       "entries": [
         {
+          "title": "Sequels named by their own season",
+          "detail": "BetterPosters draws one poster per series, so a Season 2 entry used to wear season one's art under a different name. Season detection now reads the spellings titles actually use - \"Season Two\", \"S2\", \"2nd Cour\" and a trailing roman numeral like \"Overlord IV\" - so fewer sequels slip through, and it still leaves alone titles whose number is their name (\"86\", \"Steins;Gate 0\"). In the full-screen viewer a sequel now offers the BetterPosters render anyway, captioned \"series art\" with a line saying which season it is not, and a save is filed as \"<title> - series poster (<variant>)\" instead of claiming the picture is that season's. Cards and lists still keep each season's own AniList cover."
+        },
+        {
           "title": "A profile banner that fits its own picture",
           "detail": "The banner at the top of a profile was one fixed height, so a square or vertical upload was cropped to its middle band and a wide one lost its sides. It now sizes itself to the picture it is showing, and the Profile layout editor gained a Banner shape control - Adapt, Landscape, Square or Portrait - for readers who want every profile to share one shape instead. Extreme uploads are clamped, so a panorama never collapses into a strip and a vertical illustration never fills the whole screen."
         },

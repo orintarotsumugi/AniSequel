@@ -43,6 +43,7 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.romajiName
 import com.anisequel.domain.ui.PosterOverlays
+import com.anisequel.domain.ui.SequelSeason
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -76,6 +77,16 @@ internal fun ViewerDetailsCard(
     /** The page inside the selected source, and how many images it holds. */
     imageIndex: Int,
     imageCount: Int,
+    /**
+     * The season this entry is, when btttr's render is the *series* art rather than
+     * this entry's own; null when the picture is the entry's own.
+     *
+     * See `FullScreenCoverViewer.seriesSeasonOf`. btttr addresses one IMDb id per
+     * series, so a Season 2 entry is offered season one's render - the viewer shows
+     * it because it is the only place the series art can be seen whole, and this is
+     * how it says so instead of passing it off as season two's poster.
+     */
+    seriesSeason: Int?,
     onSelectSource: (Int) -> Unit,
     /**
      * Read here rather than at the call site so a pinch recomposes this card
@@ -134,7 +145,12 @@ internal fun ViewerDetailsCard(
                     imageCount > 1 ->
                         "$provider · Image ${imageIndex + 1} of $imageCount"
                     image?.variant != null -> "$provider · ${image.variant}"
-                    else -> null
+                    else -> provider.takeIf { it.isNotBlank() && seriesSeason != null }
+                }?.let { label ->
+                    // The caption is where a reader reads what the picture is, so
+                    // the correction belongs at the end of it rather than as a
+                    // second caption; the line below explains the term.
+                    if (seriesSeason != null) "$label · series art" else label
                 }
                 if (onScreenLabel != null) {
                     Spacer(modifier = Modifier.height(3.dp))
@@ -144,6 +160,28 @@ internal fun ViewerDetailsCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.testTag("cover_image_caption")
+                    )
+                }
+
+                if (seriesSeason != null) {
+                    // "Series art" is a term of art, not an explanation. Without
+                    // this line it reads as a label the reader has to decode, and
+                    // the alternative - hiding the render - is worse: btttr has one
+                    // picture per series and this is the only screen that can show
+                    // it at its own size.
+                    // "Final Season" has no number - [SequelSeason] answers 99 for it,
+                    // which must not reach the reader as "Season 99".
+                    val seasonName =
+                        if (seriesSeason == SequelSeason.FINAL_SEASON) "the final season"
+                        else "Season $seriesSeason"
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "BetterPosters has one render per series, so this is " +
+                            "the series artwork rather than $seasonName's.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.testTag("cover_series_art_note")
                     )
                 }
 
