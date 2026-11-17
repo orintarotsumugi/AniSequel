@@ -60,7 +60,14 @@ import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
+import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.SequelSeason
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.LocalBetterPosters
+import com.anisequel.ui.components.cards.LocalPosterOverlays
+import com.anisequel.ui.components.cards.LocalPosterSource
+import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
+import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
 import com.anisequel.ui.components.detail.info.InfoAppearanceEditor
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -225,6 +232,13 @@ fun SequelDetailSheet(
         )
     )
     val immersive = LocalImmersiveMode.current
+    // Read at composition, used by the extraction below: the colour has to come from
+    // the picture the reader is actually shown. With BetterPosters on that is btttr's
+    // rendered art, not the AniList cover, and the two palettes can be unrelated.
+    val posterSource = LocalPosterSource.current
+    val posterOverlays = LocalPosterOverlays.current
+    val betterPosters = LocalBetterPosters.current
+    val uniqueSeasons = LocalPosterUniqueSeasons.current
 
     // The page's scroll position is hoisted out of `AnimatedContent`, and so is the
     // in-progress edit below, for the same reason: `AnimatedContent` disposes the
@@ -271,22 +285,51 @@ fun SequelDetailSheet(
     // exactly once for this title.
     //
     // Extraction runs even when the anime layer is off, because the hero uses
-    // the same seed for its backdrop and shadow. It is one 128px decode from
+    // the same seed for its backdrop and shadow. It is one 96px decode from
     // Coil's cache - the hero is already loading the full image - and it means
     // the artwork's colour is right whether or not the global recolour is on.
     LaunchedEffect(
         subject.mediaId,
         subject.media.type,
         media.posterUrl,
+        posterSource,
+        posterOverlays,
+        uniqueSeasons,
         themeSettings.isLoaded,
         themeSettings.animeThemeEnabled,
         themeSettings.animeThemeRetainColor
     ) {
         if (!themeSettings.isLoaded) return@LaunchedEffect
 
-        val seed = CoverColorRepository.extract(context, media.posterUrl)
-        if (seed != null) {
-            CoverColors.put(media.posterUrl, seed)
+        // The picture on screen, resolved the same way `cardPosterUrl` resolves it:
+        // the same source, the same season rule, the same cache. A sequel season
+        // keeps its own cover, so the sheet must not read a palette from a btttr
+        // poster the grid is not drawing - keeping the two in step is why
+        // [posterLookupTitle] exists. The lookup is a cache hit in practice, because
+        // the card that opened this sheet already asked for the same id and variant;
+        // a miss falls back to AniList's cover rather than delaying the colour.
+        val useBetterPoster = posterSource == PosterSource.BETTER_POSTERS &&
+            !(uniqueSeasons && SequelSeason.isSequel(posterLookupTitle(media)))
+        val shownPoster = if (useBetterPoster) {
+            betterPosters?.posterUrl(
+                subject.mediaId,
+                posterOverlays,
+                skipSequels = uniqueSeasons
+            ) ?: media.posterUrl
+        } else {
+            media.posterUrl
+        }
+        val palette = CoverColorRepository.extractPalette(context, shownPoster)
+        val seed = palette?.seed
+        if (palette != null) {
+            // Both keys, because the surfaces read different ones: the sheet knows
+            // the resolved URL, and the hero still falls back to the AniList cover.
+            CoverColors.put(shownPoster, palette.seed)
+            CoverColors.put(media.posterUrl, palette.seed)
+            palette.accent?.let { accent ->
+                CoverColors.putAccent(shownPoster, accent)
+                CoverColors.putAccent(media.posterUrl, accent)
+            }
         }
 
         if (!themeSettings.animeThemeEnabled) return@LaunchedEffect

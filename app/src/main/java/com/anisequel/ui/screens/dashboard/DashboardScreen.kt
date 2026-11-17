@@ -1,4 +1,5 @@
 package com.anisequel.ui.screens.dashboard
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -819,7 +820,19 @@ private fun DashboardSuccessPane(
     nova: @Composable () -> Unit,
     classic: @Composable () -> Unit
 ) {
-    if (layout == AppLayout.NOVA) nova() else classic()
+    // Crossfade, not an `if`: switching the app layout in Settings swapped the
+    // whole Home body in one frame, which read as the page reloading rather than
+    // the reader changing how it is arranged. The two layouts share the same
+    // view model, so the incoming one draws the data the outgoing one already
+    // had; only the arrangement changes. `FastEffects` follows Motion style, so
+    // Instant still switches in one frame as asked.
+    Crossfade(
+        targetState = layout,
+        animationSpec = ExpressiveMotion.FastEffects,
+        label = "dashboard_layout"
+    ) { current ->
+        if (current == AppLayout.NOVA) nova() else classic()
+    }
 }
 
 /**

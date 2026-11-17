@@ -279,14 +279,11 @@ internal fun NovaLibraryGrid(
     // the named count: it is a diagram of the mode, not a measurement of the
     // device it happens to be drawn on.
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // The reader's card size, applied to the mode's own count here rather than
-        // stored per mode: a bigger card is bigger in every grid, and a table of six
-        // modes would have to be edited to say so.
-        val columns = libraryColumns(
-            mode = viewMode,
-            width = maxWidth,
-            size = LocalCardDesign.current.size
-        )
+        // The mode's own count, never the card size: "Big cards" stays two across
+        // and "Cover wall" three however the cards' covers are shaped. The card
+        // design used to bias this by a column, which is how choosing Compact under
+        // Big cards produced a three-up grid neither setting had asked for.
+        val columns = libraryColumns(mode = viewMode, width = maxWidth)
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier

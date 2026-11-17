@@ -302,10 +302,14 @@ private fun InfoAppearancePreview(
     blur: InfoBackdropBlur,
     tint: InfoBackdropTint
 ) {
+    // The preview draws the source the reader chose, not the AniList cover: a
+    // preview that ignores the BetterPosters setting is a picture of an app the
+    // reader does not have.
+    val chosenPoster = cardPosterUrl(media)
     val artwork = when (source) {
         InfoBackdropSource.BANNER -> media.bannerImage?.takeIf { it.isNotBlank() }
-            ?: media.posterUrl
-        InfoBackdropSource.COVER -> media.posterUrl
+            ?: chosenPoster
+        InfoBackdropSource.COVER -> chosenPoster
         InfoBackdropSource.OFF -> null
     }
     // A live radius rather than the enum's value: the three choices are far
@@ -316,6 +320,9 @@ private fun InfoAppearancePreview(
         animationSpec = ExpressiveMotion.FastSpatialDp,
         label = "info_appearance_preview_blur"
     )
+    // Crisp is radius 0: without this the preview still pays for an offscreen
+    // layer to blur an image by nothing, on the settings page itself.
+    val artworkBlur = if (radius > 0.dp) Modifier.blur(radius) else Modifier
     val surface = MaterialTheme.colorScheme.surface
     val onArtwork = if (artwork != null) Color.White else MaterialTheme.colorScheme.onSurface
     val coverFallback = media.posterColor.toCoverColorOrNull()
@@ -344,7 +351,7 @@ private fun InfoAppearancePreview(
                         alignment = Alignment.TopCenter,
                         modifier = Modifier
                             .fillMaxSize()
-                            .blur(radius)
+                            .then(artworkBlur)
                             .background(surface)
                     )
                 }

@@ -121,17 +121,34 @@ internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): Conten
  * hub is the only entrance, and `BackHandler` stepping out of a page is the whole
  * navigation contract.
  */
-private enum class SettingsPage(val title: String, val subtitle: String) {
-    APPEARANCE("Appearance", "Theme, background and accent colour"),
+private enum class SettingsPage(
+    val title: String,
+    val subtitle: String,
+    /**
+     * Whether the page draws its own header, including any header for a sub-screen.
+     *
+     * Theme and Interface are shelves with a level below them. Drawing this screen's
+     * header *around* them meant a reader two levels in saw three titles stacked - the
+     * page, the part, the part's part - with the content pushed under the third. Those
+     * two pages now own the whole screen (`Column` + one header), and Back still steps
+     * out one level at a time because their handlers are registered after this one.
+     */
+    val ownsHeader: Boolean = false
+) {
+    APPEARANCE(
+        "Appearance",
+        "Theme, background and accent colour",
+        ownsHeader = true
+    ),
     // How the app is laid out, kept apart from what colour it is: the card style
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
     // Its parts each have a sub-page of their own - see [InterfaceTab].
-    UI("Interface", "Layout, cards, motion and gestures"),
+    UI("Interface", "Layout, cards, motion and gestures", ownsHeader = true),
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
-    TYPE("Type & reading", "Font, text size and scrolling titles"),
+    TYPE("Type & reading", "Font, UI size, text size and scrolling titles"),
     JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
@@ -318,11 +335,17 @@ fun SettingsScreen(
                         )
                     } else {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            SettingsSubHeader(
-                                title = destination.title,
-                                subtitle = destination.subtitle,
-                                onBack = { page = null }
-                            )
+                            // A page that owns a nested stack draws the header for
+                            // whatever level is open; drawing one here as well was
+                            // the stacking: "Interface" above "Card design" above
+                            // "Card shape", three rows of title before a control.
+                            if (!destination.ownsHeader) {
+                                SettingsSubHeader(
+                                    title = destination.title,
+                                    subtitle = destination.subtitle,
+                                    onBack = { page = null }
+                                )
+                            }
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -347,7 +370,8 @@ fun SettingsScreen(
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
                                     totalMissedCount = totalMissedCount,
-                                    cardPreviewEntries = cardPreviewEntries
+                                    cardPreviewEntries = cardPreviewEntries,
+                                    onClosePage = { page = null }
                                 )
                             }
                         }
@@ -563,18 +587,31 @@ private fun SettingsPageContent(
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
     totalMissedCount: Int?,
-    cardPreviewEntries: List<MediaListEntryItem>
+    cardPreviewEntries: List<MediaListEntryItem>,
+    /** Leaves the open page for the Settings shelf; used by the pages that own theirs. */
+    onClosePage: () -> Unit
 ) {
     when (page) {
-        SettingsPage.APPEARANCE -> ThemeTab(themePreferences = themePreferences)
+        SettingsPage.APPEARANCE -> ThemeTab(
+            themePreferences = themePreferences,
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage
+        )
         SettingsPage.UI -> InterfaceTab(
             themePreferences = themePreferences,
             interfacePreferences = interfacePreferences,
             quickAddPreferences = quickAddPreferences,
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage,
             previewEntries = cardPreviewEntries,
             mainTabPreferences = mainTabPreferences
         )
-        SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
+        SettingsPage.TYPE -> TypeSettingsTab(
+            themePreferences = themePreferences,
+            interfacePreferences = interfacePreferences
+        )
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.SEASONAL -> SeasonalSettingsTab(
             seasonalPreferences = seasonalPreferences

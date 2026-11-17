@@ -60,7 +60,6 @@ import com.anisequel.data.model.namespaceKey
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.MediaPosterCell
@@ -681,14 +680,10 @@ fun ProfileLibraryTab(
     // The mode's own column count, narrowed only where the mode asks for a
     // compact wall; the width comes from the constraint rather than from the
     // device, so a split-screen window gets the same honest answer as a phone.
-    // Sized by the reader's card size as well as the mode: a profile's posters are
-    // the same cards as the Library's, and a reader who asked for roomy cards did not
-    // mean "except on somebody else's page".
-    val columns = libraryColumns(
-        mode = viewMode,
-        width = maxWidth,
-        size = LocalCardDesign.current.size
-    )
+    // Not sized by the card design: the view mode owns the grid on a profile for
+    // the same reason it does on the Library, and a card size that changed it would
+    // be the card design overriding the view the reader picked.
+    val columns = libraryColumns(mode = viewMode, width = maxWidth)
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
         // the grid must not reflow when the window changes, because the person's

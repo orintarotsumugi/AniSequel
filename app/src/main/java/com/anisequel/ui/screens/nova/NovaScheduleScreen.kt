@@ -380,8 +380,10 @@ private fun ScheduleRow(
                     .background(entry.coverColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    // The reader's poster source, by id: this row carries no MediaNode.
-                    model = cardPosterUrl(entry.mediaId, entry.coverUrl),
+                    // The reader's poster source, by id: this row carries no MediaNode,
+                    // but it does carry the title - which is what keeps a sequel season
+                    // on its own cover instead of the series poster.
+                    model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title),
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

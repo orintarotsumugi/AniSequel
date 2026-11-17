@@ -37,8 +37,10 @@ enum class PosterSource(
     BETTER_POSTERS(
         storageValue = "btttr",
         displayName = "BetterPosters",
-        blurb = "btttr.cc's rendered poster - the cover with its title and score set " +
-            "on it. Matched by IMDb id, so a title it does not carry keeps its AniList cover."
+        blurb = "btttr.cc's rendered poster - the cover with the show's name set " +
+            "into it. Matched by IMDb id, so a title it does not carry keeps its " +
+            "AniList cover; the score, genre and trend overlays are off by default " +
+            "and can be added in Poster art."
     );
 
     companion object {

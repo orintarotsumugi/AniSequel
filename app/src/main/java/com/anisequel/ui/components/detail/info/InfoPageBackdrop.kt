@@ -25,6 +25,9 @@ import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.theme.CoverColors
+import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LocalAppDarkTheme
 
 /**
  * The artwork behind the whole Info page, under the cards.
@@ -80,6 +83,10 @@ internal fun InfoPageBackdrop(
         animationSpec = ExpressiveMotion.FastSpatialDp,
         label = "info_backdrop_blur"
     )
+    // Crisp is radius 0, and `Modifier.blur(0.dp)` still asks Compose for an
+    // offscreen render layer. Skipping the modifier is what makes "off" actually
+    // cost nothing; the same rule the new Home's backdrop follows.
+    val artworkBlur = if (radius > 0.dp) Modifier.blur(radius) else Modifier
 
     Box(
         modifier = modifier
@@ -114,7 +121,7 @@ internal fun InfoPageBackdrop(
                             scaleX = BACKDROP_SCALE
                             scaleY = BACKDROP_SCALE
                         }
-                        .blur(radius)
+                        .then(artworkBlur)
                         .unseamedCover()
                 )
             }
@@ -125,10 +132,17 @@ internal fun InfoPageBackdrop(
             // natural leaves the pixels alone. It sits *below* the scrim so the
             // cards' text is still read against `surface`, not against pigment.
             if (tint == InfoBackdropTint.TINTED) {
+                // The poster's own colour when the session has read it, not only
+                // the brand's primary: this is the wash that makes the page belong
+                // to the artwork, and it now follows BetterPosters art too.
+                val dark = LocalAppDarkTheme.current
+                val wash = CoverColors.color(chosenPoster)?.let {
+                    DynamicThemeBuilder.accentColor(it, dark = dark)
+                } ?: MaterialTheme.colorScheme.primary
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+                        .background(wash.copy(alpha = 0.18f))
                         .testTag("info_page_backdrop_tint")
                 )
             }

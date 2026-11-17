@@ -36,13 +36,17 @@ class AnimeCoverThemeWiringTest {
         )
 
         assertTrue(
-            "nothing calls CoverColorRepository.extract, so the theme seed is still " +
-                "whatever AniList averaged over the file rather than the artwork",
-            sheet.contains("CoverColorRepository.extract(")
+            "nothing calls CoverColorRepository.extractPalette, so the theme seed is " +
+                "still whatever AniList averaged over the file rather than the artwork",
+            sheet.contains("CoverColorRepository.extractPalette(")
         )
         assertTrue(
             "the extracted colour has to reach the hero as well as the theme",
             sheet.contains("CoverColors.put(")
+        )
+        assertTrue(
+            "the artwork's second hue is extracted but never handed to the surfaces",
+            sheet.contains("CoverColors.putAccent(")
         )
         assertTrue(
             "the theme seed must come from the extraction first; AniList's colour " +

@@ -17,6 +17,7 @@ import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -87,6 +88,26 @@ class InterfacePreferences(private val context: Context) {
         val POSTER_SOURCE = stringPreferencesKey("poster_source")
 
         /**
+         * What btttr composites onto a BetterPosters poster; see [PosterOverlays].
+         *
+         * Three booleans rather than one serialised value, for the same reason the
+         * card design has five keys: a preferences file is readable, and a blob that
+         * fails to parse loses every switch at once.
+         */
+        val POSTER_SHOW_RATING = booleanPreferencesKey("poster_show_rating")
+        val POSTER_SHOW_GENRE = booleanPreferencesKey("poster_show_genre")
+        val POSTER_SHOW_TREND_TAGS = booleanPreferencesKey("poster_show_trend_tags")
+
+        /**
+         * Whether a sequel season keeps its own AniList cover instead of repeating
+         * the series poster btttr draws for every season.
+         *
+         * On by default: the repeated picture is the thing a reader notices in a
+         * grid, and AniList's entry has the season-specific art and name.
+         */
+        val POSTER_UNIQUE_SEASONS = booleanPreferencesKey("poster_unique_seasons")
+
+        /**
          * The display density the whole app draws at, in dpi.
          *
          * An int because it is a whole dpi: the slider's label prints it, the
@@ -142,6 +163,18 @@ class InterfacePreferences(private val context: Context) {
          * leaving each surface to read the store for itself.
          */
         val posterSource: PosterSource = PosterSource.DEFAULT,
+        /**
+         * What the chosen btttr poster has printed on the artwork itself.
+         *
+         * Part of this emission for the same reason the source is: it is a fact
+         * about the picture a card draws, and the app root provides it once.
+         */
+        val posterOverlays: PosterOverlays = PosterOverlays.DEFAULT,
+        /**
+         * Keep a sequel season on its own cover rather than on btttr's one series
+         * poster - see [com.anisequel.domain.ui.SequelSeason].
+         */
+        val posterUniqueSeasons: Boolean = true,
         /**
          * The density the whole app draws at, in dpi.
          *
@@ -200,12 +233,26 @@ class InterfacePreferences(private val context: Context) {
                     size = CardSize.fromStorage(preferences[Keys.CARD_SIZE]),
                     boldTitles = preferences[Keys.CARD_BOLD_TITLES] ?: false,
                     scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true,
-                    showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: false,
-                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: false
+                    // `?: true`, matching both [CardDesign]'s default and what
+                    // 2.3.1's release notes promised. The false that shipped here
+                    // was a real defect: every grid lost its caption on upgrade,
+                    // and the switch that would bring it back described itself as
+                    // already on.
+                    showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: true,
+                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: true
                 ).clamped(),
                 showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
                 showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true,
                 posterSource = PosterSource.fromStorage(preferences[Keys.POSTER_SOURCE]),
+                // Clean posters are the default: btttr's score, genre line and
+                // trend strip are all opt-in, and "unset" has to mean off so an
+                // upgrade from a build without these keys lands on the clean art.
+                posterOverlays = PosterOverlays(
+                    showRating = preferences[Keys.POSTER_SHOW_RATING] ?: false,
+                    showGenre = preferences[Keys.POSTER_SHOW_GENRE] ?: false,
+                    showTrendTags = preferences[Keys.POSTER_SHOW_TREND_TAGS] ?: false
+                ),
+                posterUniqueSeasons = preferences[Keys.POSTER_UNIQUE_SEASONS] ?: true,
                 displayDpi = DisplayDpi.clamp(
                     preferences[Keys.DISPLAY_DPI] ?: DisplayDpi.DEFAULT_DPI
                 )
@@ -311,6 +358,33 @@ class InterfacePreferences(private val context: Context) {
     }
 
     /**
+     * Which of btttr's own overlays the poster keeps.
+     *
+     * One write for the three switches: they are one picture, and the URL builder
+     * reads them together - a poster with the score removed but the genre kept is a
+     * variant, not a half-applied set.
+     */
+    suspend fun setPosterOverlays(overlays: PosterOverlays) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.POSTER_SHOW_RATING] = overlays.showRating
+            preferences[Keys.POSTER_SHOW_GENRE] = overlays.showGenre
+            preferences[Keys.POSTER_SHOW_TREND_TAGS] = overlays.showTrendTags
+        }
+    }
+
+    /**
+     * Whether a sequel season keeps its own cover.
+     *
+     * See [com.anisequel.domain.ui.SequelSeason]: btttr has one series poster per
+     * IMDb entry, so seasons 2 and up would otherwise share season one's picture.
+     */
+    suspend fun setPosterUniqueSeasons(unique: Boolean) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.POSTER_UNIQUE_SEASONS] = unique
+        }
+    }
+
+    /**
      * The display density, clamped rather than rejected.
      *
      * The slider cannot ask for a value outside the range, but this is a public
@@ -342,6 +416,10 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.SHOW_MY_RATINGS)
             preferences.remove(Keys.SHOW_THEIR_RATINGS)
             preferences.remove(Keys.POSTER_SOURCE)
+            preferences.remove(Keys.POSTER_SHOW_RATING)
+            preferences.remove(Keys.POSTER_SHOW_GENRE)
+            preferences.remove(Keys.POSTER_SHOW_TREND_TAGS)
+            preferences.remove(Keys.POSTER_UNIQUE_SEASONS)
             preferences.remove(Keys.DISPLAY_DPI)
         }
     }

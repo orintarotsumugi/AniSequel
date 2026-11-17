@@ -41,8 +41,63 @@ object CoverColorQuantizer {
     private const val CUTOFF_CHROMA = 5.0
     private const val CUTOFF_EXCITED_PROPORTION = 0.01
 
+    /** A second hue is only worth drawing if it is genuinely coloured and not tiny. */
+    private const val ACCENT_MIN_CHROMA = 24.0
+    private const val ACCENT_MIN_SHARE = 0.004
+
+    /** How far the accent's hue must sit from the seed's before it is a second colour. */
+    private const val ACCENT_MIN_HUE_DISTANCE = 40.0
+
     /** The most suitable theme seed in [pixels], or null if the image is grey. */
     fun seedFrom(pixels: IntArray): Int? = score(quantize(pixels))
+
+    /**
+     * A second, distinct hue in [pixels] - the colour a gradient pairs with the seed.
+     *
+     * The seed's own scoring is not reused here: it is built to pick the *most
+     * representative* colour, so running it twice would confidently return the same
+     * hue. This pass rewards chroma instead of population, requires a real region
+     * rather than a one-pixel logo, and rejects anything within
+     * [ACCENT_MIN_HUE_DISTANCE] of [seed] - a two-colour gradient needs two colours,
+     * and a cover with only one hue has no second colour to give.
+     */
+    fun accentFrom(pixels: IntArray, seed: Int? = null): Int? = accent(quantize(pixels), seed)
+
+    /** [accentFrom] with a hand-built histogram, so the scoring can be tested. */
+    fun accent(histogram: Map<Int, Int>, seed: Int? = null): Int? {
+        val total = histogram.values.sumOf { it.toLong() }
+        if (total <= 0L) return null
+        val seedHue = seed?.let { Hct.fromInt(it).hue }
+
+        var best: Int? = null
+        var bestScore = -1.0
+        for ((argb, population) in histogram) {
+            if (population <= 0) continue
+            val share = population.toDouble() / total
+            if (share < ACCENT_MIN_SHARE) continue
+
+            val hct = Hct.fromInt(argb)
+            if (hct.chroma < ACCENT_MIN_CHROMA) continue
+            if (seedHue != null && hueDistance(hct.hue, seedHue) < ACCENT_MIN_HUE_DISTANCE) {
+                continue
+            }
+
+            // Chroma, tempered by how much of the image wears it: the same trade a
+            // designer makes between "the accent colour" and "a bright speck".
+            val score = hct.chroma * kotlin.math.sqrt(share)
+            if (score > bestScore || (score == bestScore && (best?.let { argb < it } ?: true))) {
+                bestScore = score
+                best = argb
+            }
+        }
+        return best
+    }
+
+    /** The shortest arc between two hues, in degrees. */
+    private fun hueDistance(a: Double, b: Double): Double {
+        val difference = abs(a - b) % 360.0
+        return if (difference > 180.0) 360.0 - difference else difference
+    }
 
     /**
      * Bins opaque pixels into 5 bits per channel.

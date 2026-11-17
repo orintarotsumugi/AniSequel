@@ -95,17 +95,28 @@ private const val THEME_HUB_KEY = "theme_hub"
  * choosing which part to open: is the app the colour I meant? A live sample on the
  * shelf is worth more than one repeated at the top of four sub-pages.
  *
- * ## Why a sub-page still says "Theme" above it
+ * ## Why only one header is on screen
  *
- * The header above this content is the page the reader came from, and the sub-header
- * below it is the part they are in - a breadcrumb, not two titles for one screen. Back
- * drops the sub-page before it drops the page: this composable's `BackHandler` is
- * registered after the one in `SettingsScreen`, and the dispatcher gives the most
- * recently added enabled callback the event.
+ * This composable draws the header for whatever level is open - "Appearance" on the
+ * shelf, the part's own title inside a part - and `SettingsScreen` stops drawing a
+ * header around this page (`SettingsPage.ownsHeader`). It used to draw one above and
+ * this page drew another below, so the reader saw two titles stacked before any
+ * control. Back drops the sub-page before it drops the page: this composable's
+ * `BackHandler` is registered after the one in `SettingsScreen`, and the dispatcher
+ * gives the most recently added enabled callback the event.
  */
 @Composable
 fun ThemeTab(
     themePreferences: ThemePreferences,
+    /**
+     * The header this page shows on its own shelf, supplied by `SettingsScreen` from
+     * the `SettingsPage` enum its shelf row read - the row and the page still cannot
+     * describe different things.
+     */
+    pageTitle: String,
+    pageSubtitle: String,
+    /** Leaves the Theme page for the Settings shelf. */
+    onClosePage: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -140,66 +151,92 @@ fun ThemeTab(
         sectionStateHolder.SaveableStateProvider(
             key = destination?.name ?: THEME_HUB_KEY
         ) {
-            if (destination == null) {
-                ThemeHub(
-                    themePreferences = themePreferences,
-                    settings = themeSettings,
-                    scope = scope,
-                    onOpen = { section = it }
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Exactly one header: the page's own on the shelf, the part's inside
+                // a part. See the class documentation.
+                SettingsSubHeader(
+                    title = destination?.title ?: pageTitle,
+                    subtitle = destination?.subtitle ?: pageSubtitle,
+                    onBack = {
+                        if (destination == null) onClosePage() else section = null
+                    },
+                    backDescription = if (destination == null) {
+                        "Back to settings"
+                    } else {
+                        "Back to Theme"
+                    },
+                    backTestTag = if (destination == null) {
+                        "settings_sub_back"
+                    } else {
+                        "theme_sub_back"
+                    }
                 )
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    SettingsSubHeader(
-                        title = destination.title,
-                        subtitle = destination.subtitle,
-                        onBack = { section = null },
-                        // One page out, not two - the header above already says
-                        // "Theme", and this says which part of it is open.
-                        backDescription = "Back to Theme",
-                        backTestTag = "theme_sub_back"
-                    )
-                    when (destination) {
-                        ThemeSection.APPEARANCE -> SettingsScrollColumn {
-                            AppearanceSection(
-                                themePreferences = themePreferences,
-                                settings = themeSettings,
-                                scope = scope
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            BackgroundSection(
-                                themePreferences = themePreferences,
-                                settings = themeSettings,
-                                scope = scope
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                        ThemeSection.ACCENT -> SettingsScrollColumn {
-                            AccentColourSection(
-                                themePreferences = themePreferences,
-                                settings = themeSettings,
-                                scope = scope
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                        ThemeSection.ARTWORK -> SettingsScrollColumn {
-                            AnimeColourSection(
-                                themePreferences = themePreferences,
-                                settings = themeSettings,
-                                scope = scope
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
-                        ThemeSection.PAGES -> SettingsScrollColumn {
-                            InfoBackdropSection(
-                                themePreferences = themePreferences,
-                                settings = themeSettings,
-                                scope = scope
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    if (destination == null) {
+                        ThemeHub(
+                            themePreferences = themePreferences,
+                            settings = themeSettings,
+                            scope = scope,
+                            onOpen = { section = it }
+                        )
+                    } else {
+                        ThemeSectionBody(
+                            section = destination,
+                            themePreferences = themePreferences,
+                            settings = themeSettings,
+                            scope = scope
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+/** The body of one Theme part: the card that used to sit in the page's scroll. */
+@Composable
+private fun ThemeSectionBody(
+    section: ThemeSection,
+    themePreferences: ThemePreferences,
+    settings: ThemePreferences.ThemeSettings,
+    scope: CoroutineScope
+) {
+    when (section) {
+        ThemeSection.BACKGROUND -> SettingsScrollColumn {
+            BackgroundSection(
+                themePreferences = themePreferences,
+                settings = settings,
+                scope = scope
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        ThemeSection.ACCENT -> SettingsScrollColumn {
+            AccentColourSection(
+                themePreferences = themePreferences,
+                settings = settings,
+                scope = scope
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        ThemeSection.ARTWORK -> SettingsScrollColumn {
+            AnimeColourSection(
+                themePreferences = themePreferences,
+                settings = settings,
+                scope = scope
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+        ThemeSection.PAGES -> SettingsScrollColumn {
+            InfoBackdropSection(
+                themePreferences = themePreferences,
+                settings = settings,
+                scope = scope
+            )
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -217,11 +254,11 @@ private enum class ThemeSection(
     val icon: ImageVector,
     val testTag: String
 ) {
-    APPEARANCE(
-        title = "Appearance",
-        subtitle = "Light, dark or the device, and the canvas under it",
-        icon = AppVectorIcons.ThemeDark,
-        testTag = "theme_row_appearance"
+    BACKGROUND(
+        title = "Background",
+        subtitle = "OLED mode, the canvas colour and the Home glow",
+        icon = AppVectorIcons.SectionBackground,
+        testTag = "theme_row_background"
     ),
     ACCENT(
         title = "Accent colour",
@@ -262,12 +299,24 @@ private fun ThemeHub(
     SettingsScrollColumn {
         ThemePreviewCard(themeSettings = settings)
 
+        // The mode tiles used to live one level down, under an "Appearance" row
+        // that opened a sub-page containing only them and the background canvas.
+        // Light/Dark/System is the first thing a reader comes to this page for, and
+        // making it the page's own second card removes a screen between the tap and
+        // the switch. The canvas keeps its sub-page row below.
+        Spacer(modifier = Modifier.height(16.dp))
+        AppearanceSection(
+            themePreferences = themePreferences,
+            settings = settings,
+            scope = scope
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
         SettingsSectionLabel("Look", compact = true)
         SettingsHubGroup(
             entries = listOf(
-                themeEntry(ThemeSection.APPEARANCE, onOpen),
-                themeEntry(ThemeSection.ACCENT, onOpen)
+                themeEntry(ThemeSection.ACCENT, onOpen),
+                themeEntry(ThemeSection.BACKGROUND, onOpen)
             )
         )
 
@@ -363,7 +412,9 @@ private fun AppearanceSection(
     scope: CoroutineScope
 ) {
     SectionCard(
-        title = "Appearance",
+        // On the shelf rather than behind a row: this is the page's mode, and the
+        // three tiles are the picture the row used to promise.
+        title = "Mode",
         icon = AppVectorIcons.ThemeDark,
         subtitle = "Light, dark, or follow the device"
     ) {

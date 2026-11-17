@@ -71,7 +71,8 @@ internal fun AccentColourSection(
     scope: CoroutineScope
 ) {
     SectionCard(
-        title = "Accent colour",
+        // The screen's header already says "Accent colour".
+        title = "Palette",
         icon = AppVectorIcons.SectionAppearance,
         subtitle = "Wallpaper, a palette, or a custom hue - the last pick wins",
         iconContainer = MaterialTheme.colorScheme.tertiaryContainer,

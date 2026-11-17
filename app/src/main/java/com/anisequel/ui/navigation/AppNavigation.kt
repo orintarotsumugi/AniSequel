@@ -33,7 +33,9 @@ import com.anisequel.ui.components.cards.LocalBetterPosters
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.LocalListRatings
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
+import com.anisequel.ui.components.cards.LocalPosterOverlays
 import com.anisequel.ui.components.cards.LocalPosterSource
+import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.markdown.ProvideMediaCovers
 import com.anisequel.data.network.NetworkClient
@@ -308,7 +310,11 @@ fun AppNavigation(
     )
 
     // One instance for the app: its answer cache is the feature (see [BetterPostersApi]).
-    val betterPosters = remember { BetterPostersApi() }
+    // The mapping is also written to a small file, so a cold start does not repeat
+    // an ARM lookup for every card before a poster can be drawn.
+    val betterPosters = remember {
+        BetterPostersApi(cacheFile = java.io.File(context.filesDir, "better_posters_ids.json"))
+    }
     // A float spring, not an int one: the local is fractional now so the bar's
     // flight is smooth, and the float spec is the one that can overshoot by the
     // pixels between two 4dp steps rather than by whole steps.
@@ -674,6 +680,8 @@ fun AppNavigation(
             // picker, six card surfaces, and no way to thread it by hand that does
             // not eventually miss one of them.
             LocalPosterSource provides interfaceSettings.posterSource,
+            LocalPosterOverlays provides interfaceSettings.posterOverlays,
+            LocalPosterUniqueSeasons provides interfaceSettings.posterUniqueSeasons,
             LocalBetterPosters provides betterPosters,
             LocalAppLayout provides interfaceSettings.layout,
             LocalLibraryViewMode provides interfaceSettings.libraryView,
