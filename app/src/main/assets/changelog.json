@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.3.4",
+      "entries": [
+        {
+          "title": "Info page respects your list status",
+          "detail": "A title already on your list no longer offers to add it to Planning on the Info page: it shows the status you gave it (watching, completed, paused, dropped, repeating) instead, so a finished show cannot be silently moved back to Planning."
+        },
+        {
+          "title": "Downloadable poster",
+          "detail": "The Info page's Extras card now saves the best available artwork - BetterPosters when you chose it, otherwise AniList's cover - to your gallery, so a poster you like can be kept at full resolution."
+        }
+      ]
+    },
+    {
       "version": "2.3.3",
       "entries": [
         {

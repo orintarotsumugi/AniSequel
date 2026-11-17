@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,11 +45,14 @@ import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.cardPosterUrl
+import com.anisequel.ui.components.detail.saveCoverToGallery
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.liveChartUrl
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The things the page can do with this title, rather than tell you about it.
@@ -72,6 +76,10 @@ fun InfoExtrasCard(
 ) {
     val context = LocalContext.current
     val trailerUrl = media.trailerYoutubeUrl
+    val scope = rememberCoroutineScope()
+    var savingPoster by remember(media.id) { mutableStateOf(false) }
+    var posterSaved by remember(media.id) { mutableStateOf(false) }
+    val posterToSave = cardPosterUrl(media) ?: media.posterUrl
 
     InfoCard(
         modifier = modifier.testTag("info_extras_card"),
@@ -87,6 +95,31 @@ fun InfoExtrasCard(
                 title = "Full artwork",
                 subtitle = "The poster and every other image, on its own",
                 onClick = onOpenCover
+            )
+
+            InfoExtraRow(
+                icon = AppVectorIcons.Download,
+                title = if (posterSaved) "Poster saved" else if (savingPoster) "Saving poster…" else "Download poster",
+                subtitle = "Save the best available artwork to your gallery",
+                onClick = {
+                    if (savingPoster) return@InfoExtraRow
+                    val url = posterToSave
+                    if (url == null) return@InfoExtraRow
+                    savingPoster = true
+                    scope.launch {
+                        val ok = saveCoverToGallery(
+                            context = context,
+                            coverUrl = url,
+                            title = media.displayName
+                        )
+                        savingPoster = false
+                        posterSaved = ok
+                        if (ok) {
+                            kotlinx.coroutines.delay(COPY_CONFIRMATION_MILLIS)
+                            posterSaved = false
+                        }
+                    }
+                }
             )
         }
 
