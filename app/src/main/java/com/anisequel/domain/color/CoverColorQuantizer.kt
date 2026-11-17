@@ -85,7 +85,11 @@ object CoverColorQuantizer {
             // Chroma, tempered by how much of the image wears it: the same trade a
             // designer makes between "the accent colour" and "a bright speck".
             val score = hct.chroma * kotlin.math.sqrt(share)
-            if (score > bestScore || (score == bestScore && (best?.let { argb < it } ?: true))) {
+            // A named tie-break rather than the same Elvis expression inside the
+            // conjunction: it parses exactly the same and reads without counting
+            // parentheses.
+            val winsTie = best?.let { argb < it } ?: true
+            if (score > bestScore || (score == bestScore && winsTie)) {
                 bestScore = score
                 best = argb
             }
