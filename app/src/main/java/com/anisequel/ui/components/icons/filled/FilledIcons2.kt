@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.anisequel.ui.components.icons.Icons
 import com.anisequel.ui.components.icons.materialIcon
 import com.anisequel.ui.components.icons.materialPath
+import androidx.compose.ui.graphics.PathFillType.Companion.EvenOdd
 
 public val Icons.Filled.FormatListNumbered: ImageVector
     get() {
