@@ -41,6 +41,9 @@ import androidx.compose.ui.unit.sp
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.navigation.MainTab
+import com.anisequel.ui.navigation.enabledMainTabs
+import com.anisequel.ui.navigation.mainTabDestinations
 import kotlin.math.roundToInt
 
 /**
@@ -65,9 +68,27 @@ import kotlin.math.roundToInt
  * straight to `padding(bottom = ...)`; this one clamps every frame with
  * [NavBarLift.clampDp] before it reaches layout. The spring still bounces; it just
  * cannot draw a position the bar does not have.
+ *
+ * ## Why the bar in the mock-up is the reader's bar
+ *
+ * It used to draw four fixed glyphs - Home, Library, Tiers, Profile - which meant a
+ * reader who had turned the tier tab off still met it here, in the preview of the bar
+ * they had just shortened. [tabs] is the list the real bar is built from, and the glyphs
+ * come from `mainTabDestinations`, so the mock-up is the bar rather than a drawing of
+ * an older one.
  */
 @Composable
-internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
+internal fun BottomBarLiftPreview(
+    liftDp: Int,
+    modifier: Modifier = Modifier,
+    /**
+     * The bar to draw, in the app's order.
+     *
+     * Defaulted to the shipped bar so a caller with no preferences in reach - a
+     * preview, a test - still gets a bar the app could produce.
+     */
+    tabs: List<MainTab> = enabledMainTabs(tierListTab = false)
+) {
     val target = NavBarLift.clamp(liftDp)
     // Held as a `State`, not read here.
     //
@@ -110,6 +131,7 @@ internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
         ) {
             PhoneDummy(
                 lift = animated,
+                tabs = tabs,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -134,7 +156,11 @@ internal fun BottomBarLiftPreview(liftDp: Int, modifier: Modifier = Modifier) {
  * they had chosen.
  */
 @Composable
-private fun PhoneDummy(lift: State<Float>, modifier: Modifier = Modifier) {
+private fun PhoneDummy(
+    lift: State<Float>,
+    tabs: List<MainTab>,
+    modifier: Modifier = Modifier
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(28.dp))
@@ -236,6 +262,7 @@ private fun PhoneDummy(lift: State<Float>, modifier: Modifier = Modifier) {
             // shipped `Padding must be non-negative` crash, which is why the
             // guard has to hold on every frame rather than at the target.
             PhoneNavBar(
+                tabs = tabs,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 9.dp)
@@ -314,9 +341,16 @@ private fun PhoneBar(
     )
 }
 
-/** The app's floating capsule, reduced to four glyphs and one label. */
+/**
+ * The app's floating capsule, drawn from the tabs the bar actually offers.
+ *
+ * The labels and glyphs are `mainTabDestinations`' answers, so a tab this preview draws
+ * is a tab the bar draws with the same name and the same icon - including the ones the
+ * reader turned off, which simply are not in the list.
+ */
 @Composable
-private fun PhoneNavBar(modifier: Modifier = Modifier) {
+private fun PhoneNavBar(tabs: List<MainTab>, modifier: Modifier = Modifier) {
+    val destinations = mainTabDestinations(tabs, profileAvatarUrl = null)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -326,10 +360,13 @@ private fun PhoneNavBar(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PhoneNavItem(icon = AppVectorIcons.HomeTab, label = "Home", selected = true)
-        PhoneNavItem(icon = AppVectorIcons.Library, label = "Library", selected = false)
-        PhoneNavItem(icon = AppVectorIcons.Trophy, label = "Tiers", selected = false)
-        PhoneNavItem(icon = AppVectorIcons.ProfilePerson, label = "Profile", selected = false)
+        destinations.forEachIndexed { index, destination ->
+            PhoneNavItem(
+                icon = destination.icon,
+                label = destination.label,
+                selected = tabs[index] == MainTab.HOME
+            )
+        }
     }
 }
 

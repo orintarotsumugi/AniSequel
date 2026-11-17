@@ -80,7 +80,17 @@ data class CardDesign(
      * says cards take part, because a reader who turned it off did so after seeing a
      * card scroll, and the sample they switched off was not a settings page.
      */
-    val scrollTitles: Boolean = true
+    val scrollTitles: Boolean = true,
+    /**
+     * Whether the card prints the title under the artwork.
+     *
+     * Off by default so a card is just the poster: BetterPosters art already sets
+     * the name on the image, and a plain cover reads as the poster first. Turn it
+     * on when you want the app to label the card.
+     */
+    val showTitles: Boolean = false,
+    /** Whether the card prints the score, for the same reason [showTitles] exists. */
+    val showScores: Boolean = false
 ) {
     /**
      * Brought back inside the sliders' span.
@@ -93,6 +103,16 @@ data class CardDesign(
         titleScale = titleScale.coerceIn(MIN_TITLE_SCALE, MAX_TITLE_SCALE),
         ratingScale = ratingScale.coerceIn(MIN_RATING_SCALE, MAX_RATING_SCALE)
     )
+
+    /**
+     * Whether a card at this design prints nothing but its artwork.
+     *
+     * The two poster switches are one decision made in two places, and a preview that
+     * only knew one of them would draw a card that cannot exist. Kept on the value
+     * rather than recomputed at each call site so "is this the bare poster?" has one
+     * answer.
+     */
+    val printsText: Boolean get() = showTitles || showScores
 
     companion object {
         /**

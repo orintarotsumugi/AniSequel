@@ -7,9 +7,9 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,27 +74,41 @@ internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): Conten
         val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
             slideInHorizontally(
                 animationSpec = ExpressiveMotion.FastSpatialOffset
-            ) { width -> width / 4 }
-        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-            slideOutHorizontally(
-                animationSpec = ExpressiveMotion.FastSpatialOffset
-            ) { width -> -width / 4 }
-        (enter togetherWith exit) using null
-    } else {
-        // The outgoing page falls a tenth of its height and fades; the shelf does
-        // not slide at all, so only one surface is moving and the eye knows which
-        // one left. The height itself snaps (`using null`), because a page settling
-        // its own scroll while the container animated its height was a crash once
-        // - see the class documentation.
-        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            ) { width -> width / 4 } +
             scaleIn(
                 initialScale = 0.98f,
                 animationSpec = ExpressiveMotion.FastSpatial
             )
         val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-            slideOutVertically(
+            slideOutHorizontally(
                 animationSpec = ExpressiveMotion.FastSpatialOffset
-            ) { height -> height / 10 }
+            ) { width -> -width / 5 } +
+            scaleOut(
+                targetScale = 0.99f,
+                animationSpec = ExpressiveMotion.FastSpatial
+            )
+        (enter togetherWith exit) using null
+    } else {
+        // Back mirrors the push: the shelf returns from the left while the current
+        // page leaves to the right, so depth and direction stay clear. Height snaps
+        // (`using null`) because a page settling its scroll while the container
+        // animated its height caused crashes in the past.
+        val enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            slideInHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialOffset
+            ) { width -> -width / 5 } +
+            scaleIn(
+                initialScale = 0.99f,
+                animationSpec = ExpressiveMotion.FastSpatial
+            )
+        val exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+            slideOutHorizontally(
+                animationSpec = ExpressiveMotion.FastSpatialOffset
+            ) { width -> width / 4 } +
+            scaleOut(
+                targetScale = 0.98f,
+                animationSpec = ExpressiveMotion.FastSpatial
+            )
         (enter togetherWith exit) using null
     }
 }
@@ -108,7 +122,7 @@ internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): Conten
  * navigation contract.
  */
 private enum class SettingsPage(val title: String, val subtitle: String) {
-    APPEARANCE("Appearance", "Theme, background, accent and motion"),
+    APPEARANCE("Appearance", "Theme, background and accent colour"),
     // How the app is laid out, kept apart from what colour it is: the card style
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
@@ -428,14 +442,14 @@ private fun SettingsRoot(
                         "settings_row_type",
                         onOpen
                     ),
-                    SettingsPage.SEASONAL.entry(
-                        AppVectorIcons.Seasonal,
-                        "settings_row_seasonal",
-                        onOpen
-                    ),
                     SettingsPage.JOKES.entry(
                         AppVectorIcons.AnimeSparkle,
                         "settings_row_jokes",
+                        onOpen
+                    ),
+                    SettingsPage.SEASONAL.entry(
+                        AppVectorIcons.Seasonal,
+                        "settings_row_seasonal",
                         onOpen
                     )
                 ),
@@ -557,7 +571,8 @@ private fun SettingsPageContent(
             themePreferences = themePreferences,
             interfacePreferences = interfacePreferences,
             quickAddPreferences = quickAddPreferences,
-            previewEntries = cardPreviewEntries
+            previewEntries = cardPreviewEntries,
+            mainTabPreferences = mainTabPreferences
         )
         SettingsPage.TYPE -> TypeSettingsTab(themePreferences = themePreferences)
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)

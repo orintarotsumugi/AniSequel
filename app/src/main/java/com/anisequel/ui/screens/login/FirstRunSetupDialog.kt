@@ -50,6 +50,7 @@ import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.PosterSource
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.screens.settings.AppLayoutPreviews
@@ -102,7 +103,7 @@ internal val SETUP_STEPS = listOf(
     SetupStep(
         label = "Welcome",
         title = "Make AniSequel yours",
-        subtitle = "Five quick choices, then your list is ready. Every one of them can " +
+        subtitle = "A few quick choices, then your list is ready. Every one of them can " +
             "be changed later in Settings.",
         icon = AppVectorIcons.AnimeSparkle
     ),
@@ -111,6 +112,12 @@ internal val SETUP_STEPS = listOf(
         title = "Choose a home",
         subtitle = "The same two layouts Settings offers, drawn with sample posters.",
         icon = AppVectorIcons.ViewGrid
+    ),
+    SetupStep(
+        label = "Posters",
+        title = "Choose your poster art",
+        subtitle = "AniList covers, or BetterPosters art when it is available for a title.",
+        icon = AppVectorIcons.SectionAppearance
     ),
     SetupStep(
         label = "Theme",
@@ -183,6 +190,7 @@ fun FirstRunSetupDialog(
     // shows the app's current strengths without hiding any existing data, while
     // every choice remains editable in Settings.
     var layout by rememberSaveable { mutableStateOf(AppLayout.NOVA.storageValue) }
+    var posterSource by rememberSaveable { mutableStateOf(PosterSource.DEFAULT.storageValue) }
     var theme by rememberSaveable { mutableStateOf(ThemeMode.SYSTEM.storageValue) }
     var motion by rememberSaveable { mutableStateOf(MotionStyle.DEFAULT.storageValue) }
     var jokesEnabled by rememberSaveable { mutableStateOf(true) }
@@ -198,6 +206,7 @@ fun FirstRunSetupDialog(
     val saveChoices: () -> Unit = {
         scope.launch {
             interfacePreferences.setLayout(AppLayout.fromStorage(layout))
+            interfacePreferences.setPosterSource(PosterSource.fromStorage(posterSource))
             themePreferences.setThemeMode(ThemeMode.fromStorage(theme))
             themePreferences.setMotionStyle(MotionStyle.fromStorage(motion))
             jokePreferences.setEnabled(jokesEnabled)
@@ -221,6 +230,7 @@ fun FirstRunSetupDialog(
     // to the one object those controls read.
     val draft = SetupDraft(
         layout = layout,
+        posterSource = posterSource,
         theme = theme,
         motion = motion,
         jokesEnabled = jokesEnabled,
@@ -230,6 +240,7 @@ fun FirstRunSetupDialog(
     )
     val onDraftChange: (SetupDraft) -> Unit = { updated ->
         layout = updated.layout
+        posterSource = updated.posterSource
         theme = updated.theme
         motion = updated.motion
         jokesEnabled = updated.jokesEnabled
@@ -319,6 +330,24 @@ internal fun SetupStepChoices(
             )
         }
         2 -> SectionCard(
+            title = "Poster art",
+            icon = AppVectorIcons.SectionAppearance,
+            subtitle = "You can change this later in Settings > Interface > Card design"
+        ) {
+            ChoiceChips(
+                values = PosterSource.entries.map { it.storageValue to it.displayName },
+                selected = draft.posterSource,
+                onSelect = { onDraftChange(draft.copy(posterSource = it)) },
+                tag = "onboarding_poster_source"
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = PosterSource.fromStorage(draft.posterSource).blurb,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        3 -> SectionCard(
             title = "Theme",
             icon = AppVectorIcons.ThemeDark
         ) {
@@ -333,7 +362,7 @@ internal fun SetupStepChoices(
                 tag = "onboarding_theme"
             )
         }
-        3 -> SectionCard(
+        4 -> SectionCard(
             title = "Motion",
             icon = AppVectorIcons.SectionMotion
         ) {
@@ -346,7 +375,7 @@ internal fun SetupStepChoices(
                 tag = "onboarding_motion"
             )
         }
-        4 -> SectionCard(
+        5 -> SectionCard(
             title = "Jokes",
             icon = AppVectorIcons.Star
         ) {
@@ -397,6 +426,7 @@ internal fun SetupStepChoices(
 /** The wizard's choices, bundled so one page can receive all seven in one value. */
 internal data class SetupDraft(
     val layout: String,
+    val posterSource: String,
     val theme: String,
     val motion: String,
     val jokesEnabled: Boolean,

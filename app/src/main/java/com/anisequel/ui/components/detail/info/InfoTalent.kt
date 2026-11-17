@@ -53,6 +53,7 @@ import com.anisequel.data.model.staffList
 import com.anisequel.data.model.typeLabelFor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ScoreBadge
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.SectionHeading
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -499,7 +500,10 @@ private fun RelationCard(
                 .testTag("info_relation_${node.id}")
         ) {
             AsyncImage(
-                model = node.posterUrl,
+                // The reader's chosen art, as everywhere else: this row is the
+                // other titles on somebody's page, and their covers should be the
+                // same pictures the grid draws.
+                model = cardPosterUrl(node),
                 // The relation's name is the `Text` under the poster; a
                 // description here announced every title twice.
                 contentDescription = null,

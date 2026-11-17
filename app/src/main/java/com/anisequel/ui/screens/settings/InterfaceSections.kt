@@ -1,26 +1,36 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
@@ -29,14 +39,16 @@ import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.PosterSource
 import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
-import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.UiSize
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.rememberBoundSliderState
+import com.anisequel.ui.navigation.MainTab
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -61,10 +73,19 @@ import kotlin.math.roundToInt
  * sub-page: it is gated on the new layout, and a setting whose dependency is on a
  * different page is a switch that appears not to work.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun InterfaceLayoutSection(
     interfacePreferences: InterfacePreferences,
-    previewEntries: List<MediaListEntryItem>
+    previewEntries: List<MediaListEntryItem>,
+    /**
+     * The bar the phone preview should draw.
+     *
+     * The preview used to draw four fixed glyphs, so a reader who had turned the tier
+     * tab off met it again in the drawing of the bar they had just shortened. The list
+     * is the one the real bar is built from, so the two cannot disagree.
+     */
+    barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
     val interfaceSettings by interfacePreferences.settings.collectAsState(
@@ -150,7 +171,7 @@ internal fun InterfaceLayoutSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(10.dp))
-            BottomBarLiftPreview(liftDp = liftDraft.roundToInt())
+            BottomBarLiftPreview(liftDp = liftDraft.roundToInt(), tabs = barTabs)
 
             Spacer(modifier = Modifier.height(8.dp))
             SwitchRow(
@@ -167,17 +188,58 @@ internal fun InterfaceLayoutSection(
 
         Spacer(modifier = Modifier.height(16.dp))
         SectionCard(
-            title = "Display density",
+            title = "UI size",
             icon = AppVectorIcons.Tune,
             subtitle = "How large every card, caption and gap is drawn - " +
-                "${DisplayDpi.DEFAULT_DPI} dpi unless you say otherwise."
+                "the same on every screen until you say otherwise."
         ) {
+            // The named sizes first, the slider second. A reader who wants the app
+            // bigger should not have to know that the number going up means the
+            // elements going down, and a preset is one tap where the slider is a
+            // drag. The slider stays because 447 is not a size, it is a number.
+            SettingsFieldLabel(text = "Size")
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("ui_size_row")
+            ) {
+                UiSize.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.displayName,
+                        selected = UiSize.of(dpiDraft.roundToInt()) == option,
+                        onClick = {
+                            if (interfaceSettings.displayDpi != option.dpi) {
+                                dpiDraft = option.dpi.toFloat()
+                                scope.launch { interfacePreferences.setDisplayDpi(option.dpi) }
+                            }
+                        },
+                        minTouchTargetHeight = 48.dp,
+                        role = Role.RadioButton,
+                        onClickLabel = "Draw the app at the ${option.displayName} UI size",
+                        modifier = Modifier.testTag("ui_size_${option.name.lowercase()}")
+                    )
+                }
+            }
+            CollapsibleText(
+                text = (UiSize.of(dpiDraft.roundToInt())?.blurb
+                    ?: "Between two named sizes - the slider below has the exact value.") +
+                    " This is the app's own size, not the phone's font setting: it scales " +
+                    "cards, text and spacing together, so a layout that fits a small phone " +
+                    "fits at every size you can pick.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SettingsFieldLabel(text = "Density")
+                SettingsFieldLabel(text = "Exact size")
                 Text(
                     text = "${DisplayDpi.clamp(dpiDraft.roundToInt())} dpi",
                     style = MaterialTheme.typography.labelLarge,
@@ -215,7 +277,7 @@ internal fun InterfaceLayoutSection(
             )
             Spacer(modifier = Modifier.height(8.dp))
             SettingsButton(
-                text = "Reset density",
+                text = "Reset size",
                 onClick = {
                     scope.launch { interfacePreferences.setDisplayDpi(DisplayDpi.DEFAULT_DPI) }
                 },
@@ -350,31 +412,70 @@ internal fun InterfaceLibrarySection(
 }
 
 /**
- * The whole card, not just its shape: style, name size, rating size, size in the
- * grid, weight and scrolling.
+ * The card, in three sub-pages: its shape, the words it prints, and the art under them.
  *
- * ## Why this replaced the style picker rather than sitting beside it
+ * ## Why this became a shelf
  *
- * All six answers describe one object. Split across two sub-pages, a reader would
- * have picked a style on one page and then discovered on the next that the title size
- * they wanted was somewhere else - with the same card drawn at the top of both. The
- * picker therefore moved here whole (the chips, their tags and the preference they
- * write are unchanged) and everything new is arranged under it, above one preview
- * that shows all of it at once.
+ * Every answer here describes one object, which is why the style picker, the two
+ * sliders, the caption switches, the two rating switches, the poster source and the
+ * card's size once shared a single card above one preview. That was still an honest
+ * page when it held only the design; by the time the poster source moved in, a reader
+ * who had come for the size chips was scrolling past a preview, ten style chips, two
+ * sliders, four switches and a picker to reach them.
  *
- * ## Why the preview is above the controls
+ * The three parts answer three different questions - what shape is it, what does it
+ * say, what does it show - and each keeps a preview at the top, because all three are
+ * still judged by looking. The controls did not change: every chip, slider, switch,
+ * test tag and preference write below is the one that was there before.
  *
- * A card's design is judged by looking, and the thing being judged is on the screen
- * before the reader touches a control - so every change lands on a card they are
- * already looking at rather than on one they have to scroll back to. This is also
- * why the two sliders keep a draft: the preview reads the finger, the preference is
- * written on release, and the grid behind the page never sees a half-dragged value.
+ * ## Why the drafts live up here
+ *
+ * [titleDraft] and [ratingDraft] are held by this composable rather than by a part, so
+ * opening another part does not lose a value the reader was mid-way through. The write
+ * still happens on release, for the reason the bar-lift slider documents: a preference
+ * written per frame would rebuild the grid behind the page under the finger.
  */
-@OptIn(ExperimentalLayoutApi::class)
+private enum class CardDesignPart(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val testTag: String
+) {
+    SHAPE(
+        title = "Card shape",
+        subtitle = "Style, and how many cards fit a row",
+        icon = AppVectorIcons.ViewGrid,
+        testTag = "card_design_row_shape"
+    ),
+    TEXT(
+        title = "Name and score",
+        subtitle = "Type size, weight, scrolling and which score",
+        icon = AppVectorIcons.TextBold,
+        testTag = "card_design_row_text"
+    ),
+    POSTER(
+        title = "Poster art",
+        subtitle = "AniList or BetterPosters, and what the card adds to it",
+        icon = AppVectorIcons.SectionAppearance,
+        testTag = "card_design_row_poster"
+    )
+}
+
+/** The save key for the card design shelf, when no part is open. */
+private const val CARD_DESIGN_HUB_KEY = "card_design_hub"
+
 @Composable
 internal fun InterfaceCardDesignSection(
     interfacePreferences: InterfacePreferences,
-    previewEntries: List<MediaListEntryItem>
+    previewEntries: List<MediaListEntryItem>,
+    /**
+     * The bar to draw inside the preview.
+     *
+     * Passed in because the mock-up's bar has to be the reader's bar: a frame that
+     * still shows a Search tab after the reader turned it off is the preview
+     * contradicting the switch, one page away from the switch itself.
+     */
+    barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
     val style by interfacePreferences.cardStyle.collectAsState(
@@ -405,244 +506,318 @@ internal fun InterfaceCardDesignSection(
         scope.launch { interfacePreferences.setCardDesign(updated) }
     }
 
-    SettingsScrollColumn {
-        SectionCard(
-            title = "Card design",
-            icon = AppVectorIcons.ViewGrid,
-            subtitle = "Style, poster, title, rating and size - on every card, everywhere"
+    var part by rememberSaveable { mutableStateOf<CardDesignPart?>(null) }
+
+    // The shelf and the parts are separate compositions and `AnimatedContent` disposes
+    // the outgoing one, so without this a trip to "Poster art" and back would return
+    // the reader to the top of a preview they had scrolled past.
+    val partStateHolder = rememberSaveableStateHolder()
+
+    // Only while a part is open: disabled here, the event falls through to the
+    // Interface shelf's own handler, which is what Back means on this shelf.
+    BackHandler(enabled = part != null) { part = null }
+
+    AnimatedContent(
+        targetState = part,
+        transitionSpec = { settingsLevelTransition() },
+        label = "card_design_part_transition"
+    ) { destination ->
+        partStateHolder.SaveableStateProvider(
+            key = destination?.name ?: CARD_DESIGN_HUB_KEY
         ) {
-            CardDesignPreview(
+            if (destination == null) {
+                CardDesignHub(
+                    style = style,
+                    design = draft,
+                    entries = previewEntries,
+                    barTabs = barTabs,
+                    onOpen = { part = it },
+                    onReset = { commit(CardDesign.DEFAULT) }
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SettingsSubHeader(
+                        title = destination.title,
+                        subtitle = destination.subtitle,
+                        onBack = { part = null },
+                        // One page out, not two: the header above says "Interface", and
+                        // this says which part of it the reader is looking at.
+                        backDescription = "Back to card design",
+                        backTestTag = "card_design_sub_back"
+                    )
+                    CardDesignPartBody(
+                        part = destination,
+                        interfacePreferences = interfacePreferences,
+                        interfaceSettings = interfaceSettings,
+                        style = style,
+                        draft = draft,
+                        entries = previewEntries,
+                        barTabs = barTabs,
+                        titleDraft = titleDraft,
+                        ratingDraft = ratingDraft,
+                        onTitleDraft = { titleDraft = it },
+                        onRatingDraft = { ratingDraft = it },
+                        onCommit = commit
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The shelf: the card as it stands, then the three parts that change it, then the one
+ * control that takes all of them back.
+ *
+ * Reset sits here rather than inside a part because it resets every part - a button
+ * labelled "Reset card design" on a page that only owns the name size would leave a
+ * reader looking for the second reset they assume must exist.
+ */
+@Composable
+private fun CardDesignHub(
+    style: MediaCardStyle,
+    design: CardDesign,
+    entries: List<MediaListEntryItem>,
+    barTabs: List<MainTab>,
+    onOpen: (CardDesignPart) -> Unit,
+    onReset: () -> Unit
+) {
+    SettingsScrollColumn {
+        CardDesignPreview(
+            style = style,
+            design = design,
+            entries = entries,
+            barTabs = barTabs
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsHubGroup(
+            entries = listOf(
+                cardDesignEntry(CardDesignPart.SHAPE, onOpen),
+                cardDesignEntry(CardDesignPart.TEXT, onOpen),
+                cardDesignEntry(CardDesignPart.POSTER, onOpen)
+            )
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsButton(
+            text = "Reset card design",
+            icon = AppVectorIcons.Refresh,
+            variant = SettingsButtonVariant.Outlined,
+            // Disabled rather than hidden: a control that vanishes leaves the reader
+            // wondering whether the page lost a feature.
+            enabled = design != CardDesign.DEFAULT,
+            onClick = onReset,
+            modifier = Modifier.testTag("card_design_reset")
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+/** One shelf row, named and described by the sub-page it opens. */
+private fun cardDesignEntry(
+    part: CardDesignPart,
+    onOpen: (CardDesignPart) -> Unit
+): SettingsHubEntry = SettingsHubEntry(
+    icon = part.icon,
+    title = part.title,
+    subtitle = part.subtitle,
+    testTag = part.testTag,
+    onClick = { onOpen(part) }
+)
+
+/**
+ * The body of one part.
+ *
+ * Drawn with the draft design so the sample above each control is the value the reader
+ * is on, not the last one that was written - which is the difference between a slider
+ * that works and a slider that explains itself after the fact.
+ */
+@Composable
+private fun CardDesignPartBody(
+    part: CardDesignPart,
+    interfacePreferences: InterfacePreferences,
+    interfaceSettings: InterfacePreferences.InterfaceSettings,
+    style: MediaCardStyle,
+    draft: CardDesign,
+    entries: List<MediaListEntryItem>,
+    barTabs: List<MainTab>,
+    titleDraft: Float,
+    ratingDraft: Float,
+    onTitleDraft: (Float) -> Unit,
+    onRatingDraft: (Float) -> Unit,
+    onCommit: (CardDesign) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    SettingsScrollColumn {
+        when (part) {
+            CardDesignPart.SHAPE -> CardShapePart(
                 style = style,
                 design = draft,
-                entries = previewEntries
+                entries = entries,
+                barTabs = barTabs,
+                onStyle = { option ->
+                    if (option != style) {
+                        scope.launch { interfacePreferences.setCardStyle(option) }
+                    }
+                },
+                onSize = { option -> onCommit(draft.copy(size = option)) }
             )
-
-            Spacer(modifier = Modifier.height(14.dp))
-            SettingsFieldLabel(text = "Style")
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // A wrapping row, not a scrolling one: a picker that hides two of its ten
-            // options off the edge reads as those options having been removed, because
-            // nothing about the row says it scrolls.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("card_style_row")
-            ) {
-                MediaCardStyle.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == style,
-                        onClick = {
-                            if (option != style) {
-                                scope.launch { interfacePreferences.setCardStyle(option) }
-                            }
-                        },
-                        // This picker is the primary control of its sub-page, not a
-                        // filter beside a grid: a 30dp chip is a fingertip target found
-                        // by aiming, and the ten options are the whole decision.
-                        minTouchTargetHeight = 48.dp,
-                        // One style is active at a time, so this is a radio choice.
-                        role = Role.RadioButton,
-                        onClickLabel = "Use the ${option.displayName} card style",
-                        modifier = Modifier.testTag("card_style_${option.storageValue}")
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            CardDesignSlider(
-                label = "Title size",
-                valueLabel = "${(titleDraft * 100f).roundToInt()}%",
-                value = titleDraft,
-                range = CardDesign.MIN_TITLE_SCALE..CardDesign.MAX_TITLE_SCALE,
-                steps = TITLE_SIZE_STEPS,
-                testTag = "card_title_size_slider",
-                supporting = "How large the anime name is drawn on a card. Every card " +
-                    "in the app follows it - the Library, a profile's list and the " +
-                    "sequel rows on Home.",
-                onValueChange = { titleDraft = it },
-                onCommit = { commit(design.copy(titleScale = titleDraft, ratingScale = ratingDraft)) }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-            CardDesignSlider(
-                label = "Rating size",
-                labelDetail = "the score",
-                valueLabel = "${(ratingDraft * 100f).roundToInt()}%",
-                value = ratingDraft,
-                range = CardDesign.MIN_RATING_SCALE..CardDesign.MAX_RATING_SCALE,
-                steps = RATING_SIZE_STEPS,
-                testTag = "card_rating_size_slider",
-                supporting = "The score on a card, as a corner badge, a band or a " +
-                    "caption line depending on the style above - the pair of switches " +
-                    "below chooses which score it is. Scaled apart from the name, " +
-                    "because a score is scanned and a name is read.",
-                onValueChange = { ratingDraft = it },
-                onCommit = { commit(design.copy(titleScale = titleDraft, ratingScale = ratingDraft)) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsFieldLabel(text = "Which rating")
-            Spacer(modifier = Modifier.height(4.dp))
-            // Two switches rather than one "personal score" toggle, because the two
-            // numbers are read in different situations: your own score is a reminder on
-            // your Library, somebody else's is the reason you opened their profile. A
-            // reader may want to see theirs without their own list turning into a
-            // scoreboard. Off means "the community average", which is what every card
-            // drew before this setting existed - never a card with no number at all.
-            SwitchRow(
-                title = "Your rating, on your list",
-                subtitle = "Print the score you gave a title instead of the community " +
-                    "average. Applies to every list shape - grid, list, grouped and " +
-                    "table - and to an entry you have not scored the average still " +
-                    "shows.",
-                checked = interfaceSettings.showMyRatings,
-                onCheckedChange = { show ->
+            CardDesignPart.TEXT -> CardTextPart(
+                design = draft,
+                entries = entries,
+                barTabs = barTabs,
+                style = style,
+                titleDraft = titleDraft,
+                ratingDraft = ratingDraft,
+                onTitleDraft = onTitleDraft,
+                onRatingDraft = onRatingDraft,
+                showMyRatings = interfaceSettings.showMyRatings,
+                showTheirRatings = interfaceSettings.showTheirRatings,
+                onShowMyRatings = { show ->
                     scope.launch { interfacePreferences.setShowMyRatings(show) }
                 },
-                modifier = Modifier.testTag("show_my_ratings_switch")
-            )
-            SwitchRow(
-                title = "Their rating, on their profile",
-                subtitle = "Print the score the profile's owner gave, when you open " +
-                    "someone else's library. AniList only returns those scores for a " +
-                    "public list, and an unscored entry keeps the community average.",
-                checked = interfaceSettings.showTheirRatings,
-                onCheckedChange = { show ->
+                onShowTheirRatings = { show ->
                     scope.launch { interfacePreferences.setShowTheirRatings(show) }
                 },
-                modifier = Modifier.testTag("show_their_ratings_switch")
+                onCommit = onCommit
             )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsFieldLabel(text = "Poster art")
-            Spacer(modifier = Modifier.height(8.dp))
-            // A picker rather than a switch, because these are two sources of one
-            // picture: AniList's own cover, or btttr's rendered poster. The blurb under
-            // it says what the reader will actually see, since "BetterPosters" alone
-            // promises art the app cannot promise for a title btttr does not carry.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("poster_source_row")
-            ) {
-                PosterSource.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == interfaceSettings.posterSource,
-                        onClick = {
-                            if (option != interfaceSettings.posterSource) {
-                                scope.launch { interfacePreferences.setPosterSource(option) }
-                            }
+            CardDesignPart.POSTER -> {
+                val context = LocalContext.current
+                var pendingPosterSource by remember { mutableStateOf<PosterSource?>(null) }
+                CardPosterPart(
+                    design = draft,
+                    entries = entries,
+                    barTabs = barTabs,
+                    style = style,
+                    posterSource = interfaceSettings.posterSource,
+                    onPosterSource = { option ->
+                        if (option != interfaceSettings.posterSource) {
+                            scope.launch { interfacePreferences.setPosterSource(option) }
+                            pendingPosterSource = option
+                        }
+                    },
+                    onCommit = onCommit
+                )
+                val asked = pendingPosterSource
+                if (asked != null) {
+                    AlertDialog(
+                        onDismissRequest = { pendingPosterSource = null },
+                        title = { Text("Clear saved AniList covers?") },
+                        text = {
+                            Text(
+                                "If you switched poster sources, you can clear the saved " +
+                                    "AniList cover images so the app reloads artwork. " +
+                                    "Clearing can use more data and AniList requests later " +
+                                    "because covers will be downloaded again."
+                            )
                         },
-                        minTouchTargetHeight = 48.dp,
-                        role = Role.RadioButton,
-                        onClickLabel = "Draw card posters from ${option.displayName}",
-                        modifier = Modifier.testTag("poster_source_${option.storageValue}")
+                        confirmButton = {
+                            TextButton(onClick = {
+                                context.clearCoverCache()
+                                pendingPosterSource = null
+                            }) { Text("Clear cache") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { pendingPosterSource = null }) {
+                                Text("Keep cache")
+                            }
+                        }
                     )
                 }
             }
-            CollapsibleText(
-                text = interfaceSettings.posterSource.blurb,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-            SettingsFieldLabel(text = "Card size")
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("card_size_row")
-            ) {
-                CardSize.entries.forEach { option ->
-                    ExpressiveStateChip(
-                        label = option.displayName,
-                        selected = option == design.size,
-                        onClick = {
-                            if (option != design.size) {
-                                commit(
-                                    design.copy(
-                                        titleScale = titleDraft,
-                                        ratingScale = ratingDraft,
-                                        size = option
-                                    )
-                                )
-                            }
-                        },
-                        minTouchTargetHeight = 48.dp,
-                        role = Role.RadioButton,
-                        onClickLabel = "Draw cards at ${option.displayName} size",
-                        modifier = Modifier.testTag("card_size_${option.storageValue}")
-                    )
-                }
-            }
-            CollapsibleText(
-                text = design.size.blurb + " Applies inside the app library and to every " +
-                    "poster grid that follows it, including somebody else's profile.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            SwitchRow(
-                title = "Bold titles",
-                subtitle = "Draw every card's name a weight heavier. The shipped card is " +
-                    "semibold; this is the step above it.",
-                checked = design.boldTitles,
-                onCheckedChange = { bold ->
-                    commit(
-                        design.copy(
-                            titleScale = titleDraft,
-                            ratingScale = ratingDraft,
-                            boldTitles = bold
-                        )
-                    )
-                },
-                modifier = Modifier.testTag("card_bold_titles_switch")
-            )
-            SwitchRow(
-                title = "Scroll long titles",
-                subtitle = "A name too long for its line scrolls once it has rested, " +
-                    "instead of being cut. The speed itself is on the Type page, under " +
-                    "Long titles; an Instant motion style still stops every marquee.",
-                checked = design.scrollTitles,
-                onCheckedChange = { scroll ->
-                    commit(
-                        design.copy(
-                            titleScale = titleDraft,
-                            ratingScale = ratingDraft,
-                            scrollTitles = scroll
-                        )
-                    )
-                },
-                modifier = Modifier.testTag("card_scroll_titles_switch")
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-            SettingsButton(
-                text = "Reset card design",
-                icon = AppVectorIcons.Refresh,
-                variant = SettingsButtonVariant.Outlined,
-                // Disabled rather than hidden: a control that vanishes leaves the
-                // reader wondering whether the page lost a feature.
-                enabled = design != CardDesign.DEFAULT,
-                onClick = { commit(CardDesign.DEFAULT) },
-                modifier = Modifier.testTag("card_design_reset")
-            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
+
+/** Style and size: the two answers that only change what a card's frame is. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CardShapePart(
+    style: MediaCardStyle,
+    design: CardDesign,
+    entries: List<MediaListEntryItem>,
+    barTabs: List<MainTab>,
+    onStyle: (MediaCardStyle) -> Unit,
+    onSize: (CardSize) -> Unit
+) {
+    SectionCard(
+        title = "Card shape",
+        icon = AppVectorIcons.ViewGrid,
+        subtitle = "The frame every grid in the app draws"
+    ) {
+        CardDesignPreview(
+            style = style,
+            design = design,
+            entries = entries,
+            barTabs = barTabs
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        SettingsFieldLabel(text = "Style")
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // A wrapping row, not a scrolling one: a picker that hides two of its ten
+        // options off the edge reads as those options having been removed, because
+        // nothing about the row says it scrolls.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("card_style_row")
+        ) {
+            MediaCardStyle.entries.forEach { option ->
+                ExpressiveStateChip(
+                    label = option.displayName,
+                    selected = option == style,
+                    onClick = { onStyle(option) },
+                    // This picker is the primary control of its sub-page, not a
+                    // filter beside a grid: a 30dp chip is a fingertip target found
+                    // by aiming, and the ten options are the whole decision.
+                    minTouchTargetHeight = 48.dp,
+                    // One style is active at a time, so this is a radio choice.
+                    role = Role.RadioButton,
+                    onClickLabel = "Use the ${option.displayName} card style",
+                    modifier = Modifier.testTag("card_style_${option.storageValue}")
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsFieldLabel(text = "Card size")
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("card_size_row")
+        ) {
+            CardSize.entries.forEach { option ->
+                ExpressiveStateChip(
+                    label = option.displayName,
+                    selected = option == design.size,
+                    onClick = { if (option != design.size) onSize(option) },
+                    minTouchTargetHeight = 48.dp,
+                    role = Role.RadioButton,
+                    onClickLabel = "Draw cards at ${option.displayName} size",
+                    modifier = Modifier.testTag("card_size_${option.storageValue}")
+                )
+            }
+        }
+        CollapsibleText(
+            text = design.size.blurb + " Applies inside the app library and to every " +
+                "poster grid that follows it, including somebody else's profile.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 
 /**
  * One labelled slider: a name, the value it is on, the track and a sentence about
@@ -655,7 +830,7 @@ internal fun InterfaceCardDesignSection(
  * its thumb where the reader left it.
  */
 @Composable
-private fun CardDesignSlider(
+internal fun CardDesignSlider(
     label: String,
     valueLabel: String,
     value: Float,
@@ -702,13 +877,3 @@ private fun CardDesignSlider(
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
-
-/**
- * Ticks for the two sliders.
- *
- * Derived from the span and the step rather than written as a literal, so changing a
- * range in [CardDesign] keeps the ticks honest: a step of 5% across a 60-point span is
- * eleven interior stops.
- */
-private const val TITLE_SIZE_STEPS = 11
-private const val RATING_SIZE_STEPS = 5

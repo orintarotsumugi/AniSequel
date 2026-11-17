@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterUrl
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -302,7 +303,9 @@ private fun HiddenSequelRow(
                         ?: MaterialTheme.colorScheme.surfaceContainerHighest
                 )
         ) {
-            val cover = sequel.sequelMedia.posterUrl
+            // The reader's chosen art, like every other cover in the app: this row
+            // is a list of sequels and the tiny cover is the only picture on it.
+            val cover = cardPosterUrl(sequel.sequelMedia)
             if (cover != null) {
                 AsyncImage(
                     model = cover,

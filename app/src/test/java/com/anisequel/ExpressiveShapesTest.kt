@@ -180,13 +180,12 @@ class ExpressiveShapesTest {
     }
 
     /**
-     * The scale carries the values the theme documents, not Material's.
+     * The scale carries the values the theme documents.
      *
      * `ExpressiveTheme.kt` says, in its own doc comment, that this scale runs
-     * 10 / 14 / 20 / 28 / 36 — deliberately rounder than M3's 4 / 8 / 12 / 16 / 28
-     * so cards read as curved panels rather than hard rectangles. The five tokens
-     * below are the steps of *that*, and the theme now reads them rather than
-     * repeating them.
+     * 6 / 10 / 14 / 18 / 24 — crisper than M3's 4 / 8 / 12 / 16 / 28 while cards
+     * still read as curved panels. The five tokens below are the steps of *that*,
+     * and the theme now reads them rather than repeating them.
      *
      * Pinning the numbers is what makes a later change to either one deliberate:
      * if someone edits the scale and forgets the theme, or the reverse, this
@@ -200,11 +199,11 @@ class ExpressiveShapesTest {
      */
     @Test
     fun `the scale carries the theme's documented values`() {
-        assertEquals("ExtraSmallCorner", 10f, ExpressiveShapes.ExtraSmallCorner.value, TOLERANCE)
-        assertEquals("SmallCorner", 14f, ExpressiveShapes.SmallCorner.value, TOLERANCE)
-        assertEquals("MediumCorner", 20f, ExpressiveShapes.MediumCorner.value, TOLERANCE)
-        assertEquals("LargeCorner", 28f, ExpressiveShapes.LargeCorner.value, TOLERANCE)
-        assertEquals("ExtraLargeCorner", 36f, ExpressiveShapes.ExtraLargeCorner.value, TOLERANCE)
+        assertEquals("ExtraSmallCorner", 6f, ExpressiveShapes.ExtraSmallCorner.value, TOLERANCE)
+        assertEquals("SmallCorner", 10f, ExpressiveShapes.SmallCorner.value, TOLERANCE)
+        assertEquals("MediumCorner", 14f, ExpressiveShapes.MediumCorner.value, TOLERANCE)
+        assertEquals("LargeCorner", 18f, ExpressiveShapes.LargeCorner.value, TOLERANCE)
+        assertEquals("ExtraLargeCorner", 24f, ExpressiveShapes.ExtraLargeCorner.value, TOLERANCE)
     }
 
     private companion object {

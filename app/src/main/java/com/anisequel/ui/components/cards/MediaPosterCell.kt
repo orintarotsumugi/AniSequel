@@ -147,14 +147,21 @@ fun MediaPosterCell(
 ) {
     // Asked once. Two booleans derived from the same table let the cell be handed a
     // "top and bottom" the table cannot produce, and every scroll asked it twice.
-    val scoreCorner = if (score != null) scoreCornerOf(style) else null
-    val titleOverlaid = titleVisible && style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
-    val titleHidden = !titleVisible || style.titlePlacement == CardTitlePlacement.HIDDEN
+    //
+    // The design's two poster switches are applied here and not at the call sites:
+    // the cell is the one place every card in the app is drawn, so a surface added
+    // later inherits the reader's "the artwork already says this" answer without
+    // knowing the switches exist.
+    val design = LocalCardDesign.current
+    val shownScore = score.takeIf { design.showScores }
+    val shownTitle = titleVisible && design.showTitles
+    val scoreCorner = if (shownScore != null) scoreCornerOf(style) else null
+    val titleOverlaid = shownTitle && style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM
+    val titleHidden = !shownTitle || style.titlePlacement == CardTitlePlacement.HIDDEN
 
     // The reader's card design, resolved once here rather than per `Text`. The name
     // and the rating are two factors, the size one bias and the scrolling one switch -
     // reading them once keeps every part of the card on one frame of the same answer.
-    val design = LocalCardDesign.current
     val titleStyle = cardTitleStyle(design)
     val ratingStyle = cardRatingStyle(design)
 
@@ -163,11 +170,15 @@ fun MediaPosterCell(
             coverUrl = coverUrl,
             coverColor = coverColor,
             title = title,
-            score = score,
+            score = shownScore,
             scoreCorner = scoreCorner,
             titleOverlaid = titleOverlaid,
             style = style,
-            contentDescription = contentDescription,
+            // A card that prints no caption would otherwise be an unnamed button: the
+            // grid reads the cell by its label, and hiding the text is a design
+            // choice about pixels, not about what the card is.
+            contentDescription = contentDescription
+                ?: title.takeIf { titleHidden && !titleOverlaid },
             posterModifier = posterModifier,
             titleStyle = titleStyle,
             ratingStyle = ratingStyle,
@@ -196,13 +207,13 @@ fun MediaPosterCell(
             )
         }
 
-        if (score != null && scoreCorner == null && !titleHidden) {
+        if (shownScore != null && scoreCorner == null && !titleHidden) {
             Spacer(modifier = Modifier.height(if (titleOverlaid) 6.dp else 1.dp))
             if (style.scorePlacement == CardScorePlacement.BANNER_BELOW_TITLE) {
                 // The banner's own step of the type scale, multiplied by the reader's
                 // rating factor - not the caption's size borrowed and scaled again.
                 ScoreBanner(
-                    score = score,
+                    score = shownScore,
                     textStyle = cardRatingStyle(
                         design,
                         base = MaterialTheme.typography.labelMedium
@@ -210,7 +221,7 @@ fun MediaPosterCell(
                 )
             } else {
                 Text(
-                    text = "$score%",
+                    text = "$shownScore%",
                     style = ratingStyle,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -20,11 +21,15 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.repository.InterfacePreferences
+import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.navigation.MainTab
+import com.anisequel.ui.navigation.enabledMainTabs
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
 
 /** The key the [rememberSaveableStateHolder] files the Interface shelf under. */
 private const val INTERFACE_HUB_KEY = "interface_hub"
@@ -88,9 +93,36 @@ fun InterfaceTab(
      * answer (demo mode, or Settings opened before Home finishes) and falls back
      * to the sample titles the previews have always used.
      */
-    previewEntries: List<MediaListEntryItem> = emptyList()
+    previewEntries: List<MediaListEntryItem> = emptyList(),
+    /**
+     * Which pages the bar offers, for the two previews that draw it.
+     *
+     * The previews used to draw a fixed bar - Home, Library, Tiers, Profile - so a
+     * reader who had just turned a tab off met it again inside the drawing of their
+     * own bar. Collected here rather than in each sub-page because the bar preview and
+     * the card-design mock-up are two views of one answer.
+     */
+    mainTabPreferences: MainTabPreferences
 ) {
     var section by rememberSaveable { mutableStateOf<InterfaceSection?>(null) }
+    val barTabs by produceState(
+        initialValue = enabledMainTabs(
+            tierListTab = MainTabPreferences.DEFAULT_TIER_LIST_TAB,
+            searchTab = MainTabPreferences.DEFAULT_SEARCH_TAB,
+            searchAnimeEnabled = MainTabPreferences.DEFAULT_SEARCH_ANIME,
+            searchMangaEnabled = MainTabPreferences.DEFAULT_SEARCH_MANGA
+        ),
+        mainTabPreferences
+    ) {
+        combine(
+            mainTabPreferences.tierListTab,
+            mainTabPreferences.searchTab,
+            mainTabPreferences.searchAnimeEnabled,
+            mainTabPreferences.searchMangaEnabled
+        ) { tierList, search, searchAnime, searchManga ->
+            enabledMainTabs(tierList, search, searchAnime, searchManga)
+        }.collect { value = it }
+    }
     // Collected once for the page rather than once per sub-page: the motion sample
     // and the shelf are two views of the same settings object, and a second reader
     // would only be a second chance to disagree.
@@ -147,7 +179,8 @@ fun InterfaceTab(
                         interfacePreferences = interfacePreferences,
                         quickAddPreferences = quickAddPreferences,
                         scope = scope,
-                        previewEntries = previewEntries
+                        previewEntries = previewEntries,
+                        barTabs = barTabs
                     )
                 }
             }
@@ -267,12 +300,14 @@ private fun InterfaceSectionBody(
     interfacePreferences: InterfacePreferences,
     quickAddPreferences: QuickAddPreferences,
     scope: CoroutineScope,
-    previewEntries: List<MediaListEntryItem>
+    previewEntries: List<MediaListEntryItem>,
+    barTabs: List<MainTab>
 ) {
     when (section) {
         InterfaceSection.LAYOUT -> InterfaceLayoutSection(
             interfacePreferences = interfacePreferences,
-            previewEntries = previewEntries
+            previewEntries = previewEntries,
+            barTabs = barTabs
         )
         InterfaceSection.SEQUELS -> InterfaceSequelSection(
             interfacePreferences = interfacePreferences,
@@ -284,7 +319,8 @@ private fun InterfaceSectionBody(
         )
         InterfaceSection.CARDS -> InterfaceCardDesignSection(
             interfacePreferences = interfacePreferences,
-            previewEntries = previewEntries
+            previewEntries = previewEntries,
+            barTabs = barTabs
         )
         InterfaceSection.MOTION -> SettingsScrollColumn {
             MotionSection(

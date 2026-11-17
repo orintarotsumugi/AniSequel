@@ -71,6 +71,15 @@ class InterfacePreferences(private val context: Context) {
         val CARD_SIZE = stringPreferencesKey("card_size")
         val CARD_BOLD_TITLES = booleanPreferencesKey("card_bold_titles")
         val CARD_SCROLL_TITLES = booleanPreferencesKey("card_scroll_titles")
+
+        /**
+         * Whether a card prints its own name and score.
+         *
+         * Default true, which is what every card drew before these keys existed -
+         * a reader who has never opened Settings sees no change on upgrading.
+         */
+        val CARD_SHOW_TITLES = booleanPreferencesKey("card_show_titles")
+        val CARD_SHOW_SCORES = booleanPreferencesKey("card_show_scores")
         val SHOW_MY_RATINGS = booleanPreferencesKey("show_my_ratings")
         val SHOW_THEIR_RATINGS = booleanPreferencesKey("show_their_ratings")
 
@@ -190,7 +199,9 @@ class InterfacePreferences(private val context: Context) {
                         ?: CardDesign.DEFAULT_RATING_SCALE,
                     size = CardSize.fromStorage(preferences[Keys.CARD_SIZE]),
                     boldTitles = preferences[Keys.CARD_BOLD_TITLES] ?: false,
-                    scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true
+                    scrollTitles = preferences[Keys.CARD_SCROLL_TITLES] ?: true,
+                    showTitles = preferences[Keys.CARD_SHOW_TITLES] ?: false,
+                    showScores = preferences[Keys.CARD_SHOW_SCORES] ?: false
                 ).clamped(),
                 showMyRatings = preferences[Keys.SHOW_MY_RATINGS] ?: true,
                 showTheirRatings = preferences[Keys.SHOW_THEIR_RATINGS] ?: true,
@@ -267,6 +278,8 @@ class InterfacePreferences(private val context: Context) {
             preferences[Keys.CARD_SIZE] = clamped.size.storageValue
             preferences[Keys.CARD_BOLD_TITLES] = clamped.boldTitles
             preferences[Keys.CARD_SCROLL_TITLES] = clamped.scrollTitles
+            preferences[Keys.CARD_SHOW_TITLES] = clamped.showTitles
+            preferences[Keys.CARD_SHOW_SCORES] = clamped.showScores
         }
     }
 
@@ -324,6 +337,8 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.CARD_SIZE)
             preferences.remove(Keys.CARD_BOLD_TITLES)
             preferences.remove(Keys.CARD_SCROLL_TITLES)
+            preferences.remove(Keys.CARD_SHOW_TITLES)
+            preferences.remove(Keys.CARD_SHOW_SCORES)
             preferences.remove(Keys.SHOW_MY_RATINGS)
             preferences.remove(Keys.SHOW_THEIR_RATINGS)
             preferences.remove(Keys.POSTER_SOURCE)

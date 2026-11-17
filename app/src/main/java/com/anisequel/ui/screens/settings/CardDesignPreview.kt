@@ -41,9 +41,13 @@ import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.cardRatingStyle
 import com.anisequel.ui.components.cards.toAlignment
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.navigation.MainTab
+import com.anisequel.ui.navigation.enabledMainTabs
+import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.theme.DynamicThemeBuilder
 
 /**
@@ -75,6 +79,16 @@ import com.anisequel.ui.theme.DynamicThemeBuilder
  * fresh account, demo mode, or Settings opened before Home has answered). One of the
  * samples is deliberately long, because a name that scrolls is a design decision and
  * an unbroken run of short names would hide the switch that turns it off.
+ *
+ * ## Why the frame's bars are the reader's own
+ *
+ * The mock-up used to draw a fixed bar - Home, Library, Search, Profile - and a
+ * magnifier in the app bar, whether or not the reader had those pages on their bar at
+ * all. A preview whose bar is not the bar is a preview of a different app, and the
+ * reader who had just turned the Search tab off met it again here, one page away from
+ * the switch they turned it off with. [barTabs] is the list `enabledMainTabs` produced
+ * for the real bar, and the glyphs come from `mainTabDestinations`, so the two cannot
+ * describe different bars.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,7 +96,15 @@ internal fun CardDesignPreview(
     style: MediaCardStyle,
     design: CardDesign,
     entries: List<MediaListEntryItem>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * The bar this preview should draw, exactly as the app draws it.
+     *
+     * Defaulted to the shipped bar (no Search, no Tiers) rather than left empty: a
+     * caller that has no preferences in reach still gets a bar the app could produce,
+     * and the default is the one a fresh install has.
+     */
+    barTabs: List<MainTab> = enabledMainTabs(tierListTab = false)
 ) {
     // The columns the reader's card size produces at the shipped three-across, which
     // is what makes the sliders and chips show their effect on *this* page rather than
@@ -122,7 +144,7 @@ internal fun CardDesignPreview(
                 .testTag("card_design_preview")
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                PreviewTopBar()
+                PreviewTopBar(showSearch = MainTab.SEARCH in barTabs)
                 Spacer(modifier = Modifier.height(10.dp))
                 PreviewFilters()
                 Spacer(modifier = Modifier.height(12.dp))
@@ -140,7 +162,7 @@ internal fun CardDesignPreview(
                             ) {
                                 row.forEach { sample ->
                                     MediaPosterCell(
-                                        coverUrl = sample.coverUrl,
+                                        coverUrl = sampleCoverUrl(sample),
                                         coverColor = sample.coverColor,
                                         title = sample.title,
                                         score = sample.score,
@@ -169,15 +191,23 @@ internal fun CardDesignPreview(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
-                PreviewBottomBar()
+                PreviewBottomBar(tabs = barTabs)
             }
         }
     }
 }
 
-/** The app bar the grid sits under: a title with its count, and the search action. */
+/**
+ * The app bar the grid sits under: a title with its count, and the search action when
+ * the reader actually has a Search page to open.
+ *
+ * Without the tab there is no magnifier, because the action opens a page that has no
+ * bar entry and - unlike the tier list - no other door at all. The switch that removes
+ * it is on the Library page one level up, so a magnifier drawn here anyway was the
+ * preview contradicting the reader's answer immediately after they gave it.
+ */
 @Composable
-private fun PreviewTopBar() {
+private fun PreviewTopBar(showSearch: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -206,12 +236,14 @@ private fun PreviewTopBar() {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Icon(
-            imageVector = AppVectorIcons.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
+        if (showSearch) {
+            Icon(
+                imageVector = AppVectorIcons.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
@@ -252,9 +284,16 @@ private fun PreviewFilters() {
     }
 }
 
-/** The bottom bar, so the frame reads as a page rather than a floating grid. */
+/**
+ * The bottom bar, so the frame reads as a page rather than a floating grid.
+ *
+ * The glyphs are the bar's own: `mainTabDestinations` maps the same [MainTab] list the
+ * real bar is built from, and the highlighted entry is the Library because the frame is
+ * a Library page. A tab the reader turned off has no destination and so draws nothing.
+ */
 @Composable
-private fun PreviewBottomBar() {
+private fun PreviewBottomBar(tabs: List<MainTab>) {
+    val destinations = mainTabDestinations(tabs, profileAvatarUrl = null)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,14 +303,10 @@ private fun PreviewBottomBar() {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        listOf(
-            AppVectorIcons.HomeTab to false,
-            AppVectorIcons.Library to true,
-            AppVectorIcons.Search to false,
-            AppVectorIcons.ProfileHome to false
-        ).forEach { (icon, selected) ->
+        destinations.forEachIndexed { index, destination ->
+            val selected = tabs[index] == MainTab.LIBRARY
             Icon(
-                imageVector = icon,
+                imageVector = destination.icon,
                 contentDescription = null,
                 tint = if (selected) {
                     MaterialTheme.colorScheme.primary
@@ -328,8 +363,28 @@ private data class PreviewSample(
     val coverUrl: String?,
     val coverColor: Color?,
     val score: Int?,
-    val progress: String
+    val progress: String,
+    /**
+     * The AniList id, for the btttr lookup, or null for a placeholder card.
+     *
+     * The samples have no id because they are not titles: asking btttr about an
+     * invented show would be a request whose only possible answer is "no".
+     */
+    val mediaId: Int? = null
 )
+
+/**
+ * The cover the cell should draw for a sample.
+ *
+ * A placeholder resolves to its own null and never asks; the reader's entries go
+ * through the same [cardPosterUrl] the grid uses, so the preview shows the source they
+ * chose or falls back to the cover while btttr answers.
+ */
+@Composable
+private fun sampleCoverUrl(sample: PreviewSample): String? {
+    val id = sample.mediaId ?: return sample.coverUrl
+    return cardPosterUrl(mediaId = id, fallback = sample.coverUrl)
+}
 
 /**
  * The reader's own covers first, then the samples the page has always used.
@@ -347,7 +402,8 @@ private fun previewSamples(entries: List<MediaListEntryItem>): List<PreviewSampl
             coverUrl = entry.media.posterUrl,
             coverColor = DynamicThemeBuilder.parseHexColor(entry.media.posterColor),
             score = entry.media.averageScore?.takeIf { it > 0 },
-            progress = progressLabels[index % progressLabels.size]
+            progress = progressLabels[index % progressLabels.size],
+            mediaId = entry.media.id
         )
     }
     val placeholders = listOf(

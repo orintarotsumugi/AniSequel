@@ -167,7 +167,10 @@ fun AboutCard(
                 if (isBioCollapsible(about, nodes)) {
                     Text(
                         text = if (expanded) "Show less" else "Show more",
-                        style = MaterialTheme.typography.labelMedium,
+                        // Matches the disclosure under every Settings paragraph: one
+                        // size smaller than the caption, so it reads as an offer
+                        // rather than as another heading.
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier

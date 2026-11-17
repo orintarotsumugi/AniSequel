@@ -102,7 +102,13 @@ jobs:
   # request must not need the release key for a lint report.
   lint:
     name: Android Lint (advisory)
-    runs-on: ubuntu-latest
+    # Pinned rather than `ubuntu-latest`: GitHub's `ubuntu-latest` is mid-migration
+    # from 24.04 to 26.04 (October 19 - November 19, 2026), and every run on the
+    # label carries a "will migrate to Ubuntu 26" notice annotation until the
+    # rollout reaches this repository. Naming the image makes the environment the
+    # one these builds have actually been passing on (the runs report
+    # `Image: ubuntu-26.04`) and takes the notice off the run summary.
+    runs-on: ubuntu-26.04
     # A normal lint run is about four minutes. The bound is only here so a stuck
     # step cannot hold a runner (and, before the concurrency change above, the
     # ref's whole queue) for GitHub's six-hour default.
@@ -143,7 +149,9 @@ jobs:
 
   build-and-release:
     name: Build APKs, Bug Check & Release
-    runs-on: ubuntu-latest
+    # Pinned for the same reason as the lint job: `ubuntu-latest` is mid-migration
+    # to Ubuntu 26.04 and annotates every run until it completes.
+    runs-on: ubuntu-26.04
     # About seven minutes in the normal case: tests, the release APK, signing
     # verification, publish. The bound exists so a step that hangs the way the
     # artifact upload did on 2026-11-11 ends the job on its own instead of

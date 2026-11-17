@@ -133,6 +133,9 @@ class ThemePreferences(context: Context) {
         val INFO_BACKDROP_SOURCE = stringPreferencesKey("info_backdrop_source")
         val INFO_BACKDROP_BLUR = stringPreferencesKey("info_backdrop_blur")
         val INFO_BACKDROP_TINT = stringPreferencesKey("info_backdrop_tint")
+
+        /** Subtle blur on Nova backdrop accents; off by default for performance. */
+        val NOVA_BACKDROP_BLUR = booleanPreferencesKey("nova_backdrop_blur")
     }
 
     /**
@@ -217,6 +220,8 @@ class ThemePreferences(context: Context) {
         val infoBackdropSource: InfoBackdropSource = InfoBackdropSource.DEFAULT,
         val infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
         val infoBackdropTint: InfoBackdropTint = InfoBackdropTint.DEFAULT,
+        /** Subtle blur on Nova UI backdrops; off by default. */
+        val novaBackdropBlur: Boolean = false,
         /** False only until the stored values have actually been read once. */
         val isLoaded: Boolean = false
     ) {
@@ -288,6 +293,7 @@ class ThemePreferences(context: Context) {
             infoBackdropTint = InfoBackdropTint.fromStorage(
                 preferences[Keys.INFO_BACKDROP_TINT]
             ),
+            novaBackdropBlur = preferences[Keys.NOVA_BACKDROP_BLUR] ?: false,
             isLoaded = true
         )
     }
@@ -449,6 +455,13 @@ class ThemePreferences(context: Context) {
     suspend fun setInfoBackdropTint(tint: InfoBackdropTint) {
         appContext.themeDataStore.edit { preferences ->
             preferences[Keys.INFO_BACKDROP_TINT] = tint.storageValue
+        }
+    }
+
+    /** Enables subtle blur accents on Nova backdrops (off by default). */
+    suspend fun setNovaBackdropBlur(enabled: Boolean) {
+        appContext.themeDataStore.edit { preferences ->
+            preferences[Keys.NOVA_BACKDROP_BLUR] = enabled
         }
     }
 
@@ -684,6 +697,7 @@ class ThemePreferences(context: Context) {
             preferences.remove(Keys.INFO_BACKDROP_SOURCE)
             preferences.remove(Keys.INFO_BACKDROP_BLUR)
             preferences.remove(Keys.INFO_BACKDROP_TINT)
+            preferences.remove(Keys.NOVA_BACKDROP_BLUR)
             // Back to the bars, which is the default this app ships with.
             // The reading font, size and title scroll are their own page's choices
             // and are reset there, not by "Reset appearance".

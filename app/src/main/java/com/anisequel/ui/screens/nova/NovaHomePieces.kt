@@ -143,7 +143,7 @@ private fun NovaContinueCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(158.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(coverTint ?: Color.Transparent)
         ) {
             AsyncImage(
@@ -208,6 +208,8 @@ fun NovaSequelRow(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
+                onClickLabel = "Open ${sequel.sequelTitle}",
                 onClick = onOpen
             )
             .testTag("nova_sequel_row_${sequel.sequelId}"),
@@ -223,7 +225,7 @@ fun NovaSequelRow(
                 modifier = Modifier
                     .width(62.dp)
                     .height(92.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
@@ -333,6 +335,8 @@ fun NovaSequelCard(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
+                onClickLabel = "Open ${sequel.sequelTitle}",
                 onClick = onOpen
             )
             .testTag("nova_sequel_card_${sequel.sequelId}"),
@@ -512,7 +516,7 @@ fun NovaHomeSkeleton(modifier: Modifier = Modifier) {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(NovaShortcutHeight),
-                            shape = RoundedCornerShape(26.dp),
+                            shape = RoundedCornerShape(18.dp),
                             phase = phase
                         )
                     }
@@ -524,7 +528,7 @@ fun NovaHomeSkeleton(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(NovaOtherShortcutHeight),
-                    shape = RoundedCornerShape(26.dp),
+                    shape = RoundedCornerShape(18.dp),
                     phase = phase
                 )
             }
@@ -565,7 +569,7 @@ fun NovaHomeSkeleton(modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .height(104.dp),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(18.dp),
                 phase = phase
             )
         }

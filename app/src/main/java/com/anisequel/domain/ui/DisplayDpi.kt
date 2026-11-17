@@ -44,3 +44,48 @@ object DisplayDpi {
      */
     fun density(value: Int): Float = clamp(value) / 160f
 }
+
+/**
+ * The three stops [DisplayDpi] is usually asked for, in words.
+ *
+ * A dpi slider is precise and unreadable: 447 is not a size anybody pictures, and a
+ * reader who wants "a bit bigger" should not have to know which way the number goes.
+ * These name the three sizes people actually choose between, and the slider stays under
+ * them for the reader who wants the value in between.
+ *
+ * [DEFAULT] is not the midpoint of the other two on purpose - it is the density every
+ * install starts at, and the preset a reader returns to after experimenting has to be
+ * the same number as the shipped default or the two would disagree about "normal".
+ */
+enum class UiSize(
+    val displayName: String,
+    val dpi: Int,
+    val blurb: String
+) {
+    COMPACT(
+        displayName = "Small",
+        dpi = 400,
+        blurb = "More on screen: the same layout at a finer density."
+    ),
+    DEFAULT(
+        displayName = "Default",
+        dpi = DisplayDpi.DEFAULT_DPI,
+        blurb = "The shipped size, on every phone."
+    ),
+    LARGE(
+        displayName = "Large",
+        dpi = 512,
+        blurb = "Fewer, larger controls - for a reader who wants to aim less."
+    );
+
+    companion object {
+        /**
+         * The preset a stored dpi belongs to, or null between two of them.
+         *
+         * Null rather than the nearest preset: the slider can land anywhere in the
+         * range, and highlighting "Large" for a value that is not large would be the
+         * page agreeing with itself rather than with the preference.
+         */
+        fun of(dpi: Int): UiSize? = entries.firstOrNull { it.dpi == dpi }
+    }
+}

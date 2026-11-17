@@ -29,17 +29,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ProfileAvatarButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.LocalNovaBackdropBlur
 
 /**
  * The new look's shared surfaces.
@@ -54,15 +57,13 @@ import com.anisequel.ui.components.expressive.bouncyPress
  */
 
 /** The shape every shelf and header in the new layout shares. */
-private val NovaSurfaceShape = RoundedCornerShape(26.dp)
+private val NovaSurfaceShape = RoundedCornerShape(18.dp)
 
 /**
  * A translucent panel that reads as sitting above the page.
  *
- * No blur: a real backdrop blur is a render effect, and this app draws a full
- * list over it while scrolling. A translucent container plus a hairline border
- * gives the same layering cue at a fraction of the cost - and it is what makes
- * the cards legible on both the dark and the light palettes.
+ * A translucent container with a crisp hairline border for a light glassy
+ * layering effect that stays legible and scroll-friendly on both palettes.
  */
 @Composable
 fun NovaSurface(
@@ -83,7 +84,7 @@ fun NovaSurface(
         color = tint,
         border = BorderStroke(
             width = 1.dp,
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f)
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
         ),
         shadowElevation = if (tonalElevation) 2.dp else 0.dp
     ) {
@@ -94,16 +95,21 @@ fun NovaSurface(
 /**
  * A faint wash behind a new-layout page.
  *
- * Two gradients and nothing animated: the seasonal sky already owns movement in
- * this app, and a second full-screen clock would spend frames competing with it.
- * The gradient is drawn behind the page's own opaque content, so it only shows
- * where the content is transparent - which is the point.
+ * Two soft gradients that can gain a light blur for depth when enabled, kept
+ * static so the seasonal sky still owns motion. The blur is off by default:
+ * every blur is an offscreen render pass, and these gradients already read as
+ * depth without one.
  */
 @Composable
 fun NovaBackdrop(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit
 ) {
+    // Read once per draw: the preference is off by default, and skipping the
+    // modifier entirely is what makes "off" mean no offscreen layer at all
+    // rather than a zero-radius blur that still pays for one.
+    val blurEnabled = LocalNovaBackdropBlur.current
+
     Box(
         modifier = modifier.background(MaterialTheme.colorScheme.background)
     ) {
@@ -111,10 +117,11 @@ fun NovaBackdrop(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(360.dp)
+                .then(novaBlur(blurEnabled, 24.dp))
                 .background(
                     Brush.verticalGradient(
                         listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.13f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                             Color.Transparent
                         )
                     )
@@ -124,10 +131,11 @@ fun NovaBackdrop(
             modifier = Modifier
                 .size(230.dp)
                 .offset(x = (-70).dp, y = (-30).dp)
+                .then(novaBlur(blurEnabled, 28.dp))
                 .background(
                     Brush.radialGradient(
                         listOf(
-                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
+                            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
                             Color.Transparent
                         )
                     ),
@@ -137,6 +145,17 @@ fun NovaBackdrop(
         content()
     }
 }
+
+/**
+ * The backdrop's blur, or nothing at all when the reader left it off.
+ *
+ * `Modifier.blur` renders its child through an offscreen layer, and a zero
+ * radius still asks for that layer, so "off" has to mean no modifier rather
+ * than a disabled one. Empty `Modifier` chains cost nothing, which is what keeps
+ * the default page to its two gradient draws.
+ */
+private fun novaBlur(enabled: Boolean, radius: Dp): Modifier =
+    if (enabled) Modifier.blur(radius) else Modifier
 
 /**
  * The new Home's bar: the app mark, its tagline, and the two doors out.
@@ -180,7 +199,7 @@ fun NovaTopBar(
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(RoundedCornerShape(13.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(
                             Brush.linearGradient(
                                 listOf(

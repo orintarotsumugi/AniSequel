@@ -53,6 +53,7 @@ import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
@@ -397,7 +398,10 @@ private fun InfoAppearancePreview(
                 Column {
                     Row(verticalAlignment = Alignment.Bottom) {
                         AsyncImage(
-                            model = media.posterUrl,
+                            // The preview has to show the poster the page will
+                            // draw, or the reader is choosing a backdrop for a
+                            // picture they will not see.
+                            model = cardPosterUrl(media),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier

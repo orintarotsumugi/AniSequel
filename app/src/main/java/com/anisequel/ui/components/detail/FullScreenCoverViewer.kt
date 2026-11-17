@@ -51,7 +51,9 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.romajiName
 import com.anisequel.data.repository.LiveChartCovers
+import com.anisequel.domain.ui.PosterSource
 import com.anisequel.ui.components.liveChartUrl
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -124,8 +126,20 @@ fun FullScreenCoverViewer(
     // forever, if the search finds no close match or the request fails.
     val liveChartArtwork = rememberLiveChartArtwork(media)
 
-    val sources = remember(media.id, media.posterUrl, media.bannerImage, liveChartArtwork) {
-        buildCoverSources(media, liveChartArtwork)
+    // The btttr poster, when the reader chose that art and one exists for this title.
+    // Read here rather than inside `buildCoverSources` because that function is pure:
+    // the lookup is a composable effect, and the viewer's whole source list is built
+    // from its answers so the pills and the pager cannot disagree.
+    val betterPoster = cardPosterUrl(media)
+
+    val sources = remember(
+        media.id,
+        media.posterUrl,
+        media.bannerImage,
+        liveChartArtwork,
+        betterPoster
+    ) {
+        buildCoverSources(media, liveChartArtwork, betterPoster)
     }
     var sourceIndex by remember(media.id) { mutableIntStateOf(0) }
     // The LiveChart source is appended *after* the dialog opens, and it can also
@@ -444,11 +458,28 @@ private fun CoverViewerPager(
  *
  * Pure and separate from the composable so the ordering and the fallback are one
  * readable list rather than three branches inside the dialog's body.
+ *
+ * [betterPoster] is btttr's rendered art, already resolved by the caller and null
+ * when the reader stayed on AniList or btttr does not carry the title. It leads the
+ * list because it is the source the reader asked to see, and the AniList cover stays
+ * behind it as the second pill rather than being replaced - the viewer is where a
+ * poster is looked at closely, so the picture the reader chose is the first one and
+ * the one they did not is still one tap away.
  */
 private fun buildCoverSources(
     media: MediaNode,
-    liveChartArtwork: LiveChartArtwork?
+    liveChartArtwork: LiveChartArtwork?,
+    betterPoster: String? = null
 ): List<CoverSource> = buildList {
+    betterPoster?.let {
+        add(
+            CoverSource(
+                label = PosterSource.BETTER_POSTERS.displayName,
+                urls = listOf(it),
+                fallbackAspect = DEFAULT_COVER_ASPECT
+            )
+        )
+    }
     media.posterUrl?.let {
         add(
             CoverSource(

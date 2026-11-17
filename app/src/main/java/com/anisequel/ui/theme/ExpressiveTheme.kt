@@ -10,12 +10,12 @@ import androidx.compose.material3.Shapes
  * set of slots, so components interpolate between the right pair as they change
  * state instead of jumping. Players that differ from the M3 material
  * defaults read as Expressive: containers are rounder (M3 defaults are 7dp,
- * 10dp, 14dp, 16dp and 24dp), so this scale runs 10 / 14 / 20 / 28 / 36 -
- * large enough that cards read as curved panels rather than hard rectangles,
+ * 10dp, 14dp, 16dp and 24dp), so this scale runs 6 / 10 / 14 / 18 / 24 -
+ * crisp enough to feel sharp while cards still read as curved panels,
  * but still inside the scale where adjacent slots stay visually related.
  *
  * This is the app's *only* shape scale. A second `Shapes` used to be declared
- * alongside the typography in `Type.kt` with different values - medium at 16dp
+ * alongside the typography in `Type.kt` with different values
  * there against 18dp here, extraLarge 28dp against 34dp - which made "the app's
  * roundness" whichever one a file happened to import, so tuning the theme
  * changed some surfaces and not others. That declaration is gone: add a slot
