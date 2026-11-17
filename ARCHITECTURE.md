@@ -550,3 +550,31 @@ When making modifications or adding new features to AniSequel, you **MUST** adhe
 5. **Draw-Phase Transforms**: Animate UI scales and translations inside `Modifier.graphicsLayer { ... }` or `bouncyPress`.
 6. **Triple-Version Sync**: If you bump the app version, update all three version baseline locations (`gradle.properties`, `app/build.gradle.kts`, `update.json`) and run `./gradlew test`.
 7. **Verification Gate**: Always run `./gradlew test` (or `compile_applet`) to verify changes before completing a task.
+
+## Recent changes (2.3.4)
+
+- **Info page action row is status-aware.** `DetailActionState` now carries the
+  viewer's existing list status. When a title is already tracked under a status
+  the quick-add control does not represent (completed, paused, dropped,
+  repeating), `DetailActionRow` renders a disabled badge with that status instead
+  of an "Add to Planning" button, so a finished show can no longer be silently
+  moved back to Planning. Planning and Watching keep their existing badges.
+- **Downloadable poster.** `InfoExtrasCard` gained a "Download poster" action that
+  saves the best available artwork (BetterPosters when selected, otherwise
+  AniList's cover) to `Pictures/AniSequel` via `saveCoverToGallery`, with
+  saving/saved feedback. The artwork URL is resolved in composition (not inside
+  the click handler) because `cardPosterUrl` is a composable.
+
+## Package inventory (current)
+
+Top-level packages under `com.anisequel`:
+
+- `data/` — network (Retrofit/GraphQL), repositories, models, snapshots, diagnostics, security, update, changelog.
+- `domain/` — pure Kotlin use cases, tier list, profile layout, motion, color, seasonal, studio, jokes, card design.
+- `ui/` — Compose screens, components, theme, viewmodels, navigation, widgets.
+
+Subpackages:
+
+- `data/changelog`, `data/diagnostics`, `data/model`, `data/network`, `data/repository`, `data/security`, `data/update`.
+- `domain/card`, `domain/color`, `domain/gif`, `domain/jokes`, `domain/library`, `domain/list`, `domain/motion`, `domain/profile`, `domain/seasonal`, `domain/studio`, `domain/tier`, `domain/ui`, `domain/usecase`.
+- `ui/components` (+ cards, detail, detail/info, expressive, icons, markdown, nova, seasonal, update), `ui/navigation`, `ui/screens` (+ dashboard, library, login, nova, profile, settings, studio, tier), `ui/security`, `ui/theme`, `ui/viewmodel`, `ui/widget`.

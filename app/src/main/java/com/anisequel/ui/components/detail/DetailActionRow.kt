@@ -16,10 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
@@ -28,8 +32,11 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.components.cards.HoldAndSwipePlanningButton
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.viewmodel.QuickAddStatus
 
@@ -227,11 +234,13 @@ private fun DetailQuickAdd(
             swipeEnabled = swipeEnabled,
             modifier = modifier
         )
-    } ?: if (state.showMediaAction) {
+    } ?: if (state.showMediaAction || state.trackedStatus != null) {
         MediaQuickAdd(
             media = subject.media,
             isPlanned = state.isPlanned,
             isWatching = state.isWatching,
+            trackedStatus = state.trackedStatus,
+            isManga = subject.media.isManga,
             canWriteToAniList = canWriteToAniList,
             status = quickAddStatus,
             onAddToPlanning = onAddMediaToPlanning,
@@ -308,6 +317,8 @@ private fun MediaQuickAdd(
     media: MediaNode,
     isPlanned: Boolean,
     isWatching: Boolean,
+    trackedStatus: String? = null,
+    isManga: Boolean = false,
     canWriteToAniList: Boolean,
     status: QuickAddStatus,
     onAddToPlanning: (MediaNode) -> Unit,
@@ -316,6 +327,16 @@ private fun MediaQuickAdd(
     swipeEnabled: Boolean,
     modifier: Modifier
 ) {
+    if (trackedStatus != null) {
+        TrackedStatusBadge(
+            mediaId = media.id,
+            status = trackedStatus,
+            isManga = isManga,
+            modifier = modifier
+        )
+        return
+    }
+
     if (!canWriteToAniList && !isPlanned && !isWatching) {
         SignInToAddButton(
             onClick = { onAddToPlanning(media) },
@@ -335,6 +356,43 @@ private fun MediaQuickAdd(
         swipeEnabled = swipeEnabled,
         modifier = modifier
     )
+}
+
+@Composable
+private fun TrackedStatusBadge(
+    mediaId: Int,
+    status: String,
+    isManga: Boolean,
+    modifier: Modifier
+) {
+    val statusColors = AniSequelTheme.statusColors
+    val label = ListStatuses.label(status = status, isManga = isManga)
+    OutlinedButton(
+        onClick = {},
+        enabled = false,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clearAndSetSemantics { contentDescription = label }
+            .testTag("tracked_status_button_$mediaId"),
+        shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
+        colors = ButtonDefaults.outlinedButtonColors(
+            disabledContentColor = statusColors.info,
+            disabledContainerColor = statusColors.infoContainer
+        )
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.CheckCircle,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
 }
 
 @Composable

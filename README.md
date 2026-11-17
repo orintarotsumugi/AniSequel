@@ -1,5 +1,7 @@
 # AniSequel
 
+[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/orintarotsumugi/AniSequel)
+
 **Your AniList history, read forwards.** AniSequel walks the relation graph of
 every anime and manga you have finished and finds the sequels, films, OVAs and
 spin-offs you never got around to - then puts the good ones one tap from your

@@ -54,8 +54,7 @@ internal fun MiniCover(
             // placeholder for a cover, but every layout preview in Settings reads
             // this one cell, so an empty list made all of them look like the same
             // grey card and hid the difference between the modes.
-            model = entry?.media?.let { media -> cardPosterUrl(media) }
-                ?: SAMPLE_COVER,
+            model = entry?.media?.let { media -> cardPosterUrl(media) },
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -66,8 +65,6 @@ internal fun MiniCover(
 internal fun previewTitle(entry: MediaListEntryItem?): String =
     entry?.media?.displayName ?: "Dandadan"
 
-/** The fallback art matches [previewTitle]'s fallback name. */
-private const val SAMPLE_COVER = "https://img.anili.st/media/171018"
 
 /**
  * One of the reader's entries for preview slot [index], cycling when there are

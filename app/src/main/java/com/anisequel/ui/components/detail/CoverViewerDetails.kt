@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -106,14 +108,16 @@ internal fun ViewerDetailsCard(
             if (sources.size > 1) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     sources.forEachIndexed { index, candidate ->
                         ViewerPill(
                             label = candidate.label,
                             selected = index == sourceIndex,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.widthIn(min = 88.dp),
                             onClick = { onSelectSource(index) }
                         )
                     }

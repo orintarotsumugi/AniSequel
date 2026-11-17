@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Rules for working in **AniSequel**. Every one of these is here because the
+Rules for working in **AniSequel**. For an AI-generated tour of the codebase, see the [DeepWiki](https://deepwiki.com/orintarotsumugi/AniSequel). Every one of these is here because the
 obvious alternative was tried and cost something. The *why* is the point — if
 you cannot reproduce the failure, do not remove the rule, and do add the missing
 explanation.

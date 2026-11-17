@@ -18,6 +18,11 @@ internal class DetailActionState(
     // AniList's add mutation overwrites existing entries, including completed titles.
     private val isOnAnotherList = listStatus != null && !isPlanned && !isWatching
 
+    // A title the viewer already tracks under a status the quick add does not
+    // represent (completed, paused, dropped, repeating): it keeps its badge and
+    // never offers to plan it again.
+    val trackedStatus: String? = if (isOnAnotherList) listStatus else null
+
     // A confirmed or in-flight write knows more than a detail fetch still in flight.
     private val hasKnownAddState = isPlanned || isWatching || quickAddStatus.isBusy
     val showMediaAction = !hasSequel && !isOnAnotherList && (!isDetailLoading || hasKnownAddState)
