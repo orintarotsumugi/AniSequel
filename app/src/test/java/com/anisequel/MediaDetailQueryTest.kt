@@ -128,6 +128,18 @@ class MediaDetailQueryTest {
         }
     }
 
+    @Test
+    fun `both detail query forms request the media statistics shown in Nova`() {
+        listOf(
+            GraphQLQueries.getMediaDetailQuery("ANIME"),
+            GraphQLQueries.getMediaDetailQuery("MANGA"),
+            GraphQLQueries.getMediaDetailQuery(null)
+        ).forEach { query ->
+            assertTrue("score distribution missing:\\n$query", query.contains("scoreDistribution { score amount }"))
+            assertTrue("list status distribution missing:\\n$query", query.contains("statusDistribution { status amount }"))
+        }
+    }
+
     /**
      * Voice actors hang off the *edge*, not the character: AniList returns the same
      * character with a different actor per language, so only the edge can say "this
