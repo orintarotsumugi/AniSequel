@@ -26,9 +26,11 @@ This release keeps AniSequel's identity and existing Compose architecture. Refer
 
 ### Detail navigation and motion
 
-The detail surface is a full-screen Compose `Dialog` in `SequelDetailSheet.kt`. It currently animates a small scale, alpha and vertical offset with `ExpressiveMotion.SettleSpatial`. Dismissal animates that same value back to zero before calling the host's `onDismiss`.
+The detail surface remains a full-screen Compose `Dialog` in `SequelDetailSheet.kt`, preserving the existing host ownership and Back lifecycle. The reading page stays composed while **My Entry** is shown as a separate in-window overlay. The editor opens at 60% of the available height and its handle expands it to full height; dragging down returns it to the 60% resting height. The floating navigation capsule travels clear of the overlay, and the Info page's list state remains alive underneath it.
 
-This is a working entrance/exit baseline, but it is not a shared-element transition: the source poster lives in the host screen while the detail page is in a separate dialog window. A real poster-to-page transition needs a coordinated host/dialog or navigation-overlay design. Do not label a scale animation as shared-element motion. First reproduce the reported blank frame on Android Back and determine whether it comes from dialog teardown, host state, or nested navigation. Then implement and test one lifecycle for close button, system Back and gesture Back.
+The sheet's entrance, settling and dismissal use `ExpressiveMotion` tokens, so the app-wide motion style (including `INSTANT`) controls the transition rather than local hard-coded durations. The existing detail entrance/exit still animates alpha, scale and vertical offset; it is not a shared-element transition.
+
+The poster source still lives in the host screen while the detail page is in a separate dialog window. A real poster-to-page transition needs a coordinated host/dialog or navigation-overlay design. Do not label a scale animation as shared-element motion. Continue reproducing the reported blank frame on Android Back and verify close button, system Back and gesture Back share one lifecycle.
 
 ### Detail content and Nova
 
@@ -67,6 +69,8 @@ The Nova library already has a dedicated card/grid renderer. Make expressive pos
 - No blank frame or lost host screen when closing a title through the close button, Android Back or predictive/gesture Back.
 - The poster transition is coordinated in both directions and does not claim shared-element behaviour unless the source and destination are actually linked.
 - Detail content remains scrollable with the dock visible; the last content item can scroll fully clear of it.
+- My Entry opens at 60% height, expands to full height from its drag handle, and preserves the Info page and editor draft underneath/inside the overlay.
+- My Entry motion follows the global Motion setting, including the instant/no-motion style.
 - Episode fields are sourced from the correct AniList data and omitted when unavailable.
 - Community charts distinguish AniList aggregates from locally derived list statistics.
 - Profile and message Markdown render consistently and safely.
