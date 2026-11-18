@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaScoreAmount
 import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.compactCount
@@ -365,7 +366,7 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
 @Composable
 private fun NovaScoreDetails(
     media: MediaNode,
-    scoreRows: List<com.anisequel.data.model.ScoreDistribution>,
+    scoreRows: List<MediaScoreAmount>,
     totalRatings: Int,
     maxScoreCount: Int
 ) {
