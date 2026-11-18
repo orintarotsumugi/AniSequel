@@ -279,56 +279,280 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
     val statusRows = media.stats?.statusDistribution.orEmpty()
         .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
         .sortedByDescending { it.amount }
+    val totalRatings = scoreRows.sumOf { it.amount ?: 0 }
+    val maxScoreCount = scoreRows.maxOfOrNull { it.amount ?: 0 } ?: 0
+    val totalStatuses = statusRows.sumOf { it.amount ?: 0 }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 22.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(selectedStatTitle(selectedLabel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(media.displayName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                selectedStatTitle(selectedLabel),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                media.displayName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
         when (selectedLabel) {
             "Score" -> {
-                Text("Average score: ${media.averageScore?.let { String.format(Locale.US, "%.1f", it / 10f) } ?: "Not available"} / 10")
-                if (scoreRows.isEmpty()) Text("AniList has not supplied a score distribution for this title.")
-                scoreRows.forEach { row ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(String.format(Locale.US, "%.1f/10", (row.score ?: 0) / 10f), modifier = Modifier.width(54.dp))
-                        Text("${compactCount(row.amount ?: 0)} ratings", style = MaterialTheme.typography.bodyMedium)
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Star,
+                            contentDescription = null,
+                            modifier = Modifier.size(30.dp)
+                        )
+                        Column {
+                            Text(
+                                media.averageScore?.takeIf { it > 0 }?.let {
+                                    String.format(Locale.US, "%.1f", it / 10f)
+                                } ?: "—",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text("Average score · out of 10", style = MaterialTheme.typography.labelLarge)
+                            if (totalRatings > 0) {
+                                Text("${compactCount(totalRatings)} ratings", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                Text("Score distribution", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (scoreRows.isEmpty()) {
+                    EmptyStatMessage("AniList has not supplied a score distribution for this title.")
+                } else {
+                    scoreRows.forEach { row ->
+                        val amount = row.amount ?: 0
+                        DistributionBarRow(
+                            label = String.format(Locale.US, "%.1f", (row.score ?: 0) / 10f),
+                            value = compactCount(amount),
+                            fraction = if (maxScoreCount > 0) amount.toFloat() / maxScoreCount else 0f,
+                            accent = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
             "Popularity" -> {
-                Text("Popularity: ${media.popularity?.let(::compactCount) ?: "Not available"}")
-                if (media.rankingList.isEmpty()) Text("No catalogue ranking is available.")
-                media.rankingList.forEach { ranking ->
-                    Text(listOfNotNull(ranking.context, ranking.rank?.let { "#$it" }).joinToString(" · "))
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("POPULARITY", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            media.popularity?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("AniList popularity count", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                Text("Catalogue rankings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (media.rankingList.isEmpty()) {
+                    EmptyStatMessage("No catalogue ranking is available for this title.")
+                } else {
+                    media.rankingList.forEach { ranking ->
+                        Surface(
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    ranking.rank?.let { "#$it" } ?: "—",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    ranking.context ?: "Catalogue ranking",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                 }
             }
             "Favourites" -> {
-                Text("${media.favourites?.let(::compactCount) ?: "Not available"} AniList favourites")
-                Text("AniList provides the total count, not a public list of every account that favourited this title.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        Modifier.padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Icon(AppVectorIcons.Favorite, contentDescription = null, modifier = Modifier.size(30.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                media.favourites?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text("AniList favourites", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+                EmptyStatMessage(
+                    "This is the total number of AniList favourites. AniList does not provide a public list of every account that favourited this title."
+                )
             }
             else -> {
-                Text(if (media.isManga) "Chapters: ${media.chapters ?: "Not available"}" else "Episode length: ${media.duration?.let { "$it minutes" } ?: "Not available"}")
-            }
-        }
-        if (statusRows.isNotEmpty()) {
-            Text("List status breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            statusRows.forEach { row ->
-                Row {
-                    Text(row.status.orEmpty().replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
-                    Text(compactCount(row.amount ?: 0), fontWeight = FontWeight.SemiBold)
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(if (media.isManga) "CHAPTERS" else "EPISODE LENGTH", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            if (media.isManga) media.chapters?.toString() ?: "—"
+                            else media.duration?.let { "$it min" } ?: "—",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (media.isManga) "Published chapters"
+                            else "Average runtime per episode",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }
-        media.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
-            Text("Synopsis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(synopsis.replace(Regex("<[^>]*>"), "").replace("&mdash;", "—").replace("&quot;", "\""))
+
+        if (statusRows.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "List status breakdown",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        compactCount(totalStatuses),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                statusRows.forEachIndexed { index, row ->
+                    val amount = row.amount ?: 0
+                    DistributionBarRow(
+                        label = row.status.orEmpty().replace('_', ' ').lowercase()
+                            .replaceFirstChar { it.uppercase() },
+                        value = compactCount(amount),
+                        fraction = if (totalStatuses > 0) amount.toFloat() / totalStatuses else 0f,
+                        accent = chartAccent(index)
+                    )
+                }
+            }
         }
-        Spacer(Modifier.height(24.dp))
+
+        media.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Synopsis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        synopsis.replace(Regex("<[^>]*>"), "").replace("&mdash;", "—").replace("&quot;", "\""),
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(28.dp))
     }
+}
+
+@Composable
+private fun DistributionBarRow(
+    label: String,
+    value: String,
+    fraction: Float,
+    accent: Color
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(9.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .height(9.dp)
+                    .clip(CircleShape)
+                    .background(accent)
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyStatMessage(message: String) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            message,
+            modifier = Modifier.padding(14.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun chartAccent(index: Int): Color = when (index % 5) {
+    0 -> Color(0xFF6D9FDE)
+    1 -> Color(0xFF64A88A)
+    2 -> Color(0xFFD99B59)
+    3 -> Color(0xFFB48AD8)
+    else -> Color(0xFFD47C86)
 }
 
 private fun selectedStatTitle(label: String): String = when (label) {
