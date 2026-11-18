@@ -121,9 +121,11 @@ internal fun AnimatedContentTransitionScope<*>.settingsLevelTransition(): Conten
  * hub is the only entrance, and `BackHandler` stepping out of a page is the whole
  * navigation contract.
  */
-private enum class SettingsPage(
+internal enum class SettingsPage(
     val title: String,
     val subtitle: String,
+    /** The tile the shelf draws, reused by the search result for this page. */
+    val icon: ImageVector,
     /**
      * Whether the page draws its own header, including any header for a sub-screen.
      *
@@ -138,40 +140,58 @@ private enum class SettingsPage(
     APPEARANCE(
         "Appearance",
         "Theme, background and accent colour",
+        AppVectorIcons.SectionAppearance,
         ownsHeader = true
     ),
     // How the app is laid out, kept apart from what colour it is: the card style
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
     // Its parts each have a sub-page of their own - see [InterfaceTab].
-    UI("Interface", "Layout, cards, motion and gestures", ownsHeader = true),
+    UI("Interface", "Layout, cards, motion and gestures", AppVectorIcons.ViewGrid, ownsHeader = true),
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
-    TYPE("Type & reading", "Font, UI size, text size and scrolling titles"),
-    JOKES("Jokes", "Ani-chan's timing, tone and saved lines"),
+    TYPE(
+        "Type & reading",
+        "Font, UI size, text size and scrolling titles",
+        AppVectorIcons.TextBold
+    ),
+    JOKES("Jokes", "Ani-chan's timing, tone and saved lines", AppVectorIcons.AnimeSparkle),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
     SEASONAL(
         "Seasonal effects",
-        "Snow, petals and leaves - and how hard the sky may work on this phone"
+        "Snow, petals and leaves - and how hard the sky may work on this phone",
+        AppVectorIcons.Seasonal
     ),
-    LIBRARY("Library & dashboard", "Refresh, arriving rows and the bar"),
+    LIBRARY(
+        "Library & dashboard",
+        "Refresh, arriving rows and the bar",
+        AppVectorIcons.Library
+    ),
     // The four device-shaped choices were in four different pages because each was
     // written beside the feature that first needed it - the frame-rate ceiling under
     // the sky, full screen under the theme, the app lock under the session, the hold
     // duration under the cards it acts on. Asked together, they are one question.
-    DEVICE("Device Manager", "What this phone reports, and how hard the app may work"),
-    ACCOUNT("AniList account", "Client ID and session"),
+    DEVICE(
+        "Device Manager",
+        "What this phone reports, and how hard the app may work",
+        AppVectorIcons.DevicePhone
+    ),
+    ACCOUNT("AniList account", "Client ID and session", AppVectorIcons.SectionAniList),
     // Updates is its own page rather than the top of About: the update check and
     // the release notes are the two cards a reader comes back to, and they were
     // sharing a scroll with the crash report and the privacy policy.
-    UPDATES("Updates", "Version, update check and release notes"),
+    UPDATES(
+        "Updates",
+        "Version, update check and release notes",
+        AppVectorIcons.SystemUpdate
+    ),
     // "and links" is not padding: the page carries the repository and the issue
     // tracker, which is where a bug report actually goes. A subtitle that stopped
     // at "privacy" would describe three of its four cards.
-    ABOUT("About & support", "Build, privacy and links")
+    ABOUT("About & support", "Build, privacy and links", AppVectorIcons.SectionAbout)
 }
 
 /**
@@ -287,6 +307,17 @@ fun SettingsScreen(
 ) {
     var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
     var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
+    // Search is a mode of the shelf, not a destination of its own: the field sits
+    // above the shelf, a non-empty query replaces the shelf with results, and Back
+    // clears the query before it closes Settings. Keeping the query in this screen
+    // rather than in `SettingsRoot` also lets it survive opening a result and
+    // coming back to the same answer list.
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    // A search result can point one level below a page. The target is handed to the
+    // page's own shelf once, then consumed; without clearing it, reopening
+    // Interface from the normal row would jump to the last searched part again.
+    var interfaceTarget by rememberSaveable { mutableStateOf<InterfaceSection?>(null) }
+    var themeTarget by rememberSaveable { mutableStateOf<ThemeSection?>(null) }
     // One probe, for the one place that checks: the shelf's "AniList connection"
     // row and the dialog it opens share it, so a Check tap cannot disagree with
     // the row that opened it. The About page used to raise a second, independent
@@ -303,7 +334,15 @@ fun SettingsScreen(
     val pageStateHolder = rememberSaveableStateHolder()
 
     BackHandler {
-        if (page != null) page = null else onNavigateBack()
+        when {
+            page != null -> {
+                page = null
+                interfaceTarget = null
+                themeTarget = null
+            }
+            searchQuery.isNotEmpty() -> searchQuery = ""
+            else -> onNavigateBack()
+        }
     }
 
     Scaffold(
@@ -330,8 +369,19 @@ fun SettingsScreen(
                         SettingsRoot(
                             viewer = viewer,
                             onClose = onNavigateBack,
-                            onOpen = { page = it },
-                            onCheckConnection = { showConnectionCheck = true }
+                            onOpen = {
+                                interfaceTarget = null
+                                themeTarget = null
+                                page = it
+                            },
+                            onOpenSearchResult = { result ->
+                                interfaceTarget = result.interfaceSection
+                                themeTarget = result.themeSection
+                                page = result.page
+                            },
+                            onCheckConnection = { showConnectionCheck = true },
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it }
                         )
                     } else {
                         Column(modifier = Modifier.fillMaxSize()) {
@@ -343,7 +393,11 @@ fun SettingsScreen(
                                 SettingsSubHeader(
                                     title = destination.title,
                                     subtitle = destination.subtitle,
-                                    onBack = { page = null }
+                                    onBack = {
+                                        page = null
+                                        interfaceTarget = null
+                                        themeTarget = null
+                                    }
                                 )
                             }
                             Box(
@@ -371,7 +425,15 @@ fun SettingsScreen(
                                     totalWatchedCount = totalWatchedCount,
                                     totalMissedCount = totalMissedCount,
                                     cardPreviewEntries = cardPreviewEntries,
-                                    onClosePage = { page = null }
+                                    interfaceTarget = interfaceTarget,
+                                    onInterfaceTargetConsumed = { interfaceTarget = null },
+                                    themeTarget = themeTarget,
+                                    onThemeTargetConsumed = { themeTarget = null },
+                                    onClosePage = {
+                                        page = null
+                                        interfaceTarget = null
+                                        themeTarget = null
+                                    }
                                 )
                             }
                         }
@@ -402,7 +464,10 @@ private fun SettingsRoot(
     viewer: ViewerProfile?,
     onClose: () -> Unit,
     onOpen: (SettingsPage) -> Unit,
-    onCheckConnection: () -> Unit
+    onOpenSearchResult: (SettingsSearchResult) -> Unit,
+    onCheckConnection: () -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -416,120 +481,124 @@ private fun SettingsRoot(
                 .fillMaxWidth()
         ) {
             SettingsHubHeader(onClose = onClose)
-
-            // The account leads now. It is the one row whose answer changes what
-            // every page below it is looking at - demo list or real AniList list -
-            // and it used to sit fourth, under two sections a signed-out reader
-            // would walk past on the way to "am I signed in?".
-            SettingsSectionLabel("AniList")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.ACCOUNT.entry(
-                        AppVectorIcons.SectionAniList,
-                        "settings_row_account",
-                        onOpen,
-                        // The one live fact on the shelf: whether this session is a
-                        // real AniList account or the built-in demo list. Everything
-                        // else the row could say is already on the page it opens.
-                        subtitle = viewer?.let { "Signed in as ${it.name}" }
-                            ?: "Not signed in - browsing the demo list"
-                    ),
-                    // `SignalOn`, not `BrokenHeart`: this row asks a question. A
-                    // broken heart beside "connection" claims the answer before the
-                    // check has run, on a screen where the answer is usually fine.
-                    SettingsHubEntry(
-                        icon = AppVectorIcons.SignalOn,
-                        title = "Connection check",
-                        subtitle = "Ask AniList whether it is reachable",
-                        onClick = onCheckConnection,
-                        testTag = "settings_row_connection"
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
+            SettingsSearchBar(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
 
-            SettingsSectionLabel("Personalisation")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.APPEARANCE.entry(
-                        AppVectorIcons.SectionAppearance,
-                        "settings_row_appearance",
-                        onOpen
-                    ),
-                    SettingsPage.UI.entry(
-                        AppVectorIcons.ViewGrid,
-                        "settings_row_ui",
-                        onOpen
-                    ),
-                    SettingsPage.TYPE.entry(
-                        AppVectorIcons.TextBold,
-                        "settings_row_type",
-                        onOpen
-                    ),
-                    SettingsPage.JOKES.entry(
-                        AppVectorIcons.AnimeSparkle,
-                        "settings_row_jokes",
-                        onOpen
-                    ),
-                    SettingsPage.SEASONAL.entry(
-                        AppVectorIcons.Seasonal,
-                        "settings_row_seasonal",
-                        onOpen
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-
-            SettingsSectionLabel("Library & dashboard")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.LIBRARY.entry(
-                        AppVectorIcons.Library,
-                        "settings_row_library",
-                        onOpen
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-
-            SettingsSectionLabel("This device")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.DEVICE.entry(
-                        AppVectorIcons.DevicePhone,
-                        "settings_row_device",
-                        onOpen
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-
-            // The connection check used to sit under a "Network" label of its own,
-            // which is a whole section heading for one row - and a heading that
-            // names the transport rather than the thing being checked. It lives
-            // with the account row at the top, because it is the same AniList.
-            SettingsSectionLabel("About")
-            SettingsHubGroup(
-                entries = listOf(
-                    SettingsPage.UPDATES.entry(
-                        AppVectorIcons.SystemUpdate,
-                        "settings_row_updates",
-                        onOpen
-                    ),
-                    SettingsPage.ABOUT.entry(
-                        AppVectorIcons.SectionAbout,
-                        "settings_row_about",
-                        onOpen
-                    )
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-
-            Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                SettingsVersionFooter(
-                    versionName = BuildConfig.VERSION_NAME,
-                    versionCode = BuildConfig.VERSION_CODE
+            if (searchQuery.isNotBlank()) {
+                SettingsSearchResults(
+                    query = searchQuery,
+                    onQueryChange = onSearchQueryChange,
+                    onOpen = onOpenSearchResult,
+                    modifier = Modifier.fillMaxWidth()
                 )
+            } else {
+                // The account leads now. It is the one row whose answer changes what
+                // every page below it is looking at - demo list or real AniList list -
+                // and it used to sit fourth, under two sections a signed-out reader
+                // would walk past on the way to "am I signed in?".
+                SettingsSectionLabel("AniList")
+                SettingsHubGroup(
+                    entries = listOf(
+                        SettingsPage.ACCOUNT.entry(
+                            "settings_row_account",
+                            onOpen,
+                            // The one live fact on the shelf: whether this session is a
+                            // real AniList account or the built-in demo list. Everything
+                            // else the row could say is already on the page it opens.
+                            subtitle = viewer?.let { "Signed in as ${it.name}" }
+                                ?: "Not signed in - browsing the demo list"
+                        ),
+                        // `SignalOn`, not `BrokenHeart`: this row asks a question. A
+                        // broken heart beside "connection" claims the answer before the
+                        // check has run, on a screen where the answer is usually fine.
+                        SettingsHubEntry(
+                            icon = AppVectorIcons.SignalOn,
+                            title = "Connection check",
+                            subtitle = "Ask AniList whether it is reachable",
+                            onClick = onCheckConnection,
+                            testTag = "settings_row_connection"
+                        )
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                SettingsSectionLabel("Personalisation")
+                SettingsHubGroup(
+                    entries = listOf(
+                        SettingsPage.APPEARANCE.entry(
+                            "settings_row_appearance",
+                            onOpen
+                        ),
+                        SettingsPage.UI.entry(
+                            "settings_row_ui",
+                            onOpen
+                        ),
+                        SettingsPage.TYPE.entry(
+                            "settings_row_type",
+                            onOpen
+                        ),
+                        SettingsPage.JOKES.entry(
+                            "settings_row_jokes",
+                            onOpen
+                        ),
+                        SettingsPage.SEASONAL.entry(
+                            "settings_row_seasonal",
+                            onOpen
+                        )
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                SettingsSectionLabel("Library & dashboard")
+                SettingsHubGroup(
+                    entries = listOf(
+                        SettingsPage.LIBRARY.entry(
+                            "settings_row_library",
+                            onOpen
+                        )
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                SettingsSectionLabel("This device")
+                SettingsHubGroup(
+                    entries = listOf(
+                        SettingsPage.DEVICE.entry(
+                            "settings_row_device",
+                            onOpen
+                        )
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                // The connection check used to sit under a "Network" label of its own,
+                // which is a whole section heading for one row - and a heading that
+                // names the transport rather than the thing being checked. It lives
+                // with the account row at the top, because it is the same AniList.
+                SettingsSectionLabel("About")
+                SettingsHubGroup(
+                    entries = listOf(
+                        SettingsPage.UPDATES.entry(
+                            "settings_row_updates",
+                            onOpen
+                        ),
+                        SettingsPage.ABOUT.entry(
+                            "settings_row_about",
+                            onOpen
+                        )
+                    ),
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+
+                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    SettingsVersionFooter(
+                        versionName = BuildConfig.VERSION_NAME,
+                        versionCode = BuildConfig.VERSION_CODE
+                    )
+                }
             }
         }
     }
@@ -554,12 +623,11 @@ private fun SettingsRoot(
  * where a reader glances to ask whether they are signed in at all.
  */
 private fun SettingsPage.entry(
-    icon: ImageVector,
     testTag: String,
     onOpen: (SettingsPage) -> Unit,
     subtitle: String? = null
 ): SettingsHubEntry = SettingsHubEntry(
-    icon = icon,
+    icon = this.icon,
     title = title,
     subtitle = subtitle ?: this.subtitle,
     testTag = testTag,
@@ -588,6 +656,12 @@ private fun SettingsPageContent(
     totalWatchedCount: Int?,
     totalMissedCount: Int?,
     cardPreviewEntries: List<MediaListEntryItem>,
+    /** An Interface part a search result asked for, consumed once by that page. */
+    interfaceTarget: InterfaceSection?,
+    onInterfaceTargetConsumed: () -> Unit,
+    /** An Appearance part a search result asked for, consumed once by that page. */
+    themeTarget: ThemeSection?,
+    onThemeTargetConsumed: () -> Unit,
     /** Leaves the open page for the Settings shelf; used by the pages that own theirs. */
     onClosePage: () -> Unit
 ) {
@@ -596,7 +670,9 @@ private fun SettingsPageContent(
             themePreferences = themePreferences,
             pageTitle = page.title,
             pageSubtitle = page.subtitle,
-            onClosePage = onClosePage
+            onClosePage = onClosePage,
+            initialSection = themeTarget,
+            onInitialSectionConsumed = onThemeTargetConsumed
         )
         SettingsPage.UI -> InterfaceTab(
             themePreferences = themePreferences,
@@ -606,7 +682,9 @@ private fun SettingsPageContent(
             pageSubtitle = page.subtitle,
             onClosePage = onClosePage,
             previewEntries = cardPreviewEntries,
-            mainTabPreferences = mainTabPreferences
+            mainTabPreferences = mainTabPreferences,
+            initialSection = interfaceTarget,
+            onInitialSectionConsumed = onInterfaceTargetConsumed
         )
         SettingsPage.TYPE -> TypeSettingsTab(
             themePreferences = themePreferences,

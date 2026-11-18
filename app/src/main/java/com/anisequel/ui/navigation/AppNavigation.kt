@@ -62,6 +62,7 @@ import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalConfirmPlanningAdd
 import com.anisequel.ui.theme.LocalHomeSequelStyle
+import com.anisequel.ui.theme.LocalInfoPageStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
 import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
@@ -684,6 +685,10 @@ fun AppNavigation(
             LocalPosterUniqueSeasons provides interfaceSettings.posterUniqueSeasons,
             LocalBetterPosters provides betterPosters,
             LocalAppLayout provides interfaceSettings.layout,
+            // The title page is its own choice, not part of the Home layout: a
+            // reader can keep the classic Home and open the redesigned title page,
+            // and this is the one place that answer is provided.
+            LocalInfoPageStyle provides interfaceSettings.infoPageStyle,
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,

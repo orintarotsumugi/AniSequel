@@ -27,6 +27,48 @@ enum class AppLayout(val storageValue: String, val displayName: String) {
 }
 
 /**
+ * Which title page the app draws.
+ *
+ * [CLASSIC] is the page as it shipped: one card per section under a collapsing
+ * hero. [NOVA] is the redesigned page: full-bleed key art, a poster lockup, one
+ * stats strip and the reading sections laid over the same artwork.
+ *
+ * A separate switch from [AppLayout] on purpose. The two are different questions -
+ * the Home/Library look and the title page - and a reader may want one and not the
+ * other. Tying them together would take that choice away, and a screen the new
+ * title page does not cover would be forced into it by a Home-layout tap.
+ *
+ * Stored by [storageValue] for the same reason the other enums are: a reordering
+ * must not repaint every install, and a value written by a newer build falls back
+ * to the shipped page rather than crashing.
+ */
+enum class InfoPageStyle(
+    val storageValue: String,
+    val displayName: String,
+    val blurb: String
+) {
+    CLASSIC(
+        storageValue = "classic",
+        displayName = "Classic",
+        blurb = "Cards under the collapsing hero - the title page as it shipped."
+    ),
+    NOVA(
+        storageValue = "nova",
+        displayName = "Nova",
+        blurb = "Full-bleed key art, a poster lockup and a stats strip, " +
+            "with the synopsis, details and categories over the artwork."
+    );
+
+    companion object {
+        /** The page the app opens in, so an update never moves a reader's pages. */
+        val DEFAULT = CLASSIC
+
+        fun fromStorage(value: String?): InfoPageStyle =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
+}
+
+/**
  * How the new Home draws its missed sequels.
  *
  * Two answers to the same question, because the two readers are real: [ROWS]

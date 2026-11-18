@@ -4,6 +4,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.HomeSequelStyle
+import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
 
@@ -17,6 +18,18 @@ import com.anisequel.domain.ui.NavBarLift
  * [com.anisequel.data.repository.InterfacePreferences].
  */
 val LocalAppLayout = staticCompositionLocalOf { AppLayout.DEFAULT }
+
+/**
+ * Which title page the app draws: the shipped card page or the Nova redesign.
+ *
+ * A dynamic local, like [LocalHomeSequelStyle], so switching it does not rebuild
+ * the provider's whole content. It is read by the detail sheet - which is a
+ * dialog in its own window and inherits this composition's locals - and by the
+ * Interface page's preview. Provided once at the app root from
+ * [com.anisequel.data.repository.InterfacePreferences], so a tap in Settings is
+ * what the next title opened uses and no screen has to thread the choice.
+ */
+val LocalInfoPageStyle = compositionLocalOf { InfoPageStyle.DEFAULT }
 
 /**
  * How dense the new Library draws itself.

@@ -114,7 +114,9 @@ class InfoBackdropWiringTest {
         assertTrue(
             "the hero's bottom edge is not read from item zero of the list, so the " +
                 "hand-off cannot follow the hero as it scrolls or grows with the font scale",
-            page.contains("private fun rememberHeroBottom(listState: LazyListState)") &&
+            // Internal rather than private: the Nova page shares this measured
+            // edge. The assertion below still pins the source of the value.
+            page.contains("fun rememberHeroBottom(listState: LazyListState)") &&
                 page.contains("firstOrNull { it.index == 0 }")
         )
         assertTrue(

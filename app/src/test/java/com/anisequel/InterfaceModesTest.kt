@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.HomeSequelStyle
+import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
 import org.junit.Assert.assertEquals
@@ -26,6 +27,28 @@ class InterfaceModesTest {
         assertEquals(HomeSequelStyle.BANNER, HomeSequelStyle.fromStorage("banner"))
         assertEquals(HomeSequelStyle.SHELF, HomeSequelStyle.fromStorage("shelf"))
         assertEquals(MediaCardStyle.COVER_ONLY, MediaCardStyle.fromStorage("cover_only"))
+    }
+
+    /**
+     * The title-page switch is its own key, and an install that has never seen it
+     * must keep the page it shipped with.
+     *
+     * Both halves matter: a fresh value on the wrong key would make the switch
+     * look live while writing nothing the app reads, and a default of
+     * [InfoPageStyle.NOVA] would repaint every existing install's title page on
+     * upgrade - the one
+     * thing the "classic is untouched" promise rules out.
+     */
+    @Test
+    fun `the title page style is stable and defaults to the shipped page`() {
+        assertEquals(InfoPageStyle.CLASSIC, InfoPageStyle.fromStorage("classic"))
+        assertEquals(InfoPageStyle.NOVA, InfoPageStyle.fromStorage("nova"))
+        assertEquals(InfoPageStyle.CLASSIC, InfoPageStyle.DEFAULT)
+        assertEquals(
+            "a value written by a newer build must fall back to the shipped page",
+            InfoPageStyle.CLASSIC,
+            InfoPageStyle.fromStorage("hologram")
+        )
     }
 
     @Test

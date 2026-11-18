@@ -285,7 +285,7 @@ internal fun LazyListScope.infoPageItems(
  * same inset), so a scrolled-away card and an arriving one are the same kind of
  * slot to reuse.
  */
-private fun LazyListScope.cardItem(
+internal fun LazyListScope.cardItem(
     key: String,
     index: Int,
     entranceKey: Any? = null,
@@ -308,7 +308,7 @@ private fun LazyListScope.cardItem(
  * The heading and content padding belong to the row (see `InfoTalent.kt` and
  * `InfoThemeSongsSection.kt`); this function is only where that split is decided.
  */
-private fun LazyListScope.rowItem(
+internal fun LazyListScope.rowItem(
     key: String,
     index: Int,
     entranceKey: Any? = null,

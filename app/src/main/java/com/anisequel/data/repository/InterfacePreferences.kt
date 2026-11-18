@@ -15,6 +15,7 @@ import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.HomeSequelStyle
+import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.domain.ui.PosterOverlays
@@ -55,6 +56,15 @@ class InterfacePreferences(private val context: Context) {
     private object Keys {
         val CARD_STYLE = stringPreferencesKey("media_card_style")
         val APP_LAYOUT = stringPreferencesKey("app_layout")
+
+        /**
+         * Which title page the detail sheet draws.
+         *
+         * Its own key rather than a third value on [APP_LAYOUT]: the two are
+         * different questions, and folding the title page into the Home layout
+         * would make "I like the new Home but not the new title page" unexpressible.
+         */
+        val INFO_PAGE_STYLE = stringPreferencesKey("info_page_style")
         val LIBRARY_VIEW = stringPreferencesKey("library_view_mode")
         val SHOW_CONTINUE_RAIL = booleanPreferencesKey("show_continue_rail")
         val HOME_SEQUEL_STYLE = stringPreferencesKey("home_sequel_style")
@@ -120,6 +130,16 @@ class InterfacePreferences(private val context: Context) {
     /** Everything about the interface that is not the colour palette. */
     data class InterfaceSettings(
         val layout: AppLayout = AppLayout.DEFAULT,
+        /**
+         * Which title page the Info destination draws.
+         *
+         * Part of this emission so the app root provides it once beside the layout
+         * it belongs with; the detail sheet reads it through
+         * [com.anisequel.ui.theme.LocalInfoPageStyle].
+         * Defaults to the shipped page, so an upgrade changes nothing until the
+         * reader asks for the redesign.
+         */
+        val infoPageStyle: InfoPageStyle = InfoPageStyle.DEFAULT,
         val libraryView: LibraryViewMode = LibraryViewMode.DEFAULT,
         val showContinueRail: Boolean = true,
         val homeSequelStyle: HomeSequelStyle = HomeSequelStyle.DEFAULT,
@@ -212,6 +232,7 @@ class InterfacePreferences(private val context: Context) {
         context.interfaceDataStore.data.map { preferences ->
             InterfaceSettings(
                 layout = AppLayout.fromStorage(preferences[Keys.APP_LAYOUT]),
+                infoPageStyle = InfoPageStyle.fromStorage(preferences[Keys.INFO_PAGE_STYLE]),
                 libraryView = LibraryViewMode.fromStorage(preferences[Keys.LIBRARY_VIEW]),
                 showContinueRail = preferences[Keys.SHOW_CONTINUE_RAIL] ?: true,
                 homeSequelStyle = HomeSequelStyle.fromStorage(
@@ -273,6 +294,19 @@ class InterfacePreferences(private val context: Context) {
     suspend fun setLayout(layout: AppLayout) {
         context.interfaceDataStore.edit { preferences ->
             preferences[Keys.APP_LAYOUT] = layout.storageValue
+        }
+    }
+
+    /**
+     * Which title page the Info destination draws.
+     *
+     * A separate setter from [setLayout] for the reason [InfoPageStyle] gives: the
+     * two choices are independent, and one picker must not silently rewrite the
+     * other.
+     */
+    suspend fun setInfoPageStyle(style: InfoPageStyle) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.INFO_PAGE_STYLE] = style.storageValue
         }
     }
 
@@ -403,11 +437,12 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
-    /** Back to the shipped layout, density, rail, card style, poster source and bar position. */
+    /** Back to the shipped layout, title page, density, rail, card style, poster source and bar position. */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
             preferences.remove(Keys.CARD_STYLE)
             preferences.remove(Keys.APP_LAYOUT)
+            preferences.remove(Keys.INFO_PAGE_STYLE)
             preferences.remove(Keys.LIBRARY_VIEW)
             preferences.remove(Keys.SHOW_CONTINUE_RAIL)
             preferences.remove(Keys.HOME_SEQUEL_STYLE)

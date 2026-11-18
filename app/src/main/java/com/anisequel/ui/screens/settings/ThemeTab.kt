@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -106,7 +107,7 @@ private const val THEME_HUB_KEY = "theme_hub"
  * gives the most recently added enabled callback the event.
  */
 @Composable
-fun ThemeTab(
+internal fun ThemeTab(
     themePreferences: ThemePreferences,
     /**
      * The header this page shows on its own shelf, supplied by `SettingsScreen` from
@@ -117,6 +118,9 @@ fun ThemeTab(
     pageSubtitle: String,
     /** Leaves the Theme page for the Settings shelf. */
     onClosePage: () -> Unit,
+    /** A part a Settings search result asked for; consumed once, like Interface's. */
+    initialSection: ThemeSection? = null,
+    onInitialSectionConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -128,6 +132,13 @@ fun ThemeTab(
     )
 
     var section by rememberSaveable { mutableStateOf<ThemeSection?>(null) }
+
+    LaunchedEffect(initialSection) {
+        if (initialSection != null) {
+            section = initialSection
+            onInitialSectionConsumed()
+        }
+    }
 
     // The shelf and the sub-pages are separate compositions, and `AnimatedContent`
     // disposes the outgoing one - so a sub-page's scroll position would start at the
@@ -248,7 +259,7 @@ private fun ThemeSectionBody(
  * title and the sub-page's header come from the same two strings, so a row cannot
  * promise a different page than the one it opens.
  */
-private enum class ThemeSection(
+internal enum class ThemeSection(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,

@@ -34,8 +34,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -217,7 +219,19 @@ data class SettingsHubEntry(
     val title: String,
     val subtitle: String,
     val testTag: String,
-    val onClick: () -> Unit
+    val onClick: () -> Unit,
+    /**
+     * The page or part a search result belongs to, printed above its title.
+     *
+     * Null for an ordinary shelf row: repeating "Settings" over every row would
+     * be a second label for the screen the reader is already on. Search results
+     * set it because their rows are a flat list drawn from every page.
+     */
+    val eyebrow: String? = null,
+    /** The title with query matches already styled; null draws the plain title. */
+    val titleHighlight: AnnotatedString? = null,
+    /** The subtitle with query matches already styled; null draws the plain text. */
+    val subtitleHighlight: AnnotatedString? = null
 )
 
 /**
@@ -314,15 +328,26 @@ private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
             )
         }
         Column(modifier = Modifier.weight(1f)) {
+            if (entry.eyebrow != null) {
+                Text(
+                    text = entry.eyebrow,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.size(2.dp))
+            }
             Text(
-                text = entry.title,
+                text = entry.titleHighlight ?: AnnotatedString(entry.title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.size(2.dp))
             Text(
-                text = entry.subtitle,
+                text = entry.subtitleHighlight ?: AnnotatedString(entry.subtitle),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

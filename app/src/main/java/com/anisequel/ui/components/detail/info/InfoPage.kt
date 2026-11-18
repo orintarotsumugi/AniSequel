@@ -329,7 +329,7 @@ fun AnimeInfoPage(
  * the first frame could guess, and the second call is a cache hit.
  */
 @Composable
-private fun rememberThemeSongs(media: MediaNode): State<List<ThemeSong>> {
+internal fun rememberThemeSongs(media: MediaNode): State<List<ThemeSong>> {
     val artwork = media.bannerImage?.takeIf { it.isNotBlank() }
         ?: media.coverImage?.bestUrl
     return produceState(
@@ -369,7 +369,7 @@ private fun rememberThemeSongs(media: MediaNode): State<List<ThemeSong>> {
  * belongs to.
  */
 @Composable
-private fun rememberInfoCollapse(listState: LazyListState): State<Float> {
+internal fun rememberInfoCollapse(listState: LazyListState): State<Float> {
     val distance = with(LocalDensity.current) { HERO_COLLAPSE.toPx() }
     return remember(listState, distance) {
         derivedStateOf {
@@ -399,7 +399,7 @@ private fun rememberInfoCollapse(listState: LazyListState): State<Float> {
  * below a hero that is already drawn.
  */
 @Composable
-private fun rememberHeroBottom(listState: LazyListState): State<Float> =
+internal fun rememberHeroBottom(listState: LazyListState): State<Float> =
     remember(listState) {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -427,7 +427,7 @@ private fun rememberHeroBottom(listState: LazyListState): State<Float> =
  * from, not keep the one from the title the reader just left.
  */
 @Composable
-private fun rememberShowFloatingBar(collapse: State<Float>): State<Boolean> =
+internal fun rememberShowFloatingBar(collapse: State<Float>): State<Boolean> =
     remember(collapse) {
         derivedStateOf { collapse.value > DOCKED_BAR_AT }
     }
@@ -446,7 +446,7 @@ private fun rememberShowFloatingBar(collapse: State<Float>): State<Boolean> =
  * which is the divisor that makes the offset mean "how far into this item".
  */
 @Composable
-private fun rememberReadProgress(listState: LazyListState): State<Float> =
+internal fun rememberReadProgress(listState: LazyListState): State<Float> =
     remember(listState) {
         derivedStateOf {
             val info = listState.layoutInfo

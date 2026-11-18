@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
@@ -540,6 +542,290 @@ private fun MiniCoverColumn(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The two title pages, drawn as the shape a reader is choosing between.
+ *
+ * The same bargain as [AppLayoutPreviews]: a name is not a preview. "Nova" could
+ * mean anything until the card shows the key art, the poster lockup, the stats
+ * strip and the reading cards; "Classic" could look like a downgrade until the
+ * card shows the hero and the section stack it actually is. Both are drawn with
+ * the app's own colours and type steps, and both read from [InfoPageStyle] - so a
+ * third page added later cannot appear without a preview beside it.
+ */
+@Composable
+internal fun InfoPageStylePreviews(
+    selected: InfoPageStyle,
+    onSelect: (InfoPageStyle) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        InfoPageStyle.entries.forEach { style ->
+            val interactionSource = remember { MutableInteractionSource() }
+            val active = style == selected
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.RadioButton,
+                        onClickLabel = "Use the ${style.displayName} title page"
+                    ) { onSelect(style) }
+                    .semantics { role = Role.RadioButton }
+                    .testTag("info_page_style_${style.storageValue}"),
+                shape = RoundedCornerShape(20.dp),
+                color = if (active) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerLow
+                },
+                border = BorderStroke(
+                    width = if (active) 2.dp else 1.dp,
+                    color = if (active) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    }
+                )
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                            .padding(8.dp)
+                    ) {
+                        if (style == InfoPageStyle.NOVA) {
+                            NovaInfoMini()
+                        } else {
+                            ClassicInfoMini()
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = style.displayName,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = style.blurb,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The shipped page: a banner, a poster and title, then the card stack. */
+@Composable
+private fun ClassicInfoMini() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.34f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 7.dp, bottom = 6.dp)
+                    .width(24.dp)
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.75f))
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 37.dp, bottom = 6.dp)
+            ) {
+                Text(
+                    text = "Title",
+                    style = miniBodyStyle(),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Text(
+                    text = "TV · 24m",
+                    style = miniCaptionStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+        }
+        repeat(3) { index ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Box(
+                    modifier = Modifier
+                        .height(4.dp)
+                        .fillMaxWidth(if (index == 1) 0.5f else 0.68f)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                )
+            }
+        }
+    }
+}
+
+/** The redesign: key art, poster lockup, status capsule, stat strip, progress. */
+@Composable
+private fun NovaInfoMini() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(70.dp)
+                .clip(RoundedCornerShape(10.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.62f),
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        )
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 7.dp, bottom = 7.dp)
+                    .width(26.dp)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.9f))
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 39.dp, bottom = 7.dp)
+            ) {
+                Text(
+                    text = "Title",
+                    style = miniBodyStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1
+                )
+                Text(
+                    text = "Releasing · TV",
+                    style = miniCaptionStyle(),
+                    color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 1
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 7.dp, bottom = 7.dp)
+                    .fillMaxWidth(0.38f)
+                    .height(14.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(20.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("7.5", "34K", "503", "24m").forEach { value ->
+                Text(
+                    text = value,
+                    style = miniCaptionStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(18.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Box(
+                modifier = Modifier
+                    .height(4.dp)
+                    .fillMaxWidth(0.55f)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
         )
     }
 }
