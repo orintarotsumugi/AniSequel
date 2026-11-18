@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -257,75 +258,13 @@ internal fun NovaInfoHero(
                 )
         )
 
-        // Back, on the edge the reader's thumb is nearest when the page opens.
-        Surface(
-            shape = CircleShape,
-            color = Color.Black.copy(alpha = 0.44f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-            shadowElevation = 6.dp,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .immersiveDisplayInsets(immersive)
-                .padding(12.dp)
-                .testTag("nova_detail_back")
-        ) {
-            HeroIconButton(
-                icon = AppVectorIcons.Close,
-                label = "Close",
-                onClick = onClose
-            )
-        }
-
-        // The title's utility actions, in one glass capsule. No second close here:
-        // the round control on the left is the way out, and two of them on one page
-        // is the duplication the classic hero's docked bar had to be fixed for.
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .immersiveDisplayInsets(immersive)
-                .padding(12.dp)
-        ) {
-            Surface(
-                shape = ExpressiveShapes.pill,
-                color = Color.Black.copy(alpha = 0.42f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-                shadowElevation = 8.dp,
-                modifier = Modifier.testTag("nova_detail_hero_actions")
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    HeroIconButton(
-                        icon = AppVectorIcons.Search,
-                        label = "Search the web",
-                        onClick = {
-                            val kind = if (media.isManga) "manga" else "anime"
-                            val query = media.title?.displayTitle.orEmpty().ifBlank {
-                                media.id.toString()
-                            }
-                            openExternalUrlOrCopy(
-                                context,
-                                "https://duckduckgo.com/?q=" + Uri.encode("$query $kind")
-                            )
-                        }
-                    )
-                    HeroDivider()
-                    HeroIconButton(
-                        icon = AppVectorIcons.OpenInBrowser,
-                        label = "Open on AniList",
-                        onClick = { openExternalUrlOrCopy(context, media.pageUrl) }
-                    )
-                    if (onOpenAppearance != null) {
-                        HeroDivider()
-                        HeroIconButton(
-                            icon = AppVectorIcons.SectionAppearance,
-                            label = "Page appearance",
-                            onClick = onOpenAppearance
-                        )
-                    }
-                }
-            }
-        }
+        HeroTopControls(
+            immersive = immersive,
+            onClose = onClose,
+            onSearch = { openExternalUrlOrCopy(context, webSearchUrl(media)) },
+            onOpenAniList = { openExternalUrlOrCopy(context, media.pageUrl) },
+            onOpenAppearance = onOpenAppearance
+        )
 
         Column(
             modifier = Modifier
@@ -335,228 +274,345 @@ internal fun NovaInfoHero(
                 .sectionReveal(0, entranceKey = media.id to media.type),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Box(
-                    modifier = Modifier
-                        .width(116.dp)
-                        .height(174.dp)
-                        .shadow(
-                            elevation = 18.dp,
-                            shape = MaterialTheme.shapes.large,
-                            ambientColor = coverColor,
-                            spotColor = Color.Black
-                        )
-                        .clip(MaterialTheme.shapes.large)
-                        .border(
-                            1.dp,
-                            Color.White.copy(alpha = 0.24f),
-                            MaterialTheme.shapes.large
-                        )
-                        .background(coverColor)
-                        .onGloballyPositioned { posterBounds = it.boundsInWindow() }
-                        .expressiveHoldGesture(onHold = openCover, onClick = openCover)
-                        .semantics {
-                            role = Role.Button
-                            contentDescription = media.displayName
-                            onClick(label = "View full artwork") {
-                                openCover()
-                                true
-                            }
-                        }
-                        .testTag("nova_detail_hero_poster")
-                ) {
-                    AsyncImage(
-                        model = poster,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .unseamedCover()
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.Black.copy(alpha = 0.56f),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = AppVectorIcons.FullscreenExpand,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier
-                                .padding(4.dp)
-                                .size(14.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = media.displayName,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            lineHeight = 30.sp,
-                            letterSpacing = (-0.4).sp
-                        ),
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .shadow(
-                                elevation = 6.dp,
-                                shape = RectangleShape,
-                                ambientColor = Color.Black,
-                                spotColor = Color.Black
-                            )
-                            .expressiveHoldGesture(
-                                onHold = {
-                                    copyTitle(context, currentTitle.value)
-                                    titleCopied = true
-                                }
-                            )
-                            // The hold is a pointer input TalkBack cannot perform;
-                            // the long-click action gives a screen reader the same
-                            // copy, the same pairing the classic hero uses.
-                            .semantics {
-                                onLongClick(label = "Copy title") {
-                                    copyTitle(context, media.displayName)
-                                    titleCopied = true
-                                    true
-                                }
-                            }
-                            .testTag("nova_detail_hero_title")
-                    )
-                    if (altTitle != null) {
-                        Text(
-                            text = altTitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.78f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (relationLabel != null) {
-                            HeroChip(
-                                icon = AppVectorIcons.FranchiseBranch,
-                                label = relationLabel
-                            )
-                        }
-                        if (statusLabel != null) {
-                            HeroChip(
-                                icon = AppVectorIcons.Info,
-                                label = statusLabel.uppercase(),
-                                accent = true
-                            )
-                        }
-                        // The medium before the format: "TV" beside "MANGA" would
-                        // otherwise describe the same title as two different things.
-                        HeroChip(
-                            icon = if (media.isManga) {
-                                AppVectorIcons.SourceBook
-                            } else {
-                                AppVectorIcons.Tv
-                            },
-                            label = media.formatLabel.uppercase()
-                        )
-                        media.studioCredits.firstOrNull()?.let { studio ->
-                            HeroChip(
-                                icon = AppVectorIcons.Studio,
-                                label = studio.name,
-                                onClick = studio.id?.let { id ->
-                                    { onOpenStudio(id, studio.name) }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            HeroLockup(
+                media = media,
+                relationLabel = relationLabel,
+                poster = poster,
+                coverColor = coverColor,
+                altTitle = altTitle,
+                statusLabel = statusLabel,
+                onOpenCover = openCover,
+                onPosterBounds = { posterBounds = it },
+                onCopyTitle = {
+                    copyTitle(context, currentTitle.value)
+                    titleCopied = true
+                },
+                onOpenStudio = onOpenStudio
+            )
 
             // The one control the reference puts above the fold. A tracked title
             // reads its status and progress here and one tap opens the editor; an
             // untracked one gets the planning row in the first card below instead,
             // because that row is a *choice* rather than a state.
             if (entryText.isNotBlank()) {
-                Surface(
-                    shape = ExpressiveShapes.pill,
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 52.dp)
-                        .then(
-                            if (entryEditable) {
-                                Modifier
-                                    .bouncyPress(pressedScale = 0.97f)
-                                    .clickable(
-                                        role = Role.Button,
-                                        onClickLabel = "Edit your AniList entry"
-                                    ) { onEditEntry?.invoke() }
-                            } else {
-                                Modifier
-                            }
-                        )
-                        .testTag("nova_info_entry_pill")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (entryEditable) {
-                                AppVectorIcons.EditEntry
-                            } else {
-                                AppVectorIcons.CheckCircle
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = entryText,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (entryEditable) {
-                            Text(
-                                text = "Edit",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                HeroEntryPill(
+                    text = entryText,
+                    editable = entryEditable,
+                    onClick = { onEditEntry?.invoke() }
+                )
             }
         }
 
-        // The acknowledgement floats above the lockup rather than taking a row:
-        // a layout that shifted when a copy landed would move the entry capsule
-        // under the reader's thumb for the whole confirmation window. Bottom
-        // centre sits clear of the back control and the action capsule.
-        AnimatedVisibility(
-            visible = titleCopied,
-            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
-            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 86.dp)
+        HeroCopyConfirmation(visible = titleCopied)
+
+    }
+}
+
+
+@Composable
+private fun BoxScope.HeroTopControls(
+    immersive: Boolean,
+    onClose: () -> Unit,
+    onSearch: () -> Unit,
+    onOpenAniList: () -> Unit,
+    onOpenAppearance: (() -> Unit)?
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.44f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        shadowElevation = 6.dp,
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .statusBarsPadding()
+            .immersiveDisplayInsets(immersive)
+            .padding(12.dp)
+            .testTag("nova_detail_back")
+    ) {
+        HeroIconButton(
+            icon = AppVectorIcons.Close,
+            label = "Close",
+            onClick = onClose
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .statusBarsPadding()
+            .immersiveDisplayInsets(immersive)
+            .padding(12.dp)
+    ) {
+        Surface(
+            shape = ExpressiveShapes.pill,
+            color = Color.Black.copy(alpha = 0.42f),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+            shadowElevation = 8.dp,
+            modifier = Modifier.testTag("nova_detail_hero_actions")
         ) {
-            TitleCopiedPill()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HeroIconButton(
+                    icon = AppVectorIcons.Search,
+                    label = "Search the web",
+                    onClick = onSearch
+                )
+                HeroDivider()
+                HeroIconButton(
+                    icon = AppVectorIcons.OpenInBrowser,
+                    label = "Open on AniList",
+                    onClick = onOpenAniList
+                )
+                if (onOpenAppearance != null) {
+                    HeroDivider()
+                    HeroIconButton(
+                        icon = AppVectorIcons.SectionAppearance,
+                        label = "Page appearance",
+                        onClick = onOpenAppearance
+                    )
+                }
+            }
         }
+    }
+}
+
+private fun webSearchUrl(media: MediaNode): String {
+    val kind = if (media.isManga) "manga" else "anime"
+    val query = media.title?.displayTitle.orEmpty().ifBlank { media.id.toString() }
+    return "https://duckduckgo.com/?q=" + Uri.encode("$query $kind")
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HeroLockup(
+    media: MediaNode,
+    relationLabel: String?,
+    poster: String?,
+    coverColor: Color,
+    altTitle: String?,
+    statusLabel: String?,
+    onOpenCover: () -> Unit,
+    onPosterBounds: (Rect?) -> Unit,
+    onCopyTitle: () -> Unit,
+    onOpenStudio: (Int, String?) -> Unit
+) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Box(
+            modifier = Modifier
+                .width(116.dp)
+                .height(174.dp)
+                .shadow(
+                    elevation = 18.dp,
+                    shape = MaterialTheme.shapes.large,
+                    ambientColor = coverColor,
+                    spotColor = Color.Black
+                )
+                .clip(MaterialTheme.shapes.large)
+                .border(
+                    1.dp,
+                    Color.White.copy(alpha = 0.24f),
+                    MaterialTheme.shapes.large
+                )
+                .background(coverColor)
+                .onGloballyPositioned { onPosterBounds(it.boundsInWindow()) }
+                .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
+                .semantics {
+                    role = Role.Button
+                    contentDescription = media.displayName
+                    onClick(label = "View full artwork") {
+                        onOpenCover()
+                        true
+                    }
+                }
+                .testTag("nova_detail_hero_poster")
+        ) {
+            AsyncImage(
+                model = poster,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .unseamedCover()
+            )
+            Surface(
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.56f),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.FullscreenExpand,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(14.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = media.displayName,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    lineHeight = 30.sp,
+                    letterSpacing = (-0.4).sp
+                ),
+                color = Color.White,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .shadow(
+                        elevation = 6.dp,
+                        shape = RectangleShape,
+                        ambientColor = Color.Black,
+                        spotColor = Color.Black
+                    )
+                    .expressiveHoldGesture(onHold = onCopyTitle)
+                    .semantics {
+                        onLongClick(label = "Copy title") {
+                            onCopyTitle()
+                            true
+                        }
+                    }
+                    .testTag("nova_detail_hero_title")
+            )
+            if (altTitle != null) {
+                Text(
+                    text = altTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.78f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (relationLabel != null) {
+                    HeroChip(
+                        icon = AppVectorIcons.FranchiseBranch,
+                        label = relationLabel
+                    )
+                }
+                if (statusLabel != null) {
+                    HeroChip(
+                        icon = AppVectorIcons.Info,
+                        label = statusLabel.uppercase(),
+                        accent = true
+                    )
+                }
+                // The medium before the format: "TV" beside "MANGA" would
+                // otherwise describe the same title as two different things.
+                HeroChip(
+                    icon = if (media.isManga) {
+                        AppVectorIcons.SourceBook
+                    } else {
+                        AppVectorIcons.Tv
+                    },
+                    label = media.formatLabel.uppercase()
+                )
+                media.studioCredits.firstOrNull()?.let { studio ->
+                    HeroChip(
+                        icon = AppVectorIcons.Studio,
+                        label = studio.name,
+                        onClick = studio.id?.let { id ->
+                            { onOpenStudio(id, studio.name) }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroEntryPill(
+    text: String,
+    editable: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = ExpressiveShapes.pill,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .then(
+                if (editable) {
+                    Modifier
+                        .bouncyPress(pressedScale = 0.97f)
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = "Edit your AniList entry",
+                            onClick = onClick
+                        )
+                } else {
+                    Modifier
+                }
+            )
+            .testTag("nova_info_entry_pill")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (editable) {
+                    AppVectorIcons.EditEntry
+                } else {
+                    AppVectorIcons.CheckCircle
+                },
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (editable) {
+                Text(
+                    text = "Edit",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The acknowledgement floats above the lockup rather than taking a row: a
+ * layout that shifted when a copy landed would move the entry capsule under the
+ * reader's thumb for the whole confirmation window. Bottom centre sits clear of
+ * the back control and the action capsule.
+ */
+@Composable
+private fun BoxScope.HeroCopyConfirmation(visible: Boolean) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+            slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
+        exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+            slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 2 },
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 86.dp)
+    ) {
+        TitleCopiedPill()
     }
 }
 
