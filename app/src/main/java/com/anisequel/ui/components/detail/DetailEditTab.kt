@@ -123,8 +123,12 @@ internal fun DetailEditTab(
     // A deliberate scroll dismisses the expanded stepper; tapping the progress
     // surface again toggles it. Step taps themselves do not alter expansion.
     LaunchedEffect(editorScrollState) {
+        var previousOffset = editorScrollState.value
         snapshotFlow { editorScrollState.value }.collect { offset ->
-            if (offset > 0) progressControlsExpanded = false
+            if (progressControlsExpanded && offset > previousOffset) {
+                progressControlsExpanded = false
+            }
+            previousOffset = offset
         }
     }
 
