@@ -451,7 +451,13 @@ fun SequelDetailSheet(
             mutableStateOf(false)
         }
         val selected = if (showEntrySheet && destinations.size > 1) 1 else 0
-        val sheetOffset = remember(subject.mediaId, subject.media.type) { Animatable(0.4f) }
+        val sheetOffset = remember(subject.mediaId, subject.media.type) { Animatable(1f) }
+        val closeEntrySheet: () -> Unit = {
+            scope.launch {
+                sheetOffset.animateTo(1f, ExpressiveMotion.SettleSpatial)
+                showEntrySheet = false
+            }
+        }
 
         // The capsule's measured height is also the page's bottom clearance. It
         // travels to the sheet's top edge while My Entry is open, then settles back
@@ -469,7 +475,12 @@ fun SequelDetailSheet(
         }
 
         LaunchedEffect(showEntrySheet) {
-            if (showEntrySheet) sheetOffset.snapTo(0.4f)
+            if (showEntrySheet) {
+                sheetOffset.snapTo(1f)
+                sheetOffset.animateTo(0.4f, ExpressiveMotion.DefaultSpatial)
+            } else {
+                sheetOffset.snapTo(1f)
+            }
         }
 
         BoxWithConstraints(
@@ -656,7 +667,7 @@ fun SequelDetailSheet(
                                 )
                             }
                             IconButton(
-                                onClick = { showEntrySheet = false },
+                                onClick = closeEntrySheet,
                                 modifier = Modifier
                                     .background(
                                         MaterialTheme.colorScheme.surfaceContainerHigh,
