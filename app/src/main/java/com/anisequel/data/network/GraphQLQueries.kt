@@ -1246,6 +1246,10 @@ object GraphQLQueries {
         meanScore
         popularity
         favourites
+        stats {
+          scoreDistribution { score amount }
+          statusDistribution { status amount }
+        }
         season
         seasonYear
         siteUrl
