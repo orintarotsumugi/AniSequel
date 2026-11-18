@@ -139,7 +139,7 @@ internal enum class SettingsPage(
 ) {
     APPEARANCE(
         "Appearance",
-        "Theme, background and accent colour",
+        "Colours, cover-based themes and screen backgrounds",
         AppVectorIcons.SectionAppearance,
         ownsHeader = true
     ),
@@ -147,27 +147,27 @@ internal enum class SettingsPage(
     // changes the shape of every grid in the app, and a reader choosing it wants a
     // preview of the card, not a palette.
     // Its parts each have a sub-page of their own - see [InterfaceTab].
-    UI("Interface", "Layout, cards, motion and gestures", AppVectorIcons.ViewGrid, ownsHeader = true),
+    UI("Interface", "Home, library, navigation, card layouts and gestures", AppVectorIcons.ViewGrid, ownsHeader = true),
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
     TYPE(
         "Type & reading",
-        "Font, UI size, text size and scrolling titles",
+        "Fonts, saved typefaces, text size and title behaviour",
         AppVectorIcons.TextBold
     ),
-    JOKES("Jokes", "Ani-chan's timing, tone and saved lines", AppVectorIcons.AnimeSparkle),
+    JOKES("Jokes", "Ani-chan personality, jokes, triggers and animations", AppVectorIcons.AnimeSparkle),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
     SEASONAL(
         "Seasonal effects",
-        "Snow, petals and leaves - and how hard the sky may work on this phone",
+        "Seasonal particles, their appearance and performance limits",
         AppVectorIcons.Seasonal
     ),
     LIBRARY(
         "Library & dashboard",
-        "Refresh, arriving rows and the bar",
+        "AniList refresh timing, dashboard sections and navigation bar",
         AppVectorIcons.Library
     ),
     // The four device-shaped choices were in four different pages because each was
@@ -176,22 +176,22 @@ internal enum class SettingsPage(
     // duration under the cards it acts on. Asked together, they are one question.
     DEVICE(
         "Device Manager",
-        "What this phone reports, and how hard the app may work",
+        "Display, app lock, performance limits and cover storage",
         AppVectorIcons.DevicePhone
     ),
-    ACCOUNT("AniList account", "Client ID and session", AppVectorIcons.SectionAniList),
+    ACCOUNT("AniList account", "Connect AniList, manage the session and sign out", AppVectorIcons.SectionAniList),
     // Updates is its own page rather than the top of About: the update check and
     // the release notes are the two cards a reader comes back to, and they were
     // sharing a scroll with the crash report and the privacy policy.
     UPDATES(
         "Updates",
-        "Version, update check and release notes",
+        "Installed version, app updates and diagnostics",
         AppVectorIcons.SystemUpdate
     ),
     // "and links" is not padding: the page carries the repository and the issue
     // tracker, which is where a bug report actually goes. A subtitle that stopped
     // at "privacy" would describe three of its four cards.
-    ABOUT("About & support", "Build, privacy and links", AppVectorIcons.SectionAbout)
+    ABOUT("About & support", "App details, privacy information and support links", AppVectorIcons.SectionAbout)
 }
 
 /**
