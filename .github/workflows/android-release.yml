@@ -517,7 +517,6 @@ jobs:
           # Main, tags and manual release runs still produce the fully shrunk,
           # signed release APK with the production keep rules.
           BUILD_VARIANT: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
-          FAST_R8: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         run: |
           ./gradlew "assemble${BUILD_VARIANT^}" \
             -PanisequelVersionCode="${{ github.run_number }}" \
