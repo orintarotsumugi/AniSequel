@@ -19,7 +19,9 @@ object AiringCountdown {
     fun format(airingAtSeconds: Long?, nowMillis: Long = System.currentTimeMillis()): String? {
         val airingAt = airingAtSeconds ?: return null
         val remaining = airingAt * 1000L - nowMillis
-        if (remaining <= 0L) return "now"
+        // Keep the release moment visible briefly instead of making the countdown
+        // vanish on the exact minute it reaches zero.
+        if (remaining <= 0L) return if (remaining >= -15 * 60_000L) "now" else null
 
         val minutes = remaining / 60_000
         val hours = minutes / 60
