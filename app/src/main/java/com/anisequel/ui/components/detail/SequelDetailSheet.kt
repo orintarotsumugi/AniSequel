@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,8 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
+import com.anisequel.data.model.displayName
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.CoverColorRepository
@@ -60,6 +63,8 @@ import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
+import com.anisequel.domain.list.ListStatuses
+import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.PosterSource
 import com.anisequel.domain.ui.SequelSeason
 import com.anisequel.ui.components.AppVectorIcons
@@ -70,12 +75,14 @@ import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
 import com.anisequel.ui.components.detail.info.InfoAppearanceEditor
+import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.LocalInfoPageStyle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
@@ -526,18 +533,43 @@ fun SequelDetailSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 4.dp),
+                                .padding(bottom = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "My Entry",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f)
-                            )
+                            // The editor used to open on a bare "My Entry", which named
+                            // the section but not the title it was editing - and the tab is
+                            // reached from a page whose hero has already scrolled away.
+                            // The subtitle is the title and the status the draft is about,
+                            // so a reader who came back to the editor from a relation knows
+                            // which entry the form will write.
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "My Entry",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = listOfNotNull(
+                                        media.displayName,
+                                        editState.draft?.status?.let {
+                                            ListStatuses.label(it, media.isManga)
+                                        }
+                                    ).joinToString(" \u00b7 "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("detail_edit_subtitle")
+                                )
+                            }
                             IconButton(
                                 onClick = handleDismiss,
-                                modifier = Modifier.testTag("detail_edit_close")
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        androidx.compose.foundation.shape.CircleShape
+                                    )
+                                    .testTag("detail_edit_close")
                             ) {
                                 Icon(
                                     imageVector = AppVectorIcons.Close,
@@ -554,6 +586,34 @@ fun SequelDetailSheet(
                             scope = scope
                         )
                     }
+                } else if (LocalInfoPageStyle.current == InfoPageStyle.NOVA) {
+                    NovaInfoPage(
+                        subject = subject,
+                        isDetailLoading = isDetailLoading,
+                        canWriteToAniList = canWriteToAniList,
+                        holdDurationSeconds = holdDurationSeconds,
+                        swipeEnabled = swipeEnabled,
+                        onAddToPlanning = onAddToPlanning,
+                        onAddToWatching = onAddToWatching,
+                        quickAddStatus = quickAddStatuses[quickAddKey(subject.media)]
+                            ?: QuickAddStatus(),
+                        friends = friends,
+                        onAddMediaToPlanning = onAddMediaToPlanning,
+                        onAddMediaToWatching = onAddMediaToWatching,
+                        onClose = handleDismiss,
+                        onOpenMedia = onOpenMedia,
+                        onOpenStudio = onOpenStudio,
+                        onOpenCharacter = onOpenCharacter,
+                        onOpenStaff = onOpenStaff,
+                        onEditEntry = { if (entryEditor != null) destination = 1 },
+                        onOpenAppearance = { showAppearance = true },
+                        modifier = Modifier.fillMaxSize(),
+                        listState = infoListState,
+                        bottomContentPadding = navClearance,
+                        infoBackdropSource = themeSettings.infoBackdropSource,
+                        infoBackdropBlur = themeSettings.infoBackdropBlur,
+                        infoBackdropTint = themeSettings.infoBackdropTint
+                    )
                 } else {
                     AnimeInfoPage(
                         subject = subject,

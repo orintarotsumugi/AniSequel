@@ -1245,6 +1245,7 @@ object GraphQLQueries {
         averageScore
         meanScore
         popularity
+        favourites
         season
         seasonYear
         siteUrl

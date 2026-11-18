@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
@@ -72,7 +73,7 @@ private const val INTERFACE_HUB_KEY = "interface_hub"
  * back arrow promises the shelf.
  */
 @Composable
-fun InterfaceTab(
+internal fun InterfaceTab(
     themePreferences: ThemePreferences,
     interfacePreferences: InterfacePreferences,
     /**
@@ -116,9 +117,25 @@ fun InterfaceTab(
      * own bar. Collected here rather than in each sub-page because the bar preview and
      * the card-design mock-up are two views of one answer.
      */
-    mainTabPreferences: MainTabPreferences
+    mainTabPreferences: MainTabPreferences,
+    /**
+     * A part a Settings search result asked for.
+     *
+     * Deliberately one-shot: the page reports it consumed so reopening Interface
+     * from the normal shelf row does not jump back to the part that was searched
+     * for last time. Null on every ordinary entrance.
+     */
+    initialSection: InterfaceSection? = null,
+    onInitialSectionConsumed: () -> Unit = {}
 ) {
     var section by rememberSaveable { mutableStateOf<InterfaceSection?>(null) }
+
+    LaunchedEffect(initialSection) {
+        if (initialSection != null) {
+            section = initialSection
+            onInitialSectionConsumed()
+        }
+    }
     val barTabs by produceState(
         initialValue = enabledMainTabs(
             tierListTab = MainTabPreferences.DEFAULT_TIER_LIST_TAB,
@@ -239,7 +256,7 @@ fun InterfaceTab(
  * from [CardDesignPart], which the Card design shelf's rows also use - the row and the
  * screen stay one description.
  */
-private enum class InterfaceSection(
+internal enum class InterfaceSection(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
@@ -247,7 +264,7 @@ private enum class InterfaceSection(
 ) {
     LAYOUT(
         title = "App layout",
-        subtitle = "Shelf or classic, the bar's lift and the Home rail",
+        subtitle = "Shelf or classic, the Info page, bar lift and Home rail",
         icon = AppVectorIcons.Tune,
         testTag = "interface_row_layout"
     ),

@@ -211,6 +211,34 @@ now reports `hasVisualOverflow` from layout, and the flag is sticky — once
 expanded every paragraph is unbounded, so a mirrored flag would make "Show less"
 vanish the moment it was pressed.
 
+### The second title page
+
+Settings → Interface → App layout also offers an **Info page** choice: Classic is
+the page above, and Nova is a second shell over the same data. The choice is a
+separate preference (`info_page_style`, `InfoPageStyle`) rather than a third
+value on `AppLayout`, because the Home look and the title-page look are different
+questions; an install that never touches the switch keeps Classic. The detail
+sheet dispatches once, in `SequelDetailSheet`, and the two pages share every
+section composable, the scroll-derived helpers and the entry editor.
+
+The redesign changes the *reading order*, not the facts. The hero is the
+full-bleed key art (banner or cover, following the reader's backdrop source),
+the poster and title sit in a lockup over it, the status is a full-width capsule
+that opens the editor, and the artwork drifts against the scroll in the draw
+phase. A four-up strip under it prints score, popularity, favourites and
+length; `favourites` was added to `MEDIA_DETAIL_FIELDS` for that column. The
+next-episode countdown appears once — in the stats strip for a tracked anime,
+and in the Details card (as before) when there is no progress card to own it.
+The wavy progress card and the trailer card (drawn from YouTube's deterministic
+thumbnail) are the other new surfaces; the synopsis, Categories, cast, relations
+and the rest are the same cards, in the reference order.
+
+There is no Episodes or Comments destination. The reference clients have both
+because they play video or own a comment store; AniSequel has neither, and an
+empty capsule destination is the dead control §9 keeps out. The existing
+Info/My Entry dock is unchanged, and the editor's header retouch only names the
+title and draft status above the same form.
+
 ---
 
 ## Studio pages
@@ -1654,6 +1682,18 @@ The transition still drops the default `SizeTransform` (`using null`). The pages
 are scrollable columns, and animating the container's height while the outgoing
 page settles its own scroll is the crash shape that the tab version already
 documented. The fades and scales are draw-phase and stay.
+
+The shelf also has a search field now. It is a mode of the shelf rather than a
+destination: a non-empty query replaces the rows in place, and Back clears the
+query before it leaves Settings. The index is deliberately wider than the shelf —
+it contains the Interface and Appearance parts and the named cards inside the
+other pages, each carrying the page and sub-section it needs to open. That is why
+`InterfaceTab` and `ThemeTab` accept a one-shot `initialSection`: a result can land
+on "OLED mode" or "Info page" rather than dropping the reader on a shelf and
+asking them to find it again. Matching, normalisation and the typo fallback live in
+`SettingsSearchIndex.kt` so `SettingsSearchTest` can pin them without a Compose
+harness; `SettingsSearch.kt` only draws the field, the highlighted results and the
+suggestions.
 
 About & support was the exception the split missed: it kept the profile card, the
 demo prompt, the list snapshot, a connection check and a sign-out button, all of

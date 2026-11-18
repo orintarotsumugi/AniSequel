@@ -338,7 +338,17 @@ data class MediaNode(
      */
     val characters: MediaCharacterConnection? = null,
     /** The crew, headlined by the director and the original creator. Detail query only. */
-    val staff: MediaStaffConnection? = null
+    val staff: MediaStaffConnection? = null,
+    /**
+     * How many AniList users have this title in their favourites.
+     *
+     * Detail query only: it is one number on the Nova title page's stats strip and
+     * nothing on the list query reads it. Declared at the end of the constructor
+     * rather than beside [popularity] so it cannot shift the positional arguments
+     * of a fixture built before this field existed. AniList computes it
+     * server-side; there is no local list to count.
+     */
+    val favourites: Int? = null
 ) {
     /**
      * Overlay of the lazily-fetched detail onto this node.
@@ -381,6 +391,7 @@ data class MediaNode(
         countryOfOrigin = detail.countryOfOrigin ?: countryOfOrigin,
         averageScore = detail.averageScore ?: averageScore,
         popularity = detail.popularity ?: popularity,
+        favourites = detail.favourites ?: favourites,
         season = detail.season ?: season,
         seasonYear = detail.seasonYear ?: seasonYear,
         siteUrl = detail.siteUrl ?: siteUrl,

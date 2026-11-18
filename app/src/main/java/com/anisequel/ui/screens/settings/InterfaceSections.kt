@@ -105,7 +105,8 @@ internal fun InterfaceLayoutSection(
             // stopped doing one level up.
             title = "Layout and bar",
             icon = AppVectorIcons.Settings,
-            subtitle = "Classic is untouched. The new look is the shelf layout, in beta."
+            subtitle = "Classic is untouched. New look changes Home and Library; " +
+                "the Info page is its own choice below, in beta."
         ) {
             AppLayoutPreviews(
                 selected = interfaceSettings.layout,
@@ -117,6 +118,35 @@ internal fun InterfaceLayoutSection(
                 },
                 modifier = Modifier.testTag("app_layout_row"),
                 barLift = NavBarLift.clamp(liftDraft.roundToInt())
+            )
+
+            // A second, independent choice rather than a third value on the layout
+            // picker above: wanting the new Home and the classic title page is a
+            // real preference, and folding the two together would make it
+            // unexpressible. The previews draw the two pages' *shape* - hero,
+            // stats, cards - so the switch is understood before it is tapped.
+            Spacer(modifier = Modifier.height(16.dp))
+            SettingsFieldLabel(text = "Info page")
+            Spacer(modifier = Modifier.height(8.dp))
+            InfoPageStylePreviews(
+                selected = interfaceSettings.infoPageStyle,
+                onSelect = { option ->
+                    if (option != interfaceSettings.infoPageStyle) {
+                        scope.launch { interfacePreferences.setInfoPageStyle(option) }
+                    }
+                },
+                modifier = Modifier.testTag("info_page_style_row")
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            CollapsibleText(
+                text = "Classic keeps the title page exactly as it shipped: one card per " +
+                    "section under a collapsing hero. Nova draws the key art full-bleed, " +
+                    "puts the poster and title in a lockup with the status capsule, and " +
+                    "leads with the score, popularity, favourites and length before the " +
+                    "synopsis. Both pages use the same AniList data and the same entry " +
+                    "editor, and this choice does not move the Home or Library layout.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(12.dp))
