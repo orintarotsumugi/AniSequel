@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -93,12 +95,16 @@ private data class NovaStat(val label: String, val value: String)
  * full line than inside a quarter-width cell.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun NovaStatsCard(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
     var selectedStat by remember(media.id) { mutableStateOf<String?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded)
+    )
     val stats = remember(media) {
         buildList {
             media.averageScore?.takeIf { it > 0 }?.let { score ->
