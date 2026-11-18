@@ -307,7 +307,12 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
         }
 
         when (selectedLabel) {
-            "Score" -> NovaScoreDetails(media, scoreRows, totalRatings, maxScoreCount)
+            "Score" -> NovaScoreDetails(
+                media = media,
+                scoreRows = scoreRows,
+                totalRatings = totalRatings,
+                maxScoreCount = maxScoreCount
+            )
             "Popularity" -> NovaPopularityDetails(media)
             "Favourites" -> NovaFavouritesDetails(media)
             else -> NovaLengthDetails(media)
@@ -494,6 +499,168 @@ private fun NovaLengthDetails(media: MediaNode) {
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(if (media.isManga) "CHAPTERS" else "EPISODE LENGTH", style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (media.isManga) media.chapters?.toString() ?: "—"
+                else media.duration?.let { "$it min" } ?: "—",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                if (media.isManga) "Published chapters" else "Average runtime per episode",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovaScoreDetails(
+    media: MediaNode,
+    scoreRows: List<*>,
+    totalRatings: Int,
+    maxScoreCount: Int
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.Star,
+                contentDescription = null,
+                modifier = Modifier.size(30.dp)
+            )
+            Column {
+                Text(
+                    media.averageScore?.takeIf { it > 0 }?.let {
+                        String.format(Locale.US, "%.1f", it / 10f)
+                    } ?: "—",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("Average score · out of 10", style = MaterialTheme.typography.labelLarge)
+                if (totalRatings > 0) {
+                    Text("${compactCount(totalRatings)} ratings", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+    Text("Score distribution", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    if (scoreRows.isEmpty()) {
+        EmptyStatMessage("AniList has not supplied a score distribution for this title.")
+    } else {
+        // Keep the row model typed at the call site; this helper is specialized below.
+        scoreRows.forEach { row ->
+            val scoreRow = row as com.anisequel.data.model.ScoreDistribution
+            val amount = scoreRow.amount ?: 0
+            DistributionBarRow(
+                label = String.format(Locale.US, "%.1f", (scoreRow.score ?: 0) / 10f),
+                value = compactCount(amount),
+                fraction = if (maxScoreCount > 0) amount.toFloat() / maxScoreCount else 0f,
+                accent = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovaPopularityDetails(media: MediaNode) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("POPULARITY", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(
+                media.popularity?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text("AniList popularity count", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    Text("Catalogue rankings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+    if (media.rankingList.isEmpty()) {
+        EmptyStatMessage("No catalogue ranking is available for this title.")
+    } else {
+        media.rankingList.forEach { ranking ->
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        ranking.rank?.let { "#$it" } ?: "—",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(ranking.context ?: "Catalogue ranking", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NovaFavouritesDetails(media: MediaNode) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                AppVectorIcons.ActivityLiked,
+                contentDescription = null,
+                modifier = Modifier.size(30.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    media.favourites?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("AniList favourites", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+    EmptyStatMessage(
+        "This is the total number of AniList favourites. AniList does not provide a public list of every account that favourited this title."
+    )
+}
+
+@Composable
+private fun NovaLengthDetails(media: MediaNode) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                if (media.isManga) "CHAPTERS" else "EPISODE LENGTH",
+                style = MaterialTheme.typography.labelMedium
+            )
             Text(
                 if (media.isManga) media.chapters?.toString() ?: "—"
                 else media.duration?.let { "$it min" } ?: "—",
