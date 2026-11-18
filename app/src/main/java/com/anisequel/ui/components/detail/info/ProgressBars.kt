@@ -433,10 +433,16 @@ private fun Modifier.holdToPickStyle(onHold: () -> Unit): Modifier = composed {
         .pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
-                val released = withTimeoutOrNull(HOLD_TO_EDIT_MILLIS) {
-                    waitForUpOrCancellation()
-                }
-                if (released == null) {
+                // `waitForUpOrCancellation()` also returns null when scrolling
+                // consumes the gesture. Keep that distinct from the timeout:
+                // only an actual three-second hold should open the picker.
+                val held = withTimeoutOrNull(HOLD_TO_EDIT_MILLIS) {
+                    if (waitForUpOrCancellation() == null) {
+                        return@withTimeoutOrNull false
+                    }
+                    false
+                } ?: true
+                if (held) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     currentOnHold()
                 }
