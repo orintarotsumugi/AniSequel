@@ -777,7 +777,7 @@ private fun CoverCloseEffects(
             }
             // Both halves run together: the backdrop leaving while the artwork is
             // still shrinking would show the page through a moving picture.
-            launch { reveal.animateTo(0f, ExpressiveMotion.FastSpatial) }
+            launch { reveal.animateTo(0f, ExpressiveMotion.SettleSpatial) }
             presence.animateTo(0f, ExpressiveMotion.FastEffects)
         }
         onDismiss()
