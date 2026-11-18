@@ -26,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -286,7 +287,24 @@ fun DashboardScreen(
         )
     }
 
-    val selectedDetailId = selectedSubject?.mediaId
+    // Keep the last resolved subject for this exact selection while the dashboard
+    // temporarily leaves Success during refresh. The key deliberately follows the
+    // selected source/id rather than the Success state: a different selection gets
+    // a fresh empty holder, and clearing the selection cannot resurrect an old page.
+    val retainedSubjectState = remember(
+        selectedSequelId,
+        selectedArrivingId,
+        navigatedRelation?.mediaId,
+        navigatedRelation?.type
+    ) {
+        androidx.compose.runtime.mutableStateOf<AnimeDetailSubject?>(null)
+    }
+    SideEffect {
+        if (selectedSubject != null) retainedSubjectState.value = selectedSubject
+    }
+    val displayedSubject = selectedSubject ?: retainedSubjectState.value
+
+    val selectedDetailId = displayedSubject?.mediaId
     val isDetailLoading = selectedDetailId != null && selectedDetailId in loadingDetailIds
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
@@ -480,7 +498,7 @@ fun DashboardScreen(
         onDismiss = { showFilterSheet = false }
     )
 
-    if (selectedSubject != null) {
+    if (displayedSubject != null) {
         // `canWrite` is hoisted above, next to `successState`, so the write flag,
         // the editor and the quick-add host above cannot be told different things:
         // writes unavailable while still handed the tab that writes - or the
@@ -496,7 +514,7 @@ fun DashboardScreen(
             navigatedRelation = null
         }
         SequelDetailSheet(
-            subject = selectedSubject,
+            subject = displayedSubject,
             onDismiss = closeSheet,
             onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
             onAddToWatching = { dashboardViewModel.addToWatching(it) },
@@ -507,7 +525,7 @@ fun DashboardScreen(
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
             onLoadFriends = { id, type -> dashboardViewModel.loadFriends(id, type) },
-            friends = detailFriends[selectedSubject.mediaId].orEmpty(),
+            friends = detailFriends[displayedSubject.mediaId].orEmpty(),
             onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,
