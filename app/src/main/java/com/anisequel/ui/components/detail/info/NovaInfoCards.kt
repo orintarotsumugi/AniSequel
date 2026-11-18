@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -100,7 +102,7 @@ internal fun NovaStatsCard(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
-    var selectedStat by remember(media.id) { mutableStateOf<String?>(null) }
+    var selectedStat by remember(media.type, media.id) { mutableStateOf<String?>(null) }
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
         enabledValues = setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded)
@@ -278,7 +280,10 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
         .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
         .sortedByDescending { it.amount }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(selectedStatTitle(selectedLabel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
