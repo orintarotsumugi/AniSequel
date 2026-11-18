@@ -28,6 +28,7 @@ import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ThemeSong
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.repository.InfoBackdropBlur
