@@ -565,7 +565,7 @@ fun SequelDetailSheet(
                         destinations = destinations,
                         selectedIndex = selected,
                         onSelect = { index ->
-                            if (index == 1) showEntrySheet = true else showEntrySheet = false
+                            if (index == 1) showEntrySheet = true else closeEntrySheet()
                         },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
