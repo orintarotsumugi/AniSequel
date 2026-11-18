@@ -20,6 +20,7 @@ import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.ProgressBarStyle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -65,6 +66,16 @@ class InterfacePreferences(private val context: Context) {
          * would make "I like the new Home but not the new title page" unexpressible.
          */
         val INFO_PAGE_STYLE = stringPreferencesKey("info_page_style")
+
+        /**
+         * How the Info page's progress card draws its bar.
+         *
+         * Its own key because the style outlives one title: the reader picks it
+         * once, on whichever card they held, and every title they open afterwards
+         * uses it. A per-title value would be another entry field AniList does not
+         * have and would reset on every relation walk.
+         */
+        val PROGRESS_BAR_STYLE = stringPreferencesKey("progress_bar_style")
         val LIBRARY_VIEW = stringPreferencesKey("library_view_mode")
         val SHOW_CONTINUE_RAIL = booleanPreferencesKey("show_continue_rail")
         val HOME_SEQUEL_STYLE = stringPreferencesKey("home_sequel_style")
@@ -136,10 +147,12 @@ class InterfacePreferences(private val context: Context) {
          * Part of this emission so the app root provides it once beside the layout
          * it belongs with; the detail sheet reads it through
          * [com.anisequel.ui.theme.LocalInfoPageStyle].
-         * Defaults to the shipped page, so an upgrade changes nothing until the
-         * reader asks for the redesign.
+         * Defaults to Nova now; an explicit "classic" is still honoured, so an
+         * install that chose the original page keeps it.
          */
         val infoPageStyle: InfoPageStyle = InfoPageStyle.DEFAULT,
+        /** The bar style chosen by holding a progress card; see [ProgressBarStyle]. */
+        val progressBarStyle: ProgressBarStyle = ProgressBarStyle.DEFAULT,
         val libraryView: LibraryViewMode = LibraryViewMode.DEFAULT,
         val showContinueRail: Boolean = true,
         val homeSequelStyle: HomeSequelStyle = HomeSequelStyle.DEFAULT,
@@ -233,6 +246,9 @@ class InterfacePreferences(private val context: Context) {
             InterfaceSettings(
                 layout = AppLayout.fromStorage(preferences[Keys.APP_LAYOUT]),
                 infoPageStyle = InfoPageStyle.fromStorage(preferences[Keys.INFO_PAGE_STYLE]),
+                progressBarStyle = ProgressBarStyle.fromStorage(
+                    preferences[Keys.PROGRESS_BAR_STYLE]
+                ),
                 libraryView = LibraryViewMode.fromStorage(preferences[Keys.LIBRARY_VIEW]),
                 showContinueRail = preferences[Keys.SHOW_CONTINUE_RAIL] ?: true,
                 homeSequelStyle = HomeSequelStyle.fromStorage(
@@ -307,6 +323,19 @@ class InterfacePreferences(private val context: Context) {
     suspend fun setInfoPageStyle(style: InfoPageStyle) {
         context.interfaceDataStore.edit { preferences ->
             preferences[Keys.INFO_PAGE_STYLE] = style.storageValue
+        }
+    }
+
+    /**
+     * The bar style the next Info page draws.
+     *
+     * Written from the picker a long hold opens on a progress card. The setter
+     * takes the enum rather than a string so a typo cannot write a value every
+     * read then has to fall back from.
+     */
+    suspend fun setProgressBarStyle(style: ProgressBarStyle) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.PROGRESS_BAR_STYLE] = style.storageValue
         }
     }
 

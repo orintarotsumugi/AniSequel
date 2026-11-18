@@ -7,6 +7,7 @@ import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.ProgressBarStyle
 
 /**
  * The layout the app is drawing.
@@ -30,6 +31,27 @@ val LocalAppLayout = staticCompositionLocalOf { AppLayout.DEFAULT }
  * what the next title opened uses and no screen has to thread the choice.
  */
 val LocalInfoPageStyle = compositionLocalOf { InfoPageStyle.DEFAULT }
+
+/**
+ * How the Info page's progress card is drawn.
+ *
+ * Its own local rather than a field on [LocalInfoPageStyle]: the two pages share
+ * the same cards, so a reader on the classic page can use the rocket without
+ * choosing Nova. A dynamic local for the same reason as [LocalInfoPageStyle] -
+ * changing it invalidates the bars, not the app root.
+ */
+val LocalProgressBarStyle = compositionLocalOf { ProgressBarStyle.DEFAULT }
+
+/**
+ * Writes a new progress-bar style.
+ *
+ * The picker is opened from inside the bar, which is several layers below the
+ * preferences owner, and a callback threaded through the detail sheet and both
+ * page styles would be easy to miss on the next reader. Provided once at the app
+ * root beside [LocalProgressBarStyle]. Defaults to a no-op so a preview or a host
+ * without preferences still renders a bar that does not crash when held.
+ */
+val LocalSetProgressBarStyle = staticCompositionLocalOf<(ProgressBarStyle) -> Unit> { {} }
 
 /**
  * How dense the new Library draws itself.

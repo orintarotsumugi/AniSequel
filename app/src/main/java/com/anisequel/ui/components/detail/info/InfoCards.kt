@@ -163,7 +163,7 @@ fun InfoProgressCard(
             )
         }
     ) {
-        WavyProgressBar(progress = fraction, entranceKey = media.type to media.id)
+        StyledProgressBar(progress = fraction, entranceKey = media.type to media.id)
 
         // A tracked title at zero is a real state AniList records the moment a show
         // is added to Planning, and it is the one state this card has no words for:

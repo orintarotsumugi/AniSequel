@@ -106,7 +106,7 @@ internal fun InterfaceLayoutSection(
             title = "Layout and bar",
             icon = AppVectorIcons.Settings,
             subtitle = "Classic is untouched. New look changes Home and Library; " +
-                "the Info page is its own choice below, in beta."
+                "the Info page is its own choice below."
         ) {
             AppLayoutPreviews(
                 selected = interfaceSettings.layout,

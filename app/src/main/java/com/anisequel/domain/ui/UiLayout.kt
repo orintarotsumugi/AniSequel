@@ -38,9 +38,16 @@ enum class AppLayout(val storageValue: String, val displayName: String) {
  * other. Tying them together would take that choice away, and a screen the new
  * title page does not cover would be forced into it by a Home-layout tap.
  *
+ * [NOVA] is the default now. Classic remains a real, supported page rather than a
+ * fallback: a reader who prefers the original cards can choose it and the app
+ * remembers that choice. The previous default was Classic because the redesign was
+ * new; every feature it shares with Classic is in place, so keeping existing
+ * installs on the older shell only makes the first thing they see the one the app
+ * is no longer designed around.
+ *
  * Stored by [storageValue] for the same reason the other enums are: a reordering
  * must not repaint every install, and a value written by a newer build falls back
- * to the shipped page rather than crashing.
+ * to Nova rather than crashing.
  */
 enum class InfoPageStyle(
     val storageValue: String,
@@ -60,8 +67,15 @@ enum class InfoPageStyle(
     );
 
     companion object {
-        /** The page the app opens in, so an update never moves a reader's pages. */
-        val DEFAULT = CLASSIC
+        /**
+         * The page every install opens in unless it has chosen otherwise.
+         *
+         * This deliberately moved from Classic to Nova: the redesign is the page
+         * the app is built around now, and an install that has never answered the
+         * question should see it. An explicit "classic" still wins, so this is a
+         * default rather than a migration that rewrites anyone's choice.
+         */
+        val DEFAULT = NOVA
 
         fun fromStorage(value: String?): InfoPageStyle =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
