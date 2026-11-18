@@ -1,6 +1,6 @@
 # AniSequel
 
-[![Ask DeepWiki](https://img.shields.io/badge/Ask%20DeepWiki-Architecture%20guide-5B5BD6?logo=bookstack&logoColor=white)](https://deepwiki.com/orintarotsumugi/AniSequel)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-Architecture%20guide-5B5BD6)](https://deepwiki.com/orintarotsumugi/AniSequel)
 
 **Find the next chapter of your anime journey.** AniSequel connects to AniList,
 looks at the anime and manga you've watched or read, follows each title's franchise
