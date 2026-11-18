@@ -358,45 +358,17 @@ internal fun selectLiveChartPoster(
     val keys = queryTitles.map(::normalizeLiveChartTitle).filter { it.isNotEmpty() }
     if (keys.isEmpty() || candidates.isEmpty()) return null
 
-    // What season the reader actually asked for. `null` means the titles name no
-    // season - the entry is season one.
-    //
-    // This is not decoration: AniList spells a season "Season 2" in an English
-    // title and "2nd Season" in the romaji one, and LiveChart uses either. Without
-    // the number, a query for "Frieren Season 2" did not match "Sousou no Frieren
-    // 2nd Season" at all (the words between "Frieren" and "2" differ), fell back
-    // to the base title's score, and opened season one's poster for a season-two
-    // entry. Stripping the season before comparing fixes the spelling; keeping the
-    // number decides which of the base and the sequel is the answer.
-    val querySeason = keys.mapNotNull(::seasonNumberIn).maxOrNull()
-    val queryBases = keys.map(::withoutSeasonMarker).filter { it.isNotEmpty() }
-    if (queryBases.isEmpty()) return null
-
     var best: LiveChartPosterCandidate? = null
     var bestScore = 0
     var bestLength = Int.MAX_VALUE
     candidates.forEach { candidate ->
         val normalized = normalizeLiveChartTitle(candidate.title)
         if (normalized.isEmpty()) return@forEach
-        val candidateSeason = seasonNumberIn(normalized)
-        // A season names a *specific* run. If the query names one, only that season
-        // can answer; if it names none, a later season is a different show and must
-        // not wear season one's name. This is what stops a search page that carries
-        // both from handing a sequel's art to the original - and, more importantly,
-        // the original's art to a sequel. Both are the wrong picture, and the viewer
-        // would have no way to say so.
-        if (querySeason != null) {
-            if (candidateSeason != querySeason) return@forEach
-        } else if ((candidateSeason ?: 1) > 1) {
-            return@forEach
-        }
-        val base = withoutSeasonMarker(normalized)
-        if (base.isEmpty()) return@forEach
-        val score = queryBases.maxOfOrNull { key ->
+        val score = keys.maxOfOrNull { key ->
             when {
-                base == key -> 3
-                base.startsWith(key) || key.startsWith(base) -> 2
-                base.contains(key) || key.contains(base) -> 1
+                normalized == key -> 3
+                normalized.startsWith(key) || key.startsWith(normalized) -> 2
+                normalized.contains(key) || key.contains(normalized) -> 1
                 else -> 0
             }
         } ?: 0
@@ -409,60 +381,6 @@ internal fun selectLiveChartPoster(
     }
     return best?.let { preferLiveChartLargePoster(it.imageUrl) }
 }
-
-/** "Final Season" answers this, because no number describes it. */
-private const val FINAL_LIVE_CHART_SEASON = 99
-
-private val NAMED_SEASON = Regex("""\b(?:season|part|cour)\s+(\d{1,2})\b""")
-private val ORDINAL_SEASON = Regex("""\b(\d{1,2})(?:st|nd|rd|th)\s+(?:season|cour)\b""")
-
-/** `s2`, the abbreviation LiveChart and AniList both use in short titles. */
-private val SHORT_SEASON = Regex("""(?<![a-z])s(\d{1,2})\b""")
-
-/** A trailing roman numeral, the way `Mushoku Tensei II` names its second run. */
-private val TRAILING_ROMAN = Regex("""\s(ii|iii|iv|v|vi|vii|viii|ix|x)$""")
-
-/**
- * The season a folded title declares, or null when it declares none.
- *
- * Deliberately narrower than `SequelSeason` in the domain layer: this is scoring
- * two strings from two websites, not deciding whether to hide a card's poster, and
- * a false positive here merely lowers a candidate's score. It understands the
- * spellings LiveChart's result titles actually use - `Season 2`, `2nd Season`,
- * `Part 2`, `S2`, a trailing roman numeral and `Final Season`.
- */
-private fun seasonNumberIn(title: String): Int? {
-    if (title.contains("final season")) return FINAL_LIVE_CHART_SEASON
-    ORDINAL_SEASON.find(title)?.let { match -> return match.groupValues[1].toIntOrNull() }
-    NAMED_SEASON.find(title)?.let { match -> return match.groupValues[1].toIntOrNull() }
-    SHORT_SEASON.find(title)?.let { match -> return match.groupValues[1].toIntOrNull() }
-    TRAILING_ROMAN.find(title)?.let { match ->
-        return when (match.groupValues[1]) {
-            "ii" -> 2
-            "iii" -> 3
-            "iv" -> 4
-            "v" -> 5
-            "vi" -> 6
-            "vii" -> 7
-            "viii" -> 8
-            "ix" -> 9
-            "x" -> 10
-            else -> null
-        }
-    }
-    return null
-}
-
-/** The title with its season marker removed, so `Season 2` and `2nd Season` meet. */
-private fun withoutSeasonMarker(title: String): String =
-    title
-        .replace("final season", " ")
-        .replace(ORDINAL_SEASON, " ")
-        .replace(NAMED_SEASON, " ")
-        .replace(SHORT_SEASON, " ")
-        .replace(TRAILING_ROMAN, " ")
-        .replace(MULTI_SPACE, " ")
-        .trim()
 
 /** Punctuation and case are noise for matching; LiveChart and AniList spell the
  *  same title with different separators routinely. */

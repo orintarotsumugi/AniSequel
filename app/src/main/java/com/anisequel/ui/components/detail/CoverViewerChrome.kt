@@ -94,13 +94,6 @@ internal fun CoverViewerHeader(
             } else {
                 null
             },
-            // The overlay this render was actually drawn with, when there is one.
-            // It replaces the hard-coded "HD" chip that used to sit here: that was
-            // a promise nothing in the source list made - an AniList cover is as
-            // large as AniList serves it - and it renamed a fact the sheet already
-            // knew into a badge. A btttr page has a real variant to name, so the
-            // chip is shown only when there is one.
-            variantLabel = source?.images?.getOrNull(currentPage)?.variant,
             onSave = {
                 if (onScreen && saveState != CoverSaveState.SAVING) startSave()
             },
@@ -123,8 +116,6 @@ private fun CoverViewerTopBar(
     saveState: CoverSaveState,
     /** "2 / 4" while a multi-image gallery is selected, null for a single image. */
     pageLabel: String?,
-    /** The btttr overlay on screen, or null for an AniList/LiveChart image. */
-    variantLabel: String?,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -138,40 +129,33 @@ private fun CoverViewerTopBar(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Glass, like the controls on the other side, rather than a saturated
-            // scheme pill: the header sits on the artwork, and a bright container
-            // was the loudest thing on a screen whose subject is the picture.
             Surface(
                 shape = ExpressiveShapes.pill,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.78f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
                 tonalElevation = 4.dp
             ) {
                 Text(
                     text = "${media.formatLabel} · ${media.statusLabel}",
                     style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
                 )
             }
-            if (variantLabel != null) {
-                Surface(
-                    shape = ExpressiveShapes.pill,
-                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.92f),
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    tonalElevation = 2.dp
-                ) {
-                    Text(
-                        text = variantLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
+            Surface(
+                shape = ExpressiveShapes.pill,
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.92f),
+                tonalElevation = 2.dp
+            ) {
+                Text(
+                    text = "HD",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                )
             }
         }
 

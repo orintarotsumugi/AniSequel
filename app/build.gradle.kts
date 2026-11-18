@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.3.7"
-val BASELINE_VERSION_CODE = 673
+val BASELINE_VERSION_NAME = "2.3.6"
+val BASELINE_VERSION_CODE = 672
 
 plugins {
   alias(libs.plugins.android.application)
@@ -132,19 +132,7 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       isCrunchPngs = true
-      // A pull request signs a throwaway APK for review. It still runs R8 with
-      // shrinking, obfuscation and resource shrinking - so the keep rules and
-      // missing classes are exercised before merge - but skips the whole-program
-      // optimization passes (inlining, class merging) that dominate R8's wall
-      // time. Shipped builds on main and on tags never set this property, so
-      // they keep the fully optimized R8 output. See proguard-fast-rules.pro.
-      val fastR8 = project.findProperty("anisequelFastR8")?.toString()?.toBoolean() == true
-      val r8Rules = mutableListOf<Any>(
-        getDefaultProguardFile("proguard-android-optimize.txt"),
-        "proguard-rules.pro"
-      )
-      if (fastR8) r8Rules += "proguard-fast-rules.pro"
-      proguardFiles(*r8Rules.toTypedArray())
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       val releaseConfig = signingConfigs.getByName("release")
       signingConfig = if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
         releaseConfig

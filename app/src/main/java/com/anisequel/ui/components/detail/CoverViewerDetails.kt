@@ -1,10 +1,5 @@
 package com.anisequel.ui.components.detail
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -24,19 +19,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -107,13 +96,6 @@ internal fun ViewerDetailsCard(
 ) {
     val context = LocalContext.current
     val provider = sources.getOrNull(sourceIndex)?.label.orEmpty()
-    // Compact by default. The sheet's job on a full-screen picture is to say what
-    // is on screen and let the reader switch source; the two title spellings are
-    // reference material, not the reason the sheet is there, and printing them
-    // under every image pushed the gesture hint off a short phone. Expanded is the
-    // reader asking for the rest, and the handle and the chevron both answer.
-    var expanded by rememberSaveable(media.id) { mutableStateOf(false) }
-    val toggleExpanded = { expanded = !expanded }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -133,63 +115,34 @@ internal fun ViewerDetailsCard(
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-            tonalElevation = 10.dp,
+            shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+            tonalElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 560.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .padding(horizontal = 18.dp)
-                    .padding(top = 6.dp, bottom = 14.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                SheetHandle(expanded = expanded, onToggle = toggleExpanded)
+                Text(
+                    text = media.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.ExtraBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = media.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        CoverOnScreenCaption(
-                            provider = provider,
-                            image = image,
-                            imageIndex = imageIndex,
-                            imageCount = imageCount,
-                            seriesSeason = seriesSeason
-                        )
-                    }
-
-                    IconButton(
-                        onClick = toggleExpanded,
-                        modifier = Modifier.testTag("cover_details_toggle")
-                    ) {
-                        Icon(
-                            imageVector = if (expanded) {
-                                AppVectorIcons.ExpandLess
-                            } else {
-                                AppVectorIcons.ExpandMore
-                            },
-                            contentDescription = if (expanded) {
-                                "Hide the title spellings"
-                            } else {
-                                "Show the title spellings"
-                            },
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                CoverOnScreenCaption(
+                    provider = provider,
+                    image = image,
+                    imageIndex = imageIndex,
+                    imageCount = imageCount,
+                    seriesSeason = seriesSeason
+                )
 
                 ViewerSourcePills(
                     sources = sources,
@@ -197,24 +150,16 @@ internal fun ViewerDetailsCard(
                     onSelectSource = onSelectSource
                 )
 
-                ViewerOutboundLinks(media = media, context = context)
+                ViewerTitleChips(media = media)
 
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                    label = "cover_title_spellings"
-                ) {
-                    ViewerTitleChips(media = media)
-                }
+                ViewerOutboundLinks(media = media, context = context)
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = when {
-                        zoom.isZoomed -> "Double-tap to reset zoom · Tap to show the controls"
-                        imageCount > 1 ->
-                            "Tap to hide the controls · Swipe for more art · Pinch to zoom"
-                        else -> "Tap to hide the controls · Pinch or double-tap to zoom"
+                        zoom.isZoomed -> "Double-tap to reset zoom · Tap to close"
+                        imageCount > 1 -> "Swipe for more art · Pinch to zoom"
+                        else -> "Pinch or double-tap to zoom · Tap to close"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
@@ -225,41 +170,6 @@ internal fun ViewerDetailsCard(
     }
 }
 
-
-/**
- * The grabber and its chevron: one control, two hit targets.
- *
- * The capsule is what tells the reader the sheet has more below it, and tapping
- * the whole padded row - not just the four-pixel line - is what makes that a
- * target rather than a decoration. It is a button with a label for TalkBack, so
- * the gesture is not the only way to reach the title spellings.
- */
-@Composable
-private fun SheetHandle(expanded: Boolean, onToggle: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .bouncyPress(pressedScale = 0.99f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                role = Role.Button,
-                onClickLabel = if (expanded) "Hide the title spellings" else "Show the title spellings",
-                onClick = onToggle
-            )
-            .padding(vertical = 8.dp)
-            .testTag("cover_details_handle"),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .width(36.dp)
-                .height(4.dp)
-                .clip(ExpressiveShapes.pill)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-        )
-    }
-}
 
 @Composable
 private fun CoverOnScreenCaption(

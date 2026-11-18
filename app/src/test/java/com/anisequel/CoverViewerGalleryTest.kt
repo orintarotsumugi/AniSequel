@@ -168,27 +168,11 @@ class CoverViewerGalleryTest {
     }
 
     @Test
-    fun `tapping the artwork hides the chrome instead of closing the viewer`() {
-        val file = source(viewer)
-
-        assertTrue(
-            "the chrome has no visibility state, so the picture is the only thing " +
-                "on screen and there is no way to put the furniture away",
-            file.contains("var chromeShown by remember(media.id)")
-        )
+    fun `the artwork itself closes the viewer, not just the space around it`() {
         assertTrue(
             "the pager is not handed a tap handler, so tapping the picture - which " +
                 "now covers the screen - does nothing",
-            file.contains("if (zoom.isZoomed) zoom.reset() else chromeShown = !chromeShown")
-        )
-        assertFalse(
-            "a tap on the artwork still closes the whole viewer, which punishes the " +
-                "reader for looking at the thing the screen exists to show",
-            file.contains("else requestDismiss()")
-        )
-        assertTrue(
-            "the header and the sheet are not animated out of the way",
-            file.contains("AnimatedVisibility(") && file.contains("visible = chromeShown")
+            source(viewer).contains("onTap = { if (zoom.isZoomed) zoom.reset() else requestDismiss() }")
         )
         assertTrue(
             "the artwork does not detect the tap, and the dialog's background is " +
@@ -197,26 +181,8 @@ class CoverViewerGalleryTest {
         )
         assertTrue(
             "a single tap and a double tap are no longer distinguished, so opening " +
-                "the zoom would also toggle the chrome",
+                "the zoom would also close the viewer",
             source(artwork).contains("onDoubleTap")
-        )
-    }
-
-    @Test
-    fun `the header names the render it has instead of a hard-coded badge`() {
-        val chrome = source(
-            "app/src/main/java/com/anisequel/ui/components/detail/CoverViewerChrome.kt"
-        )
-
-        assertFalse(
-            "the viewer is back to a fixed \"HD\" chip, which promises a resolution " +
-                "no source in the list reports",
-            chrome.contains("\"HD\"")
-        )
-        assertTrue(
-            "the header does not name the btttr overlay on screen, so its four " +
-                "renders are indistinguishable at the top of the page",
-            chrome.contains("variantLabel")
         )
     }
 

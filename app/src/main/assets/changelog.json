@@ -1,27 +1,6 @@
 {
   "versions": [
     {
-      "version": "2.3.7",
-      "entries": [
-        {
-          "title": "Card design previews that match your library",
-          "detail": "The previews on Card design used to draw a fixed three-column grid with invented titles, made-up counts like \"128 titles · 12 airing\" and sample covers fetched from the web. They now draw your actual Library layout - Poster grid, Compact, Big cards, Cover wall's caption-free covers, Shelf's five across, and the real List, Grouped and Table rows - using only entries from your own list, with their real progress. An empty list says so instead of filling the frame with somebody else's artwork."
-        },
-        {
-          "title": "A cover viewer that gets out of the way",
-          "detail": "Tapping the artwork now hides the header and details sheet instead of closing the viewer, and a pinch hides them automatically while you inspect a zoomed picture; tap again to bring them back. Both pieces slide and fade on the shared expressive springs, the backdrop drifts against the swipe and glows with the poster's own colour, the sheet is compact by default with the title spellings behind an expand control, and the fake \"HD\" badge is gone - the header now names the BetterPosters render actually on screen."
-        },
-        {
-          "title": "Sequel posters found by the season you asked for",
-          "detail": "LiveChart spells a season \"2nd Season\" while AniList's English title says \"Season 2\", so the name matcher scored the sequel at zero and fell back to season one's poster for a season-two entry. It now compares titles with the season removed and only accepts the season you asked for: a season-two query finds its own art, and a season-one query never lands on its sequel's."
-        },
-        {
-          "title": "The Info page seam is gone",
-          "detail": "The full-page backdrop behind an anime's Info page painted the same banner at a different crop and handed over to the content at a fixed point, which left a bright band between the hero and the first section. The hand-off now follows the hero's measured bottom edge and fades the artwork in over 200dp, so the two are one picture at every scroll position."
-        }
-      ]
-    },
-    {
       "version": "2.3.6",
       "entries": [
         {

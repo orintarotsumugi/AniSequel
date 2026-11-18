@@ -509,12 +509,6 @@ jobs:
           echo "::endgroup::"
 
       - name: Build Release APK
-        env:
-          # A pull request signs a throwaway APK for reviewers, so it can use the
-          # fast R8 pass: shrinking, obfuscation and resource shrinking still run
-          # (the keep rules are exercised), but the whole-program optimization
-          # passes are skipped. Shipped builds on main and tags keep full R8.
-          FAST_R8: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
         run: |
           # The version name is resolved before the build and passed in, so the
           # version compiled into the APK (shown in Settings -> About) is the
@@ -527,14 +521,9 @@ jobs:
           # the artifact step below could never match anything — they were copied
           # from a template that did have ABI splits. If per-ABI artifacts are
           # actually wanted, add the `splits` block *and* keep the branches.
-          R8_FLAG=()
-          if [ "$FAST_R8" = "true" ]; then
-            R8_FLAG=("-PanisequelFastR8=true")
-          fi
           ./gradlew assembleRelease \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
-            "${R8_FLAG[@]}" \
             --stacktrace
 
       - name: Prepare APK Artifact

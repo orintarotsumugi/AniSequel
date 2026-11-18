@@ -174,7 +174,6 @@ fun AnimeInfoPage(
 
     val themeSongs by rememberThemeSongs(media)
     val collapse = rememberInfoCollapse(listState)
-    val heroBottom = rememberHeroBottom(listState)
     val showFloatingBar by rememberShowFloatingBar(collapse)
     // How much of the page is behind the reader, as a 0..1 share, for the docked
     // bar's title pill to fill with. Read only inside that pill's `graphicsLayer`.
@@ -225,8 +224,7 @@ fun AnimeInfoPage(
             source = infoBackdropSource,
             blur = infoBackdropBlur,
             tint = infoBackdropTint,
-            collapse = { collapse.value },
-            heroBottom = { heroBottom.value }
+            collapse = { collapse.value }
         )
 
         LazyColumn(
@@ -381,38 +379,6 @@ private fun rememberInfoCollapse(listState: LazyListState): State<Float> {
         }
     }
 }
-
-/**
- * The bottom edge of the hero, in viewport pixels, for the page backdrop's
- * hand-off.
- *
- * Item zero is the hero, so its laid-out offset plus its height is the line the
- * hero's own scrim ends on. Reading that line out of the list rather than
- * assuming a height is what keeps the hand-off correct when the hero grows for a
- * large font scale.
- *
- * `NEGATIVE_INFINITY` means the hero is gone: item zero is no longer in the
- * list, so there is no surface band to draw and the page's artwork can run all
- * the way to the top of the viewport. `totalItemsCount == 0` is the first frame,
- * before the list has measured anything; `POSITIVE_INFINITY` keeps the backdrop
- * on surface for that frame rather than flashing the artwork into the 16dp gap
- * below a hero that is already drawn.
- */
-@Composable
-private fun rememberHeroBottom(listState: LazyListState): State<Float> =
-    remember(listState) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            if (info.totalItemsCount == 0) {
-                Float.POSITIVE_INFINITY
-            } else {
-                info.visibleItemsInfo
-                    .firstOrNull { it.index == 0 }
-                    ?.let { (it.offset + it.size).toFloat() }
-                    ?: Float.NEGATIVE_INFINITY
-            }
-        }
-    }
 
 /**
  * Whether the docked bar has crossed its threshold, as its own `Boolean`.
