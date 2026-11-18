@@ -99,7 +99,10 @@ fun ChartCard(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder()
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            chartSlotColor(0).copy(alpha = 0.22f)
+        )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -107,13 +110,13 @@ fun ChartCard(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(MaterialTheme.shapes.small)
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                        .background(chartSlotColor(0).copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        tint = chartSlotColor(0),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -237,17 +240,22 @@ internal fun SegmentStrip(
             .testTag("status_segment_strip")
             .semantics { contentDescription = "Distribution: $summary" }
     ) {
-        val total = segments.sumOf { it.share.toDouble() }.toFloat().coerceAtLeast(0.0001f)
-        var currentX = 0f
-        segments.forEachIndexed { index, segment ->
-            val shareFraction = segment.share / total
-            if (shareFraction > 0f) {
-                // The documented floor, finally applied: one entry in three
-                // hundred is 0.3%, about a pixel, and a zero-width segment is a
-                // segment that is not there. The constant existed and was
-                // explained but never used, so those statuses stayed invisible.
-                // The strip is clipped, so a floor that overflows cannot escape.
-                val segWidth = shareFraction.coerceAtLeast(MIN_SEGMENT_SHARE) * size.width
+        val visibleSegments = segments.withIndex().filter { it.value.share > 0f }
+        if (visibleSegments.isNotEmpty()) {
+            val total = visibleSegments.sumOf { it.value.share.toDouble() }.toFloat()
+                .coerceAtLeast(0.0001f)
+            // Give every non-empty category a small visible width, then distribute
+            // the remaining space proportionally. The strip always ends at its
+            // exact width, even when many tiny categories are present.
+            val floorWidth = minOf(
+                size.width * MIN_SEGMENT_SHARE,
+                size.width / visibleSegments.size
+            )
+            val proportionalWidth = (size.width - floorWidth * visibleSegments.size)
+                .coerceAtLeast(0f)
+            var currentX = 0f
+            visibleSegments.forEach { (index, segment) ->
+                val segWidth = floorWidth + proportionalWidth * (segment.share / total)
                 drawRect(
                     color = segmentColors.getOrElse(index) { Color.Gray },
                     topLeft = Offset(currentX, 0f),
@@ -289,11 +297,11 @@ fun BarChartCard(
             return@ChartCard
         }
 
-        rows.forEach { row ->
+        rows.forEachIndexed { index, row ->
             BarRow(
                 row = row,
                 labelWidth = labelWidth,
-                color = barColor ?: chartSlotColor(0)
+                color = barColor ?: chartSlotColor(index)
             )
         }
 
