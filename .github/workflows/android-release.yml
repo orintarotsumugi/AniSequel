@@ -508,25 +508,6 @@ jobs:
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
 
-      - name: Surface the failed unit test
-        if: failure()
-        run: |
-          python3 - <<'PY'
-          import glob
-          import xml.etree.ElementTree as ET
-
-          for path in glob.glob('app/build/test-results/**/*.xml', recursive=True):
-              try:
-                  root = ET.parse(path).getroot()
-              except ET.ParseError:
-                  continue
-              for case in root.iter('testcase'):
-                  for failure in list(case.findall('failure')) + list(case.findall('error')):
-                      message = (failure.get('message') or failure.text or '').replace('\n', ' ')[:1200]
-                      name = case.get('classname', '?') + '.' + case.get('name', '?')
-                      print(f"::error file={path}::{name}: {message}")
-          PY
-
       - name: Build Release APK
         env:
           # A pull request signs a throwaway APK for reviewers, so it can use the
