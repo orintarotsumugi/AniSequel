@@ -294,7 +294,7 @@ fun DashboardScreen(
     val retainedSubjectState = remember(
         selectedSequelId,
         selectedArrivingId,
-        navigatedRelation?.mediaId,
+        navigatedRelation?.id,
         navigatedRelation?.type
     ) {
         androidx.compose.runtime.mutableStateOf<AnimeDetailSubject?>(null)
