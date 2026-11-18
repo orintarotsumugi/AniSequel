@@ -66,6 +66,7 @@ internal fun chartSlotColor(slot: Int): Color {
         2 -> AniSequelTheme.statusColors.success
         3 -> scheme.tertiary
         4 -> AniSequelTheme.statusColors.info
+        5 -> AniSequelTheme.statusColors.warning
         else -> scheme.primary
     }
 }
