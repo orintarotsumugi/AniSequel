@@ -508,6 +508,31 @@ jobs:
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
 
+      # Temporary diagnostic: turn the XML test report into a check annotation so
+      # the failed test and its message are visible without the raw job log.
+      - name: Surface the failed unit test
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          found = False
+          for path in glob.glob('app/build/test-results/**/*.xml', recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              for case in root.iter('testcase'):
+                  for failure in list(case.findall('failure')) + list(case.findall('error')):
+                      found = True
+                      message = (failure.get('message') or failure.text or '').replace('\n', ' ')[:1200]
+                      name = case.get('classname', '?') + '.' + case.get('name', '?')
+                      print(f"::error file={path}::{name}: {message}")
+          if not found:
+              print('::error::The unit-test step failed before producing an XML test report; inspect the Job log.')
+          PY
+
       - name: Build Release APK
         env:
           # A pull request signs a throwaway APK for reviewers, so it can use the
