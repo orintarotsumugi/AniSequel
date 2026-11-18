@@ -217,7 +217,8 @@ Settings → Interface → App layout also offers an **Info page** choice: Class
 the page above, and Nova is a second shell over the same data. The choice is a
 separate preference (`info_page_style`, `InfoPageStyle`) rather than a third
 value on `AppLayout`, because the Home look and the title-page look are different
-questions; an install that never touches the switch keeps Classic. The detail
+questions; an install that never touches the switch now opens in Nova, while an
+explicit Classic choice is kept. The detail
 sheet dispatches once, in `SequelDetailSheet`, and the two pages share every
 section composable, the scroll-derived helpers and the entry editor.
 

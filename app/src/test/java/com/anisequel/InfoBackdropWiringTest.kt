@@ -197,7 +197,7 @@ class InfoBackdropWiringTest {
         )
         assertTrue(
             "the exit does not run the spring back to the origin",
-            file.contains("reveal.animateTo(0f, ExpressiveMotion.FastSpatial)")
+            file.contains("reveal.animateTo(0f, ExpressiveMotion.SettleSpatial)")
         )
         assertFalse(
             "the fixed teardown delay is back, so the dialog can be removed before " +

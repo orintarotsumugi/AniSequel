@@ -101,7 +101,14 @@ fun WavyProgressBar(
      * passes type *and* id (see [InfoProgressCard]); keyed on the id alone the saved
      * flag survived the crossing and the second title's bar arrived full again.
      */
-    entranceKey: Any? = null
+    entranceKey: Any? = null,
+    /**
+     * Whether the entrance and travelling phase run.
+     *
+     * Off for the style picker's three previews: they are a still sample, not
+     * three extra loops running behind a sheet the reader is reading.
+     */
+    animate: Boolean = true
 ) {
     val target = progress.coerceIn(0f, 1f)
 
@@ -123,7 +130,7 @@ fun WavyProgressBar(
     // played, at the progress it is about to show for one that has, which is how a
     // bar restored from a scroll keeps the height it already had instead of rising
     // a second time.
-    val fill = remember(entranceKey) { Animatable(if (played) target else 0f) }
+    val fill = remember(entranceKey) { Animatable(if (!animate || played) target else 0f) }
     // Unconditional, and it checks the flag's meaning rather than being wrapped in
     // `if (!played)`: a `LaunchedEffect` skipped on the played path would also never
     // see a *later* progress - the entry editor's own writes - and the bar would sit
@@ -135,9 +142,13 @@ fun WavyProgressBar(
     // have the same fraction - a 6/12 show followed by another 6/12 show - and an
     // effect keyed on the value alone would not restart, leaving the freshly
     // remembered fill sitting at zero for a bar that should be half full.
-    LaunchedEffect(entranceKey, target) {
+    LaunchedEffect(entranceKey, target, animate) {
         played = true
-        fill.animateTo(target, ExpressiveMotion.FastSpatial)
+        if (animate) {
+            fill.animateTo(target, ExpressiveMotion.FastSpatial)
+        } else {
+            fill.snapTo(target)
+        }
     }
 
     // The travelling phase, held as a `State` and read only in the draw lambda
@@ -162,7 +173,9 @@ fun WavyProgressBar(
     // bar. Whether the loop is allowed to exist at all is a visibility and a
     // motion-style question, which is what [rememberIsResumed] and the Instant
     // style answer; `target` only decides whether the phase is *read*, below.
-    val animates = rememberIsResumed() && ExpressiveMotion.speed != MotionStyle.INSTANT
+    val animates = animate &&
+        rememberIsResumed() &&
+        ExpressiveMotion.speed != MotionStyle.INSTANT
     val cycle: State<Float>? = if (animates) {
         val transition = rememberInfiniteTransition(label = "wavy_progress_bar")
         transition.animateFloat(

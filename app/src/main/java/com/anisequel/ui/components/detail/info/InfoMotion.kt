@@ -90,10 +90,10 @@ fun Modifier.sectionReveal(index: Int, entranceKey: Any? = null): Modifier {
 private const val MAX_STAGGERED_SECTIONS = 7
 
 /** The gap between one section's entrance and the next. */
-private const val STAGGER_MILLIS = 55
+private const val STAGGER_MILLIS = 42
 
 /** How far a section rises as it comes in, in the draw phase. */
-private val REVEAL_RISE = 26.dp
+private val REVEAL_RISE = 20.dp
 
 /**
  * The handover between the hero's title lockup and the docked bar, as shares of

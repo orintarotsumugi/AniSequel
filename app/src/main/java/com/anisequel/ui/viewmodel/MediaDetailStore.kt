@@ -55,6 +55,9 @@ class MediaDetailStore(
             size > MAX_ENTRIES
     }
 
+    /** Last successful fetch time, so stale details can refresh without a blank page. */
+    private val fetchedAt = LinkedHashMap<MediaCoverKey, Long>(64, 0.75f, true)
+
     /**
      * Every node fetched this session, keyed by media id, under the same bound as
      * [cache].
@@ -233,10 +236,12 @@ class MediaDetailStore(
     fun load(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
         cache[key]?.let { known ->
-            // Re-published on open so a re-opened entry has its detail again
-            // without another request.
+            // Keep cached details visible immediately. Once they are ten minutes old,
+            // continue below and refresh in the background rather than treating the
+            // first successful fetch as valid for the whole session.
             publish(mediaId, known)
-            return
+            val lastFetch = fetchedAt[key] ?: 0L
+            if (System.currentTimeMillis() - lastFetch < DETAIL_REFRESH_INTERVAL_MILLIS) return
         }
         // Demo data is already complete, and there is no session to fetch with.
         //
@@ -268,6 +273,10 @@ class MediaDetailStore(
                     // cleans up either way.
                     if (startedAtGeneration == this@MediaDetailStore.generation) {
                         cache[key] = detail
+                        fetchedAt[key] = System.currentTimeMillis()
+                        while (fetchedAt.size > MAX_ENTRIES) {
+                            fetchedAt.remove(fetchedAt.entries.first().key)
+                        }
                         publish(mediaId, detail)
                         // The host's fold is a callback, and `onSuccess` rethrows
                         // anything its lambda throws - so a listener that fails would
@@ -330,6 +339,7 @@ class MediaDetailStore(
         // never write into the cache this call is clearing.
         generation++
         cache.clear()
+        fetchedAt.clear()
         // Cleared rather than left to drain: a launch that is still in flight for a
         // collection that no longer exists has nothing to fold its answer into, and
         // leaving it would keep a spinner turning over a list the reader has left.
@@ -354,6 +364,9 @@ class MediaDetailStore(
          * published map the screens read.
          */
         const val MAX_ENTRIES = 250
+
+        /** A detail page refreshes live data at most once every ten minutes while open. */
+        const val DETAIL_REFRESH_INTERVAL_MILLIS = 10 * 60_000L
 
         /**
          * The cache namespace for a title fetched without a known type.

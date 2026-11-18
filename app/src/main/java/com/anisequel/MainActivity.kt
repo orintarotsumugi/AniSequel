@@ -30,6 +30,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.RateLimitNotice
+import com.anisequel.data.network.AniListErrorKind
+import com.anisequel.data.network.friendlyCopy
 import com.anisequel.data.network.SystemNotices
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
@@ -254,7 +256,7 @@ class MainActivity : ComponentActivity() {
                 RateLimitNotice.events.collect { retryAfterSeconds ->
                     Toast.makeText(
                         this@MainActivity,
-                        rateLimitMessage(retryAfterSeconds),
+                        rateLimitMessage(retryAfterSeconds, System.nanoTime().toString()),
                         // Long rather than short: this is the only place the
                         // reader is told that retrying immediately will fail,
                         // and two seconds is not enough to read the wait.
@@ -659,13 +661,17 @@ class MainActivity : ComponentActivity() {
  * Extracted from `onCreate` so that composable's collector stays a one-line
  * hand-off rather than another branch in an already busy Activity method.
  */
-private fun rateLimitMessage(retryAfterSeconds: Int?): String = when {
-    retryAfterSeconds == null ->
-        "AniList is busy — you're rate limited. Give it a minute and try again."
-    retryAfterSeconds <= 1 ->
-        "AniList is rate limiting. Try again now."
-    else ->
-        "AniList is rate limiting. Try again in about ${retryAfterSeconds}s."
+internal fun rateLimitMessage(retryAfterSeconds: Int?, seed: String = "rate-limit"): String {
+    val wait = when {
+        retryAfterSeconds == null ->
+            "AniList has put us on cooldown. It will retry automatically when allowed."
+        retryAfterSeconds <= 1 ->
+            "AniList's cooldown is almost over. Retrying shortly."
+        else ->
+            "AniList asked us to wait about ${retryAfterSeconds} seconds. It will retry automatically."
+    }
+    val quip = AniListErrorKind.RATE_LIMITED.friendlyCopy().quipFor(seed)
+    return "$wait\n$quip"
 }
 
 /**

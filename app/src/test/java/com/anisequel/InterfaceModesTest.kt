@@ -6,6 +6,7 @@ import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.ProgressBarStyle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,20 +35,40 @@ class InterfaceModesTest {
      * must keep the page it shipped with.
      *
      * Both halves matter: a fresh value on the wrong key would make the switch
-     * look live while writing nothing the app reads, and a default of
-     * [InfoPageStyle.NOVA] would repaint every existing install's title page on
-     * upgrade - the one
-     * thing the "classic is untouched" promise rules out.
+     * look live while writing nothing the app reads, and the default has to be
+     * the page every install opens in when no choice is stored. Nova is that page
+     * now; Classic still wins whenever it was explicitly chosen.
      */
     @Test
-    fun `the title page style is stable and defaults to the shipped page`() {
+    fun `the title page style is stable and defaults to Nova`() {
         assertEquals(InfoPageStyle.CLASSIC, InfoPageStyle.fromStorage("classic"))
         assertEquals(InfoPageStyle.NOVA, InfoPageStyle.fromStorage("nova"))
-        assertEquals(InfoPageStyle.CLASSIC, InfoPageStyle.DEFAULT)
+        assertEquals(InfoPageStyle.NOVA, InfoPageStyle.DEFAULT)
         assertEquals(
-            "a value written by a newer build must fall back to the shipped page",
-            InfoPageStyle.CLASSIC,
+            "a value written by a newer build must fall back to Nova",
+            InfoPageStyle.NOVA,
             InfoPageStyle.fromStorage("hologram")
+        )
+    }
+
+    /**
+     * A stored bar style must round-trip, and an unknown one must fall back to the
+     * shipped wave rather than crash on a value a newer build wrote.
+     *
+     * This is the usual storage-key contract for the interface enums; it is
+     * written here because the picker now writes this value from a long hold on
+     * the Info page rather than from a Settings row.
+     */
+    @Test
+    fun `the progress bar style is stable and defaults to the wave`() {
+        assertEquals(ProgressBarStyle.WAVE, ProgressBarStyle.fromStorage("wave"))
+        assertEquals(ProgressBarStyle.BAR, ProgressBarStyle.fromStorage("bar"))
+        assertEquals(ProgressBarStyle.ROCKET, ProgressBarStyle.fromStorage("rocket"))
+        assertEquals(ProgressBarStyle.WAVE, ProgressBarStyle.DEFAULT)
+        assertEquals(
+            "a style written by a newer build must fall back to the shipped wave",
+            ProgressBarStyle.WAVE,
+            ProgressBarStyle.fromStorage("constellation")
         )
     }
 

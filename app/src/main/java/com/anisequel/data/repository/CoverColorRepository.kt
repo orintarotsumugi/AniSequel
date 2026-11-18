@@ -109,11 +109,8 @@ object CoverColorRepository {
 
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-                val seed = CoverColorQuantizer.seedFrom(pixels) ?: return@withContext null
-                val palette = CoverPalette(
-                    seed = seed,
-                    accent = CoverColorQuantizer.accentFrom(pixels, seed)
-                )
+                val palette = CoverColorQuantizer.paletteFrom(pixels)
+                    ?: return@withContext null
                 palettes.put(url, palette)
                 palette
             } catch (cancellation: kotlinx.coroutines.CancellationException) {

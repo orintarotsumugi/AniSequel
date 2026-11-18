@@ -190,11 +190,11 @@ fun AniListErrorKind.friendlyCopy(): ApiErrorCopy = when (this) {
 
     AniListErrorKind.RATE_LIMITED -> ApiErrorCopy(
         headline = "Ani-chan needs a breather",
-        detail = "AniList limits how often apps may ask. Give it a minute and the same " +
-            "request will go through.",
+        detail = "AniList has temporarily asked this app to slow down. The request will " +
+            "be retried when its cooldown allows it; you do not need to keep tapping refresh.",
         quips = listOf(
-            "Too many questions at once.",
-            "Ani-chan is holding up one finger: one at a time, please.",
+            "Too many questions at once. Ani-chan only has two hands.",
+            "Ani-chan is holding up one finger: one request at a time, please.",
             "The API equivalent of \"wait your turn\".",
             "Ani-chan is not ignoring you. Ani-chan is pacing itself.",
             "Less refresh spam, more patience.",
@@ -205,7 +205,20 @@ fun AniListErrorKind.friendlyCopy(): ApiErrorCopy = when (this) {
             "That was not a challenge. It was a limit.",
             "Ani-chan is asking you to slow your roll.",
             "The request queue is a queue, not a suggestion.",
-            "You are spending requests like they are free. They are not."
+            "You are spending requests like they are free. They are not.",
+            "Ani-chan put the API on a tiny cooldown. Let it cook.",
+            "Even Goku has to wait for the next episode.",
+            "The server needs a training arc before the next request.",
+            "Ani-chan is buffering. Please do not shake the router.",
+            "This is a cooldown, not a speedrun category.",
+            "The API has entered its mysterious training montage.",
+            "Your refresh button is getting more screen time than the anime.",
+            "Ani-chan asked for a minute of peace. Respect the filler arc.",
+            "The server is taking a snack break between episodes.",
+            "One does not simply spam-refresh into AniList.",
+            "The request queue has a queue. Very organised. Very slow.",
+            "Ani-chan is counting to ten. Help by not making it count twice.",
+            "The API's stamina bar is recharging. No potion needed."
         )
     )
 

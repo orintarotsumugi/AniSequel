@@ -348,7 +348,9 @@ data class MediaNode(
      * of a fixture built before this field existed. AniList computes it
      * server-side; there is no local list to count.
      */
-    val favourites: Int? = null
+    val favourites: Int? = null,
+    /** Aggregate public statistics returned by AniList for this title. */
+    val stats: MediaStats? = null
 ) {
     /**
      * Overlay of the lazily-fetched detail onto this node.
@@ -392,6 +394,7 @@ data class MediaNode(
         averageScore = detail.averageScore ?: averageScore,
         popularity = detail.popularity ?: popularity,
         favourites = detail.favourites ?: favourites,
+        stats = detail.stats ?: stats,
         season = detail.season ?: season,
         seasonYear = detail.seasonYear ?: seasonYear,
         siteUrl = detail.siteUrl ?: siteUrl,
@@ -437,6 +440,18 @@ data class MediaNode(
         }
     )
 }
+
+@JsonClass(generateAdapter = true)
+data class MediaStats(
+    val scoreDistribution: List<MediaScoreAmount>? = null,
+    val statusDistribution: List<MediaStatusAmount>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MediaScoreAmount(val score: Int? = null, val amount: Int? = null)
+
+@JsonClass(generateAdapter = true)
+data class MediaStatusAmount(val status: String? = null, val amount: Int? = null)
 
 @JsonClass(generateAdapter = true)
 data class MediaRanking(

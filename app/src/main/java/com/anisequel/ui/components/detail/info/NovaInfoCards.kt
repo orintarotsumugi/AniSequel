@@ -3,6 +3,7 @@ package com.anisequel.ui.components.detail.info
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +52,7 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
+import com.anisequel.data.model.rankingList
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
@@ -86,10 +95,16 @@ private data class NovaStat(val label: String, val value: String)
  * full line than inside a quarter-width cell.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun NovaStatsCard(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
+    var selectedStat by remember(media.id) { mutableStateOf<String?>(null) }
+    val sheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded)
+    )
     val stats = remember(media) {
         buildList {
             media.averageScore?.takeIf { it > 0 }?.let { score ->
@@ -141,10 +156,15 @@ internal fun NovaStatsCard(
 
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+        // The four numbers are the page's first summary, so they get the
+        // primary container instead of the shared neutral surface. The page's
+        // scheme is derived from the artwork, which means this is the cover's
+        // hue at a readable tone rather than the one blue every card used to be.
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.76f),
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         border = BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -161,14 +181,24 @@ internal fun NovaStatsCard(
             ) {
                 stats.forEach { stat ->
                     Column(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(MaterialTheme.shapes.small)
+                            .combinedClickable(
+                                role = Role.Button,
+                                onClickLabel = "Show ${stat.label} details",
+                                onClick = { selectedStat = stat.label },
+                                onLongClickLabel = "Show ${stat.label} details",
+                                onLongClick = { selectedStat = stat.label }
+                            )
+                            .padding(vertical = 3.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = stat.value,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -178,7 +208,7 @@ internal fun NovaStatsCard(
                             // 360dp phone leave about 78dp each, and "Popularity"
                             // at labelMedium ellipsizes into "Populari...".
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -195,7 +225,7 @@ internal fun NovaStatsCard(
                         .fillMaxWidth()
                         .height(1.dp)
                         .background(
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
                         )
                 )
                 Row(
@@ -208,7 +238,7 @@ internal fun NovaStatsCard(
                     Icon(
                         imageVector = AppVectorIcons.Schedule,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(7.dp))
@@ -219,13 +249,87 @@ internal fun NovaStatsCard(
                             "Next episode $countdown"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         textAlign = TextAlign.Center
                     )
                 }
             }
         }
     }
+
+    selectedStat?.let { label ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedStat = null },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            NovaStatDetails(media = media, selectedLabel = label)
+        }
+    }
+}
+
+@Composable
+private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
+    val scoreRows = media.stats?.scoreDistribution.orEmpty()
+        .filter { (it.score ?: 0) > 0 && (it.amount ?: 0) > 0 }
+        .sortedBy { it.score }
+    val statusRows = media.stats?.statusDistribution.orEmpty()
+        .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
+        .sortedByDescending { it.amount }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(selectedStatTitle(selectedLabel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(media.displayName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        when (selectedLabel) {
+            "Score" -> {
+                Text("Average score: ${media.averageScore?.let { String.format(Locale.US, "%.1f", it / 10f) } ?: "Not available"} / 10")
+                if (scoreRows.isEmpty()) Text("AniList has not supplied a score distribution for this title.")
+                scoreRows.forEach { row ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(String.format(Locale.US, "%.1f/10", (row.score ?: 0) / 10f), modifier = Modifier.width(54.dp))
+                        Text("${compactCount(row.amount ?: 0)} ratings", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            "Popularity" -> {
+                Text("Popularity: ${media.popularity?.let(::compactCount) ?: "Not available"}")
+                if (media.rankingList.isEmpty()) Text("No catalogue ranking is available.")
+                media.rankingList.forEach { ranking ->
+                    Text(listOfNotNull(ranking.context, ranking.rank?.let { "#$it" }).joinToString(" · "))
+                }
+            }
+            "Favourites" -> {
+                Text("${media.favourites?.let(::compactCount) ?: "Not available"} AniList favourites")
+                Text("AniList provides the total count, not a public list of every account that favourited this title.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            else -> {
+                Text(if (media.isManga) "Chapters: ${media.chapters ?: "Not available"}" else "Episode length: ${media.duration?.let { "$it minutes" } ?: "Not available"}")
+            }
+        }
+        if (statusRows.isNotEmpty()) {
+            Text("List status breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            statusRows.forEach { row ->
+                Row {
+                    Text(row.status.orEmpty().replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
+                    Text(compactCount(row.amount ?: 0), fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+        media.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
+            Text("Synopsis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(synopsis.replace(Regex("<[^>]*>"), "").replace("&mdash;", "—").replace("&quot;", "\""))
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+private fun selectedStatTitle(label: String): String = when (label) {
+    "Duration" -> "Episode details"
+    "Chapters" -> "Reading details"
+    else -> label
 }
 
 /**
@@ -248,10 +352,15 @@ internal fun NovaProgressCard(
 
     Surface(
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
+        // The second summary surface gets the secondary container, not another
+        // copy of the stats card's tone. Holding the bar opens the style picker,
+        // and this is also where the chosen style's own accent is read against a
+        // surface chosen for it.
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.76f),
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         border = BorderStroke(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -268,20 +377,22 @@ internal fun NovaProgressCard(
                 Text(
                     text = if (isManga) "Reading Progress" else "Watching Progress",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.76f),
                     modifier = Modifier.weight(1f)
                 )
                 Text(
                     text = count,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
-            WavyProgressBar(
+            StyledProgressBar(
                 progress = fraction,
                 entranceKey = media.type to media.id,
-                height = 38.dp
+                height = 38.dp,
+                progressColor = MaterialTheme.colorScheme.secondary,
+                trackColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
             )
         }
     }

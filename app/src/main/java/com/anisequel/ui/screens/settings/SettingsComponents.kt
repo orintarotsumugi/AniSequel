@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,11 +23,13 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +52,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.expressive.bouncyPress
 
 val MaxSettingsContentWidth = 640.dp
@@ -76,72 +81,48 @@ fun SectionCard(
     icon: ImageVector? = null,
     subtitle: String? = null,
     badge: (@Composable () -> Unit)? = null,
-    /**
-     * The icon tile's background. Defaults to the quiet `secondaryContainer`
-     * role; the Theme tab passes richer roles so its sections read as the
-     * colourful half of Settings without the Edit and Info tabs changing.
-     */
-    iconContainer: Color = MaterialTheme.colorScheme.secondaryContainer,
-    /** The icon drawn on [iconContainer]. */
-    iconContent: Color = MaterialTheme.colorScheme.onSecondaryContainer,
-    /**
-     * The icon tile's outline.
-     *
-     * Defaults to the theme's small rounded square. The Settings pages that pass
-     * an Expressive polygon here are opting into the decorative family, and the
-     * tile is the only element in the app entitled to it: it is a fixed 34dp
-     * square, and `RoundedPolygon` is authored on a square perimeter - see
-     * `ExpressiveShapes` for what happens when one outlines a wide control.
-     */
-    iconShape: Shape = MaterialTheme.shapes.small,
+    iconContainer: Color? = null,
+    iconContent: Color? = null,
+    iconShape: Shape? = null,
     content: @Composable () -> Unit
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val palette = settingsIconPalette(title)
+    val resolvedContainer = iconContainer ?: palette.first
+    val resolvedContent = iconContent ?: palette.second
+    val resolvedShape = iconShape ?: settingsDecorativeShape(title)
+    val animatedContainer by animateColorAsState(
+        targetValue = resolvedContainer,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "settings_section_icon_container"
+    )
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
+        modifier = modifier.fillMaxWidth()
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize),
+        shape = ExpressiveShapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = CardDefaults.outlinedCardBorder()
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(iconShape)
-                            .background(iconContainer),
+                        modifier = Modifier.size(40.dp).clip(resolvedShape).background(animatedContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = iconContent,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Icon(imageVector = icon, contentDescription = null, tint = resolvedContent, modifier = Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        // Every settings tab is a stack of these cards, so the title
-                        // is the only stable landmark a screen-reader user can jump
-                        // to. The subtitle stays out of the heading role.
-                        modifier = Modifier.semantics { heading() }
-                    )
+                    Text(text = title, style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold, color = scheme.onSurface,
+                        modifier = Modifier.semantics { heading() })
                     if (subtitle != null) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        CollapsibleText(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Spacer(modifier = Modifier.height(3.dp))
+                        CollapsibleText(text = subtitle, style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant)
                     }
                 }
                 if (badge != null) {
@@ -149,9 +130,30 @@ fun SectionCard(
                     badge()
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             content()
         }
+    }
+}
+
+/** Decorative Material 3 Expressive silhouettes for fixed-square icon tiles. */
+@Composable
+internal fun settingsDecorativeShape(seed: String): Shape =
+    when ((seed.hashCode() and Int.MAX_VALUE) % 4) {
+        0 -> expressiveShape(ExpressiveShapes.cookie)
+        1 -> expressiveShape(ExpressiveShapes.burst)
+        2 -> expressiveShape(ExpressiveShapes.diamond)
+        else -> expressiveShape(ExpressiveShapes.flower)
+    }
+
+/** A stable Material tonal family for each settings section. */
+@Composable
+internal fun settingsIconPalette(seed: String): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    return when ((seed.hashCode() and Int.MAX_VALUE) % 3) {
+        0 -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        else -> scheme.primaryContainer to scheme.onPrimaryContainer
     }
 }
 
@@ -323,84 +325,42 @@ fun SwitchRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    // A switch that moves without a tick is the one place a settings screen can
-    // feel like a picture of a switch. TextHandleMove is the app's light tick -
-    // long-press is reserved for a destructive or dragged action.
     val haptics = LocalHapticFeedback.current
-    // The subtitle's collapse, hoisted out of the toggleable row: the "Show more"
-    // button has to live outside it (see [CollapsedTextBody]), and a paragraph
-    // that changes with the switch above it starts collapsed again.
     val subtitleExpanded = rememberSaveable(subtitle) { mutableStateOf(false) }
     val subtitleOverflowed = remember(subtitle) { mutableStateOf(false) }
-    // The whole row is the target, not just the 52dp switch: a settings row whose
-    // label does nothing when tapped is the most common way a screen like this
-    // feels broken, and Android has trained people to expect the label to work.
-    //
-    // `toggleable` rather than `clickable` + a separate switch callback. The old
-    // pair made two focus targets out of one setting - TalkBack read the label,
-    // then the switch as an unrelated control - and fired the tick twice when the
-    // thumb itself was tapped. With the switch inert (`onCheckedChange = null`)
-    // there is one node, one state and one tick, and the row still answers the
-    // whole width. `mergeDescendants` is what makes the label part of that node
-    // rather than a sibling read before it.
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
-    ) {
+    val rowContainer by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.28f) else Color.Transparent,
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "settings_switch_row_container"
+    )
+    Column(modifier = modifier.fillMaxWidth()
+        .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.small)
-                .toggleable(
-                    value = checked,
-                    enabled = enabled,
-                    role = Role.Switch,
-                    onValueChange = { next ->
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onCheckedChange(next)
-                    }
-                )
+            modifier = Modifier.fillMaxWidth().clip(ExpressiveShapes.large).background(rowContainer)
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { next ->
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onCheckedChange(next)
+                })
                 .semantics(mergeDescendants = true) {}
-                .padding(vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                Text(text = title, style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(2.dp))
-                CollapsedTextBody(
-                    text = subtitle,
-                    expanded = subtitleExpanded.value,
+                CollapsedTextBody(text = subtitle, expanded = subtitleExpanded.value,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    collapsedLines = 2,
-                    overflowed = subtitleOverflowed
-                )
+                    collapsedLines = 2, overflowed = subtitleOverflowed)
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = checked,
-                // Inert: the row owns the action. A second callback here would be a
-                // second focus target and a second haptic for one tap.
-                onCheckedChange = null,
-                enabled = enabled
-            )
+            Switch(checked = checked, onCheckedChange = null, enabled = enabled)
         }
         if (subtitleOverflowed.value) {
-            ExpandToggle(
-                expanded = subtitleExpanded.value,
-                onToggle = { subtitleExpanded.value = !subtitleExpanded.value }
-            )
+            ExpandToggle(expanded = subtitleExpanded.value, onToggle = { subtitleExpanded.value = !subtitleExpanded.value })
         }
     }
 }
@@ -446,9 +406,9 @@ fun SettingsScrollColumn(
             modifier = Modifier
                 .widthIn(max = MaxSettingsContentWidth)
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(top = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(horizontal = 18.dp)
+                .padding(top = 12.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
             content = content
         )
     }

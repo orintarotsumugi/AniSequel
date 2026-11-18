@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,6 +48,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -455,42 +456,63 @@ private fun HeroLockup(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = media.displayName,
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    lineHeight = 30.sp,
-                    letterSpacing = (-0.4).sp
-                ),
-                color = Color.White,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .shadow(
-                        elevation = 6.dp,
-                        shape = RectangleShape,
-                        ambientColor = Color.Black,
-                        spotColor = Color.Black
+            // The title used to be white text with a rectangular drop shadow,
+            // directly over whatever the key art happened to be. On a bright sky
+            // or a white shirt the name disappeared, and the "shadow" read as a
+            // grey box behind it. This is the opposite treatment: a quiet scrim
+            // whose tone is chosen against the cover colour, so dark art gets a
+            // light panel and bright art gets a dark one. The panel is the
+            // contrast, not a second decoration on the text.
+            val titleOnLight = coverColor.luminance() < 0.45f
+            val titleBackdrop = if (titleOnLight) {
+                Color.White.copy(alpha = 0.82f)
+            } else {
+                Color.Black.copy(alpha = 0.62f)
+            }
+            val titleInk = if (titleOnLight) Color.Black else Color.White
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = titleBackdrop,
+                contentColor = titleInk,
+                border = BorderStroke(1.dp, titleInk.copy(alpha = 0.10f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = media.displayName,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            lineHeight = 30.sp,
+                            letterSpacing = (-0.4).sp
+                        ),
+                        color = titleInk,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .expressiveHoldGesture(onHold = onCopyTitle)
+                            .semantics {
+                                onLongClick(label = "Copy title") {
+                                    onCopyTitle()
+                                    true
+                                }
+                            }
+                            .testTag("nova_detail_hero_title")
                     )
-                    .expressiveHoldGesture(onHold = onCopyTitle)
-                    .semantics {
-                        onLongClick(label = "Copy title") {
-                            onCopyTitle()
-                            true
-                        }
+                    if (altTitle != null) {
+                        Text(
+                            text = altTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = titleInk.copy(alpha = 0.76f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    .testTag("nova_detail_hero_title")
-            )
-            if (altTitle != null) {
-                Text(
-                    text = altTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.78f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                }
             }
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

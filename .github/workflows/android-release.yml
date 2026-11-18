@@ -508,41 +508,29 @@ jobs:
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
 
-      - name: Build Release APK
+      - name: Build APK for Review or Release
         env:
-          # A pull request signs a throwaway APK for reviewers, so it can use the
-          # fast R8 pass: shrinking, obfuscation and resource shrinking still run
-          # (the keep rules are exercised), but the whole-program optimization
-          # passes are skipped. Shipped builds on main and tags keep full R8.
-          FAST_R8: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          # Pull requests already run the full unit-test suite and advisory
+          # release lint. Their downloadable APK is a review/install artifact,
+          # not a candidate for publication, so reuse the debug variant those
+          # tests compiled instead of spending another 6+ minutes in R8.
+          # Main, tags and manual release runs still produce the fully shrunk,
+          # signed release APK with the production keep rules.
+          BUILD_VARIANT: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
         run: |
-          # The version name is resolved before the build and passed in, so the
-          # version compiled into the APK (shown in Settings -> About) is the
-          # same one the release tag and update manifest use. Resolving it after
-          # the build left the APK advertising a version that was not the one it
-          # was published under.
-          #
-          # One universal APK, deliberately. There is no `splits` block in
-          # app/build.gradle.kts, so the per-ABI branches that used to sit in
-          # the artifact step below could never match anything — they were copied
-          # from a template that did have ABI splits. If per-ABI artifacts are
-          # actually wanted, add the `splits` block *and* keep the branches.
-          R8_FLAG=()
-          if [ "$FAST_R8" = "true" ]; then
-            R8_FLAG=("-PanisequelFastR8=true")
-          fi
-          ./gradlew assembleRelease \
+          ./gradlew "assemble${BUILD_VARIANT^}" \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
-            "${R8_FLAG[@]}" \
             --stacktrace
 
       - name: Prepare APK Artifact
+        env:
+          BUILD_VARIANT: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
         run: |
           OUTPUT_DIR="release-artifacts"
           mkdir -p "$OUTPUT_DIR"
 
-          APK_BUILD_PATH="app/build/outputs/apk/release"
+          APK_BUILD_PATH="app/build/outputs/apk/$BUILD_VARIANT"
           APK=$(find "$APK_BUILD_PATH" -name '*.apk' -type f | head -1 || true)
 
           if [ -z "$APK" ]; then

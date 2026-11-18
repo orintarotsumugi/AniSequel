@@ -1,11 +1,12 @@
 # AniSequel
 
-[![DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/orintarotsumugi/AniSequel)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask%20DeepWiki-Architecture%20guide-5B5BD6?logo=bookstack&logoColor=white)](https://deepwiki.com/orintarotsumugi/AniSequel)
 
-**Your AniList history, read forwards.** AniSequel walks the relation graph of
-every anime and manga you have finished and finds the sequels, films, OVAs and
-spin-offs you never got around to - then puts the good ones one tap from your
-Planning list.
+**Find the next chapter of your anime journey.** AniSequel connects to AniList,
+looks at the anime and manga you've watched or read, follows each title's franchise
+relationships, and finds sequels, prequels, films, OVAs and spin-offs you may have
+missed. Browse recommendations, explore detailed title pages, manage your list,
+build tier boards and keep your AniList activity in sync - all in one Android app.
 
 <br>
 
@@ -22,26 +23,6 @@ middleman server.
 **Jump to:** [Features](#features) | [Install](#install) |
 [Build](#build-it) | [How it works](#how-it-works) | [Docs](#documentation) |
 [Contributing](#contributing) | [License](#license)
-
----
-
-## What's new - 2.2.1
-
-The Discord integration is gone, entirely.
-
-- **Rich Presence is removed.** No presence publishing, no RPC socket, no activity composer, no toggles.
-- **The Discord sign-in is removed with it.** It existed only to authorize presence publishing, so the OAuth flow, the stored token and the account card went too. The app now requests no Discord scopes at all.
-- **The settings page, the icon, the deep links and the GitHub Pages redirect page are gone.** The app's own jokes and every other setting are untouched.
-
-And the Type page was reworked:
-
-- **A downloaded font is one you keep.** Every stored family is listed above the search, in the same rows as a search result, and applies with one tap - after a restart or an update, without downloading again. Families with no bold cut are no longer fetched over and over.
-- **Text size goes to 75-175%** in five-percent steps: 21 sizes instead of 13.
-- **Less work behind the page.** One shared font connection, a background read of the stored list, and no re-decoding of your font on a rotation. The Home feed's card hide buttons no longer run a second press gesture.
-
-The full block-by-block notes live in
-[`changelog.json`](app/src/main/assets/changelog.json), which is also what the app
-and the GitHub release body read.
 
 ---
 

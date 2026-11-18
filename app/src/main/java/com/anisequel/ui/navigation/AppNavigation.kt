@@ -55,6 +55,7 @@ import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.domain.ui.NavBarLift
+import com.anisequel.domain.ui.ProgressBarStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.screens.login.FirstRunSetupHost
@@ -64,6 +65,8 @@ import com.anisequel.ui.theme.LocalConfirmPlanningAdd
 import com.anisequel.ui.theme.LocalHomeSequelStyle
 import com.anisequel.ui.theme.LocalInfoPageStyle
 import com.anisequel.ui.theme.LocalLibraryViewMode
+import com.anisequel.ui.theme.LocalProgressBarStyle
+import com.anisequel.ui.theme.LocalSetProgressBarStyle
 import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.theme.LocalSearchAnimeEnabled
@@ -689,6 +692,15 @@ fun AppNavigation(
             // reader can keep the classic Home and open the redesigned title page,
             // and this is the one place that answer is provided.
             LocalInfoPageStyle provides interfaceSettings.infoPageStyle,
+            // The progress style is shared by both title pages: the cards are the
+            // same composables, so a reader who picks the rocket on Nova must not
+            // meet the wave again after switching back to Classic.
+            LocalProgressBarStyle provides interfaceSettings.progressBarStyle,
+            LocalSetProgressBarStyle provides remember(interfacePreferences, appScope) {
+                { style: ProgressBarStyle ->
+                    appScope.launch { interfacePreferences.setProgressBarStyle(style) }
+                }
+            },
             LocalLibraryViewMode provides interfaceSettings.libraryView,
             LocalShowContinueRail provides interfaceSettings.showContinueRail,
             LocalHomeSequelStyle provides interfaceSettings.homeSequelStyle,

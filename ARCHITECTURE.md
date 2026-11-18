@@ -1,9 +1,53 @@
-# AniSequel — Advanced Architecture & System Design Specification
+# AniSequel — Architecture
 
-This specification provides an exhaustive, production-grade technical breakdown of the **AniSequel** codebase. It is authored for software engineers, systems architects, and automated AI coding agents tasked with analyzing, maintaining, extending, or refactoring the application.
+This document explains how AniSequel is organised, how data moves through the app, and where to make changes safely. It is intended for contributors and developers who want to understand the system before extending it.
 
 ---
 
+## At a glance
+
+AniSequel is a single-module Android application. Kotlin and Jetpack Compose build the interface; AniList is the source of anime, manga, profile and list data; GitHub Releases provides app updates. The app does not operate a proprietary backend.
+
+The code is grouped by responsibility:
+
+| Area | Responsibility |
+| --- | --- |
+| ui/ | Screens, reusable Compose components, navigation, themes, ViewModels and widgets |
+| domain/ | Business rules independent of Android UI and networking: sequel discovery, filtering, tier-list rules, motion and cover-colour calculations |
+| data/ | External I/O, persistence, repositories and API models: AniList GraphQL, DataStore preferences, snapshots and updater |
+
+### Main app flows
+
+1. **Launch:** restore preferences and the AniList session, then load dashboard data within its freshness window.
+2. **Discover:** load the viewer list and franchise relationships; domain use cases find missed sequels and apply filters.
+3. **Search:** debounce catalogue input before sending AniList GraphQL requests; open a detailed title page from a result.
+4. **Settings:** each page writes to its preference store; the same preference instances drive the feature and its preview.
+5. **Update:** read the public GitHub release manifest, download the APK, validate it, then hand it to Android's installer.
+
+### Settings map
+
+- **Appearance:** light/dark/system theme, palettes, cover-derived colour, backgrounds and OLED mode.
+- **Interface:** navigation, Home and Library layouts, cards, gestures and motion.
+- **Type & reading:** fonts, saved typefaces, text size and title behaviour.
+- **Jokes:** Ani-chan identity, tone, timing, triggers, compact mode and reveal animation.
+- **Seasonal effects:** particle style, density, size, speed and performance limits.
+- **Library & dashboard:** list refresh cadence, arriving rows, dashboard sections and bottom-bar destinations.
+- **Device Manager:** display behaviour, app lock, performance limits and cover-cache budget.
+- **AniList account:** connection, client configuration and sign-out.
+- **Updates:** installed version, update checks, release notes and crash-report options.
+- **About & support:** app details, privacy information, repository and issue links.
+
+Settings search indexes destinations and individual controls, retaining page and section metadata so a result can navigate to the relevant setting.
+
+### Network and caching
+
+AniList uses GraphQL over HTTPS. Identical read-only requests can share an in-flight response through request coalescing; rate-limit and connectivity failures are classified before reaching UI state. Repository caches and snapshots have explicit freshness windows. GitHub update requests use a separate client so AniList authentication headers are not attached to public release assets.
+
+### Build and release
+
+Pull requests can build a review APK without repeating the expensive release shrinking pass. Main-branch and tagged production releases still use the release variant and full shrinking/signing configuration. Version, changelog and updater manifest are maintained together when a release version changes.
+
+---
 ## 1. System Purpose & Architectural Philosophy
 
 **AniSequel** is a native, offline-resilient Android application built with Kotlin, Jetpack Compose, Coroutines, and Material 3 Expressive UI. The app solves a key problem for anime enthusiasts: identifying unwatched sequels, prequels, OVAs, films, and spin-offs across complex, multi-branch anime franchise relation graphs on [AniList](https://anilist.co).

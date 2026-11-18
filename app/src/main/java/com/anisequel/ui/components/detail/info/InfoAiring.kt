@@ -46,8 +46,9 @@ private const val COUNTDOWN_TICK_MILLIS = 60_000L
  * by up to a minute, which reads as a bug in whichever one the reader looked at
  * second.
  *
- * Null means "there is nothing to count down to" - no scheduled episode, or one
- * that has already aired - and every caller hides its line on null.
+ * Null means there is no scheduled airing. At the release boundary the shared
+ * formatter briefly says "now", so the reader does not lose the episode line
+ * at the exact minute the countdown reaches zero.
  */
 @Composable
 internal fun rememberAiringCountdown(media: MediaNode): String? {

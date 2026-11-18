@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,8 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.pageUrl
+import com.anisequel.data.model.posterColor
+import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
@@ -38,8 +41,13 @@ import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
 import com.anisequel.ui.components.detail.FullScreenCoverViewer
+import com.anisequel.ui.components.cards.cardPosterUrl
+import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.detail.toParentSummary
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.theme.CoverColors
+import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
@@ -127,6 +135,30 @@ fun NovaInfoPage(
     val context = LocalContext.current
     val immersive = LocalImmersiveMode.current
 
+    // The whole page takes its palette from the artwork it is already showing.
+    // Before this, only the hero's shadow and the backdrop wash used the cover;
+    // every card and control underneath still used the app's standing accent, so
+    // a blue title and a green title had the same page under different art. A
+    // nested Material scheme is the smallest honest way to repaint the shared
+    // cards, the docked bar and the M3 defaults together - they are not Nova-only
+    // composables, so a local set of colours would have to be threaded into each
+    // one.
+    val darkTheme = LocalAppDarkTheme.current
+    val poster = cardPosterUrl(media) ?: media.posterUrl
+    val coverSeed = CoverColors.color(poster)
+        ?: CoverColors.color(media.posterUrl)
+        ?: media.posterColor.toCoverColorOrNull()
+    val standingScheme = MaterialTheme.colorScheme
+    val pageScheme = remember(coverSeed, darkTheme) {
+        coverSeed?.let { seed ->
+            val (light, dark) = DynamicThemeBuilder.createDynamicSchemes(
+                seed = seed,
+                tintSurfaces = true
+            )
+            if (darkTheme) dark else light
+        }
+    } ?: standingScheme
+
     val themeSongs by rememberThemeSongs(media)
     // The same scroll-derived values as the classic page, from the same helpers:
     // the backdrop hand-off and the docked bar's threshold are properties of the
@@ -156,87 +188,89 @@ fun NovaInfoPage(
         )
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        InfoPageBackdrop(
-            media = media,
-            source = infoBackdropSource,
-            blur = infoBackdropBlur,
-            tint = infoBackdropTint,
-            collapse = { collapse.value },
-            heroBottom = { heroBottom.value }
-        )
+    MaterialTheme(colorScheme = pageScheme) {
+        Box(modifier = modifier.fillMaxSize()) {
+            InfoPageBackdrop(
+                media = media,
+                source = infoBackdropSource,
+                blur = infoBackdropBlur,
+                tint = infoBackdropTint,
+                collapse = { collapse.value },
+                heroBottom = { heroBottom.value }
+            )
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag("nova_info_page"),
-            contentPadding = PaddingValues(bottom = bottomContentPadding),
-            // Tighter than the classic page's 16dp: the stats strip and the
-            // progress card are one block of summary, and a full card gap between
-            // them would read them as two unrelated sections.
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            item(key = "nova_hero", contentType = "nova_hero") {
-                NovaInfoHero(
-                    media = media,
-                    relationLabel = subject.sequel?.relationLabel,
-                    collapse = { collapse.value },
-                    onOpenCover = { origin ->
-                        coverOrigin = origin
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("nova_info_page"),
+                contentPadding = PaddingValues(bottom = bottomContentPadding),
+                // Tighter than the classic page's 16dp: the stats strip and the
+                // progress card are one block of summary, and a full card gap between
+                // them would read them as two unrelated sections.
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item(key = "nova_hero", contentType = "nova_hero") {
+                    NovaInfoHero(
+                        media = media,
+                        relationLabel = subject.sequel?.relationLabel,
+                        collapse = { collapse.value },
+                        onOpenCover = { origin ->
+                            coverOrigin = origin
+                            showCover = true
+                        },
+                        onClose = onClose,
+                        onOpenAppearance = onOpenAppearance,
+                        onEditEntry = onEditEntry,
+                        canWriteToAniList = canWriteToAniList,
+                        onOpenStudio = onOpenStudio,
+                        backdropSource = infoBackdropSource
+                    )
+                }
+
+                novaPageItems(
+                    subject = subject,
+                    sections = sections,
+                    themeSongs = themeSongs,
+                    isDetailLoading = isDetailLoading,
+                    canWriteToAniList = canWriteToAniList,
+                    holdDurationSeconds = holdDurationSeconds,
+                    swipeEnabled = swipeEnabled,
+                    context = context,
+                    quickAddStatus = quickAddStatus,
+                    onAddMediaToPlanning = onAddMediaToPlanning,
+                    onAddMediaToWatching = onAddMediaToWatching,
+                    friends = friends,
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching,
+                    onOpenMedia = onOpenMedia,
+                    onOpenStudio = onOpenStudio,
+                    onOpenCharacter = onOpenCharacter,
+                    onOpenStaff = onOpenStaff,
+                    onOpenCover = {
+                        // Not the poster, so no rectangle to expand from. Clearing the
+                        // previous one matters when a relation was opened first.
+                        coverOrigin = null
                         showCover = true
                     },
-                    onClose = onClose,
-                    onOpenAppearance = onOpenAppearance,
-                    onEditEntry = onEditEntry,
-                    canWriteToAniList = canWriteToAniList,
-                    onOpenStudio = onOpenStudio,
-                    backdropSource = infoBackdropSource
+                    onEditEntry = onEditEntry
                 )
             }
 
-            novaPageItems(
-                subject = subject,
-                sections = sections,
-                themeSongs = themeSongs,
-                isDetailLoading = isDetailLoading,
-                canWriteToAniList = canWriteToAniList,
-                holdDurationSeconds = holdDurationSeconds,
-                swipeEnabled = swipeEnabled,
-                context = context,
-                quickAddStatus = quickAddStatus,
-                onAddMediaToPlanning = onAddMediaToPlanning,
-                onAddMediaToWatching = onAddMediaToWatching,
-                friends = friends,
-                onAddToPlanning = onAddToPlanning,
-                onAddToWatching = onAddToWatching,
-                onOpenMedia = onOpenMedia,
-                onOpenStudio = onOpenStudio,
-                onOpenCharacter = onOpenCharacter,
-                onOpenStaff = onOpenStaff,
-                onOpenCover = {
-                    // Not the poster, so no rectangle to expand from. Clearing the
-                    // previous one matters when a relation was opened first.
-                    coverOrigin = null
-                    showCover = true
-                },
-                onEditEntry = onEditEntry
+            InfoFloatingBar(
+                visible = showFloatingBar,
+                title = media.displayName,
+                progress = { readProgress.value },
+                onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
+                onOpenAniList = openOnAniList,
+                onOpenAppearance = onOpenAppearance,
+                onClose = onClose,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .immersiveDisplayInsets(immersive)
             )
         }
-
-        InfoFloatingBar(
-            visible = showFloatingBar,
-            title = media.displayName,
-            progress = { readProgress.value },
-            onScrollToTop = { scope.launch { listState.animateScrollToItem(0) } },
-            onOpenAniList = openOnAniList,
-            onOpenAppearance = onOpenAppearance,
-            onClose = onClose,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .immersiveDisplayInsets(immersive)
-        )
     }
 }
 
