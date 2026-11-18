@@ -35,7 +35,8 @@ internal fun SummaryCard(
     ChartCard(
         title = "Summary",
         icon = AppVectorIcons.StatSummary,
-        modifier = modifier
+        modifier = modifier,
+        accentSlot = 0
     ) {
         SummaryRow(
             cells = listOf(

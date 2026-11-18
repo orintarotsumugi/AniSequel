@@ -87,6 +87,7 @@ fun ChartCard(
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth,
     trailing: String? = null,
+    accentSlot: Int = 0,
     content: @Composable () -> Unit
 ) {
     Card(
@@ -102,7 +103,7 @@ fun ChartCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            chartSlotColor(0).copy(alpha = 0.22f)
+            chartSlotColor(accentSlot).copy(alpha = 0.28f)
         )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -111,13 +112,13 @@ fun ChartCard(
                     modifier = Modifier
                         .size(34.dp)
                         .clip(MaterialTheme.shapes.small)
-                        .background(chartSlotColor(0).copy(alpha = 0.16f)),
+                        .background(chartSlotColor(accentSlot).copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = chartSlotColor(0),
+                        tint = chartSlotColor(accentSlot),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -164,7 +165,8 @@ fun StatusDistributionCard(
     ChartCard(
         title = "Status Distribution",
         icon = AppVectorIcons.StatStatus,
-        modifier = modifier
+        modifier = modifier,
+        accentSlot = 2
     ) {
         if (distribution.isEmpty) {
             EmptyChartNote("No list statuses to show")
@@ -290,9 +292,16 @@ fun BarChartCard(
     labelWidth: Dp = 56.dp,
     subtitle: String? = null,
     trailing: String? = null,
-    barColor: Color? = null
+    barColor: Color? = null,
+    accentSlot: Int = 0
 ) {
-    ChartCard(title = title, icon = icon, modifier = modifier, trailing = trailing) {
+    ChartCard(
+        title = title,
+        icon = icon,
+        modifier = modifier,
+        trailing = trailing,
+        accentSlot = accentSlot
+    ) {
         if (rows.isEmpty()) {
             EmptyChartNote("Nothing recorded yet")
             return@ChartCard
