@@ -350,7 +350,12 @@ internal fun ProfileTabsContent(
     val followingListState = rememberLazyListState()
     val globalListState = rememberLazyListState()
     val messagesListState = rememberLazyListState()
-    val statsListState = rememberLazyListState()
+    // Each stats section owns its scroll position. Switching from a long Tags
+    // list to Overview must not leave the shorter list stranded at the old index,
+    // and returning to Tags should restore the place the reader left.
+    val overviewStatsListState = rememberLazyListState()
+    val genreStatsListState = rememberLazyListState()
+    val tagStatsListState = rememberLazyListState()
     val socialGridState = rememberLazyGridState()
     // Its own state, not the Social tab's: two grids of a stranger's things that
     // share a scroll position would drop the reader halfway down one when they
@@ -498,7 +503,11 @@ internal fun ProfileTabsContent(
                         contentPadding = padding,
                         section = statsSection,
                         onSelectSection = { statsSection = it },
-                        listState = statsListState
+                        listState = when (statsSection) {
+                            StatsSection.OVERVIEW -> overviewStatsListState
+                            StatsSection.GENRES -> genreStatsListState
+                            StatsSection.TAGS -> tagStatsListState
+                        }
                     )
 
                     3 -> ProfileSocialTab(
