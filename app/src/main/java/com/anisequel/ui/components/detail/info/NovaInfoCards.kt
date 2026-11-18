@@ -283,7 +283,7 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
                 if (scoreRows.isEmpty()) Text("AniList has not supplied a score distribution for this title.")
                 scoreRows.forEach { row ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${row.score}/10", modifier = Modifier.width(54.dp))
+                        Text(String.format(Locale.US, "%.1f/10", (row.score ?: 0) / 10f), modifier = Modifier.width(54.dp))
                         Text("${compactCount(row.amount ?: 0)} ratings", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -301,13 +301,14 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
             }
             else -> {
                 Text(if (media.isManga) "Chapters: ${media.chapters ?: "Not available"}" else "Episode length: ${media.duration?.let { "$it minutes" } ?: "Not available"}")
-                Text("List status breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                if (statusRows.isEmpty()) Text("AniList has not supplied list-status totals for this title.")
-                statusRows.forEach { row ->
-                    Row {
-                        Text(row.status.orEmpty().replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
-                        Text(compactCount(row.amount ?: 0), fontWeight = FontWeight.SemiBold)
-                    }
+            }
+        }
+        if (statusRows.isNotEmpty()) {
+            Text("List status breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            statusRows.forEach { row ->
+                Row {
+                    Text(row.status.orEmpty().replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
+                    Text(compactCount(row.amount ?: 0), fontWeight = FontWeight.SemiBold)
                 }
             }
         }
