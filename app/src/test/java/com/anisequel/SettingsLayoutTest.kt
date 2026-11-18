@@ -166,6 +166,33 @@ class SettingsLayoutTest {
         )
     }
 
+    @Test
+    fun `settings pages share expressive surfaces and animated controls`() {
+        val components = source(settings + "SettingsComponents.kt")
+        assertTrue("section cards should use the expressive shape scale", components.contains("ExpressiveShapes.extraLarge"))
+        assertTrue("section icon tiles should use Material expressive silhouettes", components.contains("settingsDecorativeShape(title)"))
+        assertTrue("switch rows should animate their selected surface", components.contains("animateColorAsState("))
+        assertTrue("switch rows should use the expressive spatial size token", components.contains("ExpressiveMotion.FastSpatialSize"))
+        assertTrue("checked rows should have a visible tonal state", components.contains("background(rowContainer)"))
+        val hub = source(settings + "SettingsHub.kt")
+        assertTrue("hub groups should use expressive large surfaces", hub.contains("ExpressiveShapes.extraLarge"))
+        assertTrue("hub entries should share the section icon palette", hub.contains("settingsIconPalette(entry.title)"))
+    }
+
+    @Test
+    fun `library and joke settings put primary choices before refinements`() {
+        val library = source(settings + "LibrarySettingsTab.kt")
+        assertTrue("navigation choices should lead the Library page",
+            library.indexOf("TopBarSectionCard(mainTabPreferences)") < library.indexOf("LibraryViewCard(libraryPreferences)"))
+        assertTrue("saved-list view should precede refresh interval",
+            library.indexOf("LibraryViewCard(libraryPreferences)") < library.indexOf("ListRefreshCard(refreshIntervalPreferences)"))
+        val jokes = source(settings + "JokeSettingsTab.kt")
+        assertTrue("speaker identity should precede timing refinements",
+            jokes.indexOf("PersonaCard(settings") < jokes.indexOf("PaceCard(settings"))
+        assertTrue("text presentation should follow placement choices",
+            jokes.indexOf("PlacementCard(settings") < jokes.indexOf("TextEffectCard(settings"))
+    }
+
     private fun findProjectRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".")
         var candidate: File? = start

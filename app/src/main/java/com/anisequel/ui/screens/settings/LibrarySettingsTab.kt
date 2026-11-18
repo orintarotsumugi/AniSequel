@@ -67,14 +67,14 @@ fun LibrarySettingsTab(
     modifier: Modifier = Modifier
 ) {
     SettingsScrollColumn(modifier) {
-        ListRefreshCard(refreshIntervalPreferences)
-        LibraryViewCard(libraryPreferences)
-        ArrivingSectionCard(arrivingPreferences)
-        // The hold-and-swipe card moved to Device Manager, which is where the rest
-        // of the "what this phone does with a gesture" choices live.
+        // Navigation first, then the saved-list view and its data freshness.
         TopBarSectionCard(mainTabPreferences)
         BottomBarSectionCard(mainTabPreferences)
         SearchPageSectionCard(mainTabPreferences)
+        LibraryViewCard(libraryPreferences)
+        ListRefreshCard(refreshIntervalPreferences)
+        ArrivingSectionCard(arrivingPreferences)
+        // Gesture controls live in Device Manager beside the other device behaviour.
         Spacer(modifier = Modifier.height(24.dp))
     }
 }

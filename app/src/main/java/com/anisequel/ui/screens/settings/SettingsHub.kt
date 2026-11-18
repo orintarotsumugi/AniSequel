@@ -19,6 +19,7 @@ import com.anisequel.ui.components.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 
 /**
  * The pieces the Settings hub is built from.
@@ -261,9 +263,10 @@ fun SettingsHubGroup(
 ) {
     if (entries.isEmpty()) return
     Surface(
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = ExpressiveShapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
@@ -316,14 +319,14 @@ private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(MaterialTheme.shapes.medium)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
+                .clip(settingsDecorativeShape(entry.title))
+                .background(settingsIconPalette(entry.title).first),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = entry.icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                tint = settingsIconPalette(entry.title).second,
                 modifier = Modifier.size(22.dp)
             )
         }

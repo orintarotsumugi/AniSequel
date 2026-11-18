@@ -102,12 +102,13 @@ fun JokeSettingsTab(
             }
         )
 
-        PaceCard(settings = settings, scope = scope, preferences = jokePreferences)
+        // Identity and core behaviour lead; presentation refinements follow.
         PersonaCard(settings = settings, scope = scope, preferences = jokePreferences)
-        TextEffectCard(settings = settings, scope = scope, preferences = jokePreferences)
+        PaceCard(settings = settings, scope = scope, preferences = jokePreferences)
         PlacementCard(settings = settings, scope = scope, preferences = jokePreferences)
         TonesCard(settings = settings, scope = scope, preferences = jokePreferences)
         MomentsCard(settings = settings, scope = scope, preferences = jokePreferences)
+        TextEffectCard(settings = settings, scope = scope, preferences = jokePreferences)
 
         JokeFavouritesCard(
             lines = saved,

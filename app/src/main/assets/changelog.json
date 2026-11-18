@@ -42,6 +42,10 @@
         {
           "title": "Gentler AniList refresh and rate-limit messages",
           "detail": "Open title details keep cached data on screen and refresh no more than once every ten minutes. When AniList applies a rate limit, the app explains the cooldown, preserves the server's wait time, and picks a rotating Ani-chan joke instead of showing the same plain warning. Version remains 2.3.9."
+        },
+        {
+          "title": "Expressive Settings redesign",
+          "detail": "Settings cards now share larger Material 3 Expressive surfaces, varied expressive icon silhouettes and animated tonal switch states. The Library and Ani-chan pages put primary choices before refinements, while all existing destinations, controls, preference storage and search routes remain intact. Version remains 2.3.9."
         }
       ]
     },
