@@ -590,10 +590,9 @@ fun SequelDetailSheet(
                     // editor; pulling down returns to the 60% resting position.
                     Column(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationY = sheetOffset.value * size.height
-                            }
+                            .fillMaxWidth()
+                            .fillMaxHeight(1f - sheetOffset.value)
+                            .align(Alignment.BottomCenter)
                             .background(
                                 MaterialTheme.colorScheme.surface,
                                 RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
