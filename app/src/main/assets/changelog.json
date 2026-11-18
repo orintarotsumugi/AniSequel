@@ -4,10 +4,6 @@
       "version": "2.3.9",
       "entries": [
         {
-          "title": "Expandable progress controls",
-          "detail": "My Entry's progress row now opens into an expandable stepper with animated plus/minus controls and the episode slider. It stays open while progress is adjusted, collapses when the editor is scrolled, and can be toggled closed by tapping the progress row again. Its expansion and collapse use AniSequel's shared motion tokens, so the selected Motion setting controls the interaction; Instant mode skips the transition."
-        },
-        {
           "title": "Nova is the page every install opens into",
           "detail": "The redesigned Info page is now the default. A reader who has never chosen a title page, or who installs the app for the first time, opens the full-bleed artwork, cover-derived colours, score strip and progress card instead of the original card stack. Classic is not removed: it stays under Settings > Interface > App layout, and an install that already chose Classic keeps that choice."
         },
