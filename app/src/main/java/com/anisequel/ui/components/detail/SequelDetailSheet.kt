@@ -729,7 +729,6 @@ fun SequelDetailSheet(
         }
         }
     }
-}
 
 /**
  * A theme write, where a failure is cosmetic rather than a screen.
