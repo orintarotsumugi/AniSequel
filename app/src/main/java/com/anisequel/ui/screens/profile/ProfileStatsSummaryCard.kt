@@ -35,7 +35,8 @@ internal fun SummaryCard(
     ChartCard(
         title = "Summary",
         icon = AppVectorIcons.StatSummary,
-        modifier = modifier
+        modifier = modifier,
+        accentSlot = 0
     ) {
         SummaryRow(
             cells = listOf(
@@ -43,9 +44,9 @@ internal fun SummaryCard(
                 // "Manga" one and is AniList's anime count, so "Total" read as the
                 // total of both - a number that is right beside a second number it
                 // does not include.
-                SummaryCell(state.animeCount.toString(), "Anime"),
-                SummaryCell(state.episodesWatched.toString(), "Episodes\nWatched"),
-                SummaryCell(formatWatchTime(state.minutesWatched), "Time\nWatched")
+                SummaryCell(state.animeCount.toString(), "Anime", chartSlotColor(0)),
+                SummaryCell(state.episodesWatched.toString(), "Episodes\nWatched", chartSlotColor(1)),
+                SummaryCell(formatWatchTime(state.minutesWatched), "Time\nWatched", chartSlotColor(2))
             )
         )
         Spacer(modifier = Modifier.height(18.dp))
@@ -53,19 +54,25 @@ internal fun SummaryCard(
             cells = listOf(
                 SummaryCell(
                     state.meanScore?.takeIf { it > 0.0 }?.let { formatMeanScore(it) } ?: "-",
-                    "Mean Score"
+                    "Mean Score",
+                    chartSlotColor(3)
                 ),
                 SummaryCell(
                     state.standardDeviation?.takeIf { it > 0 }?.let { "±$it" } ?: "-",
-                    "Standard\nDeviation"
+                    "Standard\nDeviation",
+                    chartSlotColor(4)
                 ),
-                SummaryCell(state.mangaCount.toString(), "Manga")
+                SummaryCell(state.mangaCount.toString(), "Manga", chartSlotColor(5))
             )
         )
     }
 }
 
-private data class SummaryCell(val value: String, val label: String)
+private data class SummaryCell(
+    val value: String,
+    val label: String,
+    val accent: androidx.compose.ui.graphics.Color
+)
 
 @Composable
 private fun SummaryRow(cells: List<SummaryCell>) {
@@ -79,7 +86,7 @@ private fun SummaryRow(cells: List<SummaryCell>) {
                     text = cell.value,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = cell.accent,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     modifier = Modifier.fillMaxWidth()

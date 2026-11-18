@@ -20,9 +20,11 @@ class InterfaceModesTest {
         assertEquals(LibraryViewMode.GROUPED, LibraryViewMode.fromStorage("grouped"))
         assertEquals(LibraryViewMode.TABLE, LibraryViewMode.fromStorage("table"))
         assertEquals(LibraryViewMode.COVERS, LibraryViewMode.fromStorage("covers"))
+        assertEquals(LibraryViewMode.CARDS, LibraryViewMode.DEFAULT)
+        assertEquals(LibraryViewMode.CARDS, LibraryViewMode.fromStorage(null))
         assertEquals(
-            "an unknown mode written by a newer build must fall back to the shipped grid",
-            LibraryViewMode.GRID,
+            "an unknown mode written by a newer build must fall back to the 2.4 poster cards",
+            LibraryViewMode.CARDS,
             LibraryViewMode.fromStorage("hologram")
         )
         assertEquals(HomeSequelStyle.BANNER, HomeSequelStyle.fromStorage("banner"))

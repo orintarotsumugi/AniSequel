@@ -142,7 +142,8 @@ private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
             icon = AppVectorIcons.StatEpisodeCount,
             rows = state.entryInsights.episodeBuckets,
             labelWidth = 48.dp,
-            subtitle = episodeBucketSubtitle(state.entryInsights)
+            subtitle = episodeBucketSubtitle(state.entryInsights),
+            accentSlot = 1
         )
     }
 
@@ -161,7 +162,8 @@ private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
                 icon = AppVectorIcons.StatCountry,
                 rows = state.entryInsights.countries,
                 labelWidth = 92.dp,
-                subtitle = "Total entries: ${countryTotal(state.entryInsights)}"
+                subtitle = "Total entries: ${countryTotal(state.entryInsights)}",
+                accentSlot = 4
             )
         }
     }
@@ -177,7 +179,8 @@ private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
                 // One hue, not the six-slot ramp: a year chart has too many rows
                 // for a rotating palette to mean anything, and rotating it makes
                 // neighbouring bars look like different categories.
-                barColor = MaterialTheme.colorScheme.primary
+                barColor = MaterialTheme.colorScheme.primary,
+                accentSlot = 0
             )
         }
     }
@@ -190,7 +193,8 @@ private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
                 rows = state.entryInsights.watchYears,
                 labelWidth = 48.dp,
                 subtitle = "Finished ${state.entryInsights.watchYears.sumOf { it.count }} entries",
-                barColor = MaterialTheme.colorScheme.primary
+                barColor = MaterialTheme.colorScheme.primary,
+                accentSlot = 5
             )
         }
     }
@@ -212,7 +216,8 @@ private fun LazyListScope.genreChart(insights: ListInsights) {
             rows = insights.genres,
             labelWidth = 92.dp,
             trailing = "${insights.genres.size}",
-            subtitle = "By entries on your list"
+            subtitle = "By entries on your list",
+            accentSlot = 1
         )
     }
 }
@@ -226,7 +231,8 @@ private fun LazyListScope.tagChart(insights: ListInsights) {
             rows = insights.tags,
             labelWidth = 116.dp,
             trailing = "${insights.tags.size}",
-            subtitle = "Your most frequent tags"
+            subtitle = "Your most frequent tags",
+            accentSlot = 4
         )
     }
 }
@@ -250,7 +256,8 @@ private fun ScoreDistributionCard(
         title = "Score Distribution",
         icon = AppVectorIcons.StatScore,
         modifier = modifier,
-        trailing = insights.scores.sumOf { it.count }.takeIf { it > 0 }?.toString()
+        trailing = insights.scores.sumOf { it.count }.takeIf { it > 0 }?.toString(),
+        accentSlot = 4
     ) {
         if (insights.scores.isEmpty()) {
             Text(
@@ -316,7 +323,8 @@ private fun FormatDistributionCard(
         title = "Format Distribution",
         icon = AppVectorIcons.StatFormat,
         modifier = modifier,
-        trailing = total.takeIf { it > 0 }?.toString()
+        trailing = total.takeIf { it > 0 }?.toString(),
+        accentSlot = 3
     ) {
         if (insights.formats.isEmpty() || total <= 0) {
             Text(

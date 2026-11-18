@@ -1,19 +1,21 @@
 package com.anisequel.ui.components.detail
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
@@ -31,7 +33,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -390,13 +391,17 @@ fun SequelDetailSheet(
         onDismiss()
     }
     val handleDismiss: () -> Unit = {
-        if (!isClosing) {
-            isClosing = true
-            scope.launch {
-                entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
-                finishDismiss()
-            }
-        }
+        if (!isClosing) isClosing = true
+    }
+
+    // The exit belongs to this media identity, not to the composition-wide scope.
+    // If a relation replaces the subject while the page is animating out, this
+    // effect is cancelled with the old id/type and cannot call the old host's
+    // onDismiss against the newly opened title.
+    LaunchedEffect(subject.mediaId, subject.media.type, isClosing) {
+        if (!isClosing) return@LaunchedEffect
+        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        finishDismiss()
     }
 
     // The palette's destination, hoisted above the dialog so the dialog's own
@@ -408,10 +413,35 @@ fun SequelDetailSheet(
     var showAppearance by rememberSaveable(subject.mediaId, subject.media.type) {
         mutableStateOf(false)
     }
+    // Back unwinds the topmost detail layer first: appearance editor, My Entry,
+    // then the title page. Keep this state outside Dialog content so its window
+    // dismissal callback can make the same decision as the visible controls.
+    var showEntrySheet by rememberSaveable(subject.mediaId, subject.media.type) {
+        mutableStateOf(false)
+    }
+    val sheetOffset = remember(subject.mediaId, subject.media.type) { Animatable(1f) }
+    val closeEntrySheet: () -> Unit = {
+        scope.launch {
+            sheetOffset.animateTo(1f, ExpressiveMotion.SettleSpatial)
+            showEntrySheet = false
+        }
+    }
+    LaunchedEffect(showEntrySheet) {
+        if (showEntrySheet) {
+            sheetOffset.snapTo(1f)
+            sheetOffset.animateTo(0.4f, ExpressiveMotion.DefaultSpatial)
+        } else {
+            sheetOffset.snapTo(1f)
+        }
+    }
 
     Dialog(
         onDismissRequest = {
-            if (showAppearance) showAppearance = false else handleDismiss()
+            when {
+                showAppearance -> showAppearance = false
+                showEntrySheet -> closeEntrySheet()
+                else -> handleDismiss()
+            }
         },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
@@ -434,42 +464,22 @@ fun SequelDetailSheet(
                 .testTag("sequel_detail_sheet"),
             color = MaterialTheme.colorScheme.surface
         ) {
-        // The page is destination zero and stays at index zero, so a saved tab index
-        // cannot reopen the sheet on a destination that is not there any more.
-        var destination by rememberSaveable(subject.mediaId, subject.media.type) {
-            mutableIntStateOf(0)
-        }
-        // The palette's destination is hoisted above the dialog - see the note
-        // beside its declaration. Boolean rather than a third `AnimatedContent`
-        // index: it is an overlay over the page, not a peer of Info and My Entry,
-        // so the bottom capsule keeps saying which of its two pages is behind it.
+        // Info stays composed underneath My Entry. The editor is a real overlay,
+        // not a second destination: its draft and the Info page's scroll state both
+        // remain alive while the reader moves the sheet.
         val destinations = buildList {
             add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
             if (entryEditor != null) {
                 add(NavigationDestination("My Entry", AppVectorIcons.EditEntry, "detail_tab_edit"))
             }
         }
-        val selected = destination.coerceIn(0, destinations.lastIndex)
-        // The page previously consumed navigation insets on its outer shell and
-        // again on the floating bar. That double reservation made the last card
-        // stop too high on devices with a gesture bar. Keep one content clearance,
-        // and add only a small physical lift when immersive mode makes the system
-        // inset report zero.
-        //
-        // The clearance is the capsule's *measured* height, not the 112dp it used
-        // to assume. That constant was smaller than a real bar plus the navigation
-        // inset on several phones: the last card - and the whole "Categories"
-        // heading under it - could not be scrolled clear of the capsule, so the
-        // page ended underneath the only control that switches away from it. The
-        // bar measures itself below and the list reserves exactly that much plus
-        // a breathing gap; 112dp stays only as the first-frame fallback, before
-        // the bar has been laid out once.
+        val selected = if (showEntrySheet && destinations.size > 1) 1 else 0
+
+        // The capsule's measured height is also the page's bottom clearance. It
+        // travels to the sheet's top edge while My Entry is open, then settles back
+        // into its normal dock position when the overlay closes.
         var dockHeightPx by remember { mutableStateOf(0) }
         val dockHeight = with(LocalDensity.current) { dockHeightPx.toDp() }
-        // With no capsule (a host with no entry editor) the page still ends
-        // edge-to-edge, so the gesture bar needs the same clearance the capsule
-        // used to provide. Read as an inset rather than a constant: 0dp on a
-        // three-button phone and 24dp+ on gesture navigation.
         val navigationInset = WindowInsets.navigationBars
             .asPaddingValues()
             .calculateBottomPadding()
@@ -480,126 +490,26 @@ fun SequelDetailSheet(
             navigationInset + 28.dp + if (immersive) 12.dp else 0.dp
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    alpha = entrance.value
-                    val scale = 0.985f + (0.015f * entrance.value)
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = (1f - entrance.value) * 22.dp.toPx()
-                }
+                .clipToBounds()
         ) {
-            AnimatedContent(
-                targetState = selected,
-                transitionSpec = {
-                    val forward = targetState > initialState
-                    // The trailing `using null` drops the default
-                    // `SizeTransform`, which springs the container's height
-                    // between the page and the editor - re-measuring the
-                    // `LazyColumn` underneath on every frame of the switch,
-                    // under a reader who may be scrolling it at the same time.
-                    // That is the motion the crash was reported from: opening
-                    // this sheet and scrolling it in one go. The slide and the
-                    // fade are draw-phase and stay; only the height snaps.
-                    (
-                        slideInHorizontally(
-                            // `DefaultSpatialOffset` is the `IntOffset` token, which is
-                            // the type `slideInHorizontally` takes - the `Int` and
-                            // `IntSize` tokens cannot be passed to it at all.
-                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                        ) { width -> if (forward) width / 5 else -width / 5 } +
-                            fadeIn(animationSpec = ExpressiveMotion.FastEffects)
-                        ) togetherWith (
-                        slideOutHorizontally(
-                            animationSpec = ExpressiveMotion.DefaultSpatialOffset
-                        ) { width -> if (forward) -width / 5 else width / 5 } +
-                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                        ) using null
-                },
-                label = "detail_destination"
-            ) { index ->
-                if (index == 1 && entryEditor != null) {
-                    // No `verticalScroll` here any more. The edit tab scrolls its own
-                    // fields so that its action row can stay pinned above the
-                    // navigation bar; scrolling at both levels would let the pinned row
-                    // scroll away, which is the thing the tab was restructured to stop.
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            // The editor has no hero to sit behind, so it takes the
-                            // status-bar inset the Info page gets from its artwork,
-                            // and it lifts for the keyboard - the Notes field is at
-                            // the bottom of a full-screen page now, not in a sheet
-                            // that the platform already resized.
-                            .statusBarsPadding()
-                            .immersiveDisplayInsets(immersive)
-                            .imePadding()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 8.dp, bottom = navClearance)
-                    ) {
-                        // The edit destination has no hero, so it needs the close
-                        // control the hero carries on the Info destination. Back
-                        // still works, but a page whose only visible exit is a
-                        // system gesture is a page that reads as a trap.
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // The editor used to open on a bare "My Entry", which named
-                            // the section but not the title it was editing - and the tab is
-                            // reached from a page whose hero has already scrolled away.
-                            // The subtitle is the title and the status the draft is about,
-                            // so a reader who came back to the editor from a relation knows
-                            // which entry the form will write.
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "My Entry",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = listOfNotNull(
-                                        media.displayName,
-                                        editState.draft?.status?.let {
-                                            ListStatuses.label(it, media.isManga)
-                                        }
-                                    ).joinToString(" \u00b7 "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.testTag("detail_edit_subtitle")
-                                )
-                            }
-                            IconButton(
-                                onClick = handleDismiss,
-                                modifier = Modifier
-                                    .background(
-                                        MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        androidx.compose.foundation.shape.CircleShape
-                                    )
-                                    .testTag("detail_edit_close")
-                            ) {
-                                Icon(
-                                    imageVector = AppVectorIcons.Close,
-                                    contentDescription = "Close"
-                                )
-                            }
-                        }
-                        DetailEditTab(
-                            media = media,
-                            editor = entryEditor,
-                            state = editState,
-                            // The sheet's scope, which outlives the tab switch -
-                            // see the parameter's doc.
-                            scope = scope
-                        )
+            val density = LocalDensity.current
+            val containerHeightPx = with(density) { maxHeight.toPx() }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = entrance.value
+                        val scale = 0.985f + (0.015f * entrance.value)
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = (1f - entrance.value) * 22.dp.toPx()
                     }
-                } else if (LocalInfoPageStyle.current == InfoPageStyle.NOVA) {
+            ) {
+                if (LocalInfoPageStyle.current == InfoPageStyle.NOVA) {
                     NovaInfoPage(
                         subject = subject,
                         isDetailLoading = isDetailLoading,
@@ -618,7 +528,7 @@ fun SequelDetailSheet(
                         onOpenStudio = onOpenStudio,
                         onOpenCharacter = onOpenCharacter,
                         onOpenStaff = onOpenStaff,
-                        onEditEntry = { if (entryEditor != null) destination = 1 },
+                        onEditEntry = { if (entryEditor != null) showEntrySheet = true },
                         onOpenAppearance = { showAppearance = true },
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
@@ -646,7 +556,7 @@ fun SequelDetailSheet(
                         onOpenStudio = onOpenStudio,
                         onOpenCharacter = onOpenCharacter,
                         onOpenStaff = onOpenStaff,
-                        onEditEntry = { if (entryEditor != null) destination = 1 },
+                        onEditEntry = { if (entryEditor != null) showEntrySheet = true },
                         onOpenAppearance = { showAppearance = true },
                         modifier = Modifier.fillMaxSize(),
                         listState = infoListState,
@@ -656,23 +566,137 @@ fun SequelDetailSheet(
                         infoBackdropTint = themeSettings.infoBackdropTint
                     )
                 }
-            }
 
-            if (destinations.size > 1) {
-                ExpressiveNavigationBar(
-                    destinations = destinations,
-                    selectedIndex = selected,
-                    onSelect = { destination = it },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        // Measured *outside* the insets padding, so the height the
-                        // list reserves already includes the gesture/nav bar the
-                        // capsule is lifted above.
-                        .onSizeChanged { dockHeightPx = it.height }
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = if (immersive) 12.dp else 0.dp)
-                )
+                if (destinations.size > 1) {
+                    ExpressiveNavigationBar(
+                        destinations = destinations,
+                        selectedIndex = selected,
+                        onSelect = { index ->
+                            if (index == 1) showEntrySheet = true else closeEntrySheet()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .onSizeChanged { dockHeightPx = it.height }
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(bottom = if (immersive) 12.dp else 0.dp)
+                            .graphicsLayer {
+                                if (showEntrySheet) {
+                                    translationY = -(
+                                        (1f - sheetOffset.value) * containerHeightPx +
+                                            dockHeightPx + 12.dp.toPx()
+                                        )
+                                    alpha = (sheetOffset.value / 0.4f).coerceIn(0f, 1f)
+                                }
+                            }
+                    )
+                }
+
+                if (showEntrySheet && entryEditor != null) {
+                    // The sheet is 60% visible on first open (40% translated below
+                    // the viewport). Pulling its handle upward reveals the full
+                    // editor; pulling down returns to the 60% resting position.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(1f - sheetOffset.value)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                MaterialTheme.colorScheme.surface,
+                                RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                            )
+                            .statusBarsPadding()
+                            .immersiveDisplayInsets(immersive)
+                            .imePadding()
+                            .padding(horizontal = 20.dp)
+                            .padding(top = 8.dp, bottom = 24.dp)
+                            .testTag("detail_my_entry_sheet")
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(28.dp)
+                                .pointerInput(containerHeightPx, showEntrySheet) {
+                                    detectVerticalDragGestures(
+                                        onVerticalDrag = { change, dragAmount ->
+                                            change.consume()
+                                            scope.launch {
+                                                val fraction = if (containerHeightPx > 0f) {
+                                                    dragAmount / containerHeightPx
+                                                } else 0f
+                                                sheetOffset.snapTo(
+                                                    (sheetOffset.value + fraction).coerceIn(0f, 0.4f)
+                                                )
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            scope.launch {
+                                                val target = if (sheetOffset.value < 0.2f) 0f else 0.4f
+                                                sheetOffset.animateTo(target, ExpressiveMotion.SettleSpatial)
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(4.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                shape = RoundedCornerShape(50)
+                            ) {}
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "My Entry",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = listOfNotNull(
+                                        media.displayName,
+                                        editState.draft?.status?.let {
+                                            ListStatuses.label(it, media.isManga)
+                                        }
+                                    ).joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("detail_edit_subtitle")
+                                )
+                            }
+                            IconButton(
+                                onClick = closeEntrySheet,
+                                modifier = Modifier
+                                    .background(
+                                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        androidx.compose.foundation.shape.CircleShape
+                                    )
+                                    .testTag("detail_edit_close")
+                            ) {
+                                Icon(
+                                    imageVector = AppVectorIcons.Close,
+                                    contentDescription = "Close My Entry"
+                                )
+                            }
+                        }
+                        DetailEditTab(
+                            media = media,
+                            editor = entryEditor,
+                            state = editState,
+                            scope = scope
+                        )
+                    }
+                }
             }
+        }
 
             // Last, so it covers the capsule as well as the page: while the
             // appearance editor is open there is one way back, and a bar that
@@ -711,7 +735,6 @@ fun SequelDetailSheet(
         }
         }
     }
-}
 
 /**
  * A theme write, where a failure is cosmetic rather than a screen.

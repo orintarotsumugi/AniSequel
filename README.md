@@ -1,6 +1,6 @@
 # AniSequel
 
-[![Ask DeepWiki](https://img.shields.io/badge/Ask%20DeepWiki-Architecture%20guide-5B5BD6?logo=bookstack&logoColor=white)](https://deepwiki.com/orintarotsumugi/AniSequel)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-Architecture%20guide-5B5BD6)](https://deepwiki.com/orintarotsumugi/AniSequel)
 
 **Find the next chapter of your anime journey.** AniSequel connects to AniList,
 looks at the anime and manga you've watched or read, follows each title's franchise
@@ -204,6 +204,7 @@ The repository's docs are a small library; this README is the door.
 | | |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The exhaustive spec: layers, sequence diagrams, the multi-module plan |
+| [docs/ANISEQUEL_2_4.md](docs/ANISEQUEL_2_4.md) | AniSequel 2.4 redesign direction, audit baseline and acceptance criteria |
 | [NOTES.md](NOTES.md) | Why the weird parts are weird. Read a section before changing its screen |
 | [BUILDING.md](BUILDING.md) | Prerequisites, tests, signing, CI, version numbers, APK size |
 | [UPDATER.md](UPDATER.md) | The update system end to end, and the failures it grew out of |
@@ -249,7 +250,7 @@ The same trap as rotating the key.
 ## Release notes
 
 `app/src/main/assets/changelog.json` is the single source of the app's release
-notes. The "What's new" card on **Settings > Updates** reads it from inside the
+notes. The release-notes card in **Settings > Updates** reads it from inside the
 APK; the release workflow reads the same file to write the GitHub release body.
 Two consumers, one source, so they cannot drift.
 
