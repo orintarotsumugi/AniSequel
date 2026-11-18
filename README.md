@@ -204,6 +204,7 @@ The repository's docs are a small library; this README is the door.
 | | |
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The exhaustive spec: layers, sequence diagrams, the multi-module plan |
+| [docs/ANISEQUEL_2_4.md](docs/ANISEQUEL_2_4.md) | AniSequel 2.4 redesign direction, audit baseline and acceptance criteria |
 | [NOTES.md](NOTES.md) | Why the weird parts are weird. Read a section before changing its screen |
 | [BUILDING.md](BUILDING.md) | Prerequisites, tests, signing, CI, version numbers, APK size |
 | [UPDATER.md](UPDATER.md) | The update system end to end, and the failures it grew out of |

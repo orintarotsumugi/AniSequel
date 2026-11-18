@@ -32,6 +32,8 @@ This is a working entrance/exit baseline, but it is not a shared-element transit
 
 ### Detail content and Nova
 
+AniList's standard media model does not expose a full episode catalogue with individual episode titles, synopses and per-episode runtimes. Its `nextAiringEpisode` object supplies the next episode number and airing timestamp. The UI must present those two fields accurately and avoid inventing per-episode metadata; richer episode data would require a separately verified source.
+
 The detail shell selects Classic or Nova content. Nova's hero, information page and information cards are separate components. The page's section order already includes summary metrics, progress, friends, synopsis, details, categories, trailer, external links, credits, cast, relations, staff and extras. Preserve the shared sections while improving the reading experience.
 
 Audit the wavy progress indicator, split/action buttons and partially expanded information sheet on actual call paths. Record a reproducible failure and add a focused test before changing each component.
