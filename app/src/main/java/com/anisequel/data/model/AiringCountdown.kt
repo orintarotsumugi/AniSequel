@@ -11,8 +11,7 @@ package com.anisequel.data.model
 object AiringCountdown {
 
     /**
-     * "in 3d" / "in 5h" / "in 30m" / "now", or null when the episode has
-     * already aired or nothing is scheduled.
+     * "in 3d" / "in 5h" / "in 30m" / "now", or null when nothing is scheduled.
      *
      * [airingAtSeconds] is seconds since the epoch, from AniList; the
      * arithmetic below is in milliseconds.
@@ -20,7 +19,7 @@ object AiringCountdown {
     fun format(airingAtSeconds: Long?, nowMillis: Long = System.currentTimeMillis()): String? {
         val airingAt = airingAtSeconds ?: return null
         val remaining = airingAt * 1000L - nowMillis
-        if (remaining <= 0L) return null
+        if (remaining <= 0L) return "now"
 
         val minutes = remaining / 60_000
         val hours = minutes / 60
