@@ -390,13 +390,17 @@ fun SequelDetailSheet(
         onDismiss()
     }
     val handleDismiss: () -> Unit = {
-        if (!isClosing) {
-            isClosing = true
-            scope.launch {
-                entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
-                finishDismiss()
-            }
-        }
+        if (!isClosing) isClosing = true
+    }
+
+    // The exit belongs to this media identity, not to the composition-wide scope.
+    // If a relation replaces the subject while the page is animating out, this
+    // effect is cancelled with the old id/type and cannot call the old host's
+    // onDismiss against the newly opened title.
+    LaunchedEffect(subject.mediaId, subject.media.type, isClosing) {
+        if (!isClosing) return@LaunchedEffect
+        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        finishDismiss()
     }
 
     // The palette's destination, hoisted above the dialog so the dialog's own
