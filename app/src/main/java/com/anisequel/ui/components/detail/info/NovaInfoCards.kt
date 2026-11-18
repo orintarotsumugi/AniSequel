@@ -412,7 +412,7 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        Icon(AppVectorIcons.Favorite, contentDescription = null, modifier = Modifier.size(30.dp))
+                        Icon(AppVectorIcons.ActivityLiked, contentDescription = null, modifier = Modifier.size(30.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
                                 media.favourites?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
