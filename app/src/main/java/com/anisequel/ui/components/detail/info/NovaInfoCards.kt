@@ -389,7 +389,7 @@ private fun NovaScoreDetails(
                     fontWeight = FontWeight.Bold
                 )
                 Text("Average score · out of 10", style = MaterialTheme.typography.labelLarge)
-                if (totalRatings > 0) Text("\u0024{compactCount(totalRatings)} ratings", style = MaterialTheme.typography.bodySmall)
+                if (totalRatings > 0) Text("${compactCount(totalRatings)} ratings", style = MaterialTheme.typography.bodySmall)
             }
         }
     }
