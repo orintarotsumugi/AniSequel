@@ -250,7 +250,7 @@ The same trap as rotating the key.
 ## Release notes
 
 `app/src/main/assets/changelog.json` is the single source of the app's release
-notes. The "What's new" card on **Settings > Updates** reads it from inside the
+notes. The release-notes card in **Settings > Updates** reads it from inside the
 APK; the release workflow reads the same file to write the GitHub release body.
 Two consumers, one source, so they cannot drift.
 
