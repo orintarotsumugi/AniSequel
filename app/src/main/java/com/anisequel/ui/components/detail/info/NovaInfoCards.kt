@@ -3,6 +3,7 @@ package com.anisequel.ui.components.detail.info
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +50,7 @@ import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
+import com.anisequel.data.model.rankingList
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
@@ -90,6 +97,8 @@ internal fun NovaStatsCard(
     media: MediaNode,
     modifier: Modifier = Modifier
 ) {
+    var selectedStat by remember(media.id) { mutableStateOf<String?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     val stats = remember(media) {
         buildList {
             media.averageScore?.takeIf { it > 0 }?.let { score ->
@@ -166,7 +175,17 @@ internal fun NovaStatsCard(
             ) {
                 stats.forEach { stat ->
                     Column(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(MaterialTheme.shapes.small)
+                            .combinedClickable(
+                                role = Role.Button,
+                                onClickLabel = "Show ${stat.label} details",
+                                onClick = { selectedStat = stat.label },
+                                onLongClickLabel = "Show ${stat.label} details",
+                                onLongClick = { selectedStat = stat.label }
+                            )
+                            .padding(vertical = 3.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
@@ -231,6 +250,80 @@ internal fun NovaStatsCard(
             }
         }
     }
+}
+
+    selectedStat?.let { label ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedStat = null },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            NovaStatDetails(media = media, selectedLabel = label)
+        }
+    }
+}
+
+@Composable
+private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
+    val scoreRows = media.stats?.scoreDistribution.orEmpty()
+        .filter { (it.score ?: 0) > 0 && (it.amount ?: 0) > 0 }
+        .sortedBy { it.score }
+    val statusRows = media.stats?.statusDistribution.orEmpty()
+        .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
+        .sortedByDescending { it.amount }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(selectedStatTitle(selectedLabel), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(media.displayName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        when (selectedLabel) {
+            "Score" -> {
+                Text("Average score: ${media.averageScore?.let { String.format(Locale.US, "%.1f", it / 10f) } ?: "Not available"} / 10")
+                if (scoreRows.isEmpty()) Text("AniList has not supplied a score distribution for this title.")
+                scoreRows.forEach { row ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${row.score}/10", modifier = Modifier.width(54.dp))
+                        Text("${compactCount(row.amount ?: 0)} ratings", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            "Popularity" -> {
+                Text("Popularity: ${media.popularity?.let(::compactCount) ?: "Not available"}")
+                if (media.rankingList.isEmpty()) Text("No catalogue ranking is available.")
+                media.rankingList.forEach { ranking ->
+                    Text(listOfNotNull(ranking.context, ranking.rank?.let { "#$it" }).joinToString(" · "))
+                }
+            }
+            "Favourites" -> {
+                Text("${media.favourites?.let(::compactCount) ?: "Not available"} AniList favourites")
+                Text("AniList provides the total count, not a public list of every account that favourited this title.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            else -> {
+                Text(if (media.isManga) "Chapters: ${media.chapters ?: "Not available"}" else "Episode length: ${media.duration?.let { "$it minutes" } ?: "Not available"}")
+                Text("List status breakdown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                if (statusRows.isEmpty()) Text("AniList has not supplied list-status totals for this title.")
+                statusRows.forEach { row ->
+                    Row {
+                        Text(row.status.orEmpty().replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }, modifier = Modifier.weight(1f))
+                        Text(compactCount(row.amount ?: 0), fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+        media.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
+            Text("Synopsis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(synopsis.replace(Regex("<[^>]*>"), "").replace("&mdash;", "—").replace("&quot;", "\""))
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+private fun selectedStatTitle(label: String): String = when (label) {
+    "Duration" -> "Episode details"
+    "Chapters" -> "Reading details"
+    else -> label
 }
 
 /**
