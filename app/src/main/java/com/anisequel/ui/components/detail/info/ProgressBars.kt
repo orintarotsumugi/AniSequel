@@ -2,7 +2,6 @@ package com.anisequel.ui.components.detail.info
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.asState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -407,7 +407,7 @@ private fun rememberAnimatedProgress(
             fill.snapTo(target)
         }
     }
-    return fill.asState()
+    return remember(fill) { derivedStateOf { fill.value } }
 }
 
 /**
