@@ -1,5 +1,10 @@
 package com.anisequel.ui.components.detail
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +36,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -44,10 +54,12 @@ import com.anisequel.data.model.isManga
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberBoundSliderState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -105,6 +117,16 @@ internal fun DetailEditTab(
     modifier: Modifier = Modifier
 ) {
     val isManga = media.isManga
+    var progressControlsExpanded by remember(media.id, media.type) { mutableStateOf(false) }
+    val editorScrollState = rememberScrollState()
+
+    // A deliberate scroll dismisses the expanded stepper; tapping the progress
+    // surface again toggles it. Step taps themselves do not alter expansion.
+    LaunchedEffect(editorScrollState) {
+        snapshotFlow { editorScrollState.value }.collect { offset ->
+            if (offset > 0) progressControlsExpanded = false
+        }
+    }
 
     // The entry is fetched by the sheet, which owns [state]. Nothing to launch
     // here any more, and nothing to re-fetch when this tab is rebuilt.
@@ -236,7 +258,7 @@ internal fun DetailEditTab(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(editorScrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Status.
@@ -329,8 +351,17 @@ internal fun DetailEditTab(
                     } else {
                         "${entryState.progress}"
                     },
-                    testTag = "edit_progress_row"
+                    testTag = "edit_progress_row",
+                    onClick = { progressControlsExpanded = !progressControlsExpanded },
+                    enabled = enabled
                 ) {
+                    AnimatedVisibility(
+                        visible = progressControlsExpanded,
+                        enter = fadeIn(ExpressiveMotion.FastEffects) +
+                            expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                        exit = fadeOut(ExpressiveMotion.FastEffects) +
+                            shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+                    ) {
                     Column(modifier = Modifier.padding(top = 10.dp)) {
                         if (totalUnits > 0) {
                             Slider(
@@ -392,6 +423,7 @@ internal fun DetailEditTab(
                                 }
                             )
                         }
+                    }
                     }
                 }
             }
