@@ -236,7 +236,9 @@ enum class LibraryViewMode(
     );
 
     companion object {
-        val DEFAULT = GRID
+        // AniSequel 2.4 opens the Library on expressive two-column poster cards.
+        // An explicit stored choice still wins, so existing readers keep their layout.
+        val DEFAULT = CARDS
 
         fun fromStorage(value: String?): LibraryViewMode =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
