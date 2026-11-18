@@ -530,8 +530,17 @@ jobs:
                       name = case.get('classname', '?') + '.' + case.get('name', '?')
                       print(f"::error file={path}::{name}: {message}")
           if not found:
-              print('::error::The unit-test step failed before producing an XML test report; inspect the Job log.')
+              print('::error::The unit-test step failed before producing an XML test report.')
           PY
+          if ! find app/build/test-results -name '*.xml' -print -quit 2>/dev/null | grep -q .; then
+            ./gradlew test --stacktrace \
+              -PanisequelVersionCode="${{ github.run_number }}" \
+              -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
+              2>&1 | tee /tmp/failed-test.log || true
+            grep -E '^e: |error:|FAILURE:' /tmp/failed-test.log | head -30 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
 
       - name: Build Release APK
         env:
