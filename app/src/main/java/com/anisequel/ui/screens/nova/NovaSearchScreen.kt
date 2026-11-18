@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -89,7 +90,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 /** How long the field waits after a keystroke before asking AniList. */
-private const val SEARCH_DEBOUNCE_MILLIS = 350L
+private const val SEARCH_DEBOUNCE_MILLIS = 450L
 
 /** Two characters, because one is a prefix rather than a question. */
 private const val SEARCH_MIN_LENGTH = 2
@@ -516,6 +517,38 @@ private fun CatalogueSearchBody(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                item(
+                    key = "search_result_summary",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (results.size == 1) "1 title found" else "${results.size} titles found",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isSearching) "Updating AniList results…" else "For “$searchedTerm”",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isSearching) {
+                            ExpressiveLoadingIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
                 items(
                     items = results,
                     key = { media -> "${media.type}_${media.id}" },

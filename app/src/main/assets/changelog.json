@@ -46,6 +46,14 @@
         {
           "title": "Expressive Settings redesign",
           "detail": "Settings cards now share larger Material 3 Expressive surfaces, varied expressive icon silhouettes and animated tonal switch states. The Library and Ani-chan pages put primary choices before refinements, while all existing destinations, controls, preference storage and search routes remain intact. Version remains 2.3.9."
+        },
+        {
+          "title": "Faster pull-request builds",
+          "detail": "Pull requests now reuse the already-tested debug variant for their downloadable review APK instead of running a second release R8 shrink pass. Actual main/tag releases still use the full signed, shrunk release build."
+        },
+        {
+          "title": "Search and cover palette polish",
+          "detail": "Catalogue search waits slightly longer before sending a request, keeps results contextual with a live match summary, and Settings search shows a clearer ranked-result header. Cover palette extraction now quantizes the sampled artwork once for both seed and accent instead of repeating the histogram pass."
         }
       ]
     },

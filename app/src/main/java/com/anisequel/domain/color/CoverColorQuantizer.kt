@@ -48,6 +48,19 @@ object CoverColorQuantizer {
     /** How far the accent's hue must sit from the seed's before it is a second colour. */
     private const val ACCENT_MIN_HUE_DISTANCE = 40.0
 
+    /**
+     * Builds the complete cover palette from one histogram pass.
+     *
+     * The old repository asked for the seed and accent separately; both calls
+     * quantized the same pixel array into the same 5-bit histogram. A cover is
+     * sampled only once, so keep that histogram and score both roles from it.
+     */
+    fun paletteFrom(pixels: IntArray): CoverPalette? {
+        val histogram = quantize(pixels)
+        val seed = score(histogram) ?: return null
+        return CoverPalette(seed = seed, accent = accent(histogram, seed))
+    }
+
     /** The most suitable theme seed in [pixels], or null if the image is grey. */
     fun seedFrom(pixels: IntArray): Int? = score(quantize(pixels))
 

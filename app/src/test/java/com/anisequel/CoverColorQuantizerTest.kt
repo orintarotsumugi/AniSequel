@@ -41,6 +41,21 @@ class CoverColorQuantizerTest {
     }
 
     @Test
+    fun `one palette pass matches the independently scored seed and accent`() {
+        val red = 0xFFD32F2F.toInt()
+        val blue = 0xFF1565C0.toInt()
+        val pixels = solid(red, 1200) + solid(blue, 500) + solid(0xFF101010.toInt(), 300)
+
+        val palette = CoverColorQuantizer.paletteFrom(pixels)
+        assertNotNull("the cover has a large coloured region", palette)
+        assertEquals(CoverColorQuantizer.seedFrom(pixels), palette!!.seed)
+        assertEquals(
+            CoverColorQuantizer.accentFrom(pixels, palette.seed),
+            palette.accent
+        )
+    }
+
+    @Test
     fun `a grey cover produces no seed`() {
         val pixels = solid(0xFF808080.toInt(), 1000) +
             solid(0xFF000000.toInt(), 500) +
