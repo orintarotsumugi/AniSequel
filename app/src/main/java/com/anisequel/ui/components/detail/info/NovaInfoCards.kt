@@ -250,7 +250,6 @@ internal fun NovaStatsCard(
             }
         }
     }
-}
 
     selectedStat?.let { label ->
         ModalBottomSheet(
