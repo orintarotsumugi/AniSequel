@@ -410,6 +410,7 @@ internal fun CardDesignShelf(
             style = style,
             design = design,
             entries = previewEntries,
+            viewMode = interfaceSettings.libraryView,
             barTabs = barTabs
         )
 
@@ -471,6 +472,7 @@ internal fun CardShapeSection(
             style = style,
             design = design,
             entries = previewEntries,
+            viewMode = interfaceSettings.libraryView,
             barTabs = barTabs,
             onStyle = { option ->
                 if (option != style) {
@@ -532,6 +534,7 @@ internal fun CardTextSection(
         CardTextPart(
             design = draft,
             entries = previewEntries,
+            viewMode = interfaceSettings.libraryView,
             barTabs = barTabs,
             style = style,
             titleDraft = titleDraft,
@@ -580,6 +583,7 @@ internal fun CardPosterSection(
         CardPosterPart(
             design = design,
             entries = previewEntries,
+            viewMode = interfaceSettings.libraryView,
             barTabs = barTabs,
             style = style,
             posterSource = interfaceSettings.posterSource,
@@ -642,6 +646,7 @@ private fun CardShapePart(
     style: MediaCardStyle,
     design: CardDesign,
     entries: List<MediaListEntryItem>,
+    viewMode: LibraryViewMode,
     barTabs: List<MainTab>,
     onStyle: (MediaCardStyle) -> Unit,
     onSize: (CardSize) -> Unit,
@@ -663,6 +668,7 @@ private fun CardShapePart(
             style = style,
             design = design.copy(cornerRadius = cornerDraft),
             entries = entries,
+            viewMode = viewMode,
             barTabs = barTabs
         )
 

@@ -102,6 +102,35 @@ class LiveChartCoverTest {
     }
 
     @Test
+    fun `a season spelled differently still finds that season, not the base`() {
+        // The reported bug: AniList's English title says "Season 2" while LiveChart
+        // writes "2nd Season". The words between the name and the number differ, so
+        // the old scorer gave the sequel 0 and fell back to the base title's cover.
+        // The reader asked for season two and got season one's art, with no hint
+        // that the picture was not the one they opened.
+        val url = selectLiveChartPoster(
+            parseLiveChartPosterCandidates(searchPage),
+            queryTitles = listOf("Frieren Season 2")
+        )
+
+        assertEquals("$frierenSeason2Thumb/webp/large.jpg", url)
+    }
+
+    @Test
+    fun `a season one query never lands on a sequel's poster`() {
+        // The other half of the same rule: a search page with only the sequel must
+        // answer null, not hand season two's picture to a season-one entry.
+        val page = posterItem("Sousou no Frieren 2nd Season", frierenSeason2Thumb)
+
+        assertNull(
+            selectLiveChartPoster(
+                parseLiveChartPosterCandidates(page),
+                queryTitles = listOf("Frieren")
+            )
+        )
+    }
+
+    @Test
     fun `a title the page does not carry yields no poster`() {
         val url = selectLiveChartPoster(
             parseLiveChartPosterCandidates(searchPage),

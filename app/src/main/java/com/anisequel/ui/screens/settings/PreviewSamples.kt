@@ -63,7 +63,7 @@ internal fun MiniCover(
 }
 
 internal fun previewTitle(entry: MediaListEntryItem?): String =
-    entry?.media?.displayName ?: "Dandadan"
+    entry?.media?.displayName ?: "No title yet"
 
 
 /**

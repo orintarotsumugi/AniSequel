@@ -85,6 +85,51 @@ class InfoBackdropWiringTest {
         )
     }
 
+    /**
+     * The hand-off between the hero and the page.
+     *
+     * The backdrop used to fade in from the top of the *window* (`surface` at 0,
+     * transparent at 42%), which is only roughly the hero's height on one phone
+     * at rest. By the hero's bottom edge the artwork was already at nearly full
+     * strength, so the 16dp item gap under it was a bright band between a hero
+     * that had just landed on `surface` and cards sitting on artwork. The
+     * mismatch was worse than a tone step because the two layers crop the same
+     * banner into very different boxes, so the band was a closer view of the same
+     * scene rather than a continuation.
+     *
+     * Pinned here rather than drawn in a test because there is no Compose test
+     * runtime in the unit-test source set, and because the failing edit is a
+     * gradient stop: it compiles, it reads as a wash, and the only symptom is
+     * the seam coming back.
+     */
+    @Test
+    fun `the info page hands the hero's measured edge to the backdrop`() {
+        val page = source(infoPage)
+        val file = source(backdrop)
+
+        assertTrue(
+            "the page does not pass the hero's measured bottom edge to the backdrop",
+            page.contains("heroBottom = { heroBottom.value }")
+        )
+        assertTrue(
+            "the hero's bottom edge is not read from item zero of the list, so the " +
+                "hand-off cannot follow the hero as it scrolls or grows with the font scale",
+            page.contains("private fun rememberHeroBottom(listState: LazyListState)") &&
+                page.contains("firstOrNull { it.index == 0 }")
+        )
+        assertTrue(
+            "the backdrop never reads the measured hero edge, so its fade is anchored " +
+                "to the window again",
+            file.contains("val top = heroBottom()")
+        )
+        assertFalse(
+            "the hand-off is anchored to a fraction of the window again; that is only " +
+                "the hero's height on one screen at rest, so the artwork shows at nearly " +
+                "full strength in the gap directly under the hero",
+            Regex("""0\.42f\s+to\s+surface""").containsMatchIn(file)
+        )
+    }
+
     @Test
     fun `the sheet hands the stored backdrop to the page`() {
         val file = source(sheet)

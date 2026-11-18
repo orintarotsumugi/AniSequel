@@ -158,13 +158,21 @@ internal fun coverAspectOf(intrinsic: Size, source: CoverSource?): Float =
  *
  * [presence] is a lambda so the fade is read in the draw phase: this covers the
  * whole window, and recomposing it per fade frame would re-ask Coil for a painter
- * on every one of them.
+ * on every one of them. [pageOffset] is read the same way and for the same reason:
+ * it is the pager's fractional offset, and it moves the backdrop a few pixels
+ * against the swipe so the blur reads as depth behind the sharp page rather than
+ * as a second copy pasted under it.
+ *
+ * The poster's extracted colour is not only the fallback fill: a soft radial wash
+ * of it sits over the blur and under the scrim, which is what gives the viewer its
+ * own colour on a pale banner and keeps a dark poster from going flat grey-black.
  */
 @Composable
 internal fun CoverViewerBackdrop(
     url: String?,
     coverBg: Color,
     presence: () -> Float,
+    pageOffset: () -> Float = { 0f },
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -182,7 +190,20 @@ internal fun CoverViewerBackdrop(
                 },
                 contentKey = { it },
                 label = "cover_viewer_backdrop_art",
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // A little larger than the window so the parallax never
+                        // exposes an edge, and a small fraction of the pager's
+                        // offset in the opposite direction. Not the pager's full
+                        // travel: the backdrop is decoration, and matching the
+                        // page exactly made it read as a second pager behind the
+                        // first.
+                        val drift = pageOffset() * 30.dp.toPx()
+                        scaleX = 1.08f
+                        scaleY = 1.08f
+                        translationX = -drift
+                    }
             ) { activeUrl ->
                 AsyncImage(
                     model = activeUrl,
@@ -194,6 +215,22 @@ internal fun CoverViewerBackdrop(
                         .unseamedCover()
                 )
             }
+
+            // The title's own colour, as light in the room. Over the blur and
+            // under the scrim, so it tints the stage without fighting the picture:
+            // a restrained 0.32 alpha keeps the effect a glow rather than a wash.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                coverBg.copy(alpha = 0.32f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
 
             // The legibility layer. Black rather than the scheme's surface: this is
             // the inside of a lightbox, and a `surface` wash went pale-grey in the
@@ -232,7 +269,7 @@ internal fun CoverArtwork(
     coverAspect: Float,
     coverBg: Color,
     zoom: CoverZoomState,
-    /** A single tap: the viewer resets a zoom or closes, and it decides which. */
+    /** A single tap: the viewer resets a zoom or toggles its chrome. */
     onTap: () -> Unit,
     /** False for the copy that is only on screen to fade out. See the call site. */
     reportsFrame: Boolean = true,

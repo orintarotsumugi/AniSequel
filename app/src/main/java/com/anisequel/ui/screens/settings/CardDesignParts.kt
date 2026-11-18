@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
 import com.anisequel.ui.components.AppVectorIcons
@@ -55,6 +56,7 @@ import kotlin.math.roundToInt
 internal fun CardTextPart(
     design: CardDesign,
     entries: List<MediaListEntryItem>,
+    viewMode: LibraryViewMode,
     barTabs: List<MainTab>,
     style: MediaCardStyle,
     titleDraft: Float,
@@ -76,6 +78,7 @@ internal fun CardTextPart(
             style = style,
             design = design,
             entries = entries,
+            viewMode = viewMode,
             barTabs = barTabs
         )
 
@@ -299,6 +302,7 @@ private fun PosterOverlayPreview(overlays: PosterOverlays) {
 internal fun CardPosterPart(
     design: CardDesign,
     entries: List<MediaListEntryItem>,
+    viewMode: LibraryViewMode,
     barTabs: List<MainTab>,
     style: MediaCardStyle,
     posterSource: PosterSource,
@@ -318,6 +322,7 @@ internal fun CardPosterPart(
             style = style,
             design = design,
             entries = entries,
+            viewMode = viewMode,
             barTabs = barTabs
         )
 
