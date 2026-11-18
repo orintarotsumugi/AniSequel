@@ -106,8 +106,8 @@ class AnimeCoverThemeWiringTest {
         // its own `Dialog(` call. A stale boundary here would make this assertion
         // read the whole rest of the file and pass on text that is not the dismiss
         // path at all.
-        val dismiss = sheet.substringAfter("val handleDismiss")
-            .substringBefore("Dialog(")
+        val dismiss = sheet.substringAfter("val finishDismiss")
+            .substringBefore("val handleDismiss")
 
         assertTrue(
             "a retained colour has to end the live layer (the retained marker is " +
