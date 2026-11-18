@@ -22,6 +22,18 @@
         {
           "title": "Nova's contrast and polish",
           "detail": "The score strip, countdown, progress card and progress count now use matching on-container foregrounds instead of borrowing the page's surface text, and the shared cards use the cover-derived neutral ramp. The hero's title backing replaces the hard rectangular shadow that made the old treatment look like a grey box."
+        },
+        {
+          "title": "A closer look at every title statistic",
+          "detail": "The score, popularity, favourites and episode-length figures now open a compact interactive detail drawer on tap or long-press. It uses AniList's score and list-status distributions, title rankings, favourite totals and synopsis when those fields are available; unavailable figures are labelled rather than guessed."
+        },
+        {
+          "title": "The episode countdown stays present at release",
+          "detail": "The next-episode line now reaches an explicit 'now' state at the scheduled release moment instead of disappearing at zero. It clears after a short grace period when AniList has not yet supplied a newer schedule."
+        },
+        {
+          "title": "The artwork returns with the same settled motion",
+          "detail": "The full-screen artwork viewer stays full-screen, with its swipeable sources, zoom and download controls. Its closing artwork spring now uses the same settled motion as the opening reveal for a more coherent return to the poster."
         }
       ]
     },
