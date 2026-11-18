@@ -122,7 +122,7 @@ private fun LibraryPreviewHeader(mode: LibraryViewMode) {
                 maxLines = 1
             )
             Text(
-                text = "128 titles \u00b7 12 airing",
+                text = "Preview of your library",
                 style = miniCaptionStyle(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1

@@ -2,9 +2,12 @@ package com.anisequel.ui.components.detail
 
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +28,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -44,7 +48,6 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.model.romajiName
-import com.anisequel.data.network.BetterPosterVariant
 import com.anisequel.data.network.LiveChartArtwork
 import com.anisequel.data.repository.LiveChartCovers
 import com.anisequel.domain.ui.PosterSource
@@ -61,6 +64,7 @@ import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 /**
@@ -274,8 +278,29 @@ fun FullScreenCoverViewer(
     // same picture at the same place, so this goes away instead of covering it.
     var overlayVisible by remember(media.id) { mutableStateOf(origin != null) }
     var closing by remember(media.id) { mutableStateOf(false) }
+    // Whether the header and the sheet are on screen. The artwork is the subject
+    // and the furniture is optional: a tap anywhere on the picture puts the two
+    // away, and a second tap brings them back. It is deliberately not a dismissal
+    // gesture - a reader inspecting the art used to lose the viewer entirely when
+    // they tapped the picture, which made the one thing this screen is for the one
+    // thing it could not do. Closing is still the close button, the system back
+    // gesture, or the dialog's outside-tap.
+    var chromeShown by remember(media.id) { mutableStateOf(true) }
+    val toggleChrome: () -> Unit = { chromeShown = !chromeShown }
     val requestDismiss: () -> Unit = {
         if (!closing) closing = true
+    }
+
+    // A zoom owns the screen. The chrome would sit over the part of the picture
+    // the reader pinched to inspect, so it steps aside for the duration and comes
+    // back on the next tap - the same trade every photo viewer makes. Observed
+    // through a snapshot flow rather than keyed on `isZoomed`: a pinch updates the
+    // scale every frame, and a recomposition of the dialog per frame would re-read
+    // the pager and the source list for a boolean that changes twice.
+    LaunchedEffect(zoom) {
+        snapshotFlow { zoom.isZoomed }.collect { zoomed ->
+            if (zoomed) chromeShown = false
+        }
     }
 
     // The reveal's choreography lives in two private composables below
@@ -344,7 +369,7 @@ fun FullScreenCoverViewer(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {
-                        if (zoom.isZoomed) zoom.reset() else requestDismiss()
+                        if (zoom.isZoomed) zoom.reset() else toggleChrome()
                     }
                 ),
             contentAlignment = Alignment.Center
@@ -358,6 +383,11 @@ fun FullScreenCoverViewer(
                 url = currentUrl,
                 coverBg = coverBg,
                 presence = { presence.value },
+                // The backdrop drifts against the swipe. Read in the draw phase
+                // like `presence`: this is a full-window image, and recomposing it
+                // per scroll frame to move it a few pixels is what makes a gallery
+                // stutter on the one screen that should feel like glass.
+                pageOffset = { pagerState.currentPageOffsetFraction },
                 modifier = Modifier.matchParentSize()
             )
 
@@ -373,7 +403,9 @@ fun FullScreenCoverViewer(
                 currentPage = currentPage,
                 zoom = zoom,
                 media = media,
-                onTap = { if (zoom.isZoomed) zoom.reset() else requestDismiss() },
+                onTap = {
+                    if (zoom.isZoomed) zoom.reset() else chromeShown = !chromeShown
+                },
                 onFrameBounds = { frame -> artworkFrame = frame },
                 modifier = Modifier
                     .fillMaxSize()
@@ -389,42 +421,65 @@ fun FullScreenCoverViewer(
                     .fillMaxSize()
                     .graphicsLayer { alpha = chrome.value }
             ) {
-                CoverViewerHeader(
-                    media = media,
-                    saveState = saveState,
-                    source = source,
-                    currentPage = currentPage,
-                    onDismiss = requestDismiss,
-                    startSave = {
-                        saveState = CoverSaveState.SAVING
-                        scope.launch {
-                            saveState = saveCover(
-                                context = context,
-                                media = media,
-                                source = source,
-                                imageIndex = currentPage,
-                                seriesSeason = seriesSeason
-                            )
+                // The two pieces of furniture slide out on their own axes: the
+                // header leaves upward and the sheet downward, so hiding them reads
+                // as opening the page up rather than as the screen fading. The
+                // `Spacer` between them stays and owns no pointer input, so the
+                // artwork underneath keeps every gesture while they are gone.
+                AnimatedVisibility(
+                    visible = chromeShown,
+                    enter = fadeIn(ExpressiveMotion.FastEffects) +
+                        slideInVertically(ExpressiveMotion.FastSpatialOffset) { height -> -height / 3 },
+                    exit = fadeOut(ExpressiveMotion.FastEffects) +
+                        slideOutVertically(ExpressiveMotion.FastSpatialOffset) { height -> -height / 3 },
+                    label = "cover_viewer_header"
+                ) {
+                    CoverViewerHeader(
+                        media = media,
+                        saveState = saveState,
+                        source = source,
+                        currentPage = currentPage,
+                        onDismiss = requestDismiss,
+                        startSave = {
+                            saveState = CoverSaveState.SAVING
+                            scope.launch {
+                                saveState = saveCover(
+                                    context = context,
+                                    media = media,
+                                    source = source,
+                                    imageIndex = currentPage,
+                                    seriesSeason = seriesSeason
+                                )
+                            }
                         }
-                    }
-                )
+                    )
+                }
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 // Bottom sheet: titles, the source switch, outbound links, hint.
-                ViewerDetailsCard(
-                    media = media,
-                    sources = sources,
-                    sourceIndex = selectedIndex,
-                    image = currentImage,
-                    imageIndex = currentPage,
-                    imageCount = images.size,
-                    seriesSeason = seriesSeason,
-                    onSelectSource = { index ->
-                        sources.getOrNull(index)?.label?.let { selectedLabel = it }
-                    },
-                    zoom = zoom
-                )
+                AnimatedVisibility(
+                    visible = chromeShown,
+                    enter = fadeIn(ExpressiveMotion.FastEffects) +
+                        slideInVertically(ExpressiveMotion.FastSpatialOffset) { height -> height / 3 },
+                    exit = fadeOut(ExpressiveMotion.FastEffects) +
+                        slideOutVertically(ExpressiveMotion.FastSpatialOffset) { height -> height / 3 },
+                    label = "cover_viewer_details"
+                ) {
+                    ViewerDetailsCard(
+                        media = media,
+                        sources = sources,
+                        sourceIndex = selectedIndex,
+                        image = currentImage,
+                        imageIndex = currentPage,
+                        imageCount = images.size,
+                        seriesSeason = seriesSeason,
+                        onSelectSource = { index ->
+                            sources.getOrNull(index)?.label?.let { selectedLabel = it }
+                        },
+                        zoom = zoom
+                    )
+                }
             }
 
             val start = origin
@@ -522,65 +577,6 @@ private fun CoverViewerPager(
                 modifier = Modifier.fillMaxSize()
             )
         }
-    }
-}
-
-/**
- * The viewer's sources, in paint order, for one title.
- *
- * AniList's poster and banner paint before any request this function makes, so a
- * title with nothing else still opens instantly. btttr's renders arrive late and
- * are four pages rather than one; LiveChart's gallery arrives later still and can
- * be nothing at all. The ordering only decides which pill sits first and which
- * source the viewer opens on - the selection is by label, so a late insertion
- * cannot change what is on screen.
- *
- * [betterPostersLead] is the reader's card source. It is passed in rather than read
- * from the composition local so this stays pure and the ordering is one readable
- * list instead of a branch in the dialog's body.
- */
-private fun buildCoverSources(
-    media: MediaNode,
-    betterPosters: List<BetterPosterVariant>,
-    liveChartArtwork: LiveChartArtwork?,
-    betterPostersLead: Boolean
-): List<CoverSource> {
-    val anilist = buildList {
-        media.posterUrl?.let {
-            add(CoverSource(ANILIST_POSTER, listOf(CoverImage(it)), DEFAULT_COVER_ASPECT))
-        }
-        // AniList banners are about 1900x400. The fallback is only ever read
-        // for the frame before the image reports its real size.
-        media.bannerImage?.let {
-            add(CoverSource(ANILIST_BANNER, listOf(CoverImage(it)), DEFAULT_BANNER_ASPECT))
-        }
-    }
-    val better = betterPosters.takeIf { it.isNotEmpty() }?.let { variants ->
-        listOf(
-            CoverSource(
-                label = PosterSource.BETTER_POSTERS.displayName,
-                images = variants.map { CoverImage(url = it.url, variant = it.overlays.variantName()) },
-                fallbackAspect = DEFAULT_COVER_ASPECT
-            )
-        )
-    }.orEmpty()
-    val liveChart = liveChartArtwork?.let { artwork ->
-        val urls = artwork.visualUrls.ifEmpty { listOfNotNull(artwork.posterUrl) }
-        urls.takeIf { it.isNotEmpty() }?.let {
-            listOf(
-                CoverSource(
-                    label = LIVE_CHART,
-                    images = urls.map { url -> CoverImage(url) },
-                    fallbackAspect = DEFAULT_COVER_ASPECT
-                )
-            )
-        }
-    }.orEmpty()
-
-    return if (betterPostersLead) {
-        better + anilist + liveChart
-    } else {
-        anilist + better + liveChart
     }
 }
 
@@ -698,45 +694,6 @@ private suspend fun saveCover(
 private fun String.lowercaseFirst(): String =
     replaceFirstChar { character -> character.lowercaseChar() }
 
-/** One image of one source, with the overlay it was rendered with when it has one. */
-internal data class CoverImage(
-    val url: String,
-    /** "Score only", "Clean poster" - btttr's renders; null for AniList and LiveChart. */
-    val variant: String? = null
-)
-
-/**
- * One source the viewer can show, with the shape to assume before it loads.
- *
- * [images] is a gallery rather than a single image because every one of the three
- * providers answers with more than one: btttr renders four overlays of the same art,
- * LiveChart's `/visuals` tab is a gallery, and AniList contributes a poster and a
- * banner. A source with one image simply has no second page to offer.
- *
- * `internal` because the details card's source switch takes the same list the
- * viewer shows; the type travels with the image, not with the composable that
- * happens to declare it.
- */
-internal data class CoverSource(
-    val label: String,
-    val images: List<CoverImage>,
-    val fallbackAspect: Float
-)
-
-/**
- * The labels a source is selected by.
- *
- * Strings rather than an enum because one of them is btttr's own name from
- * [PosterSource.BETTER_POSTERS], and the pill the reader taps and the key the pager
- * resolves must be the same value. They are also what the save button writes into
- * a file name, so they read as words.
- */
-private const val ANILIST_POSTER = "Poster"
-private const val ANILIST_BANNER = "Banner"
-private const val LIVE_CHART = "LiveChart"
-
-/** AniList's banner shape (about 1900x400), used until the image reports its own. */
-private const val DEFAULT_BANNER_ASPECT = 1900f / 400f
 
 /**
  * The reveal's entrance, and the first half of its landing.

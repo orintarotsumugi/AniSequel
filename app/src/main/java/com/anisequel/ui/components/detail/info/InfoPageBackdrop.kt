@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -38,8 +39,36 @@ import com.anisequel.ui.theme.LocalAppDarkTheme
  * with a gradient that ends on `surface`. Below that, the page was a flat container
  * colour - the title's art stopped at the first card and the rest of the scroll was
  * grey. This draws the *same* image full-screen behind the list instead, so the
- * colour continues past the hero, and the hero's own bottom fade becomes the seam
- * between two treatments of one picture rather than the end of it.
+ * colour is still there further down the page; the hand-off below decides where it
+ * is allowed to show through.
+ *
+ * ## Why the hand-off is anchored to the hero, not to the window
+ *
+ * The fade from `surface` to the artwork used to be a fixed fraction of the
+ * viewport (`surface` at 0, transparent at 42%). That is approximately the hero's
+ * height only on a phone at rest, and the "approximately" is the bug. The hero is
+ * a measured item that scrolls; the fraction was a fixed line across the window.
+ * By the hero's bottom edge the fade was already almost transparent, so the 16dp
+ * item gap under it - and the top of the first card - showed the artwork at nearly
+ * full strength beneath a hero whose own scrim had just landed on opaque
+ * `surface`.
+ *
+ * The scale mismatch made it worse. This layer draws the banner with
+ * `ContentScale.Crop` into a full-window box, while the hero crops the same banner
+ * into its 340dp box, so the "continuation" below the hero was the same picture at
+ * a very different zoom - a second, closer view of the scene. That is the cut
+ * between the artwork and the page that readers kept reporting, and matching the
+ * two gradients could never fix it because the two images were never the same
+ * picture on screen.
+ *
+ * [heroBottom] is the hero's real laid-out edge, read from the list's own layout in
+ * the draw phase. The mask is opaque `surface` at that line and fades the artwork
+ * in over [HERO_HANDOFF_FADE] of the content below it, so the page's background is
+ * the colour the hero ends on exactly where the two meet, and the artwork arrives
+ * under the first card instead of in the edge above it. Both the hero and this
+ * line are measured from the list, so the relationship holds at every scroll
+ * position and every font scale; there is no viewport fraction or assumed hero
+ * height left to drift.
  *
  * ## Why the cards still read
  *
@@ -64,6 +93,14 @@ internal fun InfoPageBackdrop(
     blur: InfoBackdropBlur,
     tint: InfoBackdropTint = InfoBackdropTint.DEFAULT,
     collapse: () -> Float,
+    /**
+     * The hero's bottom edge in viewport pixels; `POSITIVE_INFINITY` before the
+     * list has measured anything, and `NEGATIVE_INFINITY` once item zero has
+     * scrolled out of it. Read inside the draw phase, like [collapse]: it changes
+     * on every scrolled frame, and a value read in composition would recompose
+     * the backdrop for the whole scroll.
+     */
+    heroBottom: () -> Float,
     modifier: Modifier = Modifier
 ) {
     val chosenPoster = cardPosterUrl(media)
@@ -147,21 +184,47 @@ internal fun InfoPageBackdrop(
                 )
             }
 
-            // The hand-off from the hero. The hero ends on opaque `surface`; if
-            // the page's own copy of the artwork started at full strength in the
-            // 16dp gap below it, that gap would be the same hard line the hero
-            // gradient just removed. Fading the backdrop in from `surface` over
-            // roughly the hero's height makes the artwork arrive under the first
-            // card instead of at the edge above it.
+            // The hand-off from the hero - see the KDoc. Drawn in the draw phase
+            // rather than composed as a brush because [heroBottom] changes on
+            // every scrolled frame; that invalidates this draw without
+            // recomposing the backdrop, the same bargain the parallax makes.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to surface,
-                            0.42f to surface.copy(alpha = 0f)
+                    .drawBehind {
+                        val top = heroBottom()
+                        val fade = HERO_HANDOFF_FADE.toPx()
+                        // First frame: the hero is drawn but the list has not
+                        // measured its items yet, so there is no edge to anchor
+                        // to. Stay on surface rather than showing the artwork
+                        // through the gap for the frame before it arrives.
+                        if (top == Float.POSITIVE_INFINITY) {
+                            drawRect(surface)
+                            return@drawBehind
+                        }
+                        // The list stops reporting item zero the moment its last
+                        // pixel leaves the viewport, so the measured edge would
+                        // jump from 0 to "gone" and the artwork would pop on at
+                        // the top of the page. Fading the hand-off out across the
+                        // hero's last fade-length of travel - the same distance it
+                        // covers below itself - gets it to zero before the item is
+                        // disposed, so the artwork arrives as the header leaves
+                        // instead of appearing all at once once it is gone.
+                        val strength = if (top == Float.NEGATIVE_INFINITY) {
+                            0f
+                        } else {
+                            (top / fade).coerceIn(0f, 1f)
+                        }
+                        if (strength <= 0f) return@drawBehind
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to surface.copy(alpha = strength),
+                                1f to surface.copy(alpha = 0f),
+                                startY = top,
+                                endY = top + fade
+                            )
                         )
-                    )
+                    }
             )
 
             // The legibility layer. Weighted from light at the top - where the hero
@@ -200,3 +263,12 @@ private val BACKDROP_PARALLAX = 38.dp
  * otherwise full of artwork.
  */
 private const val BACKDROP_SCALE = 1.01f
+
+/**
+ * How far below the hero's edge the page's artwork takes over.
+ *
+ * Long enough that the artwork arrives under the content rather than at the seam
+ * (the bug was a hard band in the 16dp item gap), and short enough that the page
+ * is visibly the title's artwork by the time the first card has been read.
+ */
+private val HERO_HANDOFF_FADE = 200.dp

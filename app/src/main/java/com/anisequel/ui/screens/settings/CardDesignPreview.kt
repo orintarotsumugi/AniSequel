@@ -21,33 +21,39 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.posterColor
-import com.anisequel.data.model.posterUrl
 import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.card.metaCornerFor
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.MediaPosterCell
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.cardRatingStyle
+import com.anisequel.ui.components.cards.libraryRating
+import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.toAlignment
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.navigation.MainTab
 import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
-import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.screens.library.LibraryGroupHeading
+import com.anisequel.ui.screens.library.LibraryListRow
+import com.anisequel.ui.screens.library.LibraryTableHeader
+import com.anisequel.ui.screens.profile.libraryProgressLabel
 
 /**
  * A whole Library page, drawn small, from the cards the reader is designing.
@@ -59,25 +65,27 @@ import com.anisequel.ui.theme.DynamicThemeBuilder
  * like my library?* A cover alone says nothing about whether four across is cramped,
  * whether a two-line name collides with the next row, or where the rating sits
  * against the header above it. So the preview is the page those cards live on - a top
- * bar, the status filters, the grid, the bottom bar - and every one of those is drawn
- * at the real proportions the app uses.
+ * bar, the status filters, the layout, the bottom bar - and every one of those is
+ * drawn at the real proportions the app uses.
  *
- * ## Why the cards are the real cell
+ * ## Why the shape follows the Library, not a fixed three across
  *
- * [MediaPosterCell] draws them, with the reader's style and the draft design handed
- * down through [LocalCardDesign]. Nothing here re-implements a caption or a badge, so
- * a style that looks wrong in the preview is wrong in the grid for the same reason -
- * and a slider that moves the title here moves the title there, before it is even
- * committed.
+ * This preview used to be three across whatever the reader's Library was set to, so
+ * "Big cards" and "Cover wall" both previewed as a three-column poster grid - the
+ * preview described a page the app does not draw. [viewMode] is the mode the Library
+ * page is actually in: the grid takes that mode's own column count, a cover wall
+ * draws no captions, and List, Grouped and Table draw the Library's real rows rather
+ * than a poster grid they never produce.
  *
- * ## Why the covers are the reader's own
+ * ## Why the covers are only the reader's own
  *
- * Same argument as the style preview: choosing a card means judging it against
- * posters. Entries come from the list the dashboard already downloaded, so the frame
- * costs no request, and the sample titles fill in only what the library cannot (a
- * fresh account, demo mode, or Settings opened before Home has answered). One of the
- * samples is deliberately long, because a name that scrolls is a design decision and
- * an unbroken run of short names would hide the switch that turns it off.
+ * The frame used to top itself up with six invented titles and AniList cover URLs
+ * whenever the reader's list was short, and its header printed a made-up "128 titles
+ * · 12 airing". Both have gone. Choosing a card means judging it against posters the
+ * reader actually owns, and a preview that lies about their library is worse than one
+ * that says it has nothing to show: an empty list now says so. There is no request
+ * here either - the entries are the ones the dashboard already downloaded, and a
+ * title btttr has art for resolves through the same [cardPosterUrl] the grid uses.
  *
  * ## Why the frame's bars are the reader's own
  *
@@ -97,6 +105,15 @@ internal fun CardDesignPreview(
     entries: List<MediaListEntryItem>,
     modifier: Modifier = Modifier,
     /**
+     * The Library page's current shape.
+     *
+     * The card design does not change this - the Library owns it - but the preview
+     * must show the page those cards will actually land on. A reader on Big cards
+     * who opens Card design expects to see two across, not a generic three-column
+     * grid.
+     */
+    viewMode: LibraryViewMode = LibraryViewMode.DEFAULT,
+    /**
      * The bar this preview should draw, exactly as the app draws it.
      *
      * Defaulted to the shipped bar (no Search, no Tiers) rather than left empty: a
@@ -105,26 +122,12 @@ internal fun CardDesignPreview(
      */
     barTabs: List<MainTab> = enabledMainTabs(tierListTab = false)
 ) {
-    // Three across, deliberately fixed. The frame is a diagram of the card, not a
-    // claim about the Library's grid: the Library view owns its own column count
-    // (Big cards is two, Cover wall three), and a card size that moved this preview
-    // while the real grid stayed put would be the preview describing a page the app
-    // does not draw. The sliders and switches still show their effect here because
-    // they change the card's own type and artwork.
-    val columns = 3
-    val samples = remember(entries) { previewSamples(entries) }
-    val cards = remember(samples, columns) {
-        // Exactly two full rows: a half row would read as a layout the grid cannot
-        // produce, and the point of the frame is that it can.
-        List(columns * 2) { index -> samples[index % samples.size] }
-    }
-
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = if (entries.isNotEmpty()) {
-                "Preview \u00b7 your library, $columns across"
+            text = if (entries.isEmpty()) {
+                "Preview \u00b7 no covers on your list yet"
             } else {
-                "Preview \u00b7 $columns across"
+                "Preview \u00b7 your library \u00b7 ${viewMode.displayName}"
             },
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
@@ -146,7 +149,10 @@ internal fun CardDesignPreview(
                 .testTag("card_design_preview")
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
-                PreviewTopBar(showSearch = MainTab.SEARCH in barTabs)
+                PreviewTopBar(
+                    showSearch = MainTab.SEARCH in barTabs,
+                    hasCovers = entries.isNotEmpty()
+                )
                 Spacer(modifier = Modifier.height(10.dp))
                 PreviewFilters()
                 Spacer(modifier = Modifier.height(12.dp))
@@ -155,39 +161,22 @@ internal fun CardDesignPreview(
                 // frame - the card, its labels, the chips under it - keeps the app's
                 // own look, so the reader can tell the preview from the control.
                 CompositionLocalProvider(LocalCardDesign provides design) {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        cards.chunked(columns).forEach { row ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.Top,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                row.forEach { sample ->
-                                    MediaPosterCell(
-                                        coverUrl = sampleCoverUrl(sample),
-                                        coverColor = sample.coverColor,
-                                        title = sample.title,
-                                        score = sample.score,
-                                        style = style,
-                                        modifier = Modifier.weight(1f),
-                                        overlay = {
-                                            // The corner the *meta* occupies, which is
-                                            // the corner the style left free: a style
-                                            // that puts the rating top-start moves this
-                                            // pill. Two capsules stacked in one corner
-                                            // is the collision this preview exists to
-                                            // catch before the reader meets it in the
-                                            // grid.
-                                            PreviewProgressPill(
-                                                label = sample.progress,
-                                                modifier = Modifier.align(
-                                                    metaCornerFor(style).toAlignment()
-                                                )
-                                            )
-                                        }
-                                    )
-                                }
-                            }
+                    if (entries.isEmpty()) {
+                        PreviewEmptyState()
+                    } else {
+                        when (viewMode) {
+                            LibraryViewMode.LIST,
+                            LibraryViewMode.GROUPED,
+                            LibraryViewMode.TABLE -> PreviewListShape(
+                                mode = viewMode,
+                                entries = entries
+                            )
+
+                            else -> PreviewGridShape(
+                                mode = viewMode,
+                                style = style,
+                                entries = entries
+                            )
                         }
                     }
                 }
@@ -200,16 +189,121 @@ internal fun CardDesignPreview(
 }
 
 /**
- * The app bar the grid sits under: a title with its count, and the search action when
- * the reader actually has a Search page to open.
+ * The grid every card-shaped mode produces: the mode's own column count, two full
+ * rows, and the reader's real covers repeated when their list is shorter.
  *
- * Without the tab there is no magnifier, because the action opens a page that has no
- * bar entry and - unlike the tier list - no other door at all. The switch that removes
- * it is on the Library page one level up, so a magnifier drawn here anyway was the
- * preview contradicting the reader's answer immediately after they gave it.
+ * Two rows rather than one: a one-row preview cannot show how a caption collides
+ * with the next row, which is the thing the card design most often gets wrong. A
+ * cover wall draws no caption, exactly as the Library's own `titleVisible = false`
+ * does in that mode.
  */
 @Composable
-private fun PreviewTopBar(showSearch: Boolean) {
+private fun PreviewGridShape(
+    mode: LibraryViewMode,
+    style: MediaCardStyle,
+    entries: List<MediaListEntryItem>
+) {
+    val columns = mode.columns.coerceAtLeast(1)
+    // Exactly two full rows: a half row would read as a layout the grid cannot
+    // produce, and the point of the frame is that it can.
+    val cells = List(columns * 2) { index -> entries[index % entries.size] }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        cells.chunked(columns).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                row.forEach { entry ->
+                    val media = entry.media
+                    MediaPosterCell(
+                        coverUrl = cardPosterUrl(media),
+                        coverColor = media.posterColor.toCoverColorOrNull(),
+                        title = media.displayName,
+                        score = libraryRating(entry, ListOwner.MINE),
+                        style = style,
+                        titleVisible = mode != LibraryViewMode.COVERS,
+                        modifier = Modifier.weight(1f),
+                        overlay = {
+                            // The corner the *meta* occupies, which is the corner
+                            // the style left free: a style that puts the rating
+                            // top-start moves this pill. Two capsules stacked in one
+                            // corner is the collision this preview exists to catch
+                            // before the reader meets it in the grid.
+                            libraryProgressLabel(entry)?.let { progress ->
+                                PreviewProgressPill(
+                                    label = progress,
+                                    modifier = Modifier.align(
+                                        metaCornerFor(style).toAlignment()
+                                    )
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The three list-shaped modes, drawn with the Library's own rows.
+ *
+ * A poster grid here would be a drawing of a page the mode never produces. Grouped
+ * adds the status heading it groups by, Table adds the aligned column header, and
+ * List is the plain rows between them - the same components the real Library calls.
+ */
+@Composable
+private fun PreviewListShape(
+    mode: LibraryViewMode,
+    entries: List<MediaListEntryItem>
+) {
+    val shown = entries.take(3)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (mode == LibraryViewMode.GROUPED) {
+            // "Your titles" rather than a status: the three entries handed to this
+            // preview are the reader's most recently touched, not a status group,
+            // and a heading that named one would be the same invented data the
+            // counts used to be.
+            LibraryGroupHeading(label = "Your titles", count = shown.size)
+        }
+        if (mode == LibraryViewMode.TABLE) {
+            LibraryTableHeader()
+        }
+        shown.forEach { entry ->
+            LibraryListRow(
+                entry = entry,
+                detailed = mode == LibraryViewMode.TABLE,
+                onClick = {}
+            )
+        }
+        if (shown.size < entries.size) {
+            Text(
+                text = "Showing the first ${shown.size} of ${entries.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * The app bar the grid sits under: a title with the count of covers this preview was
+ * given, and the search action when the reader actually has a Search page to open.
+ *
+ * No invented library totals: this screen is handed a handful of the reader's own
+ * entries, so a line about "128 titles" was a number nothing here could know. The
+ * count is the one the frame can honestly report - how many of their covers it is
+ * showing.
+ *
+ * Without the Search tab there is no magnifier, because the action opens a page that
+ * has no bar entry and - unlike the tier list - no other door at all. The switch that
+ * removes it is on the Library page one level up, so a magnifier drawn here anyway
+ * was the preview contradicting the reader's answer immediately after they gave it.
+ */
+@Composable
+private fun PreviewTopBar(showSearch: Boolean, hasCovers: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
@@ -231,7 +325,11 @@ private fun PreviewTopBar(showSearch: Boolean) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "128 titles \u00b7 12 airing this season",
+                text = if (hasCovers) {
+                    "Your covers, drawn with this card design"
+                } else {
+                    "No titles on your list yet"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -252,6 +350,10 @@ private fun PreviewTopBar(showSearch: Boolean) {
 /**
  * The status filters, because their height is part of what makes a four-across grid
  * feel cramped or a two-across one feel empty.
+ *
+ * The counts are gone: they used to read "Watching 42" against a library the preview
+ * had never seen. The labels are the page's shape, and the shape is what this frame
+ * is for.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -261,7 +363,7 @@ private fun PreviewFilters() {
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        listOf("Watching 42" to true, "Completed 61" to false, "Planning 25" to false)
+        listOf("Watching" to true, "Completed" to false, "Planning" to false)
             .forEach { (label, selected) ->
                 Surface(
                     shape = ExpressiveShapes.pill,
@@ -283,6 +385,47 @@ private fun PreviewFilters() {
                     )
                 }
             }
+    }
+}
+
+/**
+ * What an empty library sees: an honest empty state in the frame, not six invented
+ * covers.
+ *
+ * The reader can still design a card here - the preview simply says it has nothing
+ * of theirs to draw it on. Filling the frame with somebody else's artwork is how a
+ * preview stops being a preview of *their* library.
+ */
+@Composable
+private fun PreviewEmptyState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 22.dp)
+            .testTag("card_design_preview_empty"),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.ViewGrid,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            modifier = Modifier.size(28.dp)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Your covers will preview here",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "Add a few titles to your list and open this page again.",
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -357,117 +500,4 @@ private fun PreviewProgressPill(
             maxLines = 1
         )
     }
-}
-
-/** One card the preview can draw, already flattened out of a list entry. */
-private data class PreviewSample(
-    val title: String,
-    val coverUrl: String?,
-    val coverColor: Color?,
-    val score: Int?,
-    val progress: String,
-    /**
-     * The AniList id, for the btttr lookup, or null for a placeholder card.
-     *
-     * The samples have no id because they are not titles: asking btttr about an
-     * invented show would be a request whose only possible answer is "no".
-     */
-    val mediaId: Int? = null
-)
-
-/**
- * The cover the cell should draw for a sample.
- *
- * A placeholder resolves to its own null and never asks; the reader's entries go
- * through the same [cardPosterUrl] the grid uses, so the preview shows the source they
- * chose or falls back to the cover while btttr answers.
- */
-@Composable
-private fun sampleCoverUrl(sample: PreviewSample): String? {
-    val id = sample.mediaId ?: return sample.coverUrl
-    // The title is part of the lookup, not decoration: btttr resolves by IMDb
-    // series, and without it a sequel sample would draw season one's poster under
-    // the sequel's name - the exact mismatch the schedule row already avoids.
-    return cardPosterUrl(mediaId = id, fallback = sample.coverUrl, title = sample.title)
-}
-
-/**
- * The reader's own covers first, then the samples the page has always used.
- *
- * The long name is in the samples rather than taken from the list on purpose: whether
- * a title scrolls or clips is a property of the design, and leaving it to whichever
- * names happen to be in somebody's list would make the preview show that switch to
- * some readers and not others.
- */
-private fun previewSamples(entries: List<MediaListEntryItem>): List<PreviewSample> {
-    val progressLabels = listOf("12/24", "3/12", "8/8", "24/24", "6/13", "2/10", "19/25", "1/12")
-    val fromLibrary = entries.take(6).mapIndexed { index, entry ->
-        PreviewSample(
-            title = entry.media.displayName,
-            coverUrl = entry.media.posterUrl,
-            coverColor = DynamicThemeBuilder.parseHexColor(entry.media.posterColor),
-            score = entry.media.averageScore?.takeIf { it > 0 },
-            progress = progressLabels[index % progressLabels.size],
-            mediaId = entry.media.id
-        )
-    }
-    // Real AniList ids and their covers. The placeholders used to be null covers
-    // with a colour rectangle, which meant a reader with an empty library designed
-    // cards against three flat swatches and never saw a poster. AniList's cover is
-    // the fallback the grid uses too, and btttr can replace it through the same
-    // lookup the real cards use.
-    val placeholders = listOf(
-        PreviewSample(
-            title = "Dandadan",
-            coverUrl = "https://img.anili.st/media/171018",
-            coverColor = Color(0xFF3B4A6B),
-            score = 84,
-            progress = "12/24",
-            mediaId = 171018
-        ),
-        PreviewSample(
-            title = "Frieren: Beyond Journey's End",
-            coverUrl = "https://img.anili.st/media/154587",
-            coverColor = Color(0xFF5A3B4A),
-            score = 91,
-            progress = "3/12",
-            mediaId = 154587
-        ),
-        PreviewSample(
-            title = "Kaiju No. 8",
-            coverUrl = "https://img.anili.st/media/164212",
-            coverColor = Color(0xFF2F5148),
-            score = 76,
-            progress = "8/8",
-            mediaId = 164212
-        ),
-        // Long on purpose: the one sample that shows what a name does when it does
-        // not fit - scroll, or clip - at the size the reader has picked.
-        PreviewSample(
-            title = "That Time I Got Reincarnated as a Slime Season 3 Part 2",
-            coverUrl = "https://img.anili.st/media/157295",
-            coverColor = Color(0xFF3B4A6B),
-            score = 82,
-            progress = "24/24",
-            mediaId = 157295
-        ),
-        PreviewSample(
-            title = "Solo Leveling",
-            coverUrl = "https://img.anili.st/media/151807",
-            coverColor = Color(0xFF5A3B4A),
-            score = 79,
-            progress = "6/13",
-            mediaId = 151807
-        ),
-        PreviewSample(
-            title = "Delicious in Dungeon",
-            coverUrl = "https://img.anili.st/media/153518",
-            coverColor = Color(0xFF2F5148),
-            score = 88,
-            progress = "2/10",
-            mediaId = 153518
-        )
-    )
-    val fills = placeholders.drop(fromLibrary.size)
-    return fromLibrary + fills
 }
