@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.detail
 
 import com.anisequel.data.model.MediaNode
-import com.anisequel.data.model.bannerImage
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.network.BetterPosterVariant
 import com.anisequel.data.network.LiveChartArtwork

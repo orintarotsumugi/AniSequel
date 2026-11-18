@@ -132,7 +132,19 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       isCrunchPngs = true
-      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      // A pull request signs a throwaway APK for review. It still runs R8 with
+      // shrinking, obfuscation and resource shrinking - so the keep rules and
+      // missing classes are exercised before merge - but skips the whole-program
+      // optimization passes (inlining, class merging) that dominate R8's wall
+      // time. Shipped builds on main and on tags never set this property, so
+      // they keep the fully optimized R8 output. See proguard-fast-rules.pro.
+      val fastR8 = project.findProperty("anisequelFastR8")?.toString()?.toBoolean() == true
+      val r8Rules = mutableListOf<Any>(
+        getDefaultProguardFile("proguard-android-optimize.txt"),
+        "proguard-rules.pro"
+      )
+      if (fastR8) r8Rules += "proguard-fast-rules.pro"
+      proguardFiles(*r8Rules.toTypedArray())
       val releaseConfig = signingConfigs.getByName("release")
       signingConfig = if (releaseConfig.storeFile != null && releaseConfig.storeFile!!.exists()) {
         releaseConfig
