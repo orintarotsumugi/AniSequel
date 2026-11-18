@@ -279,7 +279,7 @@ fun SequelDetailSheet(
         onLoadFriends(subject.mediaId, subject.media.type)
 
         // Keep the open title current. The store republishes its cache immediately
-        // and performs a network refresh only after its freshness window expires.
+        // and performs a network refresh only after its ten-minute freshness window expires.
         while (true) {
             delay(com.anisequel.ui.viewmodel.MediaDetailStore.DETAIL_REFRESH_INTERVAL_MILLIS)
             onLoadDetail(subject.mediaId, subject.media.type)

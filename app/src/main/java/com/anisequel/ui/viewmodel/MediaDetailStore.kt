@@ -236,7 +236,7 @@ class MediaDetailStore(
     fun load(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
         cache[key]?.let { known ->
-            // Keep cached details visible immediately. Once they are a minute old,
+            // Keep cached details visible immediately. Once they are ten minutes old,
             // continue below and refresh in the background rather than treating the
             // first successful fetch as valid for the whole session.
             publish(mediaId, known)
@@ -365,8 +365,8 @@ class MediaDetailStore(
          */
         const val MAX_ENTRIES = 250
 
-        /** A detail page refreshes live data at most once per minute while open. */
-        const val DETAIL_REFRESH_INTERVAL_MILLIS = 60_000L
+        /** A detail page refreshes live data at most once every ten minutes while open. */
+        const val DETAIL_REFRESH_INTERVAL_MILLIS = 10 * 60_000L
 
         /**
          * The cache namespace for a title fetched without a known type.

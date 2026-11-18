@@ -38,6 +38,10 @@
         {
           "title": "Live title details and smoother page motion",
           "detail": "The detail page refreshes AniList data while it stays open, keeping cached information visible and refreshing at most once per minute. Opening and closing share a settled scale-and-rise transition, and Info sections arrive with a tighter, lighter stagger. Version remains 2.3.9."
+        },
+        {
+          "title": "Gentler AniList refresh and rate-limit messages",
+          "detail": "Open title details keep cached data on screen and refresh no more than once every ten minutes. When AniList applies a rate limit, the app explains the cooldown, preserves the server's wait time, and picks a rotating Ani-chan joke instead of showing the same plain warning. Version remains 2.3.9."
         }
       ]
     },
