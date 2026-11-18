@@ -86,6 +86,7 @@ import com.anisequel.ui.theme.LocalInfoPageStyle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -276,6 +277,13 @@ fun SequelDetailSheet(
     LaunchedEffect(subject.mediaId, subject.media.type) {
         onLoadDetail(subject.mediaId, subject.media.type)
         onLoadFriends(subject.mediaId, subject.media.type)
+
+        // Keep the open title current. The store republishes its cache immediately
+        // and performs a network refresh only after its freshness window expires.
+        while (true) {
+            delay(com.anisequel.ui.viewmodel.MediaDetailStore.DETAIL_REFRESH_INTERVAL_MILLIS)
+            onLoadDetail(subject.mediaId, subject.media.type)
+        }
     }
 
     // The colour comes from the pixels, and the effect waits for the stored
@@ -365,28 +373,30 @@ fun SequelDetailSheet(
     // process-scoped job in `ThemePreferences`, and it ends the in-memory layer
     // rather than a stored flag, so a colour on a timer cannot survive a restart
     // the way the stored one did.
-    val handleDismiss: () -> Unit = {
+    // One progress value drives both directions, so Back and the close control
+    // settle the page out instead of removing the dialog in the middle of a frame.
+    val entrance = remember(subject.mediaId, subject.media.type) { Animatable(0f) }
+    var isClosing by remember(subject.mediaId, subject.media.type) { mutableStateOf(false) }
+    LaunchedEffect(subject.mediaId, subject.media.type) {
+        entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
+    }
+
+    val finishDismiss: () -> Unit = {
         if (themeSettings.animeThemeRetainColor) {
-            // Retain owns the colour. The *live* layer still ends here - it is
-            // process state for one sheet - but the colour it wrote is retained,
-            // and `AniSequelTheme` builds the tinted scheme from that marker, so
-            // the background the reader is looking at does not snap back to the
-            // brand navy on the way out. Only the layer has to stop; a layer left
-            // on would outrank the reader's own palette in Settings.
             themePreferences.clearAnimeColorLayer()
         } else {
             themePreferences.releaseAnimeColorLayer(themeSettings.animeThemeRevertDuration)
         }
         onDismiss()
     }
-
-    // The page's own entrance. A dialog window appears in one frame, which reads as
-    // a cut after the tap; fading and lifting the content is what makes the title
-    // feel like it grew out of the card. Keyed on the title, so walking a franchise
-    // is a new page arriving rather than the old one reanimating.
-    val entrance = remember(subject.mediaId, subject.media.type) { Animatable(0f) }
-    LaunchedEffect(subject.mediaId, subject.media.type) {
-        entrance.animateTo(1f, ExpressiveMotion.DefaultSpatial)
+    val handleDismiss: () -> Unit = {
+        if (!isClosing) {
+            isClosing = true
+            scope.launch {
+                entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+                finishDismiss()
+            }
+        }
     }
 
     // The palette's destination, hoisted above the dialog so the dialog's own
@@ -475,7 +485,10 @@ fun SequelDetailSheet(
                 .fillMaxSize()
                 .graphicsLayer {
                     alpha = entrance.value
-                    translationY = (1f - entrance.value) * 18.dp.toPx()
+                    val scale = 0.985f + (0.015f * entrance.value)
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = (1f - entrance.value) * 22.dp.toPx()
                 }
         ) {
             AnimatedContent(

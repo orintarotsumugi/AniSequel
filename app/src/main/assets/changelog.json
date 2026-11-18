@@ -34,6 +34,10 @@
         {
           "title": "The artwork returns with the same settled motion",
           "detail": "The full-screen artwork viewer stays full-screen, with its swipeable sources, zoom and download controls. Its closing artwork spring now uses the same settled motion as the opening reveal for a more coherent return to the poster."
+        },
+        {
+          "title": "Live title details and smoother page motion",
+          "detail": "The detail page refreshes AniList data while it stays open, keeping cached information visible and refreshing at most once per minute. Opening and closing share a settled scale-and-rise transition, and Info sections arrive with a tighter, lighter stagger. Version remains 2.3.9."
         }
       ]
     },
