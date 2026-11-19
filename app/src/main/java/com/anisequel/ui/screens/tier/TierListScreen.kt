@@ -103,6 +103,33 @@ fun TierListScreen(
 
     val document = opened
 
+    fun poolCandidatesFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> animeCandidates
+        TierMediaType.MANGA -> mangaCandidates
+    }
+
+    fun isPoolLoadingFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> isLoadingAnime
+        TierMediaType.MANGA -> isLoadingManga
+    }
+
+    fun poolLoadFailedFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> animeLoadFailed
+        TierMediaType.MANGA -> mangaLoadFailed
+    }
+
+    fun canLoadPoolFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> viewModel.canLoadAnime
+        TierMediaType.MANGA -> viewModel.canLoadManga
+    }
+
+    fun retryPoolFor(mediaType: TierMediaType) {
+        when (mediaType) {
+            TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
+            TierMediaType.MANGA -> viewModel.loadMangaLibrary()
+        }
+    }
+
     // The bar over this route is the library's, not an open board's - see
     // `showsMainBar`. The host draws the bar and cannot see this screen's state, so
     // the state is reported rather than inferred from the route: the route is the
@@ -117,12 +144,8 @@ fun TierListScreen(
     // whose pool may not have arrived yet. Guarded in the ViewModel, so this is
     // safe to call on every recomposition of the effect.
     LaunchedEffect(section, document?.mediaType) {
-        if (section == TierMediaType.ANIME || document?.mediaType == TierMediaType.ANIME) {
-            viewModel.loadAnimeLibrary()
-        }
-        if (section == TierMediaType.MANGA || document?.mediaType == TierMediaType.MANGA) {
-            viewModel.loadMangaLibrary()
-        }
+        retryPoolFor(section)
+        document?.mediaType?.takeIf { it != section }?.let(::retryPoolFor)
     }
 
     // The system back gesture has to reach the same place as the bar's arrow, or
@@ -173,10 +196,7 @@ fun TierListScreen(
         label = "tier_library_board"
     ) { openDocument ->
         if (openDocument == null) {
-            val sectionCandidates = when (section) {
-                TierMediaType.ANIME -> animeCandidates
-                TierMediaType.MANGA -> mangaCandidates
-            }
+            val sectionCandidates = poolCandidatesFor(section)
             TierLibraryScreen(
                 documents = library.documents.filter { it.mediaType == section },
                 recent = recent?.takeIf { it.mediaType == section },
@@ -184,26 +204,12 @@ fun TierListScreen(
                     mediaType = section,
                     librarySize = sectionCandidates.orEmpty().size,
                     isLoaded = sectionCandidates != null,
-                    isLoading = when (section) {
-                        TierMediaType.ANIME -> isLoadingAnime
-                        TierMediaType.MANGA -> isLoadingManga
-                    },
-                    isUnavailable = when (section) {
-                        TierMediaType.ANIME -> !viewModel.canLoadAnime
-                        TierMediaType.MANGA -> !viewModel.canLoadManga
-                    },
-                    loadFailed = when (section) {
-                        TierMediaType.ANIME -> animeLoadFailed
-                        TierMediaType.MANGA -> mangaLoadFailed
-                    }
+                    isLoading = isPoolLoadingFor(section),
+                    isUnavailable = !canLoadPoolFor(section),
+                    loadFailed = poolLoadFailedFor(section)
                 ),
                 onSelectMediaType = { section = it },
-                onRetryLoad = {
-                    when (section) {
-                        TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
-                        TierMediaType.MANGA -> viewModel.loadMangaLibrary()
-                    }
-                },
+                onRetryLoad = { retryPoolFor(section) },
                 onOpen = { listId ->
                     library.documents.firstOrNull { it.id == listId }?.let {
                         section = it.mediaType
@@ -220,6 +226,7 @@ fun TierListScreen(
                 modifier = Modifier
             )
         } else {
+            val boardType = openDocument.mediaType
             TierBoardScreen(
                 document = openDocument,
                 assignment = assignment,
@@ -230,18 +237,9 @@ fun TierListScreen(
                 notice = notice,
                 undoLabel = undoLabel,
                 redoLabel = redoLabel,
-                isPoolLoading = when (openDocument.mediaType) {
-                    TierMediaType.ANIME -> isLoadingAnime
-                    TierMediaType.MANGA -> isLoadingManga
-                },
-                poolLoadFailed = when (openDocument.mediaType) {
-                    TierMediaType.ANIME -> animeLoadFailed
-                    TierMediaType.MANGA -> mangaLoadFailed
-                },
-                isPoolLoaded = when (openDocument.mediaType) {
-                    TierMediaType.ANIME -> animeCandidates != null
-                    TierMediaType.MANGA -> mangaCandidates != null
-                },
+                isPoolLoading = isPoolLoadingFor(boardType),
+                poolLoadFailed = poolLoadFailedFor(boardType),
+                isPoolLoaded = poolCandidatesFor(boardType) != null,
                 onSeed = viewModel::seedFromScores,
                 onMove = viewModel::moveTo,
                 onClearPlacements = viewModel::clearPlacements,
@@ -257,12 +255,7 @@ fun TierListScreen(
                 onZoomChange = viewModel::setZoom,
                 onDismissNotice = viewModel::dismissNotice,
                 onLeave = viewModel::closeList,
-                onRetryPoolLoad = {
-                    when (openDocument.mediaType) {
-                        TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
-                        TierMediaType.MANGA -> viewModel.loadMangaLibrary()
-                    }
-                },
+                onRetryPoolLoad = { retryPoolFor(boardType) },
                 modifier = Modifier
             )
         }
