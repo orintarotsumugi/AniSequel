@@ -156,7 +156,9 @@ fun InfoFloatingBar(
                             .fillMaxWidth()
                             .height(3.dp)
                             .graphicsLayer {
-                                scaleX = progress()
+                                // Keep the draw transform inside its expected range even if a future
+                                // progress source briefly emits an invalid value.
+                                scaleX = progress().takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
                                 transformOrigin = TransformOrigin(0f, 0.5f)
                             }
                             .background(wash)
