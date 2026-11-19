@@ -280,7 +280,7 @@ fun FavouriteCharacterRow(
                 // "N favourites" rather than a bare number: the number is
                 // AniList's count of *other* accounts that pinned this
                 // character, which is only meaningful with the noun attached.
-                subtitle = "${character.favourites ?: 0} favourites",
+                subtitle = formatFavouriteCount(character.favourites ?: 0),
                 imageUrl = character.image?.bestUrl,
                 placeholder = AppVectorIcons.FavouriteCharacters,
                 onClick = { onOpen(character) }
@@ -319,7 +319,7 @@ fun FavouriteStaffRow(
                 // which every row now shows either way, rather than to the
                 // word "Staff", which told them nothing they could not see.
                 subtitle = member.occupation
-                    ?: "${member.favourites ?: 0} favourites",
+                    ?: formatFavouriteCount(member.favourites ?: 0),
                 imageUrl = member.image?.bestUrl,
                 placeholder = AppVectorIcons.FavouriteStaff,
                 onClick = { onOpen(member) }
@@ -330,6 +330,9 @@ fun FavouriteStaffRow(
         maxWidth = maxWidth
     )
 }
+
+internal fun formatFavouriteCount(count: Int): String =
+    if (count == 1) "1 favourite" else "$count favourites"
 
 /**
  * The row both favourite-people kinds are drawn in.

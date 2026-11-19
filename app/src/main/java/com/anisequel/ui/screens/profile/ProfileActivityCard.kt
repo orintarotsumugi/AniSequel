@@ -434,7 +434,7 @@ private fun ActivityControls(
  * and "Chapter 42 of null" is worse than the number on its own. The demo fixture
  * carries one manga row so this branch is exercised without a real account.
  */
-private fun activityDetail(activity: ProfileActivity): String {
+internal fun activityDetail(activity: ProfileActivity): String {
     val media = activity.media ?: return ""
     val isManga = media.type.equals("MANGA", ignoreCase = true)
     val progress = activity.progress?.takeIf { it.isNotBlank() }
@@ -449,11 +449,11 @@ private fun activityDetail(activity: ProfileActivity): String {
         progress
     }
     if (isManga) {
-        val chapters = media.chapters
+        val chapters = media.chapters?.takeIf { it > 0 }
         val displayNum = if (cleanProgress.startsWith("Chapter", ignoreCase = true)) cleanProgress else "Chapter $cleanProgress"
         return if (chapters != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $chapters" else displayNum
     }
-    val episodes = media.episodes
+    val episodes = media.episodes?.takeIf { it > 0 }
     val displayNum = if (cleanProgress.startsWith("Episode", ignoreCase = true)) cleanProgress else "Episode $cleanProgress"
     return if (episodes != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $episodes" else displayNum
 }

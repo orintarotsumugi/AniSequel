@@ -72,6 +72,16 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `an undated conversation row is placed after dated messages`() {
+        val state = state(
+            received = listOf(message(2, from = OTHER, to = VIEWER, at = 100)),
+            sent = listOf(message(1, from = VIEWER, to = OTHER, at = 0).copy(createdAt = null))
+        )
+        val thread = com.anisequel.ui.viewmodel.conversationMessages(state, OTHER, VIEWER)
+        assertEquals(listOf(2, 1), thread.map { it.id })
+    }
+
+    @Test
     fun `a message that arrived on both halves is drawn once`() {
         val twice = message(1, from = VIEWER, to = OTHER, at = 100)
         val state = state(received = listOf(twice), sent = listOf(twice))

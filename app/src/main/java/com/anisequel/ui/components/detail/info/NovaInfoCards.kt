@@ -329,8 +329,11 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
                 statusRows.forEachIndexed { index, row ->
                     val amount = row.amount ?: 0
                     DistributionBarRow(
-                        label = row.status.orEmpty().replace('_', ' ').lowercase()
-                            .replaceFirstChar { it.uppercase() },
+                        // Enum labels are protocol text. Folding them with the
+                        // device locale turned `HIATUS` into `Hıatus` on a
+                        // Turkish device, which is visible in the statistics card.
+                        label = row.status.orEmpty().replace('_', ' ').lowercase(Locale.ROOT)
+                            .replaceFirstChar { it.uppercase(Locale.ROOT) },
                         value = compactCount(amount),
                         fraction = if (totalStatuses > 0) amount.toFloat() / totalStatuses else 0f,
                         accent = chartAccent(index)
@@ -493,7 +496,7 @@ private fun NovaLengthDetails(media: MediaNode) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(if (media.isManga) "CHAPTERS" else "EPISODE LENGTH", style = MaterialTheme.typography.labelMedium)
             Text(
-                if (media.isManga) media.chapters?.toString() ?: "—"
+                if (media.isManga) media.chapters?.takeIf { it > 0 }?.toString() ?: "—"
                 else media.duration?.let { "$it min" } ?: "—",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold

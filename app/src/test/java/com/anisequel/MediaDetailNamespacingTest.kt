@@ -154,7 +154,7 @@ class MediaDetailNamespacingTest {
         assertNotNull(
             "the entry just opened has to survive its own publication - the sheet " +
                 "on screen reads it back by id",
-            store.details.value[total]
+            store.details.value[MediaCoverKey("ANIME", total)]
         )
     }
 
@@ -236,10 +236,13 @@ class MediaDetailNamespacingTest {
         store.load(mediaId = 1, mediaType = "ANIME")
         advanceUntilIdle()
 
-        assertNull("a thrown fetch must not publish anything", store.details.value[1])
+        assertNull(
+            "a thrown fetch must not publish anything",
+            store.details.value[MediaCoverKey("ANIME", 1)]
+        )
         assertFalse(
             "the spinner outlived the request",
-            store.loading.value.contains(1)
+            store.loading.value.contains(MediaCoverKey("ANIME", 1))
         )
         // And the next open is allowed to try again: the in-flight guard has to
         // have been cleared, or one failed open disables that title for the

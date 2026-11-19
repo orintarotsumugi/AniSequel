@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.MediaSearchType
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.detailFor
@@ -88,6 +89,7 @@ import com.anisequel.ui.theme.LocalSearchAnimeEnabled
 import com.anisequel.ui.theme.LocalSearchMangaEnabled
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 /** How long the field waits after a keystroke before asking AniList. */
 private const val SEARCH_DEBOUNCE_MILLIS = 450L
@@ -169,7 +171,7 @@ fun NovaSearchScreen(
     // the other namespace instead of falling back to the first enabled one.
     var typeName by rememberSaveable { mutableStateOf(MediaSearchType.DEFAULT.name) }
     val activeType = enabledTypes.firstOrNull { it.name == typeName } ?: enabledTypes.firstOrNull()
-    val activeLabel = activeType?.displayName?.lowercase()
+    val activeLabel = activeType?.displayName?.lowercase(Locale.ROOT)
 
     var query by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<MediaNode>>(emptyList()) }
@@ -303,8 +305,8 @@ fun NovaSearchScreen(
             swipeEnabled = quickAdd.swipeEnabled,
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
-            friends = friends[subject.mediaId].orEmpty(),
-            isDetailLoading = subject.mediaId in loadingDetailIds,
+            friends = friends[subject.media.mediaCoverKey].orEmpty(),
+            isDetailLoading = subject.media.mediaCoverKey in loadingDetailIds,
             canWriteToAniList = canWrite,
             entryEditor = entryEditor,
             onOpenMedia = { selectedMedia = it },
@@ -570,7 +572,7 @@ private fun SearchResultCard(media: MediaNode, onOpen: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val coverColor = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val metadata = listOfNotNull(
-        media.type?.lowercase()?.replaceFirstChar { it.uppercase() },
+        media.type?.lowercase(Locale.ROOT)?.replaceFirstChar { it.uppercase(Locale.ROOT) },
         media.format?.takeIf { it.isNotBlank() },
         media.averageScore?.takeIf { it > 0 }?.let { "★ $it" },
         media.seasonYear?.toString()

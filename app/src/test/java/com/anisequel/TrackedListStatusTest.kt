@@ -1,5 +1,6 @@
 package com.anisequel
 
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.detailFor
@@ -46,7 +47,7 @@ class TrackedListStatusTest {
             )
         )
 
-        val merged = mapOf(1 to detail).detailFor(summary)!!
+        val merged = mapOf(MediaCoverKey("ANIME", 1) to detail).detailFor(summary)!!
 
         assertEquals(
             "the detail query's own mediaListEntry has to survive the merge, or a " +
@@ -83,7 +84,7 @@ class TrackedListStatusTest {
             )
         )
 
-        val merged = mapOf(2 to detail).detailFor(summary)!!
+        val merged = mapOf(MediaCoverKey("ANIME", 2) to detail).detailFor(summary)!!
 
         assertEquals(ListStatuses.CURRENT, merged.mediaListEntry?.status)
         assertEquals(4, merged.mediaListEntry?.progress)
@@ -102,7 +103,7 @@ class TrackedListStatusTest {
             mediaListEntry = SimpleMediaListEntry(status = ListStatuses.PAUSED)
         )
 
-        val merged = mapOf(3 to detail).detailFor(summary)!!
+        val merged = mapOf(MediaCoverKey("ANIME", 3) to detail).detailFor(summary)!!
 
         assertEquals(ListStatuses.PAUSED, merged.mediaListEntry?.status)
         assertEquals("progress the summary knew must not be erased", 7, merged.mediaListEntry?.progress)

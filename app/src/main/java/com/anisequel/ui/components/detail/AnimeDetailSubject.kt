@@ -48,11 +48,10 @@ sealed interface AnimeDetailSubject {
  */
 fun ArrivingEntry.toDetailMedia(): MediaNode = MediaNode(
     id = mediaId,
-    // `ANIME` rather than left null, and not merely because the arriving section
-    // only holds anime: an untyped detail fetch resolves the id against *both*
-    // namespaces and answers with whichever AniList prefers, so a manga id would
-    // come back as the anime sharing that number. See `getMediaDetailQuery`.
-    type = "ANIME",
+    // Keep the namespace that came from the list. The schedule used to hard-code
+    // `ANIME`, so a manga sharing an id with an anime opened the wrong detail page
+    // and its AniList link pointed to the wrong URL as well.
+    type = mediaType,
     title = MediaTitle(userPreferred = title),
     status = status,
     episodes = episodes,

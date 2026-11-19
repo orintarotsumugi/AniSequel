@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.withSummaryProgress
@@ -149,7 +150,7 @@ fun LibraryScreen(
     val selectedSubject = selectedMedia?.let { summary ->
         AnimeDetailSubject.Media(detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary)
     }
-    val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
+    val detailLoading = selectedMedia?.mediaCoverKey?.let { it in loadingDetailIds } == true
 
     Scaffold(
         modifier = modifier
@@ -433,7 +434,7 @@ fun LibraryScreen(
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
-            friends = detailFriends[subject.mediaId].orEmpty(),
+            friends = detailFriends[subject.media.mediaCoverKey].orEmpty(),
             isDetailLoading = detailLoading,
             // The sheet is the same one the dashboard opens, so it gets the same
             // access: null here still draws the whole Info page, minus the one

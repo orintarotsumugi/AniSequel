@@ -13,6 +13,8 @@ package com.anisequel.data.model
  */
 data class ArrivingEntry(
     val mediaId: Int,
+    /** AniList's media namespace, because anime and manga ids are independent. */
+    val mediaType: String = "ANIME",
     val title: String,
     val coverUrl: String?,
     /** AniList's dominant colour for the key visual, for the loading placeholder. */
@@ -49,7 +51,7 @@ data class ArrivingEntry(
      * the same URL.
      */
     val siteUrl: String
-        get() = "https://anilist.co/anime/$mediaId"
+        get() = "https://anilist.co/${if (mediaType.equals("MANGA", ignoreCase = true)) "manga" else "anime"}/$mediaId"
 
     fun nextAiringCountdown(nowMillis: Long = System.currentTimeMillis()): String? =
         AiringCountdown.format(nextAiringAt, nowMillis)

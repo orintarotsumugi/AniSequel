@@ -7,9 +7,11 @@ import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaFriend
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.RelationKind
 import com.anisequel.data.model.SequelSortOption
@@ -355,10 +357,10 @@ class DashboardViewModel(
     )
 
     /** The node fetched for the entry a sheet is showing, keyed by media id. */
-    val detailNodes: StateFlow<Map<Int, MediaNode>> get() = detailStore.details
+    val detailNodes: StateFlow<Map<MediaCoverKey, MediaNode>> get() = detailStore.details
 
     /** Followed users' entries for the entry a sheet is showing, keyed by media id. */
-    val friends: StateFlow<Map<Int, List<MediaFriend>>> get() = detailStore.friends
+    val friends: StateFlow<Map<MediaCoverKey, List<MediaFriend>>> get() = detailStore.friends
 
     /**
      * The completed count for [cachedCollection], and the collection it was
@@ -447,7 +449,7 @@ class DashboardViewModel(
      * patches a single card, and routing that through a full recompute would
      * throw away the "loading" state the sheet is rendering.
      */
-    val loadingDetailIds: StateFlow<Set<Int>> get() = detailStore.loading
+    val loadingDetailIds: StateFlow<Set<MediaCoverKey>> get() = detailStore.loading
 
     /** True when the current session may write back to the user's AniList. */
     private val canWriteToAniList: Boolean
@@ -1121,7 +1123,7 @@ class DashboardViewModel(
      * behind the sheet should reflect the same detail the moment it lands
      * rather than on the next recompute.
      */
-    private fun foldDetailIntoList(mediaId: Int, detail: MediaNode) {
+    private fun foldDetailIntoList(key: MediaCoverKey, detail: MediaNode) {
         val success = _uiState.value as? DashboardUiState.Success ?: return
         _uiState.value = success.copy(
             missedSequels = success.missedSequels.map { item ->
@@ -1130,8 +1132,7 @@ class DashboardViewModel(
                 // put a manga's synopsis, cover and banner into an anime card
                 // whenever the two ids collided - the same rule [withCachedDetail]
                 // and [MediaDetailStore] already follow.
-                val sameTitle = item.sequelId == mediaId &&
-                    item.sequelMedia.type.equals(detail.type, ignoreCase = true)
+                val sameTitle = item.sequelMedia.mediaCoverKey == key
                 if (sameTitle) item.withDetail(detail) else item
             }
         )

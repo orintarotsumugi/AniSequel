@@ -38,7 +38,7 @@ class MediaDetailStore(
      * Called with a node the first time it is fetched, so a list that shows the
      * same entry can fold the detail into it without re-fetching.
      */
-    private val onLoaded: ((Int, MediaNode) -> Unit)? = null
+    private val onLoaded: ((MediaCoverKey, MediaNode) -> Unit)? = null
 ) {
     /**
      * Description, banner and studio per media, fetched only when opened. LRU-bounded.
@@ -78,12 +78,12 @@ class MediaDetailStore(
      * tree it had ever opened. Nothing visibly breaks when this map drops an
      * entry, which is exactly why the leak went unnoticed.
      */
-    private val published = object : LinkedHashMap<Int, MediaNode>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, MediaNode>?): Boolean =
+    private val published = object : LinkedHashMap<MediaCoverKey, MediaNode>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<MediaCoverKey, MediaNode>?): Boolean =
             size > MAX_ENTRIES
     }
 
-    private val _details = MutableStateFlow<Map<Int, MediaNode>>(emptyMap())
+    private val _details = MutableStateFlow<Map<MediaCoverKey, MediaNode>>(emptyMap())
 
     /**
      * The nodes the screens read: a snapshot of [published].
@@ -93,7 +93,7 @@ class MediaDetailStore(
      * would hand every collector the same instance without an emission to say it
      * changed.
      */
-    val details: StateFlow<Map<Int, MediaNode>> = _details.asStateFlow()
+    val details: StateFlow<Map<MediaCoverKey, MediaNode>> = _details.asStateFlow()
 
     /**
      * Publishes [detail] for [mediaId], refreshing its recency in [published].
@@ -103,9 +103,9 @@ class MediaDetailStore(
      * is what keeps the title on screen the last thing the bound would drop. The
      * snapshot is only rebuilt when the screens are actually missing the node.
      */
-    private fun publish(mediaId: Int, detail: MediaNode) {
-        published[mediaId] = detail
-        if (_details.value[mediaId] !== detail) {
+    private fun publish(key: MediaCoverKey, detail: MediaNode) {
+        published[key] = detail
+        if (_details.value[key] !== detail) {
             _details.value = LinkedHashMap(published)
         }
     }
@@ -123,7 +123,7 @@ class MediaDetailStore(
      */
     private val inFlight = mutableSetOf<MediaCoverKey>()
 
-    private val _loading = MutableStateFlow<Set<Int>>(emptySet())
+    private val _loading = MutableStateFlow<Set<MediaCoverKey>>(emptySet())
 
     /**
      * Which media ids are being fetched, for the screens' spinner.
@@ -134,7 +134,7 @@ class MediaDetailStore(
      * harmless for a spinner and is exactly the collision the fetch guard no longer
      * has.
      */
-    val loading: StateFlow<Set<Int>> = _loading.asStateFlow()
+    val loading: StateFlow<Set<MediaCoverKey>> = _loading.asStateFlow()
 
     /**
      * Followed users' entries per title, fetched separately from the detail.
@@ -165,14 +165,14 @@ class MediaDetailStore(
 
     private val friendsInFlight = mutableSetOf<MediaCoverKey>()
 
-    private val _friends = MutableStateFlow<Map<Int, List<MediaFriend>>>(emptyMap())
+    private val _friends = MutableStateFlow<Map<MediaCoverKey, List<MediaFriend>>>(emptyMap())
 
     /** Friends' entries the screens read, keyed by media id. See [friendsCache]. */
-    val friends: StateFlow<Map<Int, List<MediaFriend>>> = _friends.asStateFlow()
+    val friends: StateFlow<Map<MediaCoverKey, List<MediaFriend>>> = _friends.asStateFlow()
 
-    private fun publishFriends(mediaId: Int, friends: List<MediaFriend>) {
-        if (_friends.value[mediaId] !== friends) {
-            _friends.value = _friends.value + (mediaId to friends)
+    private fun publishFriends(key: MediaCoverKey, friends: List<MediaFriend>) {
+        if (_friends.value[key] !== friends) {
+            _friends.value = _friends.value + (key to friends)
         }
     }
 
@@ -187,7 +187,7 @@ class MediaDetailStore(
     fun loadFriends(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
         friendsCache[key]?.let { known ->
-            publishFriends(mediaId, known)
+            publishFriends(key, known)
             return
         }
         if (isDemo || key in friendsInFlight) return
@@ -204,7 +204,7 @@ class MediaDetailStore(
                     // [generation] for what filing it anyway showed the next reader.
                     if (startedAtGeneration == this@MediaDetailStore.generation) {
                         friendsCache[key] = list
-                        publishFriends(mediaId, list)
+                        publishFriends(key, list)
                     }
                 }
                 // A failed friends load draws no card: see above.
@@ -239,7 +239,7 @@ class MediaDetailStore(
             // Keep cached details visible immediately. Once they are ten minutes old,
             // continue below and refresh in the background rather than treating the
             // first successful fetch as valid for the whole session.
-            publish(mediaId, known)
+            publish(key, known)
             val lastFetch = fetchedAt[key] ?: 0L
             if (System.currentTimeMillis() - lastFetch < DETAIL_REFRESH_INTERVAL_MILLIS) return
         }
@@ -254,7 +254,7 @@ class MediaDetailStore(
         if (isDemo || key in inFlight) return
 
         inFlight += key
-        _loading.value = _loading.value + mediaId
+        _loading.value = _loading.value + key
         val startedAtGeneration = generation
         scope.launch {
             try {
@@ -289,14 +289,14 @@ class MediaDetailStore(
                             val oldest = fetchedAt.minByOrNull { (_, at) -> at }?.key ?: break
                             fetchedAt.remove(oldest)
                         }
-                        publish(mediaId, detail)
+                        publish(key, detail)
                         // The host's fold is a callback, and `onSuccess` rethrows
                         // anything its lambda throws - so a listener that fails would
                         // still have taken the fetch, and the launch, with it. The
                         // detail is already published at this point; what the host
                         // does with it is its own problem.
                         try {
-                            onLoaded?.invoke(mediaId, detail)
+                            onLoaded?.invoke(key, detail)
                         } catch (_: Exception) {
                             // Deliberately swallowed: see above.
                         }
@@ -310,9 +310,7 @@ class MediaDetailStore(
                 // fetching. Dropping it on the first to finish would hide the
                 // spinner while the second was still on the wire, and the screen
                 // would show a half-filled page as though it were complete.
-                if (inFlight.none { it.id == mediaId }) {
-                    _loading.value = _loading.value - mediaId
-                }
+                _loading.value = _loading.value - key
             }
         }
     }

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
@@ -414,8 +415,8 @@ fun StudioScreen(
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
-            friends = detailFriends[summary.id].orEmpty(),
-            isDetailLoading = summary.id in loadingDetailIds,
+            friends = detailFriends[summary.mediaCoverKey].orEmpty(),
+            isDetailLoading = summary.mediaCoverKey in loadingDetailIds,
             // Same sheet, same access: the tab follows the editor, and an
             // unauthenticated reader gets exactly the page they always got.
             canWriteToAniList = entryEditor != null,

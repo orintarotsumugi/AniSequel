@@ -82,7 +82,7 @@ class RelationDetailResolutionTest {
 
         val branch = source
             .substringAfter("navigatedRelation != null ->", missingDelimiterValue = "")
-            .substringBefore("selectedSequelId != null", missingDelimiterValue = "")
+            .substringBefore("selectedSequelKey != null", missingDelimiterValue = "")
         assertTrue(
             "could not find the relation branch in ${dashboardScreen.path}",
             branch.isNotBlank()

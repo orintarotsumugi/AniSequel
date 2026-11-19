@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "2.4.4",
+      "entries": [
+        {
+          "title": "Detail pages keep anime and manga apart",
+          "detail": "The shared detail, friends and loading state was published by numeric id, so anime/1 and manga/1 could replace each other's artwork, synopsis or friend row. Those UI caches now use the media namespace as part of their key."
+        },
+        {
+          "title": "The schedule keeps manga in its namespace",
+          "detail": "Arriving entries now carry their media type into detail pages, tile keys and AniList links instead of assuming every scheduled title is anime."
+        },
+        {
+          "title": "Dashboard relation cards keep their identity",
+          "detail": "Sequel selection and lazy-list keys now include anime or manga, so titles with the same AniList number cannot open or reuse the wrong card state."
+        },
+        {
+          "title": "Undated inbox rows stay at the end",
+          "detail": "Messages without a server timestamp no longer sort above every dated message in the inbox."
+        },
+        {
+          "title": "Undated conversation rows stay at the end",
+          "detail": "Chat history keeps messages with missing timestamps after the dated timeline instead of placing them before the first message."
+        },
+        {
+          "title": "Progress labels stop saying of zero",
+          "detail": "Activity cards treat AniList's zero episode or chapter total as unknown, so a reader sees Episode 4 or Chapter 4 rather than a misleading zero total."
+        },
+        {
+          "title": "Profile counts read naturally",
+          "detail": "Activity calendar and favourite-person cards now use singular nouns for one change or one favourite."
+        },
+        {
+          "title": "Chapter statistics stop claiming zero",
+          "detail": "Nova's title statistics show an unavailable marker when AniList has not announced a chapter total."
+        },
+        {
+          "title": "Search labels stay readable in every locale",
+          "detail": "Search metadata and statistics enum labels now use a stable case-fold, so Turkish locale rules cannot turn protocol labels into malformed words."
+        },
+        {
+          "title": "Manga links open the manga page",
+          "detail": "The schedule's AniList link and detail subject now agree on the media type, preventing a manga row from opening the anime URL with the same number."
+        }
+      ]
+    },
+    {
       "version": "2.4.3",
       "entries": [
         {
