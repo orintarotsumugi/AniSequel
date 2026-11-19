@@ -1,9 +1,21 @@
 package com.anisequel.ui.components.detail.info
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +26,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -62,6 +76,7 @@ import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.rememberFullHeightSheetState
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import java.util.Locale
@@ -195,59 +210,85 @@ internal fun NovaStatsCard(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 15.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Top
-            ) {
-                if (placeholder) {
+            Crossfade(
+                targetState = placeholder,
+                animationSpec = ExpressiveMotion.FastEffects,
+                label = "nova_stats_content"
+            ) { loading ->
+                if (loading) {
                     NovaStatsPlaceholder(media = media)
                 } else {
-                    stats.forEach { stat ->
-                        NovaStatCell(
-                            stat = stat,
-                            onClick = { selectedStat = stat.label }
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        stats.forEach { stat ->
+                            NovaStatCell(
+                                stat = stat,
+                                onClick = { selectedStat = stat.label }
+                            )
+                        }
                     }
                 }
             }
 
-            if (countdown != null) {
-                // A divider rather than a second card: the countdown belongs to the
-                // strip, and a seam inside one surface is a weaker boundary than a
-                // second card would draw around a single sentence.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
+            AnimatedVisibility(
+                visible = countdown != null,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // A divider rather than a second card: the countdown belongs to the
+                    // strip, and a seam inside one surface is a weaker boundary than a
+                    // second card would draw around a single sentence.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.18f)
+                            )
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("nova_info_countdown"),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(16.dp)
                         )
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("nova_info_countdown"),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = AppVectorIcons.Schedule,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(7.dp))
-                    Text(
-                        text = if (episode != null) {
-                            "Episode $episode airs $countdown"
-                        } else {
-                            "Next episode $countdown"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        textAlign = TextAlign.Center
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        AnimatedContent(
+                            targetState = if (episode != null) {
+                                "Episode $episode airs $countdown"
+                            } else {
+                                "Next episode $countdown"
+                            },
+                            transitionSpec = {
+                                fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                            },
+                            label = "nova_countdown_text",
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) { text ->
+                            Text(
+                                text = text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -284,7 +325,7 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 selectedStatTitle(selectedLabel),
                 style = MaterialTheme.typography.headlineSmall,
@@ -312,7 +353,7 @@ private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
         }
 
         if (statusRows.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "List status breakdown",
@@ -516,10 +557,28 @@ private fun DistributionBarRow(
     fraction: Float,
     accent: Color
 ) {
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction.coerceIn(0f, 1f),
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "nova_stat_distribution_bar"
+    )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
         }
         Box(
             modifier = Modifier
@@ -530,7 +589,7 @@ private fun DistributionBarRow(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                    .fillMaxWidth(animatedFraction)
                     .height(9.dp)
                     .clip(CircleShape)
                     .background(accent)
@@ -605,7 +664,7 @@ internal fun NovaProgressCard(
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -617,12 +676,21 @@ internal fun NovaProgressCard(
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.76f),
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = count,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                AnimatedContent(
+                    targetState = count,
+                    transitionSpec = {
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                    },
+                    label = "nova_progress_count"
+                ) { progressCount ->
+                    Text(
+                        text = progressCount,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
             }
             StyledProgressBar(
                 progress = fraction,
@@ -658,6 +726,23 @@ internal fun NovaTrailerCard(
     val thumbnail = remember(videoId) { "https://img.youtube.com/vi/$videoId/hqdefault.jpg" }
     val context = LocalContext.current
     val shape = MaterialTheme.shapes.large
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val playScale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "nova_trailer_play_scale"
+    )
+    val playContainer by animateColorAsState(
+        targetValue = if (pressed) Color.Black.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.52f),
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "nova_trailer_play_container"
+    )
+    val scrimBottom by animateColorAsState(
+        targetValue = if (pressed) Color.Black.copy(alpha = 0.82f) else Color.Black.copy(alpha = 0.76f),
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "nova_trailer_scrim"
+    )
 
     Surface(
         shape = shape,
@@ -669,8 +754,9 @@ internal fun NovaTrailerCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .bouncyPress(pressedScale = 0.98f)
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(
+                interactionSource = interactionSource,
                 role = Role.Button,
                 onClickLabel = "Watch the official trailer"
             ) { openExternalUrlOrCopy(context, url) }
@@ -696,17 +782,22 @@ internal fun NovaTrailerCard(
                         Brush.verticalGradient(
                             0f to Color.Black.copy(alpha = 0.05f),
                             0.55f to Color.Black.copy(alpha = 0.22f),
-                            1f to Color.Black.copy(alpha = 0.76f)
+                            1f to scrimBottom
                         )
                     )
             )
             Surface(
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.52f),
+                color = playContainer,
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(54.dp)
+                    .graphicsLayer {
+                        scaleX = playScale
+                        scaleY = playScale
+                    }
+                    .testTag("nova_info_trailer_play")
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -722,8 +813,8 @@ internal fun NovaTrailerCard(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(1.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = "Official trailer",
@@ -734,8 +825,8 @@ internal fun NovaTrailerCard(
                 Text(
                     text = media.displayName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.78f),
-                    maxLines = 1,
+                    color = Color.White.copy(alpha = 0.82f),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -746,28 +837,42 @@ internal fun NovaTrailerCard(
 /** One number of the strip: its value over its label, tappable for the drawer. */
 @Composable
 private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .weight(1f)
             .clip(MaterialTheme.shapes.small)
+            .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
             .combinedClickable(
+                interactionSource = interactionSource,
                 role = Role.Button,
                 onClickLabel = "Show ${stat.label} details",
                 onClick = onClick,
                 onLongClickLabel = "Show ${stat.label} details",
                 onLongClick = onClick
             )
-            .padding(vertical = 3.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .heightIn(min = 52.dp)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = stat.value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        AnimatedContent(
+            targetState = stat.value,
+            transitionSpec = {
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+            },
+            label = "nova_stat_value_${stat.label}"
+        ) { value ->
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Text(
             text = stat.label,
             // `labelSmall`, not `labelMedium`: four columns on a 360dp phone
@@ -806,17 +911,19 @@ private fun NovaStatsPlaceholder(media: MediaNode) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 3.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .heightIn(min = 52.dp)
+                    .padding(vertical = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 ShimmerBox(
                     modifier = Modifier
                         .width(46.dp)
-                        .height(20.dp),
+                        .height(22.dp),
                     shape = MaterialTheme.shapes.extraSmall,
                     phase = phase
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,

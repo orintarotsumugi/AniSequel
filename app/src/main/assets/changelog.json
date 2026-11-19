@@ -250,6 +250,26 @@
         {
           "title": "Library search clear button ignores whitespace-only text",
           "detail": "The classic library search field shows its clear action only when the query contains non-whitespace text."
+        },
+        {
+          "title": "Nova info stats and countdown animate smoothly",
+          "detail": "The Nova title page now crossfades stats placeholders into values, animates countdown visibility and text changes, transitions stat values, and fills score and status distribution bars with motion instead of snapping."
+        },
+        {
+          "title": "Nova info hero, progress, and trailer respond with motion",
+          "detail": "Hero poster and entry controls use press feedback and state transitions, the progress count updates with animated text, and the trailer card adds play-button, press, and scrim animations for clearer interaction."
+        },
+        {
+          "title": "Nova info hero layout is clearer and easier to tap",
+          "detail": "The hero poster badge, title panel spacing, entry pill states, and hero chips are refined for readability and touch, and long chip labels have more room before truncating."
+        },
+        {
+          "title": "Nova info stats, progress, and trailer cards are easier to read",
+          "detail": "Stat cells keep a stable touch target, countdown and trailer text wrap more cleanly, progress and trailer spacing is improved, and distribution rows and stat detail sections are easier to scan."
+        },
+        {
+          "title": "Nova info floating bar and page details are polished",
+          "detail": "The docked Nova title bar centers its label more accurately, placeholder stat rows match final layout sizing, and Nova info animation imports and state handling are cleaned up for consistent behavior."
         }
       ]
     },

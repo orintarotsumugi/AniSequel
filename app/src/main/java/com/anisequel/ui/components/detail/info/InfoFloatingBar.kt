@@ -184,7 +184,7 @@ fun InfoFloatingBar(
                         )
                         // Balances the leading chevron so the title is centred in
                         // the pill rather than in the space left after the icon.
-                        Spacer(modifier = Modifier.width(23.dp))
+                        Spacer(modifier = Modifier.width(17.dp))
                     }
                 }
             }
