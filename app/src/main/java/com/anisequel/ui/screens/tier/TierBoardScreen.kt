@@ -107,6 +107,9 @@ internal fun TierBoardScreen(
     notice: String?,
     undoLabel: String?,
     redoLabel: String?,
+    isPoolLoading: Boolean = false,
+    poolLoadFailed: Boolean = false,
+    isPoolLoaded: Boolean = false,
     onSeed: () -> Unit,
     onMove: (mediaId: Int, tierId: String?, beforeMediaId: Int?) -> Unit,
     onClearPlacements: () -> Unit,
@@ -118,6 +121,7 @@ internal fun TierBoardScreen(
     onTierColor: (String, Long) -> Unit,
     onTierScoreFloor: (String, Int?) -> Unit,
     onFilterChange: (TierFilter) -> Unit,
+    onRetryPoolLoad: () -> Unit = {},
     onDisplayChange: (TierDisplay) -> Unit,
     onZoomChange: (Float) -> Unit,
     onDismissNotice: () -> Unit,
@@ -338,6 +342,9 @@ internal fun TierBoardScreen(
                     unranked = unranked.size,
                     mediaType = document.mediaType,
                     undoLabel = undoLabel,
+                    isPoolLoading = isPoolLoading,
+                    poolLoadFailed = poolLoadFailed,
+                    isPoolLoaded = isPoolLoaded,
                     editable = !boardLocked,
                     onAddTitles = { sheets.addingTitles = true }
                 )
@@ -360,10 +367,13 @@ internal fun TierBoardScreen(
                             candidates = visibleCandidates,
                             unrankedCount = unranked.size,
                             isSeeding = isSeeding,
+                            isPoolLoading = isPoolLoading,
+                            poolLoadFailed = poolLoadFailed,
                             mediaType = document.mediaType,
                             // Seeding ranks titles, so it is an edit like the rest.
                             onSeed = { whenEditable(onSeed) },
-                            onAddTitles = { whenEditable { sheets.addingTitles = true } }
+                            onAddTitles = { whenEditable { sheets.addingTitles = true } },
+                            onRetryPoolLoad = onRetryPoolLoad
                         )
                     }
 

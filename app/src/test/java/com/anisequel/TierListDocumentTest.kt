@@ -1,7 +1,9 @@
 package com.anisequel
 
+import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TIER_LIST_BASE_NAME
 import com.anisequel.domain.tier.TierAssignment
+import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierListDocument
 import com.anisequel.domain.tier.TierUndoEntry
 import com.anisequel.domain.tier.TierUndoStack
@@ -136,6 +138,35 @@ class TierListDocumentTest {
         assertEquals(2, list.rankedCount)
         assertFalse(list.isEmpty)
         assertTrue(TierListDocument(id = "list2", name = "Two").isEmpty)
+    }
+
+    @Test
+    fun `ranked counts ignore placements filed under tiers that no longer exist`() {
+        // A tier that was removed leaves placements behind in the stored assignment;
+        // those are orphans, not ranked titles on the board.
+        val tiers = listOf(TierDefinition("s", "S", 0xFFE5484D))
+        val list = TierListDocument(
+            id = "list1",
+            name = "One",
+            tiers = tiers,
+            assignment = TierAssignment(linkedMapOf(1 to "s", 2 to "gone"))
+        )
+
+        assertEquals("only placements in existing tiers count as ranked", 1, list.rankedCount)
+        assertFalse(list.isEmpty)
+    }
+
+    @Test
+    fun `a list with only orphaned placements is empty for ranking purposes`() {
+        val list = TierListDocument(
+            id = "list1",
+            name = "One",
+            tiers = StandardTiers,
+            assignment = TierAssignment(linkedMapOf(1 to "removed", 2 to "also-removed"))
+        )
+
+        assertEquals(0, list.rankedCount)
+        assertTrue(list.isEmpty)
     }
 
     // ---- Undo --------------------------------------------------------------

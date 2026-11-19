@@ -43,16 +43,28 @@ internal class TierLibraryPools(
     private val userId: Int?,
     private val isDemo: Boolean
 ) {
-    /** The anime half, or null before it has been asked for. */
+    /** The anime half, or null before it has been asked for or after a failed fetch. */
     private val _anime = MutableStateFlow<List<TierCandidate>?>(null)
     val anime: StateFlow<List<TierCandidate>?> = _anime.asStateFlow()
 
-    /** The manga half, or null before it has been asked for. */
+    /** The manga half, or null before it has been asked for or after a failed fetch. */
     private val _manga = MutableStateFlow<List<TierCandidate>?>(null)
     val manga: StateFlow<List<TierCandidate>?> = _manga.asStateFlow()
 
+    private val _isLoadingAnime = MutableStateFlow(false)
+    val isLoadingAnime: StateFlow<Boolean> = _isLoadingAnime.asStateFlow()
+
     private val _isLoadingManga = MutableStateFlow(false)
     val isLoadingManga: StateFlow<Boolean> = _isLoadingManga.asStateFlow()
+
+    /**
+     * True when the last anime fetch failed.
+     *
+     * A failure leaves the pool null but must still be retryable: a transient
+     * network or rate-limit error is not "this account tracks no anime".
+     */
+    private val _animeLoadFailed = MutableStateFlow(false)
+    val animeLoadFailed: StateFlow<Boolean> = _animeLoadFailed.asStateFlow()
 
     /**
      * True when the last manga fetch failed.
@@ -63,6 +75,9 @@ internal class TierLibraryPools(
      */
     private val _mangaLoadFailed = MutableStateFlow(false)
     val mangaLoadFailed: StateFlow<Boolean> = _mangaLoadFailed.asStateFlow()
+
+    /** Whether the account's anime list can be read. */
+    val canLoadAnime: Boolean get() = isDemo || userId != null
 
     /**
      * Whether this account has a manga list to rank at all.
@@ -86,20 +101,34 @@ internal class TierLibraryPools(
      * per list. Manga is deliberately not fetched here - see [loadManga].
      */
     fun loadAnime() {
+        if (!canLoadAnime) return
+        if (_anime.value != null || _isLoadingAnime.value) return
         val id = userId
-        if (id == null && !isDemo) return
-        if (_anime.value != null) return
+        _isLoadingAnime.value = true
+        _animeLoadFailed.value = false
         scope.launch {
-            val result = if (isDemo) {
-                Result.success(aniListRepository.getDemoAnimeList())
-            } else {
-                aniListRepository.getUserAnimeList(id!!, forceRefresh = false)
-            }
-            result.onSuccess { collection ->
-                setLibrary(
-                    collection.lists.orEmpty().flatMap { it.entries.orEmpty() },
-                    TierMediaType.ANIME
+            try {
+                val result = if (isDemo) {
+                    Result.success(aniListRepository.getDemoAnimeList())
+                } else {
+                    // Folded through [repositoryResult]: a throw on the way to the
+                    // Result must not escape this launch or leave the loading flag
+                    // stuck, which would make the shelf unrecoverable.
+                    repositoryResult { aniListRepository.getUserAnimeList(id!!, forceRefresh = false) }
+                }
+                result.fold(
+                    onSuccess = { collection ->
+                        setLibrary(
+                            collection.lists.orEmpty().flatMap { it.entries.orEmpty() },
+                            TierMediaType.ANIME
+                        )
+                    },
+                    // Left null so the section is still a retry. A transient failure
+                    // is not "this account tracks no anime".
+                    onFailure = { _animeLoadFailed.value = true }
                 )
+            } finally {
+                _isLoadingAnime.value = false
             }
         }
     }
@@ -121,25 +150,28 @@ internal class TierLibraryPools(
         _isLoadingManga.value = true
         _mangaLoadFailed.value = false
         scope.launch {
-            // `repositoryResult`, not the bare call: a throw on the way to the
-            // `Result` would otherwise reach this `launch` and close the app, and the
-            // flag above would stay set so the section could never be asked for again.
-            repositoryResult {
-                aniListRepository.getUserMangaList(id, forceRefresh = false)
-            }.fold(
-                onSuccess = { collection ->
-                    setLibrary(
-                        collection.lists.orEmpty().flatMap { it.entries.orEmpty() },
-                        TierMediaType.MANGA
-                    )
-                },
-                // Left null so the section is still a retry. The failure is
-                // reported separately, because "asked and there is none" and
-                // "could not ask" are different answers to the person looking at
-                // an empty shelf.
-                onFailure = { _mangaLoadFailed.value = true }
-            )
-            _isLoadingManga.value = false
+            try {
+                // `repositoryResult`, not the bare call: a throw on the way to the
+                // `Result` would otherwise reach this `launch` and close the app, and
+                // the flag above would stay set so the section could never be asked for again.
+                repositoryResult {
+                    aniListRepository.getUserMangaList(id, forceRefresh = false)
+                }.fold(
+                    onSuccess = { collection ->
+                        setLibrary(
+                            collection.lists.orEmpty().flatMap { it.entries.orEmpty() },
+                            TierMediaType.MANGA
+                        )
+                    },
+                    // Left null so the section is still a retry. The failure is
+                    // reported separately, because "asked and there is none" and
+                    // "could not ask" are different answers to the person looking at
+                    // an empty shelf.
+                    onFailure = { _mangaLoadFailed.value = true }
+                )
+            } finally {
+                _isLoadingManga.value = false
+            }
         }
     }
 
@@ -199,13 +231,18 @@ internal class TierLibraryPools(
             )
         }
 
+        // The same media can appear in more than one list group in an AniList
+        // collection. Duplicates would produce duplicate lazy-list keys in the tray
+        // and add-titles sheet (crashing Compose) and show the same title twice.
+        val unique = mapped.distinctBy { it.mediaId }
+
         // Only the half that was asked for is replaced. Writing both from one
         // response would mark the other half as "asked, and empty" whenever the
         // query happened to return nothing of that type - and the lazy manga
         // fetch would then never run.
         when (requestedType) {
-            TierMediaType.ANIME -> _anime.value = mapped.ofMediaType(TierMediaType.ANIME)
-            TierMediaType.MANGA -> _manga.value = mapped.ofMediaType(TierMediaType.MANGA)
+            TierMediaType.ANIME -> _anime.value = unique.ofMediaType(TierMediaType.ANIME)
+            TierMediaType.MANGA -> _manga.value = unique.ofMediaType(TierMediaType.MANGA)
         }
     }
 

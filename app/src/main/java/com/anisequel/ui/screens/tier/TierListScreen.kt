@@ -96,6 +96,8 @@ fun TierListScreen(
     val undoLabel by viewModel.undoLabel.collectAsStateWithLifecycle()
     val redoLabel by viewModel.redoLabel.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val isLoadingAnime by viewModel.isLoadingAnime.collectAsStateWithLifecycle()
+    val animeLoadFailed by viewModel.animeLoadFailed.collectAsStateWithLifecycle()
     val isLoadingManga by viewModel.isLoadingManga.collectAsStateWithLifecycle()
     val mangaLoadFailed by viewModel.mangaLoadFailed.collectAsStateWithLifecycle()
 
@@ -111,10 +113,13 @@ fun TierListScreen(
         onDispose { onBoardOpenChange(false) }
     }
 
-    // The manga list is fetched the first time its shelf is opened, and again if a
-    // manga board is restored directly without the shelf being touched. Guarded in
-    // the ViewModel, so this is safe to call on every recomposition of the effect.
+    // Fetch the pool for the shelf that is visible, and for a restored/open board
+    // whose pool may not have arrived yet. Guarded in the ViewModel, so this is
+    // safe to call on every recomposition of the effect.
     LaunchedEffect(section, document?.mediaType) {
+        if (section == TierMediaType.ANIME || document?.mediaType == TierMediaType.ANIME) {
+            viewModel.loadAnimeLibrary()
+        }
         if (section == TierMediaType.MANGA || document?.mediaType == TierMediaType.MANGA) {
             viewModel.loadMangaLibrary()
         }
@@ -179,12 +184,26 @@ fun TierListScreen(
                     mediaType = section,
                     librarySize = sectionCandidates.orEmpty().size,
                     isLoaded = sectionCandidates != null,
-                    isLoading = section == TierMediaType.MANGA && isLoadingManga,
-                    isUnavailable = section == TierMediaType.MANGA && !viewModel.canLoadManga,
-                    loadFailed = section == TierMediaType.MANGA && mangaLoadFailed
+                    isLoading = when (section) {
+                        TierMediaType.ANIME -> isLoadingAnime
+                        TierMediaType.MANGA -> isLoadingManga
+                    },
+                    isUnavailable = when (section) {
+                        TierMediaType.ANIME -> !viewModel.canLoadAnime
+                        TierMediaType.MANGA -> !viewModel.canLoadManga
+                    },
+                    loadFailed = when (section) {
+                        TierMediaType.ANIME -> animeLoadFailed
+                        TierMediaType.MANGA -> mangaLoadFailed
+                    }
                 ),
                 onSelectMediaType = { section = it },
-                onRetryLoad = viewModel::loadMangaLibrary,
+                onRetryLoad = {
+                    when (section) {
+                        TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
+                        TierMediaType.MANGA -> viewModel.loadMangaLibrary()
+                    }
+                },
                 onOpen = { listId ->
                     library.documents.firstOrNull { it.id == listId }?.let {
                         section = it.mediaType
@@ -211,6 +230,18 @@ fun TierListScreen(
                 notice = notice,
                 undoLabel = undoLabel,
                 redoLabel = redoLabel,
+                isPoolLoading = when (openDocument.mediaType) {
+                    TierMediaType.ANIME -> isLoadingAnime
+                    TierMediaType.MANGA -> isLoadingManga
+                },
+                poolLoadFailed = when (openDocument.mediaType) {
+                    TierMediaType.ANIME -> animeLoadFailed
+                    TierMediaType.MANGA -> mangaLoadFailed
+                },
+                isPoolLoaded = when (openDocument.mediaType) {
+                    TierMediaType.ANIME -> animeCandidates != null
+                    TierMediaType.MANGA -> mangaCandidates != null
+                },
                 onSeed = viewModel::seedFromScores,
                 onMove = viewModel::moveTo,
                 onClearPlacements = viewModel::clearPlacements,
@@ -226,6 +257,12 @@ fun TierListScreen(
                 onZoomChange = viewModel::setZoom,
                 onDismissNotice = viewModel::dismissNotice,
                 onLeave = viewModel::closeList,
+                onRetryPoolLoad = {
+                    when (openDocument.mediaType) {
+                        TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
+                        TierMediaType.MANGA -> viewModel.loadMangaLibrary()
+                    }
+                },
                 modifier = Modifier
             )
         }

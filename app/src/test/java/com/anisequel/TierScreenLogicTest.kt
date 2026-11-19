@@ -1,10 +1,12 @@
 package com.anisequel
 
+import com.anisequel.domain.tier.StandardTiers
 import com.anisequel.domain.tier.TierAssignment
 import com.anisequel.domain.tier.TierCandidate
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierListDocument
 import com.anisequel.domain.tier.TierListLayout
+import com.anisequel.domain.tier.TierMediaType
 import com.anisequel.domain.tier.layoutTierList
 import com.anisequel.ui.screens.tier.ScreenTierOptions
 import com.anisequel.ui.screens.tier.TIER_DROP_SNAP_SLOP
@@ -13,11 +15,14 @@ import com.anisequel.ui.screens.tier.TIER_MIN_ZOOM
 import com.anisequel.ui.screens.tier.TierDrop
 import com.anisequel.ui.screens.tier.clampTierZoom
 import com.anisequel.ui.screens.tier.relativeTimeLabel
+import com.anisequel.ui.screens.tier.tierBoardEmptyStateMessage
+import com.anisequel.ui.screens.tier.tierBoardHeaderSubtitle
+import com.anisequel.ui.screens.tier.tierBoardHeaderTitle
 import com.anisequel.ui.screens.tier.tierCoverDecodePx
+import com.anisequel.ui.screens.tier.tierDrawWindow
 import com.anisequel.ui.screens.tier.tierDropCaret
 import com.anisequel.ui.screens.tier.tierDropPlacement
 import com.anisequel.ui.screens.tier.tierDropTarget
-import com.anisequel.ui.screens.tier.tierDrawWindow
 import com.anisequel.ui.screens.tier.tierItemAt
 import com.anisequel.ui.screens.tier.tierLibrarySubtitle
 import com.anisequel.ui.screens.tier.tierListCardStatus
@@ -741,4 +746,179 @@ class TierScreenLogicTest {
         // clock was ahead. "In -3 hours" would be worse than vague.
         assertEquals("just now", relativeTimeLabel(now = 1_000L, then = 5_000L))
     }
+
+    @Test
+    fun `a list card ignores placements in removed tiers`() {
+        val now = 1_700_000_000_000L
+        val orphanOnly = TierListDocument(
+            id = "list1",
+            name = "One",
+            tiers = listOf(TierDefinition("s", "S", 0xFFE5484D)),
+            assignment = TierAssignment(mapOf(1 to "gone")),
+            updatedAt = now
+        )
+
+        assertEquals("Nothing ranked yet - updated just now", tierListCardStatus(orphanOnly, now))
+    }
+
+    @Test
+    fun `the board header reflects loading, failure and empty pool states`() {
+        assertEquals(
+            "Loading library",
+            tierBoardHeaderTitle(
+                ranked = 0,
+                total = 0,
+                isPoolLoading = true,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "Your library is still loading",
+            tierBoardHeaderSubtitle(
+                total = 0,
+                unranked = 0,
+                undoLabel = null,
+                isPoolLoading = true,
+                poolLoadFailed = false,
+                isPoolLoaded = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+
+        assertEquals(
+            "Couldn't load manga list",
+            tierBoardHeaderTitle(
+                ranked = 0,
+                total = 0,
+                isPoolLoading = false,
+                poolLoadFailed = true,
+                mediaType = TierMediaType.MANGA
+            )
+        )
+        assertEquals(
+            "Your manga list did not load",
+            tierBoardHeaderSubtitle(
+                total = 0,
+                unranked = 0,
+                undoLabel = null,
+                isPoolLoading = false,
+                poolLoadFailed = true,
+                isPoolLoaded = false,
+                mediaType = TierMediaType.MANGA
+            )
+        )
+
+        assertEquals(
+            "Nothing to rank yet",
+            tierBoardHeaderTitle(
+                ranked = 0,
+                total = 0,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "There is nothing on your library to rank",
+            tierBoardHeaderSubtitle(
+                total = 0,
+                unranked = 0,
+                undoLabel = null,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                isPoolLoaded = true,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+    }
+
+    @Test
+    fun `the board header keeps ranked progress when a pool is unavailable`() {
+        assertEquals(
+            "3 ranked",
+            tierBoardHeaderTitle(
+                ranked = 3,
+                total = 0,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "Your library has not loaded",
+            tierBoardHeaderSubtitle(
+                total = 0,
+                unranked = 0,
+                undoLabel = null,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                isPoolLoaded = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "2 of 10 ranked",
+            tierBoardHeaderTitle(
+                ranked = 2,
+                total = 10,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.MANGA
+            )
+        )
+        assertEquals(
+            "8 titles still unranked",
+            tierBoardHeaderSubtitle(
+                total = 10,
+                unranked = 8,
+                undoLabel = null,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                isPoolLoaded = true,
+                mediaType = TierMediaType.MANGA
+            )
+        )
+    }
+
+    @Test
+    fun `the board empty state explains loading, failure and empty pools`() {
+        assertEquals(
+            "Loading your library so you can rank it.",
+            tierBoardEmptyStateMessage(
+                candidatesCount = 0,
+                isPoolLoading = true,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "Your manga list did not load, so there is nothing to rank yet.",
+            tierBoardEmptyStateMessage(
+                candidatesCount = 0,
+                isPoolLoading = false,
+                poolLoadFailed = true,
+                mediaType = TierMediaType.MANGA
+            )
+        )
+        assertEquals(
+            "There is nothing on your library to rank yet.",
+            tierBoardEmptyStateMessage(
+                candidatesCount = 0,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+        assertEquals(
+            "Rank 12 titles by their AniList score, or place them yourself.",
+            tierBoardEmptyStateMessage(
+                candidatesCount = 12,
+                isPoolLoading = false,
+                poolLoadFailed = false,
+                mediaType = TierMediaType.ANIME
+            )
+        )
+    }
+
 }

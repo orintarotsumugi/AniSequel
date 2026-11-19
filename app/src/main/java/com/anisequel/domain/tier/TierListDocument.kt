@@ -139,10 +139,16 @@ data class TierListDocument(
      */
     val updatedAt: Long = 0L
 ) {
-    /** Titles with a tier. The number the library card counts. */
-    val rankedCount: Int get() = assignment.tierIdByMediaId.size
+    /**
+     * Titles filed under a tier that still exists.
+     *
+     * Placements in a removed tier are orphans: they are not drawn on the board and
+     * are cleaned out of the live assignment, so counting them here would make a
+     * list with only orphaned placements look ranked.
+     */
+    val rankedCount: Int get() = assignment.withoutOrphans(tiers).tierIdByMediaId.size
 
-    val isEmpty: Boolean get() = assignment.isEmpty
+    val isEmpty: Boolean get() = assignment.withoutOrphans(tiers).isEmpty
 }
 
 /**

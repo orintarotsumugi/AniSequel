@@ -195,10 +195,17 @@ class TierListViewModel(
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    /** Whether this account has an anime list to rank at all. See [TierLibraryPools]. */
+    val canLoadAnime: Boolean get() = pools.canLoadAnime
+
     /** Whether this account has a manga list to rank at all. See [TierLibraryPools]. */
     val canLoadManga: Boolean get() = pools.canLoadManga
 
+    val isLoadingAnime: StateFlow<Boolean> = pools.isLoadingAnime
+
     val isLoadingManga: StateFlow<Boolean> = pools.isLoadingManga
+
+    val animeLoadFailed: StateFlow<Boolean> = pools.animeLoadFailed
 
     val mangaLoadFailed: StateFlow<Boolean> = pools.mangaLoadFailed
 
@@ -214,6 +221,9 @@ class TierListViewModel(
         viewModelScope.launch { preferences.migrateLegacyList() }
         pools.loadAnime()
     }
+
+    /** Reads or retries the viewer's anime list. */
+    fun loadAnimeLibrary() = pools.loadAnime()
 
     /** Reads the viewer's manga list once, the first time its shelf is opened. */
     fun loadMangaLibrary() = pools.loadManga()
