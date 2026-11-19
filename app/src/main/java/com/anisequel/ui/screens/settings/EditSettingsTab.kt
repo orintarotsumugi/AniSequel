@@ -508,7 +508,7 @@ private fun GifKeyEditor(
     onSave: (String) -> Unit
 ) {
     var editing by rememberSaveable(provider) { mutableStateOf("") }
-    var saved by remember(provider) { mutableStateOf(false) }
+    var feedback by remember(provider) { mutableStateOf<GifKeyFeedback?>(null) }
     val trimmed = editing.trim()
 
     SettingsFieldLabel(text = provider.keyLabel)
@@ -517,16 +517,19 @@ private fun GifKeyEditor(
         value = editing,
         onValueChange = {
             editing = it
-            saved = false
+            feedback = null
         },
         singleLine = true,
         placeholder = { Text(if (currentKey != null) "Stored - paste a new one to replace it" else "Not set") },
         supportingText = {
             Text(
-                text = when {
-                    saved -> "Saved on this device, encrypted."
-                    currentKey != null -> "A key is stored. Leave this empty and save to clear it."
-                    else -> provider.keyHint
+                text = when (feedback) {
+                    GifKeyFeedback.SAVED -> "Saved on this device, encrypted."
+                    GifKeyFeedback.CLEARED -> "Key removed from this device."
+                    null -> when {
+                        currentKey != null -> "A key is stored. Leave this empty and save to clear it."
+                        else -> provider.keyHint
+                    }
                 },
                 style = MaterialTheme.typography.bodySmall
             )
@@ -543,7 +546,7 @@ private fun GifKeyEditor(
             onClick = {
                 onSave("")
                 editing = ""
-                saved = true
+                feedback = GifKeyFeedback.CLEARED
             },
             enabled = currentKey != null,
             variant = SettingsButtonVariant.Outlined,
@@ -551,16 +554,27 @@ private fun GifKeyEditor(
             testTag = "settings_gif_key_clear"
         )
         SettingsButton(
-            text = if (saved) "Saved" else "Save",
+            text = when (feedback) {
+                GifKeyFeedback.SAVED -> "Saved"
+                GifKeyFeedback.CLEARED -> "Cleared"
+                null -> "Save"
+            },
             onClick = {
                 onSave(trimmed)
                 editing = ""
-                saved = true
+                feedback = GifKeyFeedback.SAVED
             },
+            icon = if (feedback != null) Icons.Filled.CheckCircleOutline else null,
             enabled = trimmed.isNotBlank(),
-            variant = if (saved) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
+            variant = if (feedback == GifKeyFeedback.SAVED) {
+                SettingsButtonVariant.Tonal
+            } else {
+                SettingsButtonVariant.Filled
+            },
             modifier = Modifier.weight(1f),
             testTag = "settings_gif_key_save"
         )
     }
 }
+
+private enum class GifKeyFeedback { SAVED, CLEARED }

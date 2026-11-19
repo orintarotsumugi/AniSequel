@@ -110,6 +110,86 @@
         {
           "title": "Tier board headers and empty states explain pool status",
           "detail": "An open tier board now distinguishes an actively loading library, a failed load, and a genuinely empty library, and offers a retry when the pool did not load."
+        },
+        {
+          "title": "Library layout search opens the correct settings",
+          "detail": "Searching for library layout now opens Interface > Library view, where the list layout controls live, instead of the Library & dashboard page."
+        },
+        {
+          "title": "Whitespace-only settings searches no longer leave hidden search state",
+          "detail": "A search field containing only spaces is treated as empty, so Back and the clear control behave the same as the visible results."
+        },
+        {
+          "title": "Clearing a GIF provider key no longer reports it as saved",
+          "detail": "Removing a stored GIF search key now records a cleared result instead of showing a saved confirmation."
+        },
+        {
+          "title": "GIF key feedback tracks saved and cleared actions separately",
+          "detail": "The GIF key editor now keeps save and clear feedback distinct, so its status and button state match the last action."
+        },
+        {
+          "title": "App lock waits for the saved setting before it can be changed",
+          "detail": "The app lock toggle no longer uses a default-off placeholder, preventing changes based on a setting that has not loaded yet."
+        },
+        {
+          "title": "List refresh waits for the saved interval before it can be changed",
+          "detail": "The refresh interval choices and reset action appear only after the saved interval loads, instead of starting from the default."
+        },
+        {
+          "title": "Arriving rows wait for saved settings before they can be changed",
+          "detail": "The arriving section switches no longer use default states before your saved dashboard preferences load."
+        },
+        {
+          "title": "Top bar shortcuts wait for saved settings before they can be changed",
+          "detail": "The top bar shortcut switches no longer use default states before your saved navigation preferences load."
+        },
+        {
+          "title": "Bottom bar tabs wait for saved settings before they can be changed",
+          "detail": "The bottom bar tab switches no longer use default states before your saved navigation preferences load."
+        },
+        {
+          "title": "Search page and device controls wait for saved settings before they can be changed",
+          "detail": "Search page type switches and Device Manager controls no longer use default values before your saved preferences load."
+        },
+        {
+          "title": "Connection check dialog shows one Close action in touch-grass state",
+          "detail": "After choosing to touch grass, the dialog no longer shows a duplicate Close button alongside the state’s own close action."
+        },
+        {
+          "title": "Updates page subtitle matches the page content",
+          "detail": "The Updates settings row and page now describe app updates and release notes, instead of listing diagnostics that live on About."
+        },
+        {
+          "title": "Library layout search result labels the correct view",
+          "detail": "The library layout search result now points to the Interface library view with matching label and description."
+        },
+        {
+          "title": "GIF key editor shows clear removal feedback",
+          "detail": "After removing a stored GIF key, the editor now says the key was removed from this device instead of showing a saved confirmation."
+        },
+        {
+          "title": "App lock card shows a loading state before the setting is available",
+          "detail": "The app lock card reads the saved preference before showing its toggle, avoiding a misleading default state."
+        },
+        {
+          "title": "List refresh card shows a loading state before the interval is available",
+          "detail": "The refresh interval card reads the saved choice before showing selected chips or a reset action."
+        },
+        {
+          "title": "Arriving rows card shows a loading state before settings are available",
+          "detail": "The arriving rows card reads saved preferences before showing switch positions."
+        },
+        {
+          "title": "Navigation settings cards show loading states before preferences are available",
+          "detail": "The top bar, bottom bar, and search page cards read saved preferences before showing their switches."
+        },
+        {
+          "title": "Device settings cards show loading states before preferences are available",
+          "detail": "Device performance and display cards read saved settings before showing controls, preventing brief default values."
+        },
+        {
+          "title": "Settings search clear control appears only for real search text",
+          "detail": "The search field shows its clear button only when the query contains non-whitespace text."
         }
       ]
     },

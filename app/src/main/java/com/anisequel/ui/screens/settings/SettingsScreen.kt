@@ -182,10 +182,11 @@ internal enum class SettingsPage(
     ACCOUNT("AniList account", "Connect AniList, manage the session and sign out", AppVectorIcons.SectionAniList),
     // Updates is its own page rather than the top of About: the update check and
     // the release notes are the two cards a reader comes back to, and they were
-    // sharing a scroll with the crash report and the privacy policy.
+    // sharing a scroll with the crash report and the privacy policy. Diagnostics
+    // live on About; this page is the check and the notes.
     UPDATES(
         "Updates",
-        "Installed version, app updates and diagnostics",
+        "App updates and release notes",
         AppVectorIcons.SystemUpdate
     ),
     // "and links" is not padding: the page carries the repository and the issue
@@ -340,7 +341,7 @@ fun SettingsScreen(
                 interfaceTarget = null
                 themeTarget = null
             }
-            searchQuery.isNotEmpty() -> searchQuery = ""
+            searchQuery.isNotBlank() -> searchQuery = ""
             else -> onNavigateBack()
         }
     }

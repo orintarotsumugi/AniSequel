@@ -3,6 +3,8 @@ package com.anisequel.ui.screens.settings
 import android.app.KeyguardManager
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -61,19 +63,9 @@ fun DeviceManagerTab(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val settings by seasonalPreferences.settings.collectAsState(initial = SeasonalSettings())
-    val themeSettings by themePreferences.settings.collectAsState(
-        initial = ThemePreferences.ThemeSettings(
-            themeMode = ThemeMode.DEFAULT,
-            useDynamicColor = false
-        )
-    )
+    val seasonalSettings by seasonalPreferences.settings.collectAsState(initial = null)
+    val themeSettings by themePreferences.settings.collectAsState(initial = null)
     val ceiling by devicePreferences.ceiling.collectAsState()
-
-    val detected = remember { detectSeasonalQualityTier(context) }
-    val resolvedQuality = remember(settings.quality, detected) {
-        settings.quality.resolve(detected)
-    }
 
     // Re-read on resume, the same way the card did on the Seasonal page: a reader
     // who unlocks a higher refresh rate in the system settings should find the pill
@@ -87,37 +79,73 @@ fun DeviceManagerTab(
     }
 
     SettingsScrollColumn(modifier) {
-        DeviceCard(
-            rate = settings.frameRate,
-            offered = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz),
-            resolvedHz = seasonalFrameHz(
-                rate = settings.frameRate,
-                tierHz = resolvedQuality.frameHz,
-                deviceHz = screen.currentHz
-            ),
-            screen = screen,
-            tierName = SeasonalQuality.of(resolvedQuality).displayName.lowercase(),
-            ceiling = ceiling,
-            usedBytes = usedBytes,
-            onRateChange = { rate ->
-                scope.launch { seasonalPreferences.setFrameRate(rate) }
-            },
-            onCeilingChange = { option ->
-                // Synchronous by design: one string in a preferences file, whose value
-                // the image loader reads at the next process start.
-                devicePreferences.setCeiling(option)
-            },
-            onClearCache = {
-                context.clearCoverCache()
-                usedBytes = context.coverCacheBytes()
+        if (seasonalSettings == null) {
+            SectionCard(
+                title = "Device",
+                icon = AppVectorIcons.DevicePhone,
+                subtitle = "Loading device and performance settings"
+            ) {
+                Text(
+                    text = "Reading your saved performance settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-        )
+        } else {
+            val settings = seasonalSettings ?: SeasonalSettings()
+            val detected = remember { detectSeasonalQualityTier(context) }
+            val resolvedQuality = remember(settings.quality, detected) {
+                settings.quality.resolve(detected)
+            }
+            DeviceCard(
+                rate = settings.frameRate,
+                offered = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz),
+                resolvedHz = seasonalFrameHz(
+                    rate = settings.frameRate,
+                    tierHz = resolvedQuality.frameHz,
+                    deviceHz = screen.currentHz
+                ),
+                screen = screen,
+                tierName = SeasonalQuality.of(resolvedQuality).displayName.lowercase(),
+                ceiling = ceiling,
+                usedBytes = usedBytes,
+                onRateChange = { rate ->
+                    scope.launch { seasonalPreferences.setFrameRate(rate) }
+                },
+                onCeilingChange = { option ->
+                    // Synchronous by design: one string in a preferences file, whose value
+                    // the image loader reads at the next process start.
+                    devicePreferences.setCeiling(option)
+                },
+                onClearCache = {
+                    context.clearCoverCache()
+                    usedBytes = context.coverCacheBytes()
+                }
+            )
+        }
 
-        DisplaySection(
-            themePreferences = themePreferences,
-            settings = themeSettings,
-            scope = scope
-        )
+        if (themeSettings == null) {
+            SectionCard(
+                title = "Display",
+                icon = AppVectorIcons.FullscreenExpand,
+                subtitle = "Full screen and the system bars"
+            ) {
+                Text(
+                    text = "Reading your saved display settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            DisplaySection(
+                themePreferences = themePreferences,
+                settings = themeSettings ?: ThemePreferences.ThemeSettings(
+                    themeMode = ThemeMode.DEFAULT,
+                    useDynamicColor = false
+                ),
+                scope = scope
+            )
+        }
 
         AppLockCard(appLockPreferences)
 
@@ -145,7 +173,7 @@ fun DeviceManagerTab(
 private fun AppLockCard(appLockPreferences: AppLockPreferences) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val enabled by appLockPreferences.enabled.collectAsState(initial = false)
+    val enabledState by appLockPreferences.enabled.collectAsState(initial = null)
     val deviceHasSecureLock = remember {
         context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
     }
@@ -155,19 +183,27 @@ private fun AppLockCard(appLockPreferences: AppLockPreferences) {
         icon = AppVectorIcons.Privacy,
         subtitle = "Who can open AniSequel"
     ) {
-        SwitchRow(
-            title = "Lock AniSequel",
-            subtitle = if (deviceHasSecureLock) {
-                "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
-            } else {
-                "Set a screen lock on this device first - there is nothing to ask for yet."
-            },
-            checked = enabled,
-            enabled = deviceHasSecureLock,
-            onCheckedChange = { locked ->
-                scope.launch { appLockPreferences.setEnabled(locked) }
-            },
-            modifier = Modifier.testTag("app_lock_switch")
-        )
+        if (enabledState == null) {
+            Text(
+                text = "Reading your app lock setting.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SwitchRow(
+                title = "Lock AniSequel",
+                subtitle = if (deviceHasSecureLock) {
+                    "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
+                } else {
+                    "Set a screen lock on this device first - there is nothing to ask for yet."
+                },
+                checked = enabledState == true,
+                enabled = deviceHasSecureLock,
+                onCheckedChange = { locked ->
+                    scope.launch { appLockPreferences.setEnabled(locked) }
+                },
+                modifier = Modifier.testTag("app_lock_switch")
+            )
+        }
     }
 }

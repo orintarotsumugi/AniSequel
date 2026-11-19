@@ -197,7 +197,7 @@ fun ConnectionCheckDialog(
                     )
                 }
 
-                if (!celebrating) {
+                if (!celebrating && !touchingGrass) {
                     Spacer(modifier = Modifier.height(12.dp))
                     TextButton(onClick = onDismiss) { Text("Close") }
                 }

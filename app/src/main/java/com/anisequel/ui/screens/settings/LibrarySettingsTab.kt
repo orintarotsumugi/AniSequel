@@ -91,41 +91,45 @@ fun LibrarySettingsTab(
 @Composable
 private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
-    )
-    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
-    )
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(initial = null)
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(initial = null)
 
     SectionCard(
         title = "Top bar",
         icon = AppVectorIcons.Tune,
         subtitle = "Shortcuts beside Settings and Profile"
     ) {
-        SwitchRow(
-            title = "Tier lists shortcut",
-            subtitle = "Show the trophy in the top bar in both layouts. This does " +
-                "not add a Tiers tab; the two switches are separate.",
-            checked = tierTopBar,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setTierTopBar(enabled) }
-            },
-            modifier = Modifier.testTag("tier_list_top_bar_switch")
-        )
+        if (searchTopBar == null || tierTopBar == null) {
+            Text(
+                text = "Reading your top bar shortcuts.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SwitchRow(
+                title = "Tier lists shortcut",
+                subtitle = "Show the trophy in the top bar in both layouts. This does " +
+                    "not add a Tiers tab; the two switches are separate.",
+                checked = tierTopBar == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setTierTopBar(enabled) }
+                },
+                modifier = Modifier.testTag("tier_list_top_bar_switch")
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        SwitchRow(
-            title = "Catalogue search shortcut",
-            subtitle = "Show the magnifier in the top bar in both layouts. This does " +
-                "not add a Search tab; the two switches are separate.",
-            checked = searchTopBar,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
-            },
-            modifier = Modifier.testTag("search_top_bar_switch")
-        )
+            SwitchRow(
+                title = "Catalogue search shortcut",
+                subtitle = "Show the magnifier in the top bar in both layouts. This does " +
+                    "not add a Search tab; the two switches are separate.",
+                checked = searchTopBar == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
+                },
+                modifier = Modifier.testTag("search_top_bar_switch")
+            )
+        }
     }
 }
 
@@ -148,46 +152,50 @@ private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
 @Composable
 private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val tierListTab by mainTabPreferences.tierListTab.collectAsState(
-        initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
-    )
-    val searchTab by mainTabPreferences.searchTab.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_TAB
-    )
+    val tierListTab by mainTabPreferences.tierListTab.collectAsState(initial = null)
+    val searchTab by mainTabPreferences.searchTab.collectAsState(initial = null)
 
     SectionCard(
         title = "Bottom bar",
         icon = AppVectorIcons.Trophy,
         subtitle = "Which pages the bar switches between"
     ) {
-        SwitchRow(
-            title = "Tier lists tab",
-            subtitle = "Add Tiers between Library and Profile. Turning this off hides " +
-                "only the tab; the trophy shortcut and your lists remain available.",
-            checked = tierListTab,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setTierListTab(enabled) }
-            },
-            modifier = Modifier.testTag("tier_list_tab_switch")
-        )
+        if (tierListTab == null || searchTab == null) {
+            Text(
+                text = "Reading your bottom bar pages.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SwitchRow(
+                title = "Tier lists tab",
+                subtitle = "Add Tiers between Library and Profile. Turning this off hides " +
+                    "only the tab; the trophy shortcut and your lists remain available.",
+                checked = tierListTab == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setTierListTab(enabled) }
+                },
+                modifier = Modifier.testTag("tier_list_tab_switch")
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // The search tab is the one optional page with no second door: the tier
-        // list is reachable from the Library's trophy and the profile's row, but
-        // catalogue search exists here and nowhere else. The subtitle says so,
-        // because a switch that reads like a shortcut for something already
-        // available would be understood as cosmetic.
-        SwitchRow(
-            title = "Search tab",
-            subtitle = "Add Search to the bar. Turning this off hides only the tab; " +
-                "the top-bar shortcut still opens the page.",
-            checked = searchTab,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setSearchTab(enabled) }
-            },
-            modifier = Modifier.testTag("search_tab_switch")
-        )
+            // The search tab is the one optional page with no second door: the tier
+            // list is reachable from the Library's trophy and the profile's row, but
+            // catalogue search exists here and nowhere else. The subtitle says so,
+            // because a switch that reads like a shortcut for something already
+            // available would be understood as cosmetic.
+            SwitchRow(
+                title = "Search tab",
+                subtitle = "Add Search to the bar. Turning this off hides only the tab; " +
+                    "the top-bar shortcut still opens the page.",
+                checked = searchTab == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setSearchTab(enabled) }
+                },
+                modifier = Modifier.testTag("search_tab_switch")
+            )
+        }
     }
 }
 
@@ -202,45 +210,49 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
 @Composable
 private fun SearchPageSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
-    )
-    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
-    )
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(initial = null)
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(initial = null)
 
     SectionCard(
         title = "Search page",
         icon = AppVectorIcons.Search,
         subtitle = "What the catalogue search can find"
     ) {
-        SwitchRow(
-            title = "Anime search",
-            subtitle = "Offer the anime half of the catalogue on the Search page.",
-            checked = searchAnimeEnabled,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setSearchAnimeEnabled(enabled) }
-            },
-            modifier = Modifier.testTag("search_anime_switch")
-        )
+        if (searchAnimeEnabled == null || searchMangaEnabled == null) {
+            Text(
+                text = "Reading your search page options.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            SwitchRow(
+                title = "Anime search",
+                subtitle = "Offer the anime half of the catalogue on the Search page.",
+                checked = searchAnimeEnabled == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setSearchAnimeEnabled(enabled) }
+                },
+                modifier = Modifier.testTag("search_anime_switch")
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Separate namespaces, separate switches. The page asks one at a time,
-        // and this is where a reader says which halves exist on their device at
-        // all. Both off also hides the tab and the shortcut (see `enabledMainTabs`
-        // and the host's composition local), because a search page with no
-        // catalogue to search is an empty room.
-        SwitchRow(
-            title = "Manga search",
-            subtitle = "Offer the manga half of the catalogue on the Search page. " +
-                "Turning both halves off hides the Search tab and its shortcut.",
-            checked = searchMangaEnabled,
-            onCheckedChange = { enabled ->
-                scope.launch { mainTabPreferences.setSearchMangaEnabled(enabled) }
-            },
-            modifier = Modifier.testTag("search_manga_switch")
-        )
+            // Separate namespaces, separate switches. The page asks one at a time,
+            // and this is where a reader says which halves exist on their device at
+            // all. Both off also hides the tab and the shortcut (see `enabledMainTabs`
+            // and the host's composition local), because a search page with no
+            // catalogue to search is an empty room.
+            SwitchRow(
+                title = "Manga search",
+                subtitle = "Offer the manga half of the catalogue on the Search page. " +
+                    "Turning both halves off hides the Search tab and its shortcut.",
+                checked = searchMangaEnabled == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setSearchMangaEnabled(enabled) }
+                },
+                modifier = Modifier.testTag("search_manga_switch")
+            )
+        }
     }
 }
 
@@ -345,9 +357,7 @@ private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
 @Composable
 private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferences) {
     val scope = rememberCoroutineScope()
-    val interval by refreshIntervalPreferences.interval.collectAsState(
-        initial = RefreshInterval.DEFAULT
-    )
+    val interval by refreshIntervalPreferences.interval.collectAsState(initial = null)
 
     SectionCard(
         title = "List refresh",
@@ -363,48 +373,57 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
         )
         Spacer(modifier = Modifier.height(14.dp))
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.testTag("refresh_interval_row")
-        ) {
-            RefreshInterval.entries.forEach { option ->
-                RefreshIntervalChip(
-                    interval = option,
-                    selected = option == interval,
-                    onClick = { scope.launch { refreshIntervalPreferences.setInterval(option) } }
-                )
+        if (interval == null) {
+            Text(
+                text = "Reading your refresh interval.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val selectedInterval = interval ?: RefreshInterval.DEFAULT
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.testTag("refresh_interval_row")
+            ) {
+                RefreshInterval.entries.forEach { option ->
+                    RefreshIntervalChip(
+                        interval = option,
+                        selected = option == selectedInterval,
+                        onClick = { scope.launch { refreshIntervalPreferences.setInterval(option) } }
+                    )
+                }
             }
-        }
 
-        // Shown only once the interval is something other than the default, so the
-        // card grows a button the moment a chip is chosen. A bare `if` did that by
-        // appearing fully drawn on the next frame and shoving the card's bottom edge
-        // down instantly; the spring expansion makes the row the thing that moves.
-        // `FastSpatialSize` rather than the `Int` token: `expandVertically` is typed
-        // on `FiniteAnimationSpec<IntSize>`, because what it animates is the row's
-        // measured height rather than a count. The `Int` token looks like the closer
-        // match and does not compile.
-        AnimatedVisibility(
-            visible = interval != RefreshInterval.DEFAULT,
-            enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
-            exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
-                shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
-        ) {
-            Column {
-                Spacer(modifier = Modifier.height(16.dp))
-                SettingsButton(
-                    // Named from the enum rather than typed: "Use AniSequel's
-                    // default" made the reader go and find out what the default was,
-                    // and it appeared right under the chip that already said it.
-                    text = "Reset to ${RefreshInterval.DEFAULT.displayName}",
-                    onClick = { scope.launch { refreshIntervalPreferences.reset() } },
-                    icon = AppVectorIcons.Restore,
-                    variant = SettingsButtonVariant.Text,
-                    fillWidth = true,
-                    testTag = "reset_refresh_interval_button"
-                )
+            // Shown only once the interval is something other than the default, so the
+            // card grows a button the moment a chip is chosen. A bare `if` did that by
+            // appearing fully drawn on the next frame and shoving the card's bottom edge
+            // down instantly; the spring expansion makes the row the thing that moves.
+            // `FastSpatialSize` rather than the `Int` token: `expandVertically` is typed
+            // on `FiniteAnimationSpec<IntSize>`, because what it animates is the row's
+            // measured height rather than a count. The `Int` token looks like the closer
+            // match and does not compile.
+            AnimatedVisibility(
+                visible = selectedInterval != RefreshInterval.DEFAULT,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingsButton(
+                        // Named from the enum rather than typed: "Use AniSequel's
+                        // default" made the reader go and find out what the default was,
+                        // and it appeared right under the chip that already said it.
+                        text = "Reset to ${RefreshInterval.DEFAULT.displayName}",
+                        onClick = { scope.launch { refreshIntervalPreferences.reset() } },
+                        icon = AppVectorIcons.Restore,
+                        variant = SettingsButtonVariant.Text,
+                        fillWidth = true,
+                        testTag = "reset_refresh_interval_button"
+                    )
+                }
             }
         }
     }
@@ -423,9 +442,7 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
 @Composable
 private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
     val scope = rememberCoroutineScope()
-    val settings by arrivingPreferences.settings.collectAsState(
-        initial = ArrivingPreferences.ArrivingSettings()
-    )
+    val settings by arrivingPreferences.settings.collectAsState(initial = null)
 
     SectionCard(
         // "Dashboard" was the name of the page these rows live on, not of the
@@ -436,36 +453,45 @@ private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
         icon = AppVectorIcons.Tv,
         subtitle = "The airing and upcoming rows above search"
     ) {
-        SwitchRow(
-            title = "Currently arriving",
-            subtitle = "Show airing and upcoming rows above search.",
-            checked = settings.showArrivingSection,
-            onCheckedChange = { enabled ->
-                scope.launch { arrivingPreferences.setShowArrivingSection(enabled) }
-            },
-            modifier = Modifier.testTag("arriving_section_switch")
-        )
-        SwitchRow(
-            title = "Compact arriving rows",
-            subtitle = "Plain rows that load no artwork - less data, less battery.",
-            checked = settings.compactArrivingCards,
-            enabled = settings.showArrivingSection,
-            onCheckedChange = { compact ->
-                scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
-            },
-            modifier = Modifier.testTag("compact_arriving_switch")
-        )
-        SwitchRow(
-            title = "Separate airing and upcoming",
-            subtitle = "Two labelled rows instead of one. Off keeps the section to " +
-                "a single strip; the cards still say which group they belong to.",
-            checked = settings.separateArrivingGroups,
-            enabled = settings.showArrivingSection,
-            onCheckedChange = { separate ->
-                scope.launch { arrivingPreferences.setSeparateArrivingGroups(separate) }
-            },
-            modifier = Modifier.testTag("separate_arriving_switch")
-        )
+        if (settings == null) {
+            Text(
+                text = "Reading your arriving rows settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            val arrivingSettings = settings ?: ArrivingPreferences.ArrivingSettings()
+            SwitchRow(
+                title = "Currently arriving",
+                subtitle = "Show airing and upcoming rows above search.",
+                checked = arrivingSettings.showArrivingSection,
+                onCheckedChange = { enabled ->
+                    scope.launch { arrivingPreferences.setShowArrivingSection(enabled) }
+                },
+                modifier = Modifier.testTag("arriving_section_switch")
+            )
+            SwitchRow(
+                title = "Compact arriving rows",
+                subtitle = "Plain rows that load no artwork - less data, less battery.",
+                checked = arrivingSettings.compactArrivingCards,
+                enabled = arrivingSettings.showArrivingSection,
+                onCheckedChange = { compact ->
+                    scope.launch { arrivingPreferences.setCompactArrivingCards(compact) }
+                },
+                modifier = Modifier.testTag("compact_arriving_switch")
+            )
+            SwitchRow(
+                title = "Separate airing and upcoming",
+                subtitle = "Two labelled rows instead of one. Off keeps the section to " +
+                    "a single strip; the cards still say which group they belong to.",
+                checked = arrivingSettings.separateArrivingGroups,
+                enabled = arrivingSettings.showArrivingSection,
+                onCheckedChange = { separate ->
+                    scope.launch { arrivingPreferences.setSeparateArrivingGroups(separate) }
+                },
+                modifier = Modifier.testTag("separate_arriving_switch")
+            )
+        }
     }
 }
 

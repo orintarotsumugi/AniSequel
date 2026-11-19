@@ -28,6 +28,15 @@ class SettingsSearchTest {
     }
 
     @Test
+    fun `library layout search opens the interface library view`() {
+        val result = SettingsSearch.search("library layout").first()
+
+        assertEquals("Library layout", result.title)
+        assertEquals(SettingsPage.UI, result.page)
+        assertEquals(InterfaceSection.LIBRARY, result.interfaceSection)
+    }
+
+    @Test
     fun `multi-word queries use the visible copy and aliases`() {
         val result = SettingsSearch.search("dark mode").first()
 

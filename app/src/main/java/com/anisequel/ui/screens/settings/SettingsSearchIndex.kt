@@ -350,13 +350,14 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "library_layout",
-                page = SettingsPage.LIBRARY,
+                page = SettingsPage.UI,
+                interfaceSection = InterfaceSection.LIBRARY,
                 title = "Library layout",
-                subtitle = "The shape of your saved list",
-                eyebrow = "Library & dashboard",
-                icon = AppVectorIcons.Library,
-                keywords = "grid list table grouped covers shelf columns",
-                priority = 20
+                subtitle = "Poster grid, cover wall, shelf, list, grouped and table",
+                eyebrow = "Interface · Library view",
+                icon = AppVectorIcons.ViewGrid,
+                keywords = "grid list table grouped covers shelf columns layout posters",
+                priority = 25
             )
         )
         add(

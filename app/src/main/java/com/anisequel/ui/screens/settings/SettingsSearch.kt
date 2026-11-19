@@ -73,7 +73,7 @@ internal fun SettingsSearchBar(
                     contentDescription = null
                 )
             },
-            trailingIcon = if (query.isNotEmpty()) {
+            trailingIcon = if (query.isNotBlank()) {
                 {
                     IconButton(onClick = { onQueryChange("") }) {
                         Icon(
