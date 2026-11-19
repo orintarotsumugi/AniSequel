@@ -72,6 +72,19 @@ class ConversationMessagesTest {
     }
 
     @Test
+    fun `an undated conversation row does not appear as the newest message`() {
+        val state = state(
+            received = listOf(message(2, from = OTHER, to = VIEWER, at = 100)),
+            sent = listOf(message(1, from = VIEWER, to = OTHER, at = 0).copy(createdAt = null))
+        )
+        val thread = com.anisequel.ui.viewmodel.conversationMessages(state, OTHER, VIEWER)
+        // Kept before dated rows in the oldest-first timeline so it cannot be
+        // mistaken for a recent message or chosen as the conversation to open.
+        assertEquals(listOf(1, 2), thread.map { it.id })
+        assertEquals("the newest dated message stays last", 2, thread.last().id)
+    }
+
+    @Test
     fun `a message that arrived on both halves is drawn once`() {
         val twice = message(1, from = VIEWER, to = OTHER, at = 100)
         val state = state(received = listOf(twice), sent = listOf(twice))

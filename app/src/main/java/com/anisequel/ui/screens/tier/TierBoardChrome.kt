@@ -63,6 +63,57 @@ import com.anisequel.ui.theme.AniSequelTheme
  * the length one reviewer can hold in a pass.
  */
 
+/** The title line of the board header, honest about pool state. */
+internal fun tierBoardHeaderTitle(
+    ranked: Int,
+    total: Int,
+    isPoolLoading: Boolean,
+    poolLoadFailed: Boolean,
+    mediaType: TierMediaType
+): String = when {
+    total > 0 -> "$ranked of $total ranked"
+    ranked > 0 -> "$ranked ranked"
+    isPoolLoading -> "Loading ${mediaType.libraryLabel}"
+    poolLoadFailed -> "Couldn't load ${mediaType.libraryLabel}"
+    else -> "Nothing to rank yet"
+}
+
+/** The subtitle line of the board header, honest about pool state. */
+internal fun tierBoardHeaderSubtitle(
+    total: Int,
+    unranked: Int,
+    undoLabel: String?,
+    isPoolLoading: Boolean,
+    poolLoadFailed: Boolean,
+    isPoolLoaded: Boolean,
+    mediaType: TierMediaType
+): String = when {
+    undoLabel != null -> "Last: $undoLabel"
+    isPoolLoading -> "Your ${mediaType.libraryLabel} is still loading"
+    poolLoadFailed -> "Your ${mediaType.libraryLabel} did not load"
+    total == 0 && isPoolLoaded -> "There is nothing on your ${mediaType.libraryLabel} to rank"
+    total == 0 -> "Your ${mediaType.libraryLabel} has not loaded"
+    unranked == 0 -> "Every title has a tier"
+    unranked == 1 -> "1 title still unranked"
+    else -> "$unranked titles still unranked"
+}
+
+/** The main explanation in the board's empty state. */
+internal fun tierBoardEmptyStateMessage(
+    candidatesCount: Int,
+    isPoolLoading: Boolean,
+    poolLoadFailed: Boolean,
+    mediaType: TierMediaType
+): String = when {
+    isPoolLoading -> "Loading your ${mediaType.libraryLabel} so you can rank it."
+    poolLoadFailed ->
+        "Your ${mediaType.libraryLabel} did not load, so there is nothing to rank yet."
+    candidatesCount == 0 ->
+        "There is nothing on your ${mediaType.libraryLabel} to rank yet."
+    else ->
+        "Rank $candidatesCount titles by their AniList score, or place them yourself."
+}
+
 /**
  * How far through the library this list is, and the way to add more.
  *
@@ -83,6 +134,9 @@ internal fun TierBoardHeader(
     unranked: Int,
     undoLabel: String?,
     mediaType: TierMediaType = TierMediaType.ANIME,
+    isPoolLoading: Boolean = false,
+    poolLoadFailed: Boolean = false,
+    isPoolLoaded: Boolean = false,
     editable: Boolean = true,
     onAddTitles: () -> Unit
 ) {
@@ -101,14 +155,13 @@ internal fun TierBoardHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = when {
-                        total > 0 -> "$ranked of $total ranked"
-                        // The library arrives after the document does, so a saved
-                        // list can be on screen with nothing to draw it from yet.
-                        // "Nothing to rank yet" would contradict the rows below.
-                        ranked > 0 -> "$ranked ranked"
-                        else -> "Nothing to rank yet"
-                    },
+                    text = tierBoardHeaderTitle(
+                        ranked = ranked,
+                        total = total,
+                        isPoolLoading = isPoolLoading,
+                        poolLoadFailed = poolLoadFailed,
+                        mediaType = mediaType
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -119,13 +172,15 @@ internal fun TierBoardHeader(
                     // showing, which is the same kind of "where am I" fact as the
                     // unranked count, and a second line under the header was a
                     // strip of chrome that pushed the first tier off screen.
-                    text = when {
-                        undoLabel != null -> "Last: $undoLabel"
-                        total == 0 -> "Your ${mediaType.libraryLabel} has not loaded"
-                        unranked == 0 -> "Every title has a tier"
-                        unranked == 1 -> "1 title still unranked"
-                        else -> "$unranked titles still unranked"
-                    },
+                    text = tierBoardHeaderSubtitle(
+                        total = total,
+                        unranked = unranked,
+                        undoLabel = undoLabel,
+                        isPoolLoading = isPoolLoading,
+                        poolLoadFailed = poolLoadFailed,
+                        isPoolLoaded = isPoolLoaded,
+                        mediaType = mediaType
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -442,8 +497,11 @@ internal fun TierEmptyState(
     candidates: List<TierCandidate>,
     unrankedCount: Int,
     isSeeding: Boolean,
+    isPoolLoading: Boolean = false,
+    poolLoadFailed: Boolean = false,
     onSeed: () -> Unit,
     onAddTitles: () -> Unit,
+    onRetryPoolLoad: () -> Unit = {},
     mediaType: TierMediaType = TierMediaType.ANIME
 ) {
     val unscored = remember(candidates) { unseedableCount(candidates) }
@@ -468,21 +526,30 @@ internal fun TierEmptyState(
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            // Named per media type: a manga board whose list is still arriving
-            // must not claim the anime library - the one that did load - is the
-            // thing that has not.
-            text = if (candidates.isEmpty()) {
-                "Your ${mediaType.libraryLabel} has not loaded, so there is nothing " +
-                    "to rank yet."
-            } else {
-                "Rank ${candidates.size} titles by their AniList score, or place them yourself."
-            },
+            // Named per media type, and honest about why there are no candidates:
+            // loading, failed, or genuinely empty are different states.
+            text = tierBoardEmptyStateMessage(
+                candidatesCount = candidates.size,
+                isPoolLoading = isPoolLoading,
+                poolLoadFailed = poolLoadFailed,
+                mediaType = mediaType
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
-        if (unscored > 0) {
+        if (poolLoadFailed) {
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(
+                onClick = onRetryPoolLoad,
+                modifier = Modifier.testTag("tier_board_retry_pool")
+            ) {
+                Text("Try again")
+            }
+        }
+
+        if (unscored > 0 && !isPoolLoading && !poolLoadFailed) {
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
@@ -514,7 +581,7 @@ internal fun TierEmptyState(
             onClick = onSeed,
             icon = AppVectorIcons.Trophy,
             loading = isSeeding,
-            enabled = candidates.isNotEmpty(),
+            enabled = candidates.isNotEmpty() && !isPoolLoading && !poolLoadFailed,
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(10.dp))
@@ -603,5 +670,5 @@ internal fun TierBoardLegend(locked: Boolean = false) {
 internal fun tierListSubtitle(ranked: Int, librarySize: Int): String = when {
     librarySize == 0 -> "Your library has not loaded yet"
     ranked == 0 -> "Nothing ranked yet"
-    else -> "$ranked of $librarySize titles ranked"
+    else -> "$ranked of $librarySize ${if (librarySize == 1) "title" else "titles"} ranked"
 }

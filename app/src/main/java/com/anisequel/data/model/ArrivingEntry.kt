@@ -1,5 +1,7 @@
 package com.anisequel.data.model
 
+import java.util.Locale
+
 /**
  * One of the viewer's own list entries that is arriving: airing right now, or
  * announced and not started yet.
@@ -13,6 +15,8 @@ package com.anisequel.data.model
  */
 data class ArrivingEntry(
     val mediaId: Int,
+    /** AniList's media namespace, because anime and manga ids are independent. */
+    val mediaType: String = "ANIME",
     val title: String,
     val coverUrl: String?,
     /** AniList's dominant colour for the key visual, for the loading placeholder. */
@@ -48,8 +52,14 @@ data class ArrivingEntry(
      * entry - the detail sheet links to it as `MediaNode.pageUrl`, which builds
      * the same URL.
      */
+    /**
+     * Stable identity for list keys and selection, scoped to AniList's media namespace.
+     */
+    val namespaceKey: String
+        get() = "${mediaType.uppercase(Locale.ROOT)}_${mediaId}"
+
     val siteUrl: String
-        get() = "https://anilist.co/anime/$mediaId"
+        get() = "https://anilist.co/${if (mediaType.equals("MANGA", ignoreCase = true)) "manga" else "anime"}/$mediaId"
 
     fun nextAiringCountdown(nowMillis: Long = System.currentTimeMillis()): String? =
         AiringCountdown.format(nextAiringAt, nowMillis)

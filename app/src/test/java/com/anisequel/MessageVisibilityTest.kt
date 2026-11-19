@@ -88,6 +88,17 @@ class MessageVisibilityTest {
         assertTrue(hasHiddenMessages(hidden))
     }
 
+    @Test
+    fun `an undated inbox row is older than every dated row`() {
+        val rows = state(
+            received = listOf(
+                message(1, sent = false, createdAt = null),
+                message(2, sent = false, createdAt = 100)
+            )
+        )
+        assertEquals(listOf(2, 1), visibleMessages(rows).map { it.id })
+    }
+
     /**
      * The dismissal belongs to the row, not to the chip that was selected.
      *

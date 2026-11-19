@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,33 +27,17 @@ import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 
-/** Covers drawn while the first library request is in flight: four rows of three. */
-private const val LIBRARY_SKELETON_COVERS = 12
-
 /** AniList covers are 2:3, the same shape the real grid lays out. */
 private const val LIBRARY_POSTER_ASPECT = 2f / 3f
 
 /**
- * The Library's waiting state, drawn as the grid that is coming.
+ * The Library's waiting state, drawn in the shape of the selected library view.
  *
- * This page used to hand its loading state to the profile's full-screen spinner.
- * On the profile that is right - the page is a header and a handful of rows whose
- * shape changes with the person. On the Library it is not: the page is one thing,
- * a three-column wall of 2:3 posters, and it looks the same for every account. A
- * lone spinner on a page that is about to be a grid also meant the first paint
- * jumped from "one dot in the middle" to "twelve posters plus a filter bar" in a
- * single frame.
- *
- * The header card is the expressive part: the Material 3 morphing loader beside a
- * title and the request's own sentence, on a `primaryContainer` surface. It says
- * *what* is happening - "Connecting to AniList" is different from "Loading your
- * AniList profile" - instead of leaving the reader to guess from a dot. Everything
- * underneath it is the exact shape and spacing of `ProfileLibraryTab`'s grid, so
- * the covers replace the shimmer in place rather than rearranging the page.
- *
- * One shimmer clock for the whole grid, not one per cell. See
- * [rememberShimmerPhase]: twelve independent sweeps would read as a flicker, and
- * each would recompose its own cell every frame.
+ * The skeleton used to assume a 3-column poster grid. That matched only one view
+ * mode: list/table/grouped readers saw a grid placeholder, and shelf/cards/covers
+ * readers saw the wrong column count and caption layout before the real content
+ * arrived. The loading state now follows the configured view mode so the first
+ * real layout replaces placeholders in place.
  */
 @Composable
 fun LibraryLoadingView(
@@ -60,6 +45,7 @@ fun LibraryLoadingView(
     modifier: Modifier = Modifier
 ) {
     val phase = rememberShimmerPhase()
+    val viewMode = com.anisequel.ui.theme.LocalLibraryViewMode.current
 
     Column(
         modifier = modifier
@@ -100,34 +86,89 @@ fun LibraryLoadingView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .testTag("library_loading_grid"),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            userScrollEnabled = false
-        ) {
-            items(LIBRARY_SKELETON_COVERS) { index ->
-                Column {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(LIBRARY_POSTER_ASPECT),
-                        shape = MaterialTheme.shapes.medium,
-                        phase = phase
-                    )
-                    Spacer(modifier = Modifier.height(5.dp))
-                    // The caption under a real poster is one or two lines; this
-                    // varies the widths so twelve cells do not read as a table.
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(if (index % 3 == 0) 0.88f else 0.64f)
-                            .height(10.dp),
-                        phase = phase
-                    )
+        when (viewMode) {
+            com.anisequel.domain.ui.LibraryViewMode.LIST,
+            com.anisequel.domain.ui.LibraryViewMode.TABLE,
+            com.anisequel.domain.ui.LibraryViewMode.GROUPED -> {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("library_loading_grid"),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    repeat(if (viewMode == com.anisequel.domain.ui.LibraryViewMode.TABLE) 7 else 8) { index ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ShimmerBox(
+                                modifier = Modifier.size(width = 40.dp, height = 56.dp),
+                                shape = MaterialTheme.shapes.small,
+                                phase = phase
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                ShimmerBox(
+                                    modifier = Modifier
+                                        .fillMaxWidth(if (index % 3 == 0) 0.72f else 0.54f)
+                                        .height(12.dp),
+                                    phase = phase
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                ShimmerBox(
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.36f)
+                                        .height(10.dp),
+                                    phase = phase
+                                )
+                            }
+                            if (viewMode == com.anisequel.domain.ui.LibraryViewMode.TABLE) {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                ShimmerBox(
+                                    modifier = Modifier.size(width = 36.dp, height = 10.dp),
+                                    phase = phase
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {
+                val columns = viewMode.columns.coerceAtLeast(1)
+                val showCaptions = viewMode != com.anisequel.domain.ui.LibraryViewMode.COVERS &&
+                    viewMode != com.anisequel.domain.ui.LibraryViewMode.SHELF
+                val itemCount = (columns * 4).coerceIn(6, 20)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .testTag("library_loading_grid"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    userScrollEnabled = false
+                ) {
+                    items(itemCount) { index ->
+                        Column {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(LIBRARY_POSTER_ASPECT),
+                                shape = MaterialTheme.shapes.medium,
+                                phase = phase
+                            )
+                            if (showCaptions) {
+                                Spacer(modifier = Modifier.height(5.dp))
+                                ShimmerBox(
+                                    modifier = Modifier
+                                        .fillMaxWidth(if (index % 3 == 0) 0.88f else 0.64f)
+                                        .height(10.dp),
+                                    phase = phase
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

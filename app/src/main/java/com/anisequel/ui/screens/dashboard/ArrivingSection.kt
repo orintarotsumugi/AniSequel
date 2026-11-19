@@ -253,7 +253,13 @@ private fun ArrivingStrip(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        items(items = row.entries, key = { it.mediaId }, contentType = { "arriving_tile" }) { entry ->
+        items(
+            items = row.entries,
+            // Anime and manga ids are separate namespaces. A shared number must
+            // not make LazyRow reuse one tile's remembered state for the other.
+            key = { it.namespaceKey },
+            contentType = { "arriving_tile" }
+        ) { entry ->
             ArrivingCard(
                 entry = entry,
                 nowMillis = nowMillis,

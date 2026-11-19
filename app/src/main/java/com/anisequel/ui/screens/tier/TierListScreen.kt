@@ -96,10 +96,39 @@ fun TierListScreen(
     val undoLabel by viewModel.undoLabel.collectAsStateWithLifecycle()
     val redoLabel by viewModel.redoLabel.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val isLoadingAnime by viewModel.isLoadingAnime.collectAsStateWithLifecycle()
+    val animeLoadFailed by viewModel.animeLoadFailed.collectAsStateWithLifecycle()
     val isLoadingManga by viewModel.isLoadingManga.collectAsStateWithLifecycle()
     val mangaLoadFailed by viewModel.mangaLoadFailed.collectAsStateWithLifecycle()
 
     val document = opened
+
+    fun poolCandidatesFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> animeCandidates
+        TierMediaType.MANGA -> mangaCandidates
+    }
+
+    fun isPoolLoadingFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> isLoadingAnime
+        TierMediaType.MANGA -> isLoadingManga
+    }
+
+    fun poolLoadFailedFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> animeLoadFailed
+        TierMediaType.MANGA -> mangaLoadFailed
+    }
+
+    fun canLoadPoolFor(mediaType: TierMediaType) = when (mediaType) {
+        TierMediaType.ANIME -> viewModel.canLoadAnime
+        TierMediaType.MANGA -> viewModel.canLoadManga
+    }
+
+    fun retryPoolFor(mediaType: TierMediaType) {
+        when (mediaType) {
+            TierMediaType.ANIME -> viewModel.loadAnimeLibrary()
+            TierMediaType.MANGA -> viewModel.loadMangaLibrary()
+        }
+    }
 
     // The bar over this route is the library's, not an open board's - see
     // `showsMainBar`. The host draws the bar and cannot see this screen's state, so
@@ -111,13 +140,12 @@ fun TierListScreen(
         onDispose { onBoardOpenChange(false) }
     }
 
-    // The manga list is fetched the first time its shelf is opened, and again if a
-    // manga board is restored directly without the shelf being touched. Guarded in
-    // the ViewModel, so this is safe to call on every recomposition of the effect.
+    // Fetch the pool for the shelf that is visible, and for a restored/open board
+    // whose pool may not have arrived yet. Guarded in the ViewModel, so this is
+    // safe to call on every recomposition of the effect.
     LaunchedEffect(section, document?.mediaType) {
-        if (section == TierMediaType.MANGA || document?.mediaType == TierMediaType.MANGA) {
-            viewModel.loadMangaLibrary()
-        }
+        retryPoolFor(section)
+        document?.mediaType?.takeIf { it != section }?.let(::retryPoolFor)
     }
 
     // The system back gesture has to reach the same place as the bar's arrow, or
@@ -168,10 +196,7 @@ fun TierListScreen(
         label = "tier_library_board"
     ) { openDocument ->
         if (openDocument == null) {
-            val sectionCandidates = when (section) {
-                TierMediaType.ANIME -> animeCandidates
-                TierMediaType.MANGA -> mangaCandidates
-            }
+            val sectionCandidates = poolCandidatesFor(section)
             TierLibraryScreen(
                 documents = library.documents.filter { it.mediaType == section },
                 recent = recent?.takeIf { it.mediaType == section },
@@ -179,12 +204,12 @@ fun TierListScreen(
                     mediaType = section,
                     librarySize = sectionCandidates.orEmpty().size,
                     isLoaded = sectionCandidates != null,
-                    isLoading = section == TierMediaType.MANGA && isLoadingManga,
-                    isUnavailable = section == TierMediaType.MANGA && !viewModel.canLoadManga,
-                    loadFailed = section == TierMediaType.MANGA && mangaLoadFailed
+                    isLoading = isPoolLoadingFor(section),
+                    isUnavailable = !canLoadPoolFor(section),
+                    loadFailed = poolLoadFailedFor(section)
                 ),
                 onSelectMediaType = { section = it },
-                onRetryLoad = viewModel::loadMangaLibrary,
+                onRetryLoad = { retryPoolFor(section) },
                 onOpen = { listId ->
                     library.documents.firstOrNull { it.id == listId }?.let {
                         section = it.mediaType
@@ -201,6 +226,7 @@ fun TierListScreen(
                 modifier = Modifier
             )
         } else {
+            val boardType = openDocument.mediaType
             TierBoardScreen(
                 document = openDocument,
                 assignment = assignment,
@@ -211,6 +237,9 @@ fun TierListScreen(
                 notice = notice,
                 undoLabel = undoLabel,
                 redoLabel = redoLabel,
+                isPoolLoading = isPoolLoadingFor(boardType),
+                poolLoadFailed = poolLoadFailedFor(boardType),
+                isPoolLoaded = poolCandidatesFor(boardType) != null,
                 onSeed = viewModel::seedFromScores,
                 onMove = viewModel::moveTo,
                 onClearPlacements = viewModel::clearPlacements,
@@ -226,6 +255,7 @@ fun TierListScreen(
                 onZoomChange = viewModel::setZoom,
                 onDismissNotice = viewModel::dismissNotice,
                 onLeave = viewModel::closeList,
+                onRetryPoolLoad = { retryPoolFor(boardType) },
                 modifier = Modifier
             )
         }

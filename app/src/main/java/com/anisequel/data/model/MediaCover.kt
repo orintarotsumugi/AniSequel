@@ -37,6 +37,10 @@ data class MediaCoverKey(
     val graphqlType: String get() = type.uppercase(Locale.ROOT)
 }
 
+/** The cache key for a media node, including AniList's independent id namespace. */
+val MediaNode.mediaCoverKey: MediaCoverKey
+    get() = MediaCoverKey(type ?: "ANIME", id)
+
 /**
  * One alias of the batched cover query, as AniList answers it.
  *

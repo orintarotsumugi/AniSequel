@@ -142,7 +142,7 @@ internal fun HeroChip(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 190.dp)
+                modifier = Modifier.widthIn(max = 220.dp)
             )
         }
     }

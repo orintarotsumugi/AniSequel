@@ -38,7 +38,10 @@ internal fun visibleMessages(state: UserMessagesViewModel.UiState): List<Message
     when (state.filter) {
         MessageFilter.ALL -> (state.received.messages + state.sent.messages)
             .distinctBy { it.id }
-            .sortedByDescending { it.createdAt ?: 0 }
+            // A missing timestamp is not "the Unix epoch". Treat it as older
+            // than every dated row so an incomplete API record cannot appear as
+            // the newest message in the inbox.
+            .sortedByDescending { it.createdAt ?: Int.MIN_VALUE }
         MessageFilter.RECEIVED -> state.received.messages
         MessageFilter.SENT -> state.sent.messages
     }.filterNot { state.visibility.isHidden(it, state.viewerId) }
@@ -206,4 +209,8 @@ internal fun conversationMessages(
     (state.received.messages + state.sent.messages)
         .distinctBy { it.id }
         .filter { it.isWith(counterpartId, viewerId) }
-        .sortedBy { it.createdAt ?: 0 }
+        // An undated record has no place in time; keep it out of the newest
+        // position so it cannot be mistaken for a recent message or chosen as the
+        // thread to open. Sorting it to the start of the oldest-first timeline is
+        // safer than sorting it to the end, which would make it look newest.
+        .sortedBy { it.createdAt ?: Int.MIN_VALUE }

@@ -493,12 +493,18 @@ private fun ActivityDaySummary(day: ActivityDay?) {
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = if (day.count == 0) "No changes" else "${day.count} changes",
+                text = formatActivityChanges(day.count),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )
         }
     }
+}
+
+internal fun formatActivityChanges(count: Int): String = when (count) {
+    0 -> "No changes"
+    1 -> "1 change"
+    else -> "$count changes"
 }
 
 /**

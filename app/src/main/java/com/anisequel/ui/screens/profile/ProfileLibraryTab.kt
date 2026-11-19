@@ -529,6 +529,14 @@ fun ProfileLibraryTab(
     remembered: RememberedLibraryView,
     gridState: LazyGridState = rememberLazyGridState(),
     /**
+     * Whose list this grid is showing.
+     *
+     * The reader's own Library page shows their entries and ratings; a borrowed
+     * profile list shows somebody else's. Defaulted to THEIRS so existing callers
+     * that render another person's list keep their behavior.
+     */
+    listOwner: ListOwner = ListOwner.THEIRS,
+    /**
      * A refresh the reader asked for with the pull gesture.
      *
      * The page had no way to ask for a new list at all: the only refresh lived on
@@ -607,10 +615,14 @@ fun ProfileLibraryTab(
     // is waiting on its own, separate request, and a spinner for the wrong one
     // would be a second, quieter version of the same lie as the zeroes.
     val awaitingAnime = isAnimeLoading && type != LibraryType.MANGA
-    // The failure that belongs to whichever half is on screen. An anime-only
-    // failure must not be reported over a manga grid, and vice versa - each
-    // half is fetched by a different request at a different time.
-    val scopedError = if (type == LibraryType.MANGA) mangaError else libraryError
+    // The failure that belongs to whichever half is on screen. "All" merges both
+    // lists, so report whichever scoped fetch failed; manga-only failures matter in
+    // ALL because manga titles may be missing from the combined view.
+    val scopedError = when {
+        type == LibraryType.MANGA -> mangaError
+        type == LibraryType.ALL -> libraryError ?: mangaError
+        else -> libraryError
+    }
     val visible = remember(scoped, type, filter, favouriteIds, query, sort, sortAscending) {
         sortLibrary(
             filterLibrary(scoped, type, filter, favouriteIds, query),
@@ -635,11 +647,20 @@ fun ProfileLibraryTab(
         visible.filter { ListStatuses.normalize(it.status) == null }
     }
 
+    // Switching type replaces the visible list. Without resetting scroll, a reader
+    // scrolled deep in one list can land mid-way through the other at a position
+    // that no longer matches what they chose.
+    var settledType by remember { mutableStateOf<LibraryType?>(null) }
     LaunchedEffect(type) {
-        // Only the manga filter needs the network; the other two are already in
-        // hand, so asking for manga on the way in would spend a request to build a
-        // view the user did not select.
-        if (type == LibraryType.MANGA) onLoadManga()
+        // Manga is fetched on demand. The "All" scope merges anime and manga, so it
+        // must ask for manga too; otherwise the combined view silently omits manga
+        // titles until the reader visits the Manga filter.
+        if (type == LibraryType.MANGA || type == LibraryType.ALL) onLoadManga()
+        val previous = settledType
+        if (previous != null && previous != type) {
+            gridState.scrollToItem(0)
+        }
+        settledType = type
     }
 
     // Nothing at all until DataStore has answered, because `type` is `ALL` for exactly
@@ -739,6 +760,11 @@ fun ProfileLibraryTab(
                 PendingDataNote("Still fetching this list - these counts are not final yet")
             }
         }
+        if (type == LibraryType.ALL && isLoadingManga && mangaEntries == null) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending_manga", contentType = "state") {
+                PendingDataNote("Still fetching manga titles for the combined list")
+            }
+        }
 
         // A failed fetch, said plainly, in place of "nothing here".
         //
@@ -759,7 +785,7 @@ fun ProfileLibraryTab(
         if (visible.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty", contentType = "state") {
                 LibraryEmpty(
-                    isLoading = (type == LibraryType.MANGA && isLoadingManga) ||
+                    isLoading = ((type == LibraryType.MANGA || type == LibraryType.ALL) && isLoadingManga) ||
                         (awaitingAnime && animeEntries.isEmpty()),
                     columns = columns,
                     // A failed fetch is not an empty list. Saying "nothing here"
@@ -799,7 +825,7 @@ fun ProfileLibraryTab(
                         LibraryListRow(
                             entry = entry,
                             detailed = true,
-                            owner = ListOwner.THEIRS,
+                            owner = listOwner,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                             modifier = animateLibraryItem()
                         )
@@ -814,7 +840,7 @@ fun ProfileLibraryTab(
                     ) { entry ->
                         LibraryListRow(
                             entry = entry,
-                            owner = ListOwner.THEIRS,
+                            owner = listOwner,
                             onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                             modifier = animateLibraryItem()
                         )
@@ -840,7 +866,7 @@ fun ProfileLibraryTab(
                         ) { entry ->
                             LibraryListRow(
                                 entry = entry,
-                                owner = ListOwner.THEIRS,
+                                owner = listOwner,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                                 modifier = animateLibraryItem()
                             )
@@ -862,7 +888,7 @@ fun ProfileLibraryTab(
                         ) { entry ->
                             LibraryListRow(
                                 entry = entry,
-                                owner = ListOwner.THEIRS,
+                                owner = listOwner,
                                 onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
                                 modifier = animateLibraryItem()
                             )
@@ -882,7 +908,11 @@ fun ProfileLibraryTab(
                         LibraryPoster(
                             entry = entry,
                             isFavourite = entry.media.namespaceKey in favouriteIds,
-                            showTitle = viewMode != LibraryViewMode.COVERS,
+                            // Shelf and Cover wall are caption-free browsing modes; Shelf
+                            // packs five columns, so a title under each cover is cramped and
+                            // inconsistent with the Nova library view.
+                            showTitle = viewMode != LibraryViewMode.COVERS &&
+                                viewMode != LibraryViewMode.SHELF,
                             modifier = Modifier
                                 .widthIn(max = ProfileMaxContentWidth)
                                 .fillMaxWidth()
@@ -1088,7 +1118,7 @@ private fun LibrarySearchField(
             )
         },
         trailingIcon = {
-            if (query.isNotEmpty()) {
+            if (query.isNotBlank()) {
                 androidx.compose.material3.IconButton(onClick = { onQueryChange("") }) {
                     Icon(
                         imageVector = AppVectorIcons.Close,

@@ -1,6 +1,279 @@
 {
   "versions": [
     {
+      "version": "2.4.4",
+      "entries": [
+        {
+          "title": "Detail pages keep anime and manga apart",
+          "detail": "The shared detail, friends and loading state was published by numeric id, so anime/1 and manga/1 could replace each other's artwork, synopsis or friend row. Those UI caches now use the media namespace as part of their key."
+        },
+        {
+          "title": "The schedule keeps manga in its namespace",
+          "detail": "Arriving entries now carry their media type into detail pages, tile keys and AniList links instead of assuming every scheduled title is anime."
+        },
+        {
+          "title": "Dashboard relation cards keep their identity",
+          "detail": "Sequel selection and lazy-list keys now include anime or manga, so titles with the same AniList number cannot open or reuse the wrong card state."
+        },
+        {
+          "title": "Undated inbox rows stay at the end",
+          "detail": "Messages without a server timestamp no longer sort above every dated message in the inbox."
+        },
+        {
+          "title": "Undated conversation rows keep their place",
+          "detail": "Chat history keeps messages with missing timestamps out of the newest position in the oldest-first timeline, so an undated row cannot be mistaken for a recent message or chosen as the conversation to open."
+        },
+        {
+          "title": "Progress labels stop saying of zero",
+          "detail": "Activity cards treat AniList's zero episode or chapter total as unknown, so a reader sees Episode 4 or Chapter 4 rather than a misleading zero total."
+        },
+        {
+          "title": "Profile counts read naturally",
+          "detail": "Activity calendar and favourite-person cards now use singular nouns for one change or one favourite."
+        },
+        {
+          "title": "Chapter statistics stop claiming zero",
+          "detail": "Nova's title statistics show an unavailable marker when AniList has not announced a chapter total."
+        },
+        {
+          "title": "Search labels stay readable in every locale",
+          "detail": "Search metadata and statistics enum labels now use a stable case-fold, so Turkish locale rules cannot turn protocol labels into malformed words."
+        },
+        {
+          "title": "Manga links open the manga page",
+          "detail": "The schedule's AniList link and detail subject now agree on the media type, preventing a manga row from opening the anime URL with the same number."
+        },
+        {
+          "title": "Background detail refresh stays silent",
+          "detail": "A detail page with a stale cached copy now refreshes in the background without flashing the loading spinner over content that is already on screen."
+        },
+        {
+          "title": "Refreshing comments shows progress",
+          "detail": "Tapping Refresh in a chat-view comment thread now marks the thread as refreshing, so the reader gets feedback while the newest page is being re-read."
+        },
+        {
+          "title": "Arriving titles open the right entry",
+          "detail": "Selecting an arriving show now uses the media namespace as well as the id, so an anime and a manga with the same AniList number cannot open each other's detail page."
+        },
+        {
+          "title": "Arriving counts read naturally",
+          "detail": "An airing show with a single announced episode is described as 1 ep instead of 1 eps."
+        },
+        {
+          "title": "Schedule progress uses the right noun",
+          "detail": "A schedule row that knows the total episode count no longer says 1 of 1 episodes when the series has exactly one episode."
+        },
+        {
+          "title": "Tier list summaries count titles correctly",
+          "detail": "A tier list with a single title in the library now says 1 title ranked instead of 1 titles ranked."
+        },
+        {
+          "title": "Studio shelves keep mixed titles apart",
+          "detail": "Titles in a studio's filmography are keyed by their media namespace, so an anime and a manga sharing an AniList number cannot reuse each other's row state."
+        },
+        {
+          "title": "Favourite media rows keep mixed titles apart",
+          "detail": "Favourite anime and manga covers are keyed by their media namespace, preventing state from being reused between entries that share a numeric id."
+        },
+        {
+          "title": "Opening a conversation picks a dated message",
+          "detail": "When a conversation includes a message with no server timestamp, the thread opens from the newest dated message instead of treating the undated one as the most recent."
+        },
+        {
+          "title": "Manga library loads recover after cancellation",
+          "detail": "If a manga library request is cancelled before it completes, the loading state is cleared so the Library tab can ask for the list again instead of staying stuck."
+        },
+        {
+          "title": "Anime tier lists show loading, failures, and retry",
+          "detail": "The anime shelf and anime boards now track loading and load errors for the anime pool, show when the list is still arriving or could not be read, and offer a retry instead of staying blank."
+        },
+        {
+          "title": "Opening a tier board reloads its candidate pool when needed",
+          "detail": "Anime and manga boards ask for their candidate pool when the visible shelf or an open board needs it, so a restored or first-opened list can recover from a missing or failed pool load."
+        },
+        {
+          "title": "Tier pool loads recover cleanly from failures and cancellation",
+          "detail": "Anime and manga tier pool requests report failures safely and always clear their loading state, allowing the shelf and board to retry instead of getting stuck."
+        },
+        {
+          "title": "Duplicate tier candidates are shown only once",
+          "detail": "Titles that appear in more than one AniList list group are collapsed by media id in the tier pool, preventing duplicate rows and duplicate lazy-list keys."
+        },
+        {
+          "title": "Removed tiers no longer count as ranked placements",
+          "detail": "Tier list summaries and empty-state counts ignore placements filed under tiers that no longer exist, so lists with only orphaned placements are treated as unranked."
+        },
+        {
+          "title": "Tier shelves report anime and manga states separately",
+          "detail": "Each tier shelf now shows its own loading, unavailable, and load-failure states and retries the correct media list, instead of treating anime as always ready or retrying manga from the anime shelf."
+        },
+        {
+          "title": "Tier board headers and empty states explain pool status",
+          "detail": "An open tier board now distinguishes an actively loading library, a failed load, and a genuinely empty library, and offers a retry when the pool did not load."
+        },
+        {
+          "title": "Library layout search opens the correct settings",
+          "detail": "Searching for library layout now opens Interface > Library view, where the list layout controls live, instead of the Library & dashboard page."
+        },
+        {
+          "title": "Whitespace-only settings searches no longer leave hidden search state",
+          "detail": "A search field containing only spaces is treated as empty, so Back and the clear control behave the same as the visible results."
+        },
+        {
+          "title": "Clearing a GIF provider key no longer reports it as saved",
+          "detail": "Removing a stored GIF search key now records a cleared result instead of showing a saved confirmation."
+        },
+        {
+          "title": "GIF key feedback tracks saved and cleared actions separately",
+          "detail": "The GIF key editor now keeps save and clear feedback distinct, so its status and button state match the last action."
+        },
+        {
+          "title": "App lock waits for the saved setting before it can be changed",
+          "detail": "The app lock toggle no longer uses a default-off placeholder, preventing changes based on a setting that has not loaded yet."
+        },
+        {
+          "title": "List refresh waits for the saved interval before it can be changed",
+          "detail": "The refresh interval choices and reset action appear only after the saved interval loads, instead of starting from the default."
+        },
+        {
+          "title": "Arriving rows wait for saved settings before they can be changed",
+          "detail": "The arriving section switches no longer use default states before your saved dashboard preferences load."
+        },
+        {
+          "title": "Top bar shortcuts wait for saved settings before they can be changed",
+          "detail": "The top bar shortcut switches no longer use default states before your saved navigation preferences load."
+        },
+        {
+          "title": "Bottom bar tabs wait for saved settings before they can be changed",
+          "detail": "The bottom bar tab switches no longer use default states before your saved navigation preferences load."
+        },
+        {
+          "title": "Search page and device controls wait for saved settings before they can be changed",
+          "detail": "Search page type switches and Device Manager controls no longer use default values before your saved preferences load."
+        },
+        {
+          "title": "Connection check dialog shows one Close action in touch-grass state",
+          "detail": "After choosing to touch grass, the dialog no longer shows a duplicate Close button alongside the state’s own close action."
+        },
+        {
+          "title": "Updates page subtitle matches the page content",
+          "detail": "The Updates settings row and page now describe app updates and release notes, instead of listing diagnostics that live on About."
+        },
+        {
+          "title": "Library layout search result labels the correct view",
+          "detail": "The library layout search result now points to the Interface library view with matching label and description."
+        },
+        {
+          "title": "GIF key editor shows clear removal feedback",
+          "detail": "After removing a stored GIF key, the editor now says the key was removed from this device instead of showing a saved confirmation."
+        },
+        {
+          "title": "App lock card shows a loading state before the setting is available",
+          "detail": "The app lock card reads the saved preference before showing its toggle, avoiding a misleading default state."
+        },
+        {
+          "title": "List refresh card shows a loading state before the interval is available",
+          "detail": "The refresh interval card reads the saved choice before showing selected chips or a reset action."
+        },
+        {
+          "title": "Arriving rows card shows a loading state before settings are available",
+          "detail": "The arriving rows card reads saved preferences before showing switch positions."
+        },
+        {
+          "title": "Navigation settings cards show loading states before preferences are available",
+          "detail": "The top bar, bottom bar, and search page cards read saved preferences before showing their switches."
+        },
+        {
+          "title": "Device settings cards show loading states before preferences are available",
+          "detail": "Device performance and display cards read saved settings before showing controls, preventing brief default values."
+        },
+        {
+          "title": "Settings search clear control appears only for real search text",
+          "detail": "The search field shows its clear button only when the query contains non-whitespace text."
+        },
+        {
+          "title": "Combined library view loads manga titles",
+          "detail": "The classic All scope now requests the manga list, so the combined library includes manga entries instead of showing anime only until Manga is opened separately."
+        },
+        {
+          "title": "Combined library view reports manga loading and errors",
+          "detail": "When viewing All, the library shows that manga titles are still being fetched and reports manga load failures that affect the merged list."
+        },
+        {
+          "title": "Classic library resets scroll when switching list type",
+          "detail": "Switching between Anime, Manga, and All starts at the top of the selected list instead of keeping a stale scroll position from the previous view."
+        },
+        {
+          "title": "Classic library loading state matches the selected view mode",
+          "detail": "The full-page library loading placeholder now follows the chosen library view, using row skeletons for list, table, and grouped modes and matching grid columns for poster modes."
+        },
+        {
+          "title": "Nova library loading placeholders match the selected view mode",
+          "detail": "Nova resolving and manga-loading placeholders now reflect the current library view, so list-style views load with row placeholders and grid views keep their expected layout."
+        },
+        {
+          "title": "Classic library rows use the correct list owner",
+          "detail": "On the reader's own library, table, list, and grouped rows now use the correct owner when showing ratings, instead of treating the library as another profile's list."
+        },
+        {
+          "title": "Shelf view hides cramped titles in the classic library",
+          "detail": "The classic Shelf grid no longer draws captions under its compact covers, matching the caption-free browsing behavior used by Nova shelf and cover-wall views."
+        },
+        {
+          "title": "Grouped library view animates unclassified rows in Nova",
+          "detail": "Titles filed under the Other group in Nova's grouped library now animate with the rest of the list instead of snapping into place."
+        },
+        {
+          "title": "Library loading placeholders match list and table layouts",
+          "detail": "List, table, and grouped library views now show row-shaped loading placeholders, avoiding a poster-grid skeleton that did not match the incoming layout."
+        },
+        {
+          "title": "Library loading placeholders match grid columns and captions",
+          "detail": "Poster-grid loading skeletons now follow the selected view mode's column count and caption visibility, including shelf, cover wall, compact, big cards, and poster grid."
+        },
+        {
+          "title": "Switching classic library types opens at the top of the new list",
+          "detail": "The classic library now returns to the start when changing media type, making the new list easier to scan immediately."
+        },
+        {
+          "title": "Combined library view shows when manga is still loading",
+          "detail": "When All is selected, the library explains that manga titles are still being fetched so missing manga entries are not mistaken for an empty result."
+        },
+        {
+          "title": "Shelf browsing is cleaner in the classic library",
+          "detail": "Compact shelf covers are shown without cramped title text, making the dense five-column view easier to browse."
+        },
+        {
+          "title": "Nova grouped unclassified rows settle smoothly",
+          "detail": "Rows in the Other status group now use the same item animations as other grouped library rows."
+        },
+        {
+          "title": "Library search clear button ignores whitespace-only text",
+          "detail": "The classic library search field shows its clear action only when the query contains non-whitespace text."
+        },
+        {
+          "title": "Nova info stats and countdown animate smoothly",
+          "detail": "The Nova title page now crossfades stats placeholders into values, animates countdown visibility and text changes, transitions stat values, and fills score and status distribution bars with motion instead of snapping."
+        },
+        {
+          "title": "Nova info hero, progress, and trailer respond with motion",
+          "detail": "Hero poster and entry controls use press feedback and state transitions, the progress count updates with animated text, and the trailer card adds play-button, press, and scrim animations for clearer interaction."
+        },
+        {
+          "title": "Nova info hero layout is clearer and easier to tap",
+          "detail": "The hero poster badge, title panel spacing, entry pill states, and hero chips are refined for readability and touch, and long chip labels have more room before truncating."
+        },
+        {
+          "title": "Nova info stats, progress, and trailer cards are easier to read",
+          "detail": "Stat cells keep a stable touch target, countdown and trailer text wrap more cleanly, progress and trailer spacing is improved, and distribution rows and stat detail sections are easier to scan."
+        },
+        {
+          "title": "Nova info floating bar and page details are polished",
+          "detail": "The docked Nova title bar centers its label more accurately, placeholder stat rows match final layout sizing, and Nova info animation imports and state handling are cleaned up for consistent behavior."
+        }
+      ]
+    },
+    {
       "version": "2.4.3",
       "entries": [
         {

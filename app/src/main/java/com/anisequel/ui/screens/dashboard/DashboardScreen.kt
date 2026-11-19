@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaCoverKey
+import com.anisequel.data.model.mediaCoverKey
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.detailFor
@@ -150,11 +153,11 @@ fun DashboardScreen(
     )
 
     var showFilterSheet by remember { mutableStateOf(false) }
-    var selectedSequelId by remember { mutableStateOf<Int?>(null) }
-    // An arriving row is not a sequel, so it is tracked by its own media id and
-    // resolved to a plain media subject below. One nullable id per source keeps
-    // "what is open" unambiguous without a second sheet.
-    var selectedArrivingId by remember { mutableStateOf<Int?>(null) }
+    var selectedSequelKey by remember { mutableStateOf<String?>(null) }
+    // An arriving row is not a sequel, so it is tracked by its own namespaced
+    // key and resolved to a plain media subject below. One nullable key per
+    // source keeps "what is open" unambiguous without a second sheet.
+    var selectedArrivingKey by remember { mutableStateOf<String?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
     val detailNodes by dashboardViewModel.detailNodes.collectAsState()
     val detailFriends by dashboardViewModel.friends.collectAsState()
@@ -272,15 +275,15 @@ fun DashboardScreen(
     var navigatedRelation by remember { mutableStateOf<MediaNode?>(null) }
 
     val selectedSubject = remember(
-        selectedSequelId,
-        selectedArrivingId,
+        selectedSequelKey,
+        selectedArrivingKey,
         navigatedRelation,
         successState,
         detailNodes
     ) {
         resolveDetailSubject(
-            selectedSequelId = selectedSequelId,
-            selectedArrivingId = selectedArrivingId,
+            selectedSequelKey = selectedSequelKey,
+            selectedArrivingKey = selectedArrivingKey,
             navigatedRelation = navigatedRelation,
             successState = successState,
             detailNodes = detailNodes
@@ -292,8 +295,8 @@ fun DashboardScreen(
     // selected source/id rather than the Success state: a different selection gets
     // a fresh empty holder, and clearing the selection cannot resurrect an old page.
     val retainedSubjectState = remember(
-        selectedSequelId,
-        selectedArrivingId,
+        selectedSequelKey,
+        selectedArrivingKey,
         navigatedRelation?.id,
         navigatedRelation?.type
     ) {
@@ -304,8 +307,7 @@ fun DashboardScreen(
     }
     val displayedSubject = selectedSubject ?: retainedSubjectState.value
 
-    val selectedDetailId = displayedSubject?.mediaId
-    val isDetailLoading = selectedDetailId != null && selectedDetailId in loadingDetailIds
+    val isDetailLoading = displayedSubject?.media?.mediaCoverKey?.let { it in loadingDetailIds } == true
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
     // One definition of "the filters are narrowing this list", owned by
@@ -431,18 +433,18 @@ fun DashboardScreen(
                                 onOpenAnimeList = { onOpenLibrary(LibraryType.ANIME.name) },
                                 onOpenMangaList = { onOpenLibrary(LibraryType.MANGA.name) },
                                 onOpenSequel = {
-                                    selectedSequelId = it.sequelId
+                                    selectedSequelKey = it.sequelMedia.namespaceKey
                                     navigatedRelation = null
-                                    selectedArrivingId = null
+                                    selectedArrivingKey = null
                                 },
                                 onOpenArriving = {
-                                    selectedArrivingId = it
-                                    selectedSequelId = null
+                                    selectedArrivingKey = it.namespaceKey
+                                    selectedSequelKey = null
                                     navigatedRelation = null
                                 },
                                 onOpenMedia = {
-                                    selectedSequelId = null
-                                    selectedArrivingId = null
+                                    selectedSequelKey = null
+                                    selectedArrivingKey = null
                                     navigatedRelation = it
                                 },
                                 onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
@@ -464,17 +466,17 @@ fun DashboardScreen(
                                     arrivingCompact = arrivingCompact,
                                     arrivingSeparateGroups = arrivingSeparateGroups,
                                     onRequestRefresh = requestRefresh,
-                                    onSelectSequel = { sequelId ->
-                                        selectedSequelId = sequelId
+                                    onSelectSequel = { sequelKey ->
+                                        selectedSequelKey = sequelKey
                                         navigatedRelation = null
                                     },
-                                    onSelectArriving = { mediaId ->
-                                        selectedArrivingId = mediaId
+                                    onSelectArriving = { arrivingKey ->
+                                        selectedArrivingKey = arrivingKey
                                         navigatedRelation = null
                                     },
                                     onSelectParent = { parent ->
-                                        selectedSequelId = null
-                                        selectedArrivingId = null
+                                        selectedSequelKey = null
+                                        selectedArrivingKey = null
                                         navigatedRelation = parent
                                     },
                                     viewModel = dashboardViewModel
@@ -509,8 +511,8 @@ fun DashboardScreen(
         // remember all three of the ids the sheet keys off - and forgetting one
         // re-opens the title it was showing the next time the sheet is dismissed.
         val closeSheet: () -> Unit = {
-            selectedSequelId = null
-            selectedArrivingId = null
+            selectedSequelKey = null
+            selectedArrivingKey = null
             navigatedRelation = null
         }
         SequelDetailSheet(
@@ -525,7 +527,7 @@ fun DashboardScreen(
             swipeEnabled = quickAddSettings.swipeEnabled,
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
             onLoadFriends = { id, type -> dashboardViewModel.loadFriends(id, type) },
-            friends = detailFriends[displayedSubject.mediaId].orEmpty(),
+            friends = detailFriends[displayedSubject.media.mediaCoverKey].orEmpty(),
             onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,
@@ -562,11 +564,11 @@ fun DashboardScreen(
  * out and its answer was thrown away.
  */
 private fun resolveDetailSubject(
-    selectedSequelId: Int?,
-    selectedArrivingId: Int?,
+    selectedSequelKey: String?,
+    selectedArrivingKey: String?,
     navigatedRelation: MediaNode?,
     successState: DashboardUiState.Success?,
-    detailNodes: Map<Int, MediaNode>
+    detailNodes: Map<MediaCoverKey, MediaNode>
 ): AnimeDetailSubject? = when {
     // The `let` names the summary `summary` because `RelationDetailResolutionTest`
     // pins this exact expression: the fetched detail wins, and the relation node's
@@ -577,11 +579,11 @@ private fun resolveDetailSubject(
             detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary
         )
     }
-    selectedSequelId != null -> successState?.missedSequels
-        ?.firstOrNull { it.sequelId == selectedSequelId }
+    selectedSequelKey != null -> successState?.missedSequels
+        ?.firstOrNull { it.sequelMedia.namespaceKey == selectedSequelKey }
         ?.let { AnimeDetailSubject.Sequel(it) }
-    selectedArrivingId != null -> successState?.arriving
-        ?.firstOrNull { it.mediaId == selectedArrivingId }
+    selectedArrivingKey != null -> successState?.arriving
+        ?.firstOrNull { it.namespaceKey == selectedArrivingKey }
         ?.let { entry ->
             val summary = entry.toDetailMedia()
             AnimeDetailSubject.Media(
@@ -614,8 +616,8 @@ private fun DashboardClassicList(
     arrivingCompact: Boolean,
     arrivingSeparateGroups: Boolean,
     onRequestRefresh: () -> Unit,
-    onSelectSequel: (Int) -> Unit,
-    onSelectArriving: (Int) -> Unit,
+    onSelectSequel: (String) -> Unit,
+    onSelectArriving: (String) -> Unit,
     onSelectParent: (MediaNode) -> Unit,
     viewModel: DashboardViewModel
 ) {
@@ -668,7 +670,7 @@ private fun DashboardClassicList(
                         compact = arrivingCompact,
                         separateGroups = arrivingSeparateGroups,
                         maxWidth = MaxContentWidth,
-                        onEntryClick = { entry -> onSelectArriving(entry.mediaId) }
+                        onEntryClick = { entry -> onSelectArriving(entry.namespaceKey) }
                     )
                 }
             }
@@ -711,12 +713,17 @@ private fun DashboardClassicList(
             } else {
                 items(
                     items = state.missedSequels,
-                    key = { "${it.parentId}_${it.sequelId}" },
+                    // The bare ids collide across AniList's anime and manga
+                    // namespaces, which made one card inherit another card's
+                    // lazy state and could open the wrong title.
+                    key = {
+                        "${it.parentType.orEmpty().uppercase()}_${it.parentId}_${it.sequelMedia.namespaceKey}"
+                    },
                     contentType = { "sequel_card" }
                 ) { item ->
                     SequelCard(
                         sequel = item,
-                        onClick = { onSelectSequel(item.sequelId) },
+                        onClick = { onSelectSequel(item.sequelMedia.namespaceKey) },
                         onAddToPlanning = { viewModel.addToPlanning(item) },
                         onAddToWatching = { viewModel.addToWatching(item) },
                         holdDurationSeconds = quickAddSettings.holdDurationSeconds,

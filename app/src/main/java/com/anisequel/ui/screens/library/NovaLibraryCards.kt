@@ -255,7 +255,12 @@ internal fun NovaLibraryGrouped(
                 NovaLibraryRow(
                     entry = entry,
                     isManga = isManga,
-                    onClick = { onOpenDetail(entry.media) }
+                    onClick = { onOpenDetail(entry.media) },
+                    modifier = Modifier.animateItem(
+                        placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                        fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                        fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                    )
                 )
             }
         }

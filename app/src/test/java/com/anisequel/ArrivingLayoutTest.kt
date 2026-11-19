@@ -1,6 +1,7 @@
 package com.anisequel
 
 import com.anisequel.data.model.ArrivingEntry
+import com.anisequel.ui.components.detail.toDetailMedia
 import com.anisequel.ui.screens.dashboard.arrivingRows
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -119,5 +120,13 @@ class ArrivingLayoutTest {
 
         assertEquals(entries.map { it.mediaId }.sorted(), combined.sorted())
         assertEquals(entries.map { it.mediaId }.sorted(), separated.sorted())
+    }
+
+    @Test
+    fun `the arriving namespace survives links and detail subjects`() {
+        val manga = entry(1, airing = false).copy(mediaType = "MANGA")
+
+        assertEquals("https://anilist.co/manga/1", manga.siteUrl)
+        assertEquals("MANGA", manga.toDetailMedia().type)
     }
 }

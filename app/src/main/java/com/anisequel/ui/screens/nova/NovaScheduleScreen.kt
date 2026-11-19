@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.AniListRepository
@@ -233,8 +234,8 @@ fun NovaScheduleScreen(
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
-            friends = friends[subject.mediaId].orEmpty(),
-            isDetailLoading = subject.mediaId in loadingDetailIds,
+            friends = friends[subject.media.mediaCoverKey].orEmpty(),
+            isDetailLoading = subject.media.mediaCoverKey in loadingDetailIds,
             canWriteToAniList = entryEditor != null,
             entryEditor = entryEditor,
             onOpenMedia = { media -> selectedMedia = media },
@@ -494,7 +495,8 @@ private fun progressLabel(entry: ArrivingEntry): String {
     // own wording rather than "1 episodes".
     val total = entry.episodes?.takeIf { it > 0 }
     return when {
-        progress != null && total != null -> "$progress of $total episodes"
+        progress != null && total != null ->
+            "$progress of $total ${if (total == 1) "episode" else "episodes"}"
         progress != null && progress > 0 ->
             if (progress == 1) "1 episode watched" else "$progress episodes watched"
         progress != null -> "0 episodes watched"

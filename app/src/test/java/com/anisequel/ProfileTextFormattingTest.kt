@@ -4,6 +4,8 @@ import com.anisequel.ui.screens.profile.formatJoinYear
 import com.anisequel.ui.screens.profile.formatMeanScore
 import com.anisequel.ui.screens.profile.formatRelativeSeconds
 import com.anisequel.ui.screens.profile.formatWatchTime
+import com.anisequel.ui.screens.profile.formatActivityChanges
+import com.anisequel.ui.screens.profile.formatFavouriteCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -147,5 +149,21 @@ class ProfileDateFormattingTest {
         } finally {
             Locale.setDefault(previous)
         }
+    }
+}
+
+class ProfileCountFormattingTest {
+
+    @Test
+    fun `singular activity and favourite counts use singular nouns`() {
+        assertEquals("1 change", formatActivityChanges(1))
+        assertEquals("1 favourite", formatFavouriteCount(1))
+    }
+
+    @Test
+    fun `plural activity and favourite counts stay plural`() {
+        assertEquals("No changes", formatActivityChanges(0))
+        assertEquals("2 changes", formatActivityChanges(2))
+        assertEquals("2 favourites", formatFavouriteCount(2))
     }
 }

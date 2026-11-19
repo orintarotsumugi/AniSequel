@@ -889,8 +889,15 @@ fun MediaNode.withListStatus(status: String?): MediaNode {
  * detail must not outrank it. `mergeListEntry` carries that reasoning, and
  * `TrackedListStatusTest` pins it in both directions.
  */
-fun Map<Int, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
-    this[summary.id]?.takeIf { detail ->
+fun Map<MediaCoverKey, MediaNode>.detailFor(summary: MediaNode): MediaNode? =
+    (if (summary.type == null) {
+        // A typeless summary comes from an untyped query, whose published key
+        // is UNSPECIFIED. Keep the old fallback for that one legacy shape while
+        // typed summaries remain strictly namespace-scoped.
+        entries.firstOrNull { (key, _) -> key.id == summary.id }?.value
+    } else {
+        this[summary.mediaCoverKey]
+    })?.takeIf { detail ->
         summary.type == null || detail.type.equals(summary.type, ignoreCase = true)
     }?.let { detail -> summary.withDetail(detail) }
 

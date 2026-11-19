@@ -1,11 +1,14 @@
 package com.anisequel.ui.components.detail.info
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -279,7 +282,7 @@ internal fun NovaInfoHero(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
+                .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
                 .sectionReveal(0, entranceKey = media.id to media.type),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -405,6 +408,7 @@ private fun HeroLockup(
     onOpenStudio: (Int, String?) -> Unit
 ) {
     Row(verticalAlignment = Alignment.Bottom) {
+        val posterInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .width(116.dp)
@@ -422,6 +426,7 @@ private fun HeroLockup(
                     MaterialTheme.shapes.large
                 )
                 .background(coverColor)
+                .bouncyPress(pressedScale = 0.97f, interactionSource = posterInteraction)
                 .onGloballyPositioned { onPosterBounds(it.boundsInWindow()) }
                 .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
                 .semantics {
@@ -444,18 +449,19 @@ private fun HeroLockup(
             )
             Surface(
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.56f),
+                color = Color.Black.copy(alpha = 0.58f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(6.dp)
+                    .padding(7.dp)
             ) {
                 Icon(
                     imageVector = AppVectorIcons.FullscreenExpand,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier
-                        .padding(4.dp)
-                        .size(14.dp)
+                        .padding(5.dp)
+                        .size(15.dp)
                 )
             }
         }
@@ -464,7 +470,7 @@ private fun HeroLockup(
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // The title used to be white text with a rectangular drop shadow,
             // directly over whatever the key art happened to be. On a bright sky
@@ -488,8 +494,8 @@ private fun HeroLockup(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                    modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = media.displayName,
@@ -522,41 +528,47 @@ private fun HeroLockup(
                     }
                 }
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+            AnimatedVisibility(
+                visible = relationLabel != null || statusLabel != null || media.formatLabel.isNotBlank(),
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
             ) {
-                if (relationLabel != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (relationLabel != null) {
+                        HeroChip(
+                            icon = AppVectorIcons.FranchiseBranch,
+                            label = relationLabel
+                        )
+                    }
+                    if (statusLabel != null) {
+                        HeroChip(
+                            icon = AppVectorIcons.Info,
+                            label = statusLabel.uppercase(),
+                            accent = true
+                        )
+                    }
+                    // The medium before the format: "TV" beside "MANGA" would
+                    // otherwise describe the same title as two different things.
                     HeroChip(
-                        icon = AppVectorIcons.FranchiseBranch,
-                        label = relationLabel
+                        icon = if (media.isManga) {
+                            AppVectorIcons.SourceBook
+                        } else {
+                            AppVectorIcons.Tv
+                        },
+                        label = media.formatLabel.uppercase()
                     )
-                }
-                if (statusLabel != null) {
-                    HeroChip(
-                        icon = AppVectorIcons.Info,
-                        label = statusLabel.uppercase(),
-                        accent = true
-                    )
-                }
-                // The medium before the format: "TV" beside "MANGA" would
-                // otherwise describe the same title as two different things.
-                HeroChip(
-                    icon = if (media.isManga) {
-                        AppVectorIcons.SourceBook
-                    } else {
-                        AppVectorIcons.Tv
-                    },
-                    label = media.formatLabel.uppercase()
-                )
-                media.studioCredits.firstOrNull()?.let { studio ->
-                    HeroChip(
-                        icon = AppVectorIcons.Studio,
-                        label = studio.name,
-                        onClick = studio.id?.let { id ->
-                            { onOpenStudio(id, studio.name) }
-                        }
-                    )
+                    media.studioCredits.firstOrNull()?.let { studio ->
+                        HeroChip(
+                            icon = AppVectorIcons.Studio,
+                            label = studio.name,
+                            onClick = studio.id?.let { id ->
+                                { onOpenStudio(id, studio.name) }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -569,6 +581,7 @@ private fun HeroEntryPill(
     editable: Boolean,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Surface(
         shape = ExpressiveShapes.pill,
         color = MaterialTheme.colorScheme.primary,
@@ -579,8 +592,9 @@ private fun HeroEntryPill(
             .then(
                 if (editable) {
                     Modifier
-                        .bouncyPress(pressedScale = 0.97f)
+                        .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
                         .clickable(
+                            interactionSource = interactionSource,
                             role = Role.Button,
                             onClickLabel = "Edit your AniList entry",
                             onClick = onClick
@@ -595,25 +609,44 @@ private fun HeroEntryPill(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = if (editable) {
-                    AppVectorIcons.EditEntry
-                } else {
-                    AppVectorIcons.CheckCircle
-                },
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
+            Crossfade(
+                targetState = editable,
+                animationSpec = ExpressiveMotion.FastEffects,
+                label = "nova_entry_pill_icon"
+            ) { canEdit ->
+                Icon(
+                    imageVector = if (canEdit) {
+                        AppVectorIcons.EditEntry
+                    } else {
+                        AppVectorIcons.CheckCircle
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = text,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            AnimatedContent(
+                targetState = text,
+                transitionSpec = {
+                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                },
+                label = "nova_entry_pill_text",
                 modifier = Modifier.weight(1f)
-            )
-            if (editable) {
+            ) { pillText ->
+                Text(
+                    text = pillText,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            AnimatedVisibility(
+                visible = editable,
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+            ) {
                 Text(
                     text = "Edit",
                     style = MaterialTheme.typography.labelLarge,

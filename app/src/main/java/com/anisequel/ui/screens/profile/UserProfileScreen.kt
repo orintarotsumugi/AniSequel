@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.data.repository.ProfileLayoutPreferences
@@ -295,7 +296,7 @@ fun UserProfileScreen(
     val selectedSubject = selectedMedia?.let { summary ->
         AnimeDetailSubject.Media(detailNodes.detailFor(summary)?.withSummaryProgress(summary) ?: summary)
     }
-    val detailLoading = selectedMedia?.id?.let { it in loadingDetailIds } == true
+    val detailLoading = selectedMedia?.mediaCoverKey?.let { it in loadingDetailIds } == true
 
     // The person whose profile sheet is opened from the cast and crew rows, and from
     // the pinned characters and staff on the Home tab.
@@ -640,7 +641,7 @@ fun UserProfileScreen(
             onAddMediaToWatching = planningAdd.onAddToWatching,
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
-            friends = detailFriends[subject.mediaId].orEmpty(),
+            friends = detailFriends[subject.media.mediaCoverKey].orEmpty(),
             isDetailLoading = detailLoading,
             // Same sheet, same access as every other host: the tab follows the
             // editor, and with no session the page is exactly what it was.

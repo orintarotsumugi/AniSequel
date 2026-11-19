@@ -2,6 +2,7 @@ package com.anisequel.domain.usecase
 
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.data.model.MediaListCollection
+import java.util.Locale
 
 /**
  * Works out which of the viewer's own entries are airing now or have not
@@ -40,7 +41,8 @@ class FindArrivingEntriesUseCase {
 
             ArrivingEntry(
                 mediaId = media.id,
-                title = media.title?.displayTitle ?: "Anime #${media.id}",
+                mediaType = media.type ?: "ANIME",
+                title = media.title?.displayTitle ?: "Title #${media.id}",
                 coverUrl = media.coverImage?.bestUrl,
                 coverColor = media.coverImage?.color,
                 status = mediaStatus,
@@ -56,7 +58,7 @@ class FindArrivingEntriesUseCase {
         // One row per show even if it somehow sits in two of the viewer's
         // lists.
         return arriving
-            .distinctBy { it.mediaId }
+            .distinctBy { "${it.mediaType.uppercase(Locale.ROOT)}_${it.mediaId}" }
             .sortedWith(
                 // Airing first - what is on now beats what is announced - then
                 // soonest first inside each half.

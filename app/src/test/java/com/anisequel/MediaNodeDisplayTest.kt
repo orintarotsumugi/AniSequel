@@ -1,6 +1,7 @@
 package com.anisequel
 
 import com.anisequel.data.model.FuzzyDate
+import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaExternalLink
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaRanking
@@ -427,7 +428,7 @@ class MediaNodeDisplayTest {
     fun `a detail fetched for the other namespace is not shown`() {
         val anime = MediaNode(id = 1, type = "ANIME", description = "An anime")
         val manga = MediaNode(id = 1, type = "MANGA", description = "A manga")
-        val published = mapOf(1 to anime)
+        val published = mapOf(MediaCoverKey("ANIME", 1) to anime)
 
         assertNull(published.detailFor(manga))
         assertEquals(anime, published.detailFor(anime))
@@ -450,7 +451,7 @@ class MediaNodeDisplayTest {
         val typeless = MediaNode(id = 1)
         val fetched = MediaNode(id = 1, type = "MANGA", description = "A manga")
 
-        val merged = mapOf(1 to fetched).detailFor(typeless)
+        val merged = mapOf(MediaCoverKey("MANGA", 1) to fetched).detailFor(typeless)
         assertEquals("A manga", merged?.description)
         assertEquals("MANGA", merged?.type)
     }
@@ -486,7 +487,7 @@ class MediaNodeDisplayTest {
             bannerImage = null
         )
 
-        val merged = mapOf(7 to detail).detailFor(summary)!!
+        val merged = mapOf(MediaCoverKey("ANIME", 7) to detail).detailFor(summary)!!
 
         assertEquals(
             "a null in the answer must not erase a banner that was already on screen",
@@ -513,7 +514,7 @@ class MediaNodeDisplayTest {
             averageScore = 88
         )
 
-        val merged = mapOf(7 to detail).detailFor(summary)!!
+        val merged = mapOf(MediaCoverKey("ANIME", 7) to detail).detailFor(summary)!!
 
         assertEquals("https://s4.anilist.co/file/fresh.jpg", merged.bannerImage)
         assertEquals(88, merged.averageScore)
