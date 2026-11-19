@@ -285,7 +285,7 @@ fun arrivalMeta(entry: ArrivingEntry): String = when {
         when {
             episode != null && total != null -> "Ep $episode / $total"
             episode != null -> "Ep $episode"
-            total != null -> "Airing · $total eps"
+            total != null -> "Airing · $total ${if (total == 1) "ep" else "eps"}"
             else -> "Airing now"
         }
     }

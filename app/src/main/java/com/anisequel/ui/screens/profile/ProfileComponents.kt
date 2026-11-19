@@ -45,6 +45,7 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.FavouriteCharacter
 import com.anisequel.data.model.FavouriteStaff
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.StudioNode
 import com.anisequel.data.model.formatLabel
 import com.anisequel.ui.components.AppVectorIcons
@@ -147,7 +148,7 @@ fun FavouriteMediaRow(
     ) {
         items(
             items = items,
-            key = { it.id },
+            key = { it.namespaceKey },
             contentType = { "media" }
         ) { media ->
             FavouriteMediaCard(media = media, onClick = { onOpen(media) })

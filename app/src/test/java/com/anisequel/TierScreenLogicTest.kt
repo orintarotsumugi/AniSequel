@@ -678,6 +678,7 @@ class TierScreenLogicTest {
         assertEquals("Your library has not loaded yet", tierListSubtitle(ranked = 0, librarySize = 0))
         assertEquals("Nothing ranked yet", tierListSubtitle(ranked = 0, librarySize = 271))
         assertEquals("12 of 271 titles ranked", tierListSubtitle(ranked = 12, librarySize = 271))
+        assertEquals("1 of 1 title ranked", tierListSubtitle(ranked = 1, librarySize = 1))
     }
 
     @Test

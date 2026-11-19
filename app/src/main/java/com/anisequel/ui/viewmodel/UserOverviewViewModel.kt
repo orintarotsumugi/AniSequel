@@ -281,29 +281,32 @@ class UserOverviewViewModel(
         _isLoadingManga.value = true
         _mangaError.value = null
         mangaJob = viewModelScope.launch {
-            // Folded through [repositoryResult] like every other call in this package:
-            // the repository classifies its own failures into the `Result`, but a throw
-            // on the way there - a Moshi failure on an unexpected shape - otherwise
-            // reaches a `launch` on `viewModelScope`, where a supervisor job hands it to
-            // the thread's handler and Android closes the app. Here it also left
-            // [_isLoadingManga] true for the life of the screen, and the guard above
-            // turns every later tap into a no-op, so the chip stops being a retry.
-            val result = repositoryResult { aniListRepository.getUserMangaList(id, false) }
-            result.fold(
-                onSuccess = { collection ->
-                    _mangaLibrary.value = flattenLibrary(collection)
-                    _mangaError.value = null
-                },
-                // Left null on failure so the chip is still a retry: a person who
-                // hit a rate limit needs the tap to be able to ask again, and a
-                // failure is not the same as an empty list. The reason is kept
-                // beside the null rather than swallowed, so the page can say what
-                // happened instead of drawing an empty grid.
-                onFailure = { error ->
-                    _mangaError.value = error.message ?: "AniList didn't return this list."
-                }
-            )
-            _isLoadingManga.value = false
+            try {
+                // Folded through [repositoryResult] like every other call in this package:
+                // the repository classifies its own failures into the `Result`, but a throw
+                // on the way there - a Moshi failure on an unexpected shape - otherwise
+                // reaches a `launch` on `viewModelScope`, where a supervisor job hands it to
+                // the thread's handler and Android closes the app. Here it also left
+                // [_isLoadingManga] true for the life of the screen, and the guard above
+                // turns every later tap into a no-op, so the chip stops being a retry.
+                val result = repositoryResult { aniListRepository.getUserMangaList(id, false) }
+                result.fold(
+                    onSuccess = { collection ->
+                        _mangaLibrary.value = flattenLibrary(collection)
+                        _mangaError.value = null
+                    },
+                    // Left null on failure so the chip is still a retry: a person who
+                    // hit a rate limit needs the tap to be able to ask again, and a
+                    // failure is not the same as an empty list. The reason is kept
+                    // beside the null rather than swallowed, so the page can say what
+                    // happened instead of drawing an empty grid.
+                    onFailure = { error ->
+                        _mangaError.value = error.message ?: "AniList didn't return this list."
+                    }
+                )
+            } finally {
+                _isLoadingManga.value = false
+            }
         }
     }
 

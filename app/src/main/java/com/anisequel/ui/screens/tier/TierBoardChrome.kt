@@ -603,5 +603,5 @@ internal fun TierBoardLegend(locked: Boolean = false) {
 internal fun tierListSubtitle(ranked: Int, librarySize: Int): String = when {
     librarySize == 0 -> "Your library has not loaded yet"
     ranked == 0 -> "Nothing ranked yet"
-    else -> "$ranked of $librarySize titles ranked"
+    else -> "$ranked of $librarySize ${if (librarySize == 1) "title" else "titles"} ranked"
 }

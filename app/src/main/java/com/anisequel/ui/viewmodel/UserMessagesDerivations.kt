@@ -209,6 +209,8 @@ internal fun conversationMessages(
     (state.received.messages + state.sent.messages)
         .distinctBy { it.id }
         .filter { it.isWith(counterpartId, viewerId) }
-        // Keep undated records at the end of the oldest-first conversation; a
-        // synthetic epoch timestamp used to put them before the first message.
-        .sortedBy { it.createdAt ?: Int.MAX_VALUE }
+        // An undated record has no place in time; keep it out of the newest
+        // position so it cannot be mistaken for a recent message or chosen as the
+        // thread to open. Sorting it to the start of the oldest-first timeline is
+        // safer than sorting it to the end, which would make it look newest.
+        .sortedBy { it.createdAt ?: Int.MIN_VALUE }

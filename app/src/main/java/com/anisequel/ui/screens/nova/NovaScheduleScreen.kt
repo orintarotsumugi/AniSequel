@@ -495,7 +495,8 @@ private fun progressLabel(entry: ArrivingEntry): String {
     // own wording rather than "1 episodes".
     val total = entry.episodes?.takeIf { it > 0 }
     return when {
-        progress != null && total != null -> "$progress of $total episodes"
+        progress != null && total != null ->
+            "$progress of $total ${if (total == 1) "episode" else "episodes"}"
         progress != null && progress > 0 ->
             if (progress == 1) "1 episode watched" else "$progress episodes watched"
         progress != null -> "0 episodes watched"

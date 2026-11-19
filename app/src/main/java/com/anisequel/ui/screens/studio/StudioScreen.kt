@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.mediaCoverKey
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.detailFor
 import com.anisequel.data.model.withSummaryProgress
 import com.anisequel.ui.components.AppVectorIcons
@@ -372,7 +373,7 @@ fun StudioScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(items = shelf.titles, key = { it.id }) { media ->
+                                    items(items = shelf.titles, key = { it.namespaceKey }) { media ->
                                         StudioTitleCard(
                                             media = media,
                                             onClick = { selectedMedia = media }

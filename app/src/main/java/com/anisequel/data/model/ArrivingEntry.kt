@@ -1,5 +1,7 @@
 package com.anisequel.data.model
 
+import java.util.Locale
+
 /**
  * One of the viewer's own list entries that is arriving: airing right now, or
  * announced and not started yet.
@@ -50,6 +52,12 @@ data class ArrivingEntry(
      * entry - the detail sheet links to it as `MediaNode.pageUrl`, which builds
      * the same URL.
      */
+    /**
+     * Stable identity for list keys and selection, scoped to AniList's media namespace.
+     */
+    val namespaceKey: String
+        get() = "${mediaType.uppercase(Locale.ROOT)}_${mediaId}"
+
     val siteUrl: String
         get() = "https://anilist.co/${if (mediaType.equals("MANGA", ignoreCase = true)) "manga" else "anime"}/$mediaId"
 

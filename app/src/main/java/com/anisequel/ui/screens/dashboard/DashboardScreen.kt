@@ -154,10 +154,10 @@ fun DashboardScreen(
 
     var showFilterSheet by remember { mutableStateOf(false) }
     var selectedSequelKey by remember { mutableStateOf<String?>(null) }
-    // An arriving row is not a sequel, so it is tracked by its own media id and
-    // resolved to a plain media subject below. One nullable id per source keeps
-    // "what is open" unambiguous without a second sheet.
-    var selectedArrivingId by remember { mutableStateOf<Int?>(null) }
+    // An arriving row is not a sequel, so it is tracked by its own namespaced
+    // key and resolved to a plain media subject below. One nullable key per
+    // source keeps "what is open" unambiguous without a second sheet.
+    var selectedArrivingKey by remember { mutableStateOf<String?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
     val detailNodes by dashboardViewModel.detailNodes.collectAsState()
     val detailFriends by dashboardViewModel.friends.collectAsState()
@@ -276,14 +276,14 @@ fun DashboardScreen(
 
     val selectedSubject = remember(
         selectedSequelKey,
-        selectedArrivingId,
+        selectedArrivingKey,
         navigatedRelation,
         successState,
         detailNodes
     ) {
         resolveDetailSubject(
             selectedSequelKey = selectedSequelKey,
-            selectedArrivingId = selectedArrivingId,
+            selectedArrivingKey = selectedArrivingKey,
             navigatedRelation = navigatedRelation,
             successState = successState,
             detailNodes = detailNodes
@@ -296,7 +296,7 @@ fun DashboardScreen(
     // a fresh empty holder, and clearing the selection cannot resurrect an old page.
     val retainedSubjectState = remember(
         selectedSequelKey,
-        selectedArrivingId,
+        selectedArrivingKey,
         navigatedRelation?.id,
         navigatedRelation?.type
     ) {
@@ -435,16 +435,16 @@ fun DashboardScreen(
                                 onOpenSequel = {
                                     selectedSequelKey = it.sequelMedia.namespaceKey
                                     navigatedRelation = null
-                                    selectedArrivingId = null
+                                    selectedArrivingKey = null
                                 },
                                 onOpenArriving = {
-                                    selectedArrivingId = it
+                                    selectedArrivingKey = it.namespaceKey
                                     selectedSequelKey = null
                                     navigatedRelation = null
                                 },
                                 onOpenMedia = {
                                     selectedSequelKey = null
-                                    selectedArrivingId = null
+                                    selectedArrivingKey = null
                                     navigatedRelation = it
                                 },
                                 onAddToPlanning = { dashboardViewModel.addToPlanning(it) },
@@ -470,13 +470,13 @@ fun DashboardScreen(
                                         selectedSequelKey = sequelKey
                                         navigatedRelation = null
                                     },
-                                    onSelectArriving = { mediaId ->
-                                        selectedArrivingId = mediaId
+                                    onSelectArriving = { arrivingKey ->
+                                        selectedArrivingKey = arrivingKey
                                         navigatedRelation = null
                                     },
                                     onSelectParent = { parent ->
                                         selectedSequelKey = null
-                                        selectedArrivingId = null
+                                        selectedArrivingKey = null
                                         navigatedRelation = parent
                                     },
                                     viewModel = dashboardViewModel
@@ -512,7 +512,7 @@ fun DashboardScreen(
         // re-opens the title it was showing the next time the sheet is dismissed.
         val closeSheet: () -> Unit = {
             selectedSequelKey = null
-            selectedArrivingId = null
+            selectedArrivingKey = null
             navigatedRelation = null
         }
         SequelDetailSheet(
@@ -565,7 +565,7 @@ fun DashboardScreen(
  */
 private fun resolveDetailSubject(
     selectedSequelKey: String?,
-    selectedArrivingId: Int?,
+    selectedArrivingKey: String?,
     navigatedRelation: MediaNode?,
     successState: DashboardUiState.Success?,
     detailNodes: Map<MediaCoverKey, MediaNode>
@@ -582,8 +582,8 @@ private fun resolveDetailSubject(
     selectedSequelKey != null -> successState?.missedSequels
         ?.firstOrNull { it.sequelMedia.namespaceKey == selectedSequelKey }
         ?.let { AnimeDetailSubject.Sequel(it) }
-    selectedArrivingId != null -> successState?.arriving
-        ?.firstOrNull { it.mediaId == selectedArrivingId }
+    selectedArrivingKey != null -> successState?.arriving
+        ?.firstOrNull { it.namespaceKey == selectedArrivingKey }
         ?.let { entry ->
             val summary = entry.toDetailMedia()
             AnimeDetailSubject.Media(
@@ -617,7 +617,7 @@ private fun DashboardClassicList(
     arrivingSeparateGroups: Boolean,
     onRequestRefresh: () -> Unit,
     onSelectSequel: (String) -> Unit,
-    onSelectArriving: (Int) -> Unit,
+    onSelectArriving: (String) -> Unit,
     onSelectParent: (MediaNode) -> Unit,
     viewModel: DashboardViewModel
 ) {
@@ -670,7 +670,7 @@ private fun DashboardClassicList(
                         compact = arrivingCompact,
                         separateGroups = arrivingSeparateGroups,
                         maxWidth = MaxContentWidth,
-                        onEntryClick = { entry -> onSelectArriving(entry.mediaId) }
+                        onEntryClick = { entry -> onSelectArriving(entry.namespaceKey) }
                     )
                 }
             }

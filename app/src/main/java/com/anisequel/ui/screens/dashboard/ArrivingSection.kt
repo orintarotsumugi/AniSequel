@@ -257,7 +257,7 @@ private fun ArrivingStrip(
             items = row.entries,
             // Anime and manga ids are separate namespaces. A shared number must
             // not make LazyRow reuse one tile's remembered state for the other.
-            key = { "${it.mediaType.uppercase()}_${it.mediaId}" },
+            key = { it.namespaceKey },
             contentType = { "arriving_tile" }
         ) { entry ->
             ArrivingCard(

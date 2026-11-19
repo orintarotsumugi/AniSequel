@@ -561,6 +561,10 @@ internal class CommentThreadWindow(
             checkJob = scope.launch { loadWholeThread(current.activityId) }
             return
         }
+        // A user-initiated refresh needs the same visible feedback as the
+        // whole-thread path above. The background poll must stay silent, which is
+        // why checkForNewComments never sets this flag.
+        state.value = current.copy(isRefreshing = true, refreshError = null)
         checkJob = scope.launch {
             loadWindow(
                 activityId = current.activityId,

@@ -20,8 +20,8 @@
           "detail": "Messages without a server timestamp no longer sort above every dated message in the inbox."
         },
         {
-          "title": "Undated conversation rows stay at the end",
-          "detail": "Chat history keeps messages with missing timestamps after the dated timeline instead of placing them before the first message."
+          "title": "Undated conversation rows keep their place",
+          "detail": "Chat history keeps messages with missing timestamps out of the newest position in the oldest-first timeline, so an undated row cannot be mistaken for a recent message or chosen as the conversation to open."
         },
         {
           "title": "Progress labels stop saying of zero",
@@ -42,6 +42,46 @@
         {
           "title": "Manga links open the manga page",
           "detail": "The schedule's AniList link and detail subject now agree on the media type, preventing a manga row from opening the anime URL with the same number."
+        },
+        {
+          "title": "Background detail refresh stays silent",
+          "detail": "A detail page with a stale cached copy now refreshes in the background without flashing the loading spinner over content that is already on screen."
+        },
+        {
+          "title": "Refreshing comments shows progress",
+          "detail": "Tapping Refresh in a chat-view comment thread now marks the thread as refreshing, so the reader gets feedback while the newest page is being re-read."
+        },
+        {
+          "title": "Arriving titles open the right entry",
+          "detail": "Selecting an arriving show now uses the media namespace as well as the id, so an anime and a manga with the same AniList number cannot open each other's detail page."
+        },
+        {
+          "title": "Arriving counts read naturally",
+          "detail": "An airing show with a single announced episode is described as 1 ep instead of 1 eps."
+        },
+        {
+          "title": "Schedule progress uses the right noun",
+          "detail": "A schedule row that knows the total episode count no longer says 1 of 1 episodes when the series has exactly one episode."
+        },
+        {
+          "title": "Tier list summaries count titles correctly",
+          "detail": "A tier list with a single title in the library now says 1 title ranked instead of 1 titles ranked."
+        },
+        {
+          "title": "Studio shelves keep mixed titles apart",
+          "detail": "Titles in a studio's filmography are keyed by their media namespace, so an anime and a manga sharing an AniList number cannot reuse each other's row state."
+        },
+        {
+          "title": "Favourite media rows keep mixed titles apart",
+          "detail": "Favourite anime and manga covers are keyed by their media namespace, preventing state from being reused between entries that share a numeric id."
+        },
+        {
+          "title": "Opening a conversation picks a dated message",
+          "detail": "When a conversation includes a message with no server timestamp, the thread opens from the newest dated message instead of treating the undated one as the most recent."
+        },
+        {
+          "title": "Manga library loads recover after cancellation",
+          "detail": "If a manga library request is cancelled before it completes, the loading state is cleared so the Library tab can ask for the list again instead of staying stuck."
         }
       ]
     },

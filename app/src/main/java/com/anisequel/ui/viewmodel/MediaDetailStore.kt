@@ -235,7 +235,8 @@ class MediaDetailStore(
      */
     fun load(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
-        cache[key]?.let { known ->
+        val cached = cache[key]
+        cached?.let { known ->
             // Keep cached details visible immediately. Once they are ten minutes old,
             // continue below and refresh in the background rather than treating the
             // first successful fetch as valid for the whole session.
@@ -253,8 +254,13 @@ class MediaDetailStore(
         // in the one place that decides whether a fetch happens at all.
         if (isDemo || key in inFlight) return
 
+        // A stale cache entry was already published above, so this fetch is a
+        // background refresh: the sheet has content to draw and must not flash a
+        // loading spinner over it. The in-flight guard still prevents a second
+        // concurrent refresh for the same title.
+        val backgroundRefresh = cached != null
         inFlight += key
-        _loading.value = _loading.value + key
+        if (!backgroundRefresh) _loading.value = _loading.value + key
         val startedAtGeneration = generation
         scope.launch {
             try {
@@ -306,11 +312,9 @@ class MediaDetailStore(
                 // the sheet shows what the summary query already had.
             } finally {
                 inFlight -= key
-                // Only drop the spinner when *no* namespace for this id is still
-                // fetching. Dropping it on the first to finish would hide the
-                // spinner while the second was still on the wire, and the screen
-                // would show a half-filled page as though it were complete.
-                _loading.value = _loading.value - key
+                // A background refresh never claimed the loading indicator; only a
+                // fetch that had no cached detail to show did.
+                if (!backgroundRefresh) _loading.value = _loading.value - key
             }
         }
     }

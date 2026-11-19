@@ -76,7 +76,7 @@ fun NovaHomeScreen(
     onOpenAnimeList: () -> Unit,
     onOpenMangaList: () -> Unit,
     onOpenSequel: (MissedSequel) -> Unit,
-    onOpenArriving: (Int) -> Unit,
+    onOpenArriving: (com.anisequel.data.model.ArrivingEntry) -> Unit,
     onOpenMedia: (MediaNode) -> Unit,
     onAddToPlanning: (MissedSequel) -> Unit,
     onAddToWatching: (MissedSequel) -> Unit,
@@ -220,7 +220,7 @@ fun NovaHomeScreen(
                     ArrivingSection(
                         entries = state.arriving,
                         maxWidth = maxWidth,
-                        onEntryClick = { onOpenArriving(it.mediaId) },
+                        onEntryClick = onOpenArriving,
                         compact = arrivingCompact,
                         separateGroups = arrivingSeparateGroups
                     )
