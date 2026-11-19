@@ -55,6 +55,7 @@ import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.components.expressive.ExpressiveCountBadge
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.screens.profile.ProfileErrorView
 import com.anisequel.ui.screens.profile.ProfileLibraryTab
@@ -393,6 +394,7 @@ fun LibraryScreen(
                             onOpenDetail = { selectedMedia = it },
                             gridState = gridState,
                             remembered = remembered,
+                            listOwner = ListOwner.MINE,
                             // The pull gesture lives on the grid, the progress bar
                             // on the profile header the route above draws - one
                             // refresh, two places it is visible from.

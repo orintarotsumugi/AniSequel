@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -370,12 +371,10 @@ private fun NovaLibraryBody(
 
 @Composable
 private fun NovaLibraryResolving() {
-    // The shape of the grid that is coming, not a spinner in the middle of an
-    // empty page. The spinner said "something is happening"; the poster outlines
-    // say what and where, so the covers land into a page that already has its
-    // layout instead of replacing a blank one. One shimmer clock for every
-    // skeleton on screen - see `rememberShimmerPhase`.
+    // The shape of the library that is coming, matched to the selected view mode so
+    // covers/rows replace placeholders in place instead of jumping from a generic grid.
     val phase = rememberShimmerPhase()
+    val viewMode = LocalLibraryViewMode.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -393,24 +392,72 @@ private fun NovaLibraryResolving() {
                 )
             }
         }
-        repeat(2) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(3) {
-                    Column(modifier = Modifier.weight(1f)) {
+        when (viewMode) {
+            LibraryViewMode.LIST,
+            LibraryViewMode.TABLE,
+            LibraryViewMode.GROUPED -> {
+                repeat(if (viewMode == LibraryViewMode.TABLE) 6 else 7) { index ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         ShimmerBox(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(0.68f),
-                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.size(width = 40.dp, height = 56.dp),
+                            shape = RoundedCornerShape(10.dp),
                             phase = phase
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        ShimmerBox(
-                            modifier = Modifier
-                                .fillMaxWidth(0.82f)
-                                .height(10.dp),
-                            phase = phase
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .fillMaxWidth(if (index % 2 == 0) 0.72f else 0.56f)
+                                    .height(12.dp),
+                                phase = phase
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            ShimmerBox(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.38f)
+                                    .height(10.dp),
+                                phase = phase
+                            )
+                        }
+                        if (viewMode == LibraryViewMode.TABLE) {
+                            ShimmerBox(
+                                modifier = Modifier.size(width = 34.dp, height = 10.dp),
+                                phase = phase
+                            )
+                        }
+                    }
+                }
+            }
+            else -> {
+                val columns = viewMode.columns.coerceAtLeast(1)
+                val showCaptions = viewMode != LibraryViewMode.COVERS &&
+                    viewMode != LibraryViewMode.SHELF
+                val rows = if (columns >= 4) 3 else 2
+                repeat(rows) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(columns.coerceAtMost(5)) { index ->
+                            Column(modifier = Modifier.weight(1f)) {
+                                ShimmerBox(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(if (viewMode == LibraryViewMode.CARDS) 0.66f else 0.68f),
+                                    shape = RoundedCornerShape(16.dp),
+                                    phase = phase
+                                )
+                                if (showCaptions) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    ShimmerBox(
+                                        modifier = Modifier
+                                            .fillMaxWidth(if (index % 3 == 0) 0.82f else 0.62f)
+                                            .height(10.dp),
+                                        phase = phase
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
