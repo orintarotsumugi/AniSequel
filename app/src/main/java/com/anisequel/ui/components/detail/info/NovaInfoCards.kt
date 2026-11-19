@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,8 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,7 +58,10 @@ import com.anisequel.data.model.rankingList
 import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.components.cards.unseamedCover
+import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import java.util.Locale
@@ -101,13 +103,25 @@ private data class NovaStat(val label: String, val value: String)
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun NovaStatsCard(
     media: MediaNode,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Whether the detail response is still in flight.
+     *
+     * The list keeps this card's slot while it is loading (see `novaPageItems`),
+     * so an empty strip here is *reserved*, not absent: drawing nothing would leave
+     * a bare `primaryContainer` rectangle, and returning early would collapse the
+     * item and make every card below jump up. The placeholders are the four labels
+     * the strip is about to carry, with the numbers still shimmering.
+     */
+    isLoading: Boolean = false
 ) {
     var selectedStat by remember(media.type, media.id) { mutableStateOf<String?>(null) }
-    val sheetState = rememberBottomSheetState(
-        initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.PartiallyExpanded, SheetValue.Expanded)
-    )
+    // The shared full-height state, not a hand-built one. This sheet used to be
+    // measured with `PartiallyExpanded` enabled as well, so the statistics drawer
+    // could settle half-open on a tall distribution list - the top of the drawer
+    // cut off mid-row with nothing to drag but the scrim. Every other sheet in the
+    // app opens to one stop; this one is no longer the exception.
+    val sheetState = rememberFullHeightSheetState()
     val stats = remember(media) {
         buildList {
             media.averageScore?.takeIf { it > 0 }?.let { score ->
@@ -154,7 +168,11 @@ internal fun NovaStatsCard(
     } else {
         rememberAiringCountdown(media)
     }
-    if (stats.isEmpty() && countdown == null) return
+    // Loading and *empty*: a summary node that already carries some numbers keeps
+    // them on screen while the rest arrives, rather than replacing live data with
+    // shimmer it already has.
+    val placeholder = isLoading && stats.isEmpty() && countdown == null
+    if (stats.isEmpty() && countdown == null && !placeholder) return
     val episode = media.airingEpisodeNumber
 
     Surface(
@@ -182,38 +200,13 @@ internal fun NovaStatsCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                stats.forEach { stat ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(MaterialTheme.shapes.small)
-                            .combinedClickable(
-                                role = Role.Button,
-                                onClickLabel = "Show ${stat.label} details",
-                                onClick = { selectedStat = stat.label },
-                                onLongClickLabel = "Show ${stat.label} details",
-                                onLongClick = { selectedStat = stat.label }
-                            )
-                            .padding(vertical = 3.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = stat.value,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = stat.label,
-                            // `labelSmall`, not `labelMedium`: four columns on a
-                            // 360dp phone leave about 78dp each, and "Popularity"
-                            // at labelMedium ellipsizes into "Populari...".
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                if (placeholder) {
+                    NovaStatsPlaceholder(media = media)
+                } else {
+                    stats.forEach { stat ->
+                        NovaStatCell(
+                            stat = stat,
+                            onClick = { selectedStat = stat.label }
                         )
                     }
                 }
@@ -739,6 +732,92 @@ internal fun NovaTrailerCard(
                     text = media.displayName,
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.78f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+/** One number of the strip: its value over its label, tappable for the drawer. */
+@Composable
+private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(MaterialTheme.shapes.small)
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = "Show ${stat.label} details",
+                onClick = onClick,
+                onLongClickLabel = "Show ${stat.label} details",
+                onLongClick = onClick
+            )
+            .padding(vertical = 3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stat.value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = stat.label,
+            // `labelSmall`, not `labelMedium`: four columns on a 360dp phone
+            // leave about 78dp each, and "Popularity" at labelMedium ellipsizes
+            // into "Populari...".
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The four cells of [NovaStatsCard] while its numbers are still loading.
+ *
+ * One `rememberShimmerPhase` for the row, not one per box: the phase is the frame
+ * clock, and four copies of it are four infinite transitions running behind one
+ * card. The labels are real because they are already known - it is only the values
+ * that are in flight - so the strip does not change shape when the numbers land.
+ */
+@Composable
+private fun NovaStatsPlaceholder(media: MediaNode) {
+    val labels = if (media.isManga) {
+        listOf("Score", "Popularity", "Favourites", "Chapters")
+    } else {
+        listOf("Score", "Popularity", "Favourites", "Duration")
+    }
+    val phase = rememberShimmerPhase()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        labels.forEach { label ->
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(vertical = 3.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(46.dp)
+                        .height(20.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
+                    phase = phase
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

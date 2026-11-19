@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaEntryEdit
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasNotAired
 import com.anisequel.data.model.isManga
 import com.anisequel.domain.list.ListStatuses
@@ -118,6 +120,13 @@ internal fun DetailEditTab(
 ) {
     val isManga = media.isManga
     var progressControlsExpanded by remember(media.id, media.type) { mutableStateOf(false) }
+    // Confirmations, not taps that write immediately. Delete throws away the
+    // progress, score, dates and note with the entry and AniList has no undo for
+    // it, while the button sits one thumb-width from Save; and a save sends the
+    // whole staged form, so it is worth one sentence naming what is about to be
+    // written rather than a mis-tap that leaves the reader editing to reverse it.
+    var confirmDelete by remember(media.id, media.type) { mutableStateOf(false) }
+    var confirmSave by remember(media.id, media.type) { mutableStateOf(false) }
     val editorScrollState = rememberScrollState()
 
     // A deliberate scroll dismisses the expanded stepper; tapping the progress
@@ -575,30 +584,9 @@ internal fun DetailEditTab(
                 ) {
                     val deleteInteraction = remember { MutableInteractionSource() }
                     OutlinedButton(
-                        onClick = {
-                            val entryId = entryState.entryId ?: return@OutlinedButton
-                            state.isSaving = true
-                            state.statusMessage = null
-                            scope.launch {
-                                try {
-                                    editor.delete(entryId).fold(
-                                        onSuccess = {
-                                            // Back to an entry that does not exist yet, so the
-                                            // form is ready to create a fresh one rather than
-                                            // showing the values that were just removed.
-                                            state.cleared()
-                                            state.statusMessage = "Removed from your list"
-                                        },
-                                        onFailure = {
-                                            state.statusMessage =
-                                                it.message ?: "Couldn't remove this entry."
-                                        }
-                                    )
-                                } finally {
-                                    state.isSaving = false
-                                }
-                            }
-                        },
+                        // The request itself lives in the confirmation below, so a
+                        // tap on Delete cannot remove an entry by itself.
+                        onClick = { confirmDelete = true },
                         enabled = !state.isSaving && entryState.entryId != null,
                         // 48dp, the app's expressive button height, rather than the
                         // 46dp this used to be: it sits beside the primary action, and
@@ -623,7 +611,7 @@ internal fun DetailEditTab(
                     // light disc with a coloured hole rather than the button thinking.
                     ExpressivePrimaryButton(
                         text = "Save changes",
-                        onClick = { persist(entryState) },
+                        onClick = { confirmSave = true },
                         modifier = Modifier.weight(1.3f),
                         loading = state.isSaving,
                         enabled = state.hasUnsavedChanges,
@@ -632,6 +620,89 @@ internal fun DetailEditTab(
                 }
             }
         }
+    }
+
+    if (confirmDelete) {
+        val entryId = state.draft?.entryId
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            icon = { Icon(AppVectorIcons.Warning, contentDescription = null) },
+            title = { Text("Delete this entry?") },
+            text = {
+                Text(
+                    "This removes ${media.displayName} from your AniList list, " +
+                        "together with its progress, score, dates and private note. " +
+                        "It cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        if (entryId == null) return@TextButton
+                        state.isSaving = true
+                        state.statusMessage = null
+                        scope.launch {
+                            try {
+                                editor.delete(entryId).fold(
+                                    onSuccess = {
+                                        // Back to an entry that does not exist yet, so the
+                                        // form is ready to create a fresh one rather than
+                                        // showing the values that were just removed.
+                                        state.cleared()
+                                        state.statusMessage = "Removed from your list"
+                                    },
+                                    onFailure = {
+                                        state.statusMessage =
+                                            it.message ?: "Couldn't remove this entry."
+                                    }
+                                )
+                            } finally {
+                                state.isSaving = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("edit_delete_confirm")
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { confirmDelete = false },
+                    modifier = Modifier.testTag("edit_delete_cancel")
+                ) { Text("Keep it") }
+            }
+        )
+    }
+
+    if (confirmSave) {
+        AlertDialog(
+            onDismissRequest = { confirmSave = false },
+            icon = { Icon(AppVectorIcons.CheckCircle, contentDescription = null) },
+            title = { Text("Save these changes?") },
+            text = {
+                Text(
+                    "This writes the status, progress, score, dates, privacy and " +
+                        "note shown here to your AniList entry for ${media.displayName}."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmSave = false
+                        persist(entryState)
+                    },
+                    modifier = Modifier.testTag("edit_save_confirm")
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { confirmSave = false },
+                    modifier = Modifier.testTag("edit_save_cancel")
+                ) { Text("Cancel") }
+            }
+        )
     }
 
     val picker = state.openDatePicker

@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,6 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
@@ -50,6 +53,7 @@ import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
+import com.anisequel.ui.theme.rememberAnimatedColorScheme
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import kotlinx.coroutines.launch
 
@@ -149,7 +153,7 @@ fun NovaInfoPage(
         ?: CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
     val standingScheme = MaterialTheme.colorScheme
-    val pageScheme = remember(coverSeed, darkTheme) {
+    val derivedScheme = remember(coverSeed, darkTheme) {
         coverSeed?.let { seed ->
             val (light, dark) = DynamicThemeBuilder.createDynamicSchemes(
                 seed = seed,
@@ -158,6 +162,17 @@ fun NovaInfoPage(
             if (darkTheme) dark else light
         }
     } ?: standingScheme
+    // The seed is read from the bitmap *after* the sheet is on screen, so the page
+    // used to open on the standing scheme and cut to the cover's a frame or two
+    // later - a flash on every first open of a title. `rememberAnimatedColorScheme`
+    // eases each role between the two on the shared colour tokens, so the corrected
+    // palette below lands as the page taking on a tint rather than as a repaint, and
+    // it still changes in one frame under Instant and in one straight line under
+    // Smooth, because those tokens branch on the reader's Motion style.
+    val correctedScheme = remember(derivedScheme, standingScheme) {
+        correctPageScheme(cover = derivedScheme, standing = standingScheme)
+    }
+    val pageScheme = rememberAnimatedColorScheme(correctedScheme)
 
     val themeSongs by rememberThemeSongs(media)
     // The same scroll-derived values as the classic page, from the same helpers:
@@ -346,12 +361,19 @@ private fun LazyListScope.novaPageItems(
         }
     }
 
+    // The strip keeps its slot while the detail is in flight. It used to be
+    // gated only on the data, so a summary node without a score dropped the card
+    // and every section below it sat one card higher - then the detail landed and
+    // the whole page jumped down by the height of the strip. A reserved slot with
+    // its numbers shimmering is both the honest waiting state and the stable one.
     cardItem(
         key = "nova_stats",
         index = 3,
         entranceKey = revealKey,
-        visible = novaHasStats(media)
-    ) { NovaStatsCard(media = media, modifier = it) }
+        visible = novaHasStats(media) || isDetailLoading
+    ) {
+        NovaStatsCard(media = media, modifier = it, isLoading = isDetailLoading)
+    }
 
     cardItem(
         key = "nova_progress",
@@ -472,3 +494,58 @@ private fun LazyListScope.novaPageItems(
         InfoExtrasCard(media = media, onOpenCover = onOpenCover, modifier = it)
     }
 }
+
+/**
+ * How much of the cover's neutral ramp is pulled back toward the app's own.
+ *
+ * Small on purpose. The page must still read as *this title's* page - the whole
+ * point of a cover-derived scheme - but the tonal ladder is sampled from a single
+ * seed, and a saturated cover (a hot pink poster, a neon green one) pushes every
+ * neutral in it toward that hue. The cards on this page are translucent over a
+ * blurred backdrop, so a fully tinted `surfaceContainer` ramp is not read against
+ * one colour: it is read against the artwork showing through. Fourteen percent is
+ * enough to keep the page's neutrals in the same family as the app around it and
+ * its body text at the contrast the theme guarantees, without draining the cover
+ * out of the page.
+ */
+private const val NEUTRAL_CORRECTION = 0.14f
+
+/** One neutral, moved part of the way back to the reader's standing neutral. */
+private fun Color.correctedToward(standing: Color): Color =
+    lerp(this, standing, NEUTRAL_CORRECTION)
+
+/**
+ * Colour-corrects the cover scheme before the page wears it.
+ *
+ * Only the **neutrals** move. `primary`, `secondary` and `tertiary` and their
+ * containers stay exactly what the seed produced, because they are the title's
+ * identity - the entry capsule and the two summary cards are the page saying
+ * "this is the colour of the thing you opened". The surfaces and outlines are
+ * infrastructure: the cards, the docked bar, the sheet behind a stat drawer. A
+ * surface that has taken the cover's full chroma makes every caption on it work
+ * for its contrast against a background that is partly the blurred artwork, and
+ * the difference between a legible page and a glowing one is a few percent of
+ * saturation rather than a different palette.
+ *
+ * Applied before [rememberAnimatedColorScheme], so this correction is part of
+ * what the colour spring animates toward rather than a second cut on top of it.
+ */
+private fun correctPageScheme(cover: ColorScheme, standing: ColorScheme): ColorScheme =
+    cover.copy(
+        background = cover.background.correctedToward(standing.background),
+        surface = cover.surface.correctedToward(standing.surface),
+        surfaceDim = cover.surfaceDim.correctedToward(standing.surfaceDim),
+        surfaceBright = cover.surfaceBright.correctedToward(standing.surfaceBright),
+        surfaceVariant = cover.surfaceVariant.correctedToward(standing.surfaceVariant),
+        surfaceContainerLowest = cover.surfaceContainerLowest
+            .correctedToward(standing.surfaceContainerLowest),
+        surfaceContainerLow = cover.surfaceContainerLow
+            .correctedToward(standing.surfaceContainerLow),
+        surfaceContainer = cover.surfaceContainer
+            .correctedToward(standing.surfaceContainer),
+        surfaceContainerHigh = cover.surfaceContainerHigh
+            .correctedToward(standing.surfaceContainerHigh),
+        surfaceContainerHighest = cover.surfaceContainerHighest
+            .correctedToward(standing.surfaceContainerHighest),
+        outlineVariant = cover.outlineVariant.correctedToward(standing.outlineVariant)
+    )

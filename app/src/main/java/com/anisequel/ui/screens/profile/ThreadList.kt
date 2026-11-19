@@ -93,7 +93,7 @@ internal fun ColumnScope.ThreadList(
             }
 
             when {
-                state.isLoading -> item(key = "loading") {
+                state.isLoading -> item(key = "loading", contentType = "loading") {
                     // The rows that are coming, at the sizes they will have. A
                     // spinner here was the one waiting state in the app whose shape
                     // was already known and thrown away.
@@ -103,7 +103,17 @@ internal fun ColumnScope.ThreadList(
                     // comments were on screen and while the editor covered them, for
                     // a skeleton that was not drawn. Composed here, it exists only
                     // for as long as the waiting state does.
-                    CommentRowsSkeleton(phase = rememberShimmerPhase())
+                    // The rows that replace it already fade in on the list's effect
+                    // tokens; this slot was the one that simply vanished, so the wait
+                    // ended in a cut. On the same pair the swap reads as one state
+                    // becoming the next rather than as a screen being swapped out.
+                    CommentRowsSkeleton(
+                        phase = rememberShimmerPhase(),
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
+                    )
                 }
 
                 state.replies.isEmpty() -> threadEmptyContent(

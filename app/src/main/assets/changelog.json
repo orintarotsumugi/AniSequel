@@ -1,6 +1,68 @@
 {
   "versions": [
     {
+      "version": "2.4.2",
+      "entries": [
+        {
+          "title": "A banner preview shows the whole banner",
+          "detail": "Choosing Banner in the Details page editor used to preview the wide key visual cropped into a portrait card, so its left and right thirds were simply not there - the preview showed a slice of the artwork and the reader had to guess at the rest. The preview now draws the banner through the same pannable artwork the profile's banner uses: it covers the card with no gap and slowly sweeps across the picture, so the whole banner is reachable, and the blur and tint still apply to it."
+        },
+        {
+          "title": "The Nova hero keeps its artwork inside the hero",
+          "detail": "The hero's artwork is over-covered and drifts against the scroll, and that transform was never clipped: at the end of a scroll its lower edge sat up to ~47dp below the hero's own item, painting a strip of banner at the hero's zoom into the gap above the first card - artwork that belonged to the top of the page appearing between the cards. The hero now clips its picture to its own bounds, so the page below it is the page and not a second crop of the key visual."
+        },
+        {
+          "title": "The progress wave holds its shape while it fills",
+          "detail": "The wave's amplitude was read from the fill as it animated, so its whole length - including the part nobody has watched - inflated from a flat line to full height on every entrance and settled afterwards. The wave now stands at your progress from the first frame and only the coloured length springs to it, so the track is steady and the fill is the thing that moves."
+        },
+        {
+          "title": "The Nova numbers keep their place while they load",
+          "detail": "The four-number strip under the hero was drawn only once the detail response arrived, so opening a title showed the page without it and then pushed every card below it down when it appeared. The strip now reserves its slot while the page is loading, with its four labels in place and the numbers shimmering, and the real values land in the cells they already occupy."
+        }
+      ]
+    },
+    {
+      "version": "2.4.1",
+      "entries": [
+        {
+          "title": "My Entry opens at full height again",
+          "detail": "The editor overlay now opens to the full height of the window instead of stopping at a 60% peek, so the whole form is there in one place: status, progress, score, start and finish dates, the private switch, the note and the pinned Save and Delete bar. The sheet is measured once and moved in the draw phase, which also removes the squash the form used to do while it rose - the fields no longer re-flow and the action bar no longer slides under your thumb on the way up. Dragging the handle down still collapses it to the 60% peek, and dragging it back up or past the bottom settles it, all on the Motion style you chose."
+        },
+        {
+          "title": "Delete and save ask before they write",
+          "detail": "Deleting an entry now opens an 'Are you sure?' dialog naming the title and stating that the progress, score, dates and note go with it, because AniList has no undo and the button sits one thumb-width from Save. Save changes asks the same way, and names the fields it is about to write, instead of sending the staged form on a single tap."
+        },
+        {
+          "title": "Nova no longer flashes a blank page",
+          "detail": "The opening and closing transition is applied to the dialog's whole surface rather than to the content inside it. The surface is what paints the page's background, so fading only its children left an opaque rectangle of app colour on screen for the first and last frames of every open and close - the flash that read as the page failing to arrive. The entrance is now the window settling in over the list in both directions, and the editor overlay follows it."
+        },
+        {
+          "title": "The Nova palette settles instead of switching",
+          "detail": "The cover's colour is read from the artwork after the page is already on screen, so the page used to open on the standing scheme and cut to the cover's a frame or two later. The scheme now eases between the two on the shared colour tokens, and the surface ramp is colour-corrected back toward your own theme by a small amount so a saturated cover cannot make the translucent cards glow or cost their captions contrast. Accents stay exactly the cover's, and Instant still changes in one frame because the colour tokens follow the Motion setting."
+        },
+        {
+          "title": "The statistics drawer always opens fully",
+          "detail": "The score, popularity, favourites and length drawer is measured with the app's shared full-height sheet state. It could previously settle half-open on a tall distribution list, leaving the top of the drawer cut off mid-row with nothing to drag but the scrim."
+        },
+        {
+          "title": "Comments read AniList's HTML the way the site does",
+          "detail": "The site's markdown guide lists headings, quotations, lists, rules, preformatted blocks and centred paragraphs in their HTML spellings, and comments, messages and bios using them arrived as one run-on line: the tags were unwrapped and the shape was lost. They are now translated into the blocks this renderer already draws, so a quoted paragraph is a quotation and a list is a list. Backslash escapes work too - writing \\*not italic\\* now prints the asterisks instead of turning the words italic."
+        },
+        {
+          "title": "A poster no longer blinks out of a comment you edited",
+          "detail": "A comment or bio that links an AniList title draws a poster card, and editing the text around those links cleared every poster on the row until the request came back - a visible blink, and a second look-up for artwork the app already had. The resolved posters and character faces now outlive the edit and the request is narrowed to the links that are actually new, so an edit that adds one title asks for that title alone."
+        },
+        {
+          "title": "Loading older messages moves the conversation",
+          "detail": "The bubbles in a direct message were drawn by position rather than by message, so fetching an earlier page rebuilt every bubble below the new ones: each re-parsed its markdown and asked again for the posters on its links, and the whole conversation flickered instead of sliding down. Each bubble is now keyed by its own message, so an earlier page arrives above the conversation without disturbing it."
+        },
+        {
+          "title": "The waiting rows fade into the comments",
+          "detail": "The placeholder rows shown while a thread loads were the one slot in the list that vanished on the frame the comments arrived, which read as a cut rather than as the wait ending. They now leave on the same fade and placement tokens every comment row already uses, so the skeleton becoming the conversation is one movement instead of two frames."
+        }
+      ]
+    },
+    {
       "version": "2.3.9",
       "entries": [
         {

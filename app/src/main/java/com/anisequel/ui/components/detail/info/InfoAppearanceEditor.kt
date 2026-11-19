@@ -53,6 +53,8 @@ import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.BackdropFit
+import com.anisequel.ui.components.PannableBackdrop
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -306,9 +308,9 @@ private fun InfoAppearancePreview(
     // preview that ignores the BetterPosters setting is a picture of an app the
     // reader does not have.
     val chosenPoster = cardPosterUrl(media)
+    val banner = media.bannerImage?.takeIf { it.isNotBlank() }
     val artwork = when (source) {
-        InfoBackdropSource.BANNER -> media.bannerImage?.takeIf { it.isNotBlank() }
-            ?: chosenPoster
+        InfoBackdropSource.BANNER -> banner ?: chosenPoster
         InfoBackdropSource.COVER -> chosenPoster
         InfoBackdropSource.OFF -> null
     }
@@ -344,16 +346,38 @@ private fun InfoAppearancePreview(
                     label = "info_appearance_preview_artwork",
                     modifier = Modifier.fillMaxSize()
                 ) { active ->
-                    AsyncImage(
-                        model = active,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        alignment = Alignment.TopCenter,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(artworkBlur)
-                            .background(surface)
-                    )
+                    if (banner != null && active == banner) {
+                        // A wide key visual used to be drawn with `Crop` into this
+                        // portrait card, and Crop keeps whichever middle slice fits:
+                        // the left and right thirds of the banner were simply gone
+                        // from the preview, so selecting "Banner" showed a slice of
+                        // the artwork rather than the artwork. `PannableBackdrop`
+                        // computes the cover fit itself and sweeps the picture across
+                        // its own overflow, so the whole banner is reachable without
+                        // ever leaving a gap in the card - the same component the
+                        // profile's banner uses.
+                        PannableBackdrop(
+                            model = active,
+                            contentDescription = null,
+                            fit = BackdropFit.COVER,
+                            drift = true,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(artworkBlur)
+                                .background(surface)
+                        )
+                    } else {
+                        AsyncImage(
+                            model = active,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            alignment = Alignment.TopCenter,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(artworkBlur)
+                                .background(surface)
+                        )
+                    }
                 }
 
                 if (tint == InfoBackdropTint.TINTED) {

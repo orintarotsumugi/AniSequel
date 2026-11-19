@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -419,7 +420,21 @@ fun SequelDetailSheet(
     var showEntrySheet by rememberSaveable(subject.mediaId, subject.media.type) {
         mutableStateOf(false)
     }
+    // How much of the entry overlay sits below the viewport: 0 is fully open, 1 is
+    // off-screen. The height itself is now fixed - see the sheet's `graphicsLayer`
+    // below - so this value is a draw-phase translation and nothing here re-measures
+    // the form while it moves.
     val sheetOffset = remember(subject.mediaId, subject.media.type) { Animatable(1f) }
+    // A drag writes these synchronously; the Animatable only owns the settle. The
+    // handle used to `launch { snapTo(...) }` once per pointer event, so one flick
+    // queued a dozen coroutines that each cancelled the previous one and the sheet
+    // visibly lagged the finger.
+    var sheetDragging by remember(subject.mediaId, subject.media.type) {
+        mutableStateOf(false)
+    }
+    var dragFraction by remember(subject.mediaId, subject.media.type) {
+        mutableFloatStateOf(1f)
+    }
     val closeEntrySheet: () -> Unit = {
         scope.launch {
             sheetOffset.animateTo(1f, ExpressiveMotion.SettleSpatial)
@@ -428,10 +443,30 @@ fun SequelDetailSheet(
     }
     LaunchedEffect(showEntrySheet) {
         if (showEntrySheet) {
+            // Opened at full height, not stopped at a peek. The form is status,
+            // progress, score, two dates, the private switch, the note and its
+            // pinned action bar - a sheet that stopped at 60% drew three rows and
+            // an action bar and looked like a finished, short form, with every
+            // field below Score hidden behind a scroll nothing suggested. The
+            // handle still collapses it to a 60% peek for a reader who wants the
+            // page behind it.
+            sheetDragging = false
             sheetOffset.snapTo(1f)
-            sheetOffset.animateTo(0.4f, ExpressiveMotion.DefaultSpatial)
+            sheetOffset.animateTo(0f, ExpressiveMotion.DefaultSpatial)
         } else {
+            sheetDragging = false
             sheetOffset.snapTo(1f)
+        }
+    }
+
+    // Opening My Entry is also the moment to retry an entry load that never landed.
+    // The entry is fetched when the title opens, so a request that failed while the
+    // reader was still reading left the editor on its error card - and the only
+    // retry was inside that card. `load` is a no-op once a draft exists, so this
+    // cannot spend a second request on a healthy form.
+    LaunchedEffect(showEntrySheet, subject.mediaId, subject.media.type, entryEditor) {
+        if (showEntrySheet && entryEditor != null && editState.loadError != null) {
+            editState.load(entryEditor, subject.mediaId)
         }
     }
 
@@ -461,6 +496,20 @@ fun SequelDetailSheet(
         Surface(
             modifier = modifier
                 .fillMaxSize()
+                // The entrance belongs to the Surface, not to the content inside
+                // it. The Surface is what paints the page's background, so fading
+                // and scaling only its children left an opaque flat rectangle of
+                // app colour on screen for the first and last frames of every open
+                // and close - the page appeared to flash a blank sheet before it
+                // arrived, and again after it left. Fading the whole window is what
+                // makes it read as the page settling in over the list.
+                .graphicsLayer {
+                    alpha = entrance.value
+                    val scale = 0.985f + (0.015f * entrance.value)
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = (1f - entrance.value) * 22.dp.toPx()
+                }
                 .testTag("sequel_detail_sheet"),
             color = MaterialTheme.colorScheme.surface
         ) {
@@ -498,17 +547,7 @@ fun SequelDetailSheet(
             val density = LocalDensity.current
             val containerHeightPx = with(density) { maxHeight.toPx() }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = entrance.value
-                        val scale = 0.985f + (0.015f * entrance.value)
-                        scaleX = scale
-                        scaleY = scale
-                        translationY = (1f - entrance.value) * 22.dp.toPx()
-                    }
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 if (LocalInfoPageStyle.current == InfoPageStyle.NOVA) {
                     NovaInfoPage(
                         subject = subject,
@@ -581,29 +620,67 @@ fun SequelDetailSheet(
                             .padding(bottom = if (immersive) 12.dp else 0.dp)
                             .graphicsLayer {
                                 if (showEntrySheet) {
+                                    // Read the live offset here so the capsule follows
+                                    // the finger during a drag instead of only
+                                    // catching up when the sheet settles.
+                                    val hidden = if (sheetDragging) {
+                                        dragFraction
+                                    } else {
+                                        sheetOffset.value
+                                    }
                                     translationY = -(
-                                        (1f - sheetOffset.value) * containerHeightPx +
+                                        (1f - hidden) * containerHeightPx +
                                             dockHeightPx + 12.dp.toPx()
                                         )
-                                    alpha = (sheetOffset.value / 0.4f).coerceIn(0f, 1f)
+                                    alpha = (hidden / 0.4f).coerceIn(0f, 1f)
                                 }
                             }
                     )
                 }
 
                 if (showEntrySheet && entryEditor != null) {
-                    // The sheet is 60% visible on first open (40% translated below
-                    // the viewport). Pulling its handle upward reveals the full
-                    // editor; pulling down returns to the 60% resting position.
+                    // The sheet opens at the full height of the window and is
+                    // translated down from there. Its three stops are the open
+                    // position, the 60% peek its handle drags to, and closed;
+                    // it used to *open* on the peek, which is why the form looked
+                    // cut down to its first three rows.
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxHeight(1f - sheetOffset.value)
+                            // The full height is laid out once and the sheet is moved
+                            // in the draw phase. Sizing it to `1f - offset` made every
+                            // frame of the open animation re-measure and re-flow the
+                            // form: the rows squashed while the sheet rose, and the
+                            // pinned Save bar slid under the reader's thumb.
+                            .fillMaxHeight()
                             .align(Alignment.BottomCenter)
+                            .graphicsLayer {
+                                val hidden = if (sheetDragging) {
+                                    dragFraction
+                                } else {
+                                    sheetOffset.value
+                                }
+                                translationY = hidden * containerHeightPx
+                            }
                             .background(
                                 MaterialTheme.colorScheme.surface,
                                 RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                             )
+                            // Claim the overlay's own area. A Column has no pointer
+                            // handler of its own, so a tap on the sheet's padding was
+                            // hit-tested straight through to the Info page composed
+                            // underneath it - opening a relation card or scrolling the
+                            // synopsis behind the editor. One handler here is enough
+                            // to make the sheet the hit target for every point it
+                            // covers; it consumes nothing, so the fields inside it
+                            // still receive their own events.
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        awaitPointerEvent()
+                                    }
+                                }
+                            }
                             .statusBarsPadding()
                             .immersiveDisplayInsets(immersive)
                             .imePadding()
@@ -617,21 +694,62 @@ fun SequelDetailSheet(
                                 .height(28.dp)
                                 .pointerInput(containerHeightPx, showEntrySheet) {
                                     detectVerticalDragGestures(
+                                        onDragStart = {
+                                            // Start from wherever the sheet actually
+                                            // is, so grabbing it mid-spring does not
+                                            // jump it back to its resting offset.
+                                            dragFraction = sheetOffset.value
+                                            sheetDragging = true
+                                        },
                                         onVerticalDrag = { change, dragAmount ->
                                             change.consume()
-                                            scope.launch {
-                                                val fraction = if (containerHeightPx > 0f) {
-                                                    dragAmount / containerHeightPx
-                                                } else 0f
-                                                sheetOffset.snapTo(
-                                                    (sheetOffset.value + fraction).coerceIn(0f, 0.4f)
-                                                )
+                                            if (containerHeightPx > 0f) {
+                                                dragFraction = (
+                                                    dragFraction + dragAmount / containerHeightPx
+                                                    ).coerceIn(0f, 1f)
                                             }
                                         },
                                         onDragEnd = {
+                                            // Three stops: open, the 60% peek, and
+                                            // closed. The peek is the resting height
+                                            // the 2.4 sheet documented; the sheet now
+                                            // *opens* past it, so reaching it is a
+                                            // choice rather than the first thing the
+                                            // reader has to undo.
+                                            val target = when {
+                                                dragFraction < 0.18f -> 0f
+                                                dragFraction < 0.62f -> 0.4f
+                                                else -> 1f
+                                            }
                                             scope.launch {
-                                                val target = if (sheetOffset.value < 0.2f) 0f else 0.4f
-                                                sheetOffset.animateTo(target, ExpressiveMotion.SettleSpatial)
+                                                // Hand the drag's last position to the
+                                                // animatable before the gesture state
+                                                // stops drawing from it, or the sheet
+                                                // snaps back for one frame.
+                                                sheetOffset.snapTo(dragFraction)
+                                                sheetDragging = false
+                                                if (target >= 1f) {
+                                                    sheetOffset.animateTo(
+                                                        1f,
+                                                        ExpressiveMotion.SettleSpatial
+                                                    )
+                                                    showEntrySheet = false
+                                                } else {
+                                                    sheetOffset.animateTo(
+                                                        target,
+                                                        ExpressiveMotion.DefaultSpatial
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onDragCancel = {
+                                            scope.launch {
+                                                sheetOffset.snapTo(dragFraction)
+                                                sheetDragging = false
+                                                sheetOffset.animateTo(
+                                                    0f,
+                                                    ExpressiveMotion.SettleSpatial
+                                                )
                                             }
                                         }
                                     )
@@ -687,11 +805,23 @@ fun SequelDetailSheet(
                                 )
                             }
                         }
+                        // `weight(1f)`, not the default `fillMaxSize()`. A
+                        // Column measures non-weighted children against an
+                        // unbounded height, so the tab's own `weight(1f)` scroll
+                        // area and its pinned action bar were being measured
+                        // against infinity: the fields drew wherever they landed
+                        // and the bar sat directly under the third row, which is
+                        // exactly the cut-down form in the report. Weighting it
+                        // hands the tab the space between the header and the
+                        // bottom of the sheet, which is what makes the full form
+                        // - dates, private switch, notes and the action bar -
+                        // scroll inside a bounded box.
                         DetailEditTab(
                             media = media,
                             editor = entryEditor,
                             state = editState,
-                            scope = scope
+                            scope = scope,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }

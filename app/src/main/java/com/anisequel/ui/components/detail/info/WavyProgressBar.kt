@@ -216,7 +216,14 @@ fun WavyProgressBar(
         // The height the wave stands at is the reader's progress - at rest when
         // nothing is watched, full height at the end - and both halves are drawn
         // from this one amplitude, so the wave is continuous across the seam.
-        val amplitude = WaveGeometry.amplitude(maxAmplitude, progress = fill.value)
+        //
+        // Read from `target`, not from `fill.value`. Taking it from the animating
+        // fraction made the *whole* curve - including the unwatched track - rise
+        // from the resting height to full as the entrance ran, so a title at 7/12
+        // arrived as a flat line inflating into a wave and then settling. The wave
+        // is the progress, so it is drawn at the progress; only the coloured length
+        // is animated, which is the thing that says "this much is watched".
+        val amplitude = WaveGeometry.amplitude(maxAmplitude, progress = target)
         // Null when the bar was idle at composition time, which is a still wave -
         // zero phase, the shape the track has always had. `target` is read here
         // rather than at the transition above: a bar nobody has started does not
