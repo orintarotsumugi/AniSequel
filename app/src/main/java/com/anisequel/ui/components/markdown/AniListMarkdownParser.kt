@@ -694,6 +694,7 @@ object AniListMarkdownParser {
         Regex("""<(ul|ol)\b[^>]*>([\s\S]*?)</\1\s*>""", RegexOption.IGNORE_CASE)
     private val HTML_LIST_ITEM = Regex("""<li\b[^>]*>([\s\S]*?)</li\s*>""", RegexOption.IGNORE_CASE)
     private val HTML_PARAGRAPH_BLOCK = Regex("""<p\b([^>]*)>([\s\S]*?)</p\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_CENTER_BLOCK = Regex("""<center\b[^>]*>([\s\S]*?)</center\s*>""", RegexOption.IGNORE_CASE)
     private val HTML_CENTERED_ATTRIBUTE = Regex("""align\s*=\s*["']?center""", RegexOption.IGNORE_CASE)
     private val HTML_RULE = Regex("""<hr\b[^>]*>""", RegexOption.IGNORE_CASE)
 
@@ -718,6 +719,10 @@ object AniListMarkdownParser {
             "\n\n" + "#".repeat(level) + " " + match.groupValues[2].trim() + "\n\n"
         }
         out = HTML_RULE.replace(out, "\n\n---\n\n")
+        // Normalize center wrappers even when their tags share lines with text.
+        out = HTML_CENTER_BLOCK.replace(out) { match ->
+            "\n\n<center>\n" + match.groupValues[1].trim() + "\n</center>\n\n"
+        }
         // Paragraphs are flattened next, before the containers that may hold them:
         // a quoted paragraph is a `<p>` inside a `<blockquote>`, and marking the
         // quote first would leave the paragraph pass rewriting a line that had
