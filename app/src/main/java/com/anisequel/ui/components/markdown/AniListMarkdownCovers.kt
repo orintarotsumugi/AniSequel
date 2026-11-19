@@ -121,9 +121,10 @@ fun ProvideMediaCovers(
  * here means every host gets them with no plumbing, and the repository's cache
  * makes a document rendered twice free the second time.
  *
- * Keyed on the keys and the loader, not on the nodes, for the reason spelled out
- * on [AniListMarkdownWithCovers]: an edit to the prose around the same links must
- * neither re-request the faces nor clear the ones already drawn.
+ * Held across key sets for the reason spelled out on [AniListMarkdownWithCovers]:
+ * an edit to the prose around the same links must neither re-request the faces nor
+ * clear the ones already drawn - and one that adds a link must ask for that link
+ * alone.
  */
 @Composable
 internal fun rememberEntityPreviews(
@@ -131,12 +132,19 @@ internal fun rememberEntityPreviews(
     loader: EntityPreviewLoader? = LocalEntityPreviewLoader.current
 ): Map<EntityPreviewKey, EntityPreview> {
     val keys = remember(nodes) { entityPreviewKeysIn(nodes) }
-    var previews by remember(keys, loader) {
+    // The map outlives the document on purpose. Keying it on `keys` cleared every
+    // face on the row the moment an edit changed one link, and the row visibly
+    // redrew itself a frame later when the request came back.
+    var previews by remember(loader) {
         mutableStateOf<Map<EntityPreviewKey, EntityPreview>>(emptyMap())
     }
     LaunchedEffect(keys, loader) {
         if (keys.isEmpty() || loader == null) return@LaunchedEffect
-        previews = loader.load(keys)
+        // Only what is not resolved yet, so an edit that adds one link asks for
+        // that link rather than for every face on the row a second time.
+        val missing = keys.filterNot { key -> previews.containsKey(key) }
+        if (missing.isEmpty()) return@LaunchedEffect
+        previews = previews + loader.load(missing)
     }
     return previews
 }
@@ -153,12 +161,15 @@ internal fun rememberEntityPreviews(
  * [loader] defaults to [LocalMediaCoverLoader]; the parameter exists so a test
  * or a preview can answer without a composition local.
  *
- * The fetch is keyed on the keys and the loader, not on the nodes: an edit that
+ * The map is held across documents rather than keyed on the keys: an edit that
  * only changes the prose around the same links must not re-request posters the
  * app already has - and, just as importantly, must not *clear* the posters that
  * are already drawn. Keying the state on `nodes` while keying the effect on the
  * keys did exactly that: the map reset to empty and the effect did not re-run,
- * because the keys were equal. A bio edited in place lost its artwork.
+ * because the keys were equal. Keying it on the keys fixed that one case and left
+ * the other: a comment edited to add a second linked title cleared the poster it
+ * already had. The state now outlives both, and the request is narrowed to the
+ * keys that are still missing.
  *
  * A failed fetch is not an error state - a card with no poster is the
  * pre-cover rendering, and that is what a missing cover looks like. The loader
@@ -175,12 +186,16 @@ fun AniListMarkdownWithCovers(
     loader: MediaCoverLoader? = LocalMediaCoverLoader.current
 ) {
     val keys = remember(nodes) { mediaCoverKeysIn(nodes) }
-    var covers by remember(keys, loader) {
+    // Deliberately not keyed on `keys`: see the note on this function. A document
+    // that gains a link keeps the posters it already has and asks for the new one.
+    var covers by remember(loader) {
         mutableStateOf<Map<MediaCoverKey, MediaCover>>(emptyMap())
     }
     LaunchedEffect(keys, loader) {
         if (keys.isEmpty() || loader == null) return@LaunchedEffect
-        covers = loader.load(keys)
+        val missing = keys.filterNot { key -> covers.containsKey(key) }
+        if (missing.isEmpty()) return@LaunchedEffect
+        covers = covers + loader.load(missing)
     }
 
     AniListMarkdownView(

@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -151,8 +152,15 @@ internal fun ConversationBody(
             }
         }
 
+        // Keyed by the line, not by position. "Earlier messages" prepends a page
+        // above everything, and without the key every bubble below it was rebuilt
+        // in the slot its neighbour had just left: each one re-parsed its markdown
+        // and re-asked for the posters on its links, so loading older messages
+        // flickered the whole conversation instead of moving it.
         lines.forEach { line ->
-            ConversationRow(line = line)
+            key(line.key) {
+                ConversationRow(line = line)
+            }
         }
     }
 }

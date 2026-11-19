@@ -673,6 +673,130 @@ object AniListMarkdownParser {
         }
     }
 
+    /**
+     * The HTML block tags AniList documents as supported, spelled as markup.
+     *
+     * `<h1>`-`<h5>`, `<hr>`, `<blockquote>`, `<pre>`, `<ul>`/`<ol>`/`<li>` and
+     * `<p align>` are all listed on the site's own markdown guide, and the site
+     * renders each as the block it names. Here they used to be *unwrapped* like
+     * any unknown tag: the words survived but the shape did not, so a quoted
+     * paragraph arrived as a run-on sentence and a list as one line with dashes
+     * in it. Translating them into the markdown this parser already understands
+     * is the smaller change and the honest one - the block walk stays the only
+     * thing that decides what a block is.
+     */
+    private val HTML_PRE_BLOCK = Regex("""<pre\b[^>]*>([\s\S]*?)</pre\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_HEADING_BLOCK =
+        Regex("""<h([1-5])\b[^>]*>([\s\S]*?)</h\1\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_BLOCKQUOTE_BLOCK =
+        Regex("""<blockquote\b[^>]*>([\s\S]*?)</blockquote\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_LIST_BLOCK =
+        Regex("""<(ul|ol)\b[^>]*>([\s\S]*?)</\1\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_LIST_ITEM = Regex("""<li\b[^>]*>([\s\S]*?)</li\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_PARAGRAPH_BLOCK = Regex("""<p\b([^>]*)>([\s\S]*?)</p\s*>""", RegexOption.IGNORE_CASE)
+    private val HTML_CENTERED_ATTRIBUTE = Regex("""align\s*=\s*["']?center""", RegexOption.IGNORE_CASE)
+    private val HTML_RULE = Regex("""<hr\b[^>]*>""", RegexOption.IGNORE_CASE)
+
+    /**
+     * [text] with the documented HTML block tags rewritten as markdown blocks.
+     *
+     * Run before [unwrapUnsupportedHtml], because that pass is what deletes the
+     * tags this one does not know: the conversions have to happen while the tags
+     * are still there. `<pre>` goes first since its contents are code and every
+     * later rule would rewrite them; `<li>` without a surrounding list is kept as
+     * a bullet rather than dropped, which is what the site does with it.
+     */
+    private fun convertBlockHtmlToMarkdown(text: String): String {
+        if (!text.contains('<')) return text
+        var out = text
+
+        out = HTML_PRE_BLOCK.replace(out) { match ->
+            "\n\n```\n" + match.groupValues[1].trim('\n') + "\n```\n\n"
+        }
+        out = HTML_HEADING_BLOCK.replace(out) { match ->
+            val level = match.groupValues[1].toIntOrNull()?.coerceIn(1, 5) ?: 1
+            "\n\n" + "#".repeat(level) + " " + match.groupValues[2].trim() + "\n\n"
+        }
+        out = HTML_RULE.replace(out, "\n\n---\n\n")
+        // Paragraphs are flattened next, before the containers that may hold them:
+        // a quoted paragraph is a `<p>` inside a `<blockquote>`, and marking the
+        // quote first would leave the paragraph pass rewriting a line that had
+        // already grown its `>`.
+        out = HTML_PARAGRAPH_BLOCK.replace(out) { match ->
+            val attributes = match.groupValues[1]
+            val content = match.groupValues[2].trim()
+            // The site draws `<p align="center">` exactly like `<center>`, which the
+            // block walk already knows; the other alignments are ordinary prose.
+            if (HTML_CENTERED_ATTRIBUTE.containsMatchIn(attributes)) {
+                "\n\n<center>\n$content\n</center>\n\n"
+            } else {
+                "\n\n$content\n\n"
+            }
+        }
+        out = HTML_LIST_BLOCK.replace(out) { match ->
+            val ordered = match.groupValues[1].equals("ol", ignoreCase = true)
+            val items = HTML_LIST_ITEM.findAll(match.groupValues[2])
+                .map { item -> item.groupValues[1].trim() }
+                .toList()
+            if (items.isEmpty()) "" else "\n\n" + items.mapIndexed { index, item ->
+                if (ordered) "${index + 1}. $item" else "- $item"
+            }.joinToString("\n") + "\n\n"
+        }
+        // An `<li>` outside a list is still a bullet on the site; inside a list it
+        // was consumed above.
+        out = HTML_LIST_ITEM.replace(out) { match -> "- " + match.groupValues[1].trim() }
+        out = HTML_BLOCKQUOTE_BLOCK.replace(out) { match ->
+            // Every line of the quote gets the marker, including blank ones, so a
+            // two-paragraph quotation does not end halfway through. Consecutive
+            // blanks collapse to a single `>`: the paragraph pass above leaves a
+            // pair of newlines between the two, and without this the middle of a
+            // quotation is a column of bare markers.
+            val quoted = mutableListOf<String>()
+            match.groupValues[1].trim().lines().forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) {
+                    if (quoted.isNotEmpty() && quoted.last() != ">") quoted.add(">")
+                } else {
+                    quoted.add("> $trimmed")
+                }
+            }
+            "\n\n" + quoted.joinToString("\n") + "\n\n"
+        }
+        return out
+    }
+
+    /**
+     * A backslash escaping the markdown character behind it.
+     *
+     * The guide lists the punctuation that can be escaped, and this is that list:
+     * a bio that says `\*not italic\*` means the asterisks, not emphasis. Only
+     * these characters are unescaped, so a Windows path or a LaTeX fragment is
+     * left exactly as typed.
+     */
+    private val ESCAPED_MARKDOWN = Regex("""\\([\\`*_{}\[\]()#+\-.!~>|])""")
+
+    /** [text] with backslash escapes resolved to the character they quote. */
+    private fun unescapeMarkdown(text: String): String =
+        if (!text.contains('\\')) text
+        else ESCAPED_MARKDOWN.replace(text) { match -> match.groupValues[1] }
+
+    /**
+     * Whether the character at [index] is quoted by a backslash.
+     *
+     * An even number of backslashes means the last one is itself escaped and the
+     * character is live markup; `\\*` is a backslash followed by emphasis, and
+     * `\*` is a literal asterisk.
+     */
+    private fun isEscapedAt(text: String, index: Int): Boolean {
+        var backslashes = 0
+        var cursor = index - 1
+        while (cursor >= 0 && text[cursor] == '\\') {
+            backslashes++
+            cursor--
+        }
+        return backslashes % 2 == 1
+    }
+
     fun parse(raw: String): List<MarkdownNode> {
         cachedParse(raw)?.let { return it }
 
@@ -693,6 +817,7 @@ object AniListMarkdownParser {
             .replace("<br/>", "\n")
             .replace("<br />", "\n")
             .let(::convertAnchorsToMarkdown)
+            .let(::convertBlockHtmlToMarkdown)
             .let(::unwrapUnsupportedHtml)
             .let(::decodeHtmlEntities)
             .trim()
@@ -1958,7 +2083,7 @@ object AniListMarkdownParser {
         tokens: MutableList<InlineToken>
     ): String {
         if (match.start > 0) {
-            tokens.add(InlineToken.Plain(source.substring(0, match.start)))
+            tokens.add(InlineToken.Plain(unescapeMarkdown(source.substring(0, match.start))))
         }
         val contents = match.contents.trim()
         tokens.add(
@@ -2218,7 +2343,11 @@ object AniListMarkdownParser {
             } else {
                 null
             }
+            // A delimiter the author escaped is text. It is filtered out rather than
+            // matched and then undone, because the escaping has to win over *every*
+            // inline form at once - `\*`, `\_`, `` \` `` and `\[` are the same rule.
             val matches = inlineMatches(remaining, spoilerDepth)
+                .filterNot { candidate -> isEscapedAt(remaining, candidate.first.range.first) }
 
             // The HTML spoiler is not in the match list above because it needs its
             // computed close rather than a regex's group, but it competes on the same
@@ -2231,7 +2360,7 @@ object AniListMarkdownParser {
             }
 
             if (matches.isEmpty()) {
-                tokens.add(InlineToken.Plain(remaining))
+                tokens.add(InlineToken.Plain(unescapeMarkdown(remaining)))
                 break
             }
 
@@ -2239,7 +2368,7 @@ object AniListMarkdownParser {
             val start = firstMatch.range.first
 
             if (start > 0) {
-                tokens.add(InlineToken.Plain(remaining.substring(0, start)))
+                tokens.add(InlineToken.Plain(unescapeMarkdown(remaining.substring(0, start))))
             }
 
             appendInlineMatch(

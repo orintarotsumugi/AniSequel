@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -193,6 +194,13 @@ internal fun NovaInfoHero(
             // than clipping the title. The artwork is a background, so the box
             // growing costs nothing.
             .heightIn(min = HERO_MIN_HEIGHT)
+            // The artwork is over-covered and translated for the parallax, and
+            // `graphicsLayer` does not clip: at the end of a scroll its bottom edge
+            // sat up to ~47dp below the hero's item, drawing a strip of the banner
+            // at the hero's own zoom into the gap above the first card - artwork
+            // that belonged to the hero appearing to be part of the page. The hero
+            // is the picture's frame, so the picture is clipped to it.
+            .clipToBounds()
             .background(coverColor)
     ) {
         if (artwork != null) {
