@@ -68,7 +68,7 @@ fun AniListMarkdownView(
     onOverflowChange: ((Boolean) -> Unit)? = null
 ) {
     Column(
-        modifier = modifier.testTag("anilist_markdown_view"),
+        modifier = modifier.fillMaxWidth().testTag("anilist_markdown_view"),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val displayNodes = if (maxLines < Int.MAX_VALUE && nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT) {

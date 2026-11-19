@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "2.4.4",
+      "entries": [
+        {"title": "Biography Markdown centering uses the full width", "detail": "Centered Markdown blocks now render against the full-width reader container instead of a shrink-wrapped inner column."},
+        {"title": "Info page scroll progress stays guarded", "detail": "The Info page floating progress transform is clamped to a finite range to keep its draw transform stable."}
+      ]
+    },
+    {
       "version": "2.4.3",
       "entries": [
         {
