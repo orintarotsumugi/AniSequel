@@ -309,10 +309,16 @@ internal fun embedMarkdown(kind: InsertKind, value: String): String = when (kind
 
 /** Strips the watch-url wrapper down to the bare video id. */
 private fun String.removeYouTubeWrapper(): String {
-    val id = listOf("watch?v=", "youtu.be/", "embed/", "shorts/", "v=")
+    // Detected and sliced with the same case rule. The lookup was
+    // case-insensitive and `substringAfter` was not, so a link whose wrapper was
+    // written in capitals was recognised but never cut: the whole URL went into
+    // `youtube(...)` instead of the id the tag is built for.
+    val wrapper = listOf("watch?v=", "youtu.be/", "embed/", "shorts/", "v=")
         .firstOrNull { contains(it, ignoreCase = true) }
         ?: return this
-    return substringAfter(id, this).substringBefore('&').substringBefore('?')
+    val start = indexOf(wrapper, ignoreCase = true) + wrapper.length
+    val id = substring(start).substringBefore('&').substringBefore('?')
+    return id.ifEmpty { this }
 }
 
 /**
@@ -363,8 +369,12 @@ internal fun quoteBlock(
         if (line.isBlank()) ">" else "> $line"
     }
     val who = authorName?.trim()?.takeIf { it.isNotEmpty() }
+    // Case-insensitive, like the `addressedTo` half of this test: a quoted
+    // comment that already opens with "@Bild" did not match an author named
+    // "bild", so the block named them twice - once in the mention and once in
+    // the "wrote" line above it.
     val alreadyNamed = who != null && (
-        text.trimStart().startsWith("@$who") ||
+        text.trimStart().startsWith("@$who", ignoreCase = true) ||
             addressedTo?.trim()?.equals(who, ignoreCase = true) == true
         )
     val credit = if (who != null && !alreadyNamed) "$who wrote\n" else ""

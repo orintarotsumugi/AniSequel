@@ -279,7 +279,9 @@ private fun CompactArrivingRow(
 fun arrivalMeta(entry: ArrivingEntry): String = when {
     entry.isAiring -> {
         val episode = entry.nextEpisodeNumber
-        val total = entry.episodes
+        // Zero is AniList's "the length is not announced yet", not a length: an
+        // unguarded total drew "Ep 4 / 0" and "Airing · 0 eps" for those shows.
+        val total = entry.episodes?.takeIf { it > 0 }
         when {
             episode != null && total != null -> "Ep $episode / $total"
             episode != null -> "Ep $episode"

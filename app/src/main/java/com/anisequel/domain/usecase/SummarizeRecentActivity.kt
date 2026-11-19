@@ -2,6 +2,7 @@ package com.anisequel.domain.usecase
 
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.displayName
+import com.anisequel.data.model.namespaceKey
 import com.anisequel.data.model.posterUrl
 
 /**
@@ -59,8 +60,13 @@ class SummarizeRecentActivityUseCase {
             .filter { (_, updatedAt) -> updatedAt >= cutoff }
             // One title counts once even if it somehow sits in two lists. The
             // newest touch of that title is the one the tile names.
+            //
+            // Keyed by namespace, not by bare id: AniList numbers `anime/` and
+            // `manga/` independently, so `anime/21` and `manga/21` collapsed into
+            // one row and the tile under-counted the week by however many
+            // collisions the pair had.
             .sortedByDescending { (_, updatedAt) -> updatedAt }
-            .distinctBy { (entry, _) -> entry.media.id }
+            .distinctBy { (entry, _) -> entry.media.namespaceKey }
 
         val latest = recent.firstOrNull()?.first ?: return RecentActivitySummary.Empty
 

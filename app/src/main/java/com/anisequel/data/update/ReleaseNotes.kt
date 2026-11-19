@@ -1,5 +1,7 @@
 package com.anisequel.data.update
 
+import java.util.Locale
+
 /**
  * One "what changed" line, as both the update prompt and the Settings card draw it.
  *
@@ -35,7 +37,11 @@ enum class ReleaseNoteTone(val label: String) {
 }
 
 fun releaseNoteTone(title: String): ReleaseNoteTone {
-    val text = title.lowercase()
+    // `Locale.ROOT`, like every other case-fold in this app. The default locale
+    // folds the Turkic dotted and dotless I differently, so on such a device an
+    // upper-case title lost its category: "FIXES" lowercased to "fıxes", matched
+    // no keyword, and drew as a neutral Note.
+    val text = title.lowercase(Locale.ROOT)
     return when {
         listOf("fix", "bug", "crash", "restore", "repair", "no longer", "stops")
             .any { text.contains(it) } -> ReleaseNoteTone.FIX
