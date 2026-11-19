@@ -725,7 +725,7 @@ object AniListMarkdownParser {
             // Keep a one-line, image-only center wrapper inline: the inline image
             // renderer preserves its authored width, while text-bearing wrappers
             // need block boundaries so the whole biography is centered.
-            if (Regex("""^<img\\b[^>]*>$""", RegexOption.IGNORE_CASE).matches(content)) {
+            if (Regex("""^<img\b[^>]*>$""", RegexOption.IGNORE_CASE).matches(content)) {
                 match.value
             } else {
                 "\n\n<center>\n" + content + "\n</center>\n\n"
