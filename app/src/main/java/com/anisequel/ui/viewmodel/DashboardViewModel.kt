@@ -1125,7 +1125,14 @@ class DashboardViewModel(
         val success = _uiState.value as? DashboardUiState.Success ?: return
         _uiState.value = success.copy(
             missedSequels = success.missedSequels.map { item ->
-                if (item.sequelId == mediaId) item.withDetail(detail) else item
+                // The type is part of the match, not just the id: AniList numbers
+                // `anime/` and `manga/` independently, so folding on the id alone
+                // put a manga's synopsis, cover and banner into an anime card
+                // whenever the two ids collided - the same rule [withCachedDetail]
+                // and [MediaDetailStore] already follow.
+                val sameTitle = item.sequelId == mediaId &&
+                    item.sequelMedia.type.equals(detail.type, ignoreCase = true)
+                if (sameTitle) item.withDetail(detail) else item
             }
         )
     }

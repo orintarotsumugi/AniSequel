@@ -488,12 +488,17 @@ private fun ScheduleDatePill(entry: ArrivingEntry) {
 
 private fun progressLabel(entry: ArrivingEntry): String {
     val progress = entry.progress
-    val total = entry.episodes
+    // Zero is AniList's "the length is not announced yet", not a length: the
+    // unguarded total read "4 of 0 episodes" and "0 episodes", the same failure
+    // the arriving card's meta line was fixed for. A single episode also gets its
+    // own wording rather than "1 episodes".
+    val total = entry.episodes?.takeIf { it > 0 }
     return when {
         progress != null && total != null -> "$progress of $total episodes"
-        progress != null && progress > 0 -> "$progress episodes watched"
+        progress != null && progress > 0 ->
+            if (progress == 1) "1 episode watched" else "$progress episodes watched"
         progress != null -> "0 episodes watched"
-        total != null -> "$total episodes"
+        total != null -> if (total == 1) "1 episode" else "$total episodes"
         else -> "Episode count to be announced"
     }
 }

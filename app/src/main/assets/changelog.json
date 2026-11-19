@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "2.4.3",
+      "entries": [
+        {
+          "title": "A detail lands on the right medium",
+          "detail": "The fold that pushes a freshly fetched detail into the card behind an open sheet matched on the media id alone. AniList numbers anime and manga independently, so where the two share a number one title's synopsis, cover and banner could appear on the other's card until the next recompute. The fold matches the media type as well now, like every other detail lookup in the app."
+        },
+        {
+          "title": "Recent updates counts anime and manga apart",
+          "detail": "The activity tile deduplicated the week by bare AniList id, so a manga and an anime sharing a number collapsed into one row and the count came up short by one title per collision. Titles are keyed by namespace now, the same way the detail cache and the library already key them."
+        },
+        {
+          "title": "A reopened title keeps its detail without asking again",
+          "detail": "The detail cache's timestamp map was trimmed by iteration order rather than by age, so the entry written last could be the one to lose its timestamp. A missing timestamp reads as never fetched, which meant that title re-requested its detail on every open for the rest of the session. The oldest timestamp is the one dropped now."
+        },
+        {
+          "title": "Progress never reads 3 / 0 eps",
+          "detail": "watchFractionLabel had no positive-total guard while watchFraction and progressCountLabel both had one, so a show whose length AniList has not announced yet printed its watched count against zero."
+        },
+        {
+          "title": "The grid's progress pill stops captioning zero",
+          "detail": "A zero episode or chapter count is AniList's way of saying the length is not announced, and the new grid passed it straight into the pill, which captioned the cover 3 | 0. An unknown length now shows the pill's own unknown marker instead."
+        },
+        {
+          "title": "An airing card stops claiming 0 eps",
+          "detail": "The meta line under the arriving card's status chip used a zero episode count as a length, so a show still being counted read Ep 4 / 0 or Airing 0 eps. It falls back to the episode number, then to Airing now."
+        },
+        {
+          "title": "Release notes keep their category in every language",
+          "detail": "A note's tone is inferred from its title after lowercasing it, and that lowercase used the device locale. On a Turkic locale the uppercase I folds to a dotless letter, so a title like FIXES matched no keyword and a fix drew as a plain note. The fold is locale-independent now."
+        },
+        {
+          "title": "A YouTube link in capitals embeds",
+          "detail": "The composer found the watch wrapper case-insensitively and then cut the string case-sensitively, so a link written in capitals was recognised but never reduced to its id: the whole URL went into the youtube tag instead of the id it is built for."
+        },
+        {
+          "title": "An undated message no longer opens the conversation",
+          "detail": "The bubble list sorted a message with no timestamp above every dated one, ahead of the first line of the thread. It sorts to the end now, which is the only honest place for a line with no time in a conversation that reads oldest first."
+        },
+        {
+          "title": "Quoting a comment names the person once",
+          "detail": "The test for a comment that already opens with a mention was case-sensitive against the author's name while the reply-to half of the same test was not, so quoting @Bild credited bild wrote above a line that had already said it."
+        },
+        {
+          "title": "The schedule stops counting against zero",
+          "detail": "A row's progress line used AniList's zero episode count as a length, so a show whose length is still unannounced read 4 of 0 episodes on the schedule. It also wrote 1 episodes for a single episode; both read correctly now."
+        },
+        {
+          "title": "One anime on your list is one entry",
+          "detail": "The profile card under Settings > Account said 1 entries for an account with a single anime on it."
+        }
+      ]
+    },
+    {
       "version": "2.4.2",
       "entries": [
         {

@@ -274,8 +274,20 @@ class MediaDetailStore(
                     if (startedAtGeneration == this@MediaDetailStore.generation) {
                         cache[key] = detail
                         fetchedAt[key] = System.currentTimeMillis()
+                        // The *oldest* timestamp. This used to take
+                        // `fetchedAt.entries.first()` - HashMap iteration order,
+                        // which is arbitrary and could be the entry written on the
+                        // line above. Losing the newest timestamp is the costly
+                        // mistake: `load` reads a missing one as "never fetched",
+                        // so the title the reader is most likely to reopen spent
+                        // the rest of the session re-requesting its detail every
+                        // time it was opened.
+                        //
+                        // Only the timestamps are trimmed here; [cache] bounds
+                        // itself through `removeEldestEntry`.
                         while (fetchedAt.size > MAX_ENTRIES) {
-                            fetchedAt.remove(fetchedAt.entries.first().key)
+                            val oldest = fetchedAt.minByOrNull { (_, at) -> at }?.key ?: break
+                            fetchedAt.remove(oldest)
                         }
                         publish(mediaId, detail)
                         // The host's fold is a callback, and `onSuccess` rethrows

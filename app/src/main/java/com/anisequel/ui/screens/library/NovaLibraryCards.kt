@@ -381,7 +381,9 @@ private fun NovaPoster(
     // only answerable after opening the entry. Same helper and same owner as the rows,
     // so a title scored in one mode is scored in all of them.
     val rating = libraryRating(entry, ListOwner.MINE)
-    val total = if (isManga) media.chapters else media.episodes
+    // `takeIf { it > 0 }`: a zero count is AniList's "not announced", and the
+    // progress pill would otherwise caption the cover "3 | 0".
+    val total = (if (isManga) media.chapters else media.episodes)?.takeIf { it > 0 }
     val completed = entry.status.equals("COMPLETED", ignoreCase = true)
     val progress = entry.progress ?: if (completed) total else null
     // Parsed once per entry rather than on every recomposition. A grid recomposes

@@ -791,13 +791,18 @@ fun MediaNode.watchFraction(): Float? {
 
 /** "6 / 12 eps watched" or "14 / 32 chs read" - null when the viewer has not started it. */
 fun MediaNode.watchFractionLabel(): String? {
+    // `total > 0`, like [watchFraction] and [progressCountLabel]. AniList reports
+    // a zero episode count for a show whose length is not announced yet, and the
+    // unguarded label printed "3 / 0 eps" for exactly those titles.
     if (isManga) {
         val total = chapters ?: return null
+        if (total <= 0) return null
         val read = watchedEpisodeCount ?: return null
         if (read <= 0) return null
         return "$read / $total chs read"
     }
     val total = episodes ?: return null
+    if (total <= 0) return null
     val watched = watchedEpisodeCount ?: return null
     if (watched <= 0) return null
     return "$watched / $total eps"

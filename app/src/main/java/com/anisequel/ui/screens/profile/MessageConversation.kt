@@ -99,7 +99,11 @@ internal fun conversationLines(
     }
     return (fromMessages + fromReplies)
         .distinctBy { it.key }
-        .sortedBy { it.createdAt ?: 0 }
+        // Dated rows in order, undated ones last. `sortedBy { createdAt ?: 0 }`
+        // sent a row with no timestamp to the very top - ahead of every dated
+        // line - which is the opposite of the oldest-first order this screen
+        // documents.
+        .sortedBy { it.createdAt ?: Int.MAX_VALUE }
 }
 
 /**

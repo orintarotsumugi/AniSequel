@@ -142,7 +142,8 @@ fun ProfileCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "$count entries",
+                        // "1 entries" was what an account with one anime read.
+                        text = if (count == 1) "1 entry" else "$count entries",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
