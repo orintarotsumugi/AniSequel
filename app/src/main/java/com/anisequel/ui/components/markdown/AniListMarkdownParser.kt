@@ -721,7 +721,15 @@ object AniListMarkdownParser {
         out = HTML_RULE.replace(out, "\n\n---\n\n")
         // Normalize center wrappers even when their tags share lines with text.
         out = HTML_CENTER_BLOCK.replace(out) { match ->
-            "\n\n<center>\n" + match.groupValues[1].trim() + "\n</center>\n\n"
+            val content = match.groupValues[1].trim()
+            // Keep a one-line, image-only center wrapper inline: the inline image
+            // renderer preserves its authored width, while text-bearing wrappers
+            // need block boundaries so the whole biography is centered.
+            if (Regex("""^<img\\b[^>]*>$""", RegexOption.IGNORE_CASE).matches(content)) {
+                match.value
+            } else {
+                "\n\n<center>\n" + content + "\n</center>\n\n"
+            }
         }
         // Paragraphs are flattened next, before the containers that may hold them:
         // a quoted paragraph is a `<p>` inside a `<blockquote>`, and marking the
