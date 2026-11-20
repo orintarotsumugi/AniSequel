@@ -59,6 +59,13 @@ fun SequelRelationBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(
+                if (onOpenParent == null) {
+                    Modifier
+                } else {
+                    Modifier.bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+                }
+            )
             .clip(MaterialTheme.shapes.extraSmall)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
@@ -67,7 +74,6 @@ fun SequelRelationBanner(
                 } else {
                     Modifier
                         .testTag("sequel_parent_link_" + sequel.parentId)
-                        .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
                         // The `interactionSource`/`indication`/`onClickLabel` overload
                         // takes no modifier of its own, so the tag belongs in the chain
                         // above it - that is where the first version of this put nothing

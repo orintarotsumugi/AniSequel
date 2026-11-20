@@ -56,6 +56,7 @@ import com.anisequel.data.model.romajiName
 import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.SequelSeason
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.liveChartUrl
@@ -201,8 +202,15 @@ internal fun ViewerDetailsCard(
 
                 AnimatedVisibility(
                     visible = expanded,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
+                    // The tokens, not the defaults: a bare `fadeIn()`/`expandVertically()`
+                    // is Compose's own tween and spring, so this one disclosure
+                    // ignored the reader's Motion style while every other
+                    // AnimatedVisibility in the app followed it - and INSTANT still
+                    // animated it.
+                    enter = fadeIn(ExpressiveMotion.FastEffects) +
+                        expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                    exit = fadeOut(ExpressiveMotion.FastEffects) +
+                        shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
                     label = "cover_title_spellings"
                 ) {
                     ViewerTitleChips(media = media)

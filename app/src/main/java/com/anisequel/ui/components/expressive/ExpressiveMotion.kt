@@ -397,6 +397,44 @@ object ExpressiveMotion {
         }
 
     /**
+     * The [effects] counterpart for `animateIntAsState` - a count that may not
+     * overshoot the number it is counting to.
+     *
+     * [FastSpatialInt] is the right spring for a position or a size, where a few
+     * units past the target read as weight. A count is not a position. A spring on
+     * an `Int` interpolates the number itself, so on `CHILL` and the softer styles
+     * the counter visibly ticked past the true value and back - a like going
+     * 41 -> 43 -> 41, a completed total briefly claiming a title the reader does
+     * not have. No frame of that overshoot is true, so a count takes the effects
+     * spring instead: non-overshooting on every style, and `snap()` under
+     * `INSTANT` like every other token.
+     */
+    val FastEffectsInt: FiniteAnimationSpec<Int> get() =
+        when (speed) {
+            com.anisequel.data.repository.MotionStyle.INSTANT -> snap()
+            com.anisequel.data.repository.MotionStyle.SMOOTH -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.SNAPPY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessHigh
+            )
+            com.anisequel.data.repository.MotionStyle.CHILL -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+            com.anisequel.data.repository.MotionStyle.FLOATY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+            com.anisequel.data.repository.MotionStyle.DREAMY -> spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessVeryLow
+            )
+        }
+
+    /**
      * The [FastSpatial] counterpart for `animateDpAsState` (corner radius and elevation).
      */
     val FastSpatialDp: FiniteAnimationSpec<Dp> get() =

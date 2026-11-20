@@ -347,11 +347,11 @@ private fun CatalogueSearchHeader(
         IconButton(
             onClick = onBack,
             modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .bouncyPress(pressedScale = 0.9f)
-                .testTag("nova_search_back")
+                                    .size(48.dp)
+                    .bouncyPress(pressedScale = 0.9f)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .testTag("nova_search_back")
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,

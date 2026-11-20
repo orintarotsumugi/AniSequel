@@ -496,6 +496,7 @@ private fun RelationCard(
                 // reused for every poster: 144x202 is not quite 2:3, so every
                 // relation was a few pixels squatter than the artwork.
                 .aspectRatio(RELATION_POSTER_ASPECT)
+                .bouncyPress(pressedScale = 0.97f)
                 .clip(MaterialTheme.shapes.medium)
                 // Tinted with the poster's own dominant colour until the art loads,
                 // the same way the hero does: a grey rectangle tells the reader
@@ -505,7 +506,6 @@ private fun RelationCard(
                         ?: MaterialTheme.colorScheme.surfaceContainerHighest
                 )
                 .clickable(role = Role.Button, onClick = { onOpen(node) })
-                .bouncyPress(pressedScale = 0.97f)
                 .testTag("info_relation_${node.id}")
         ) {
             AsyncImage(

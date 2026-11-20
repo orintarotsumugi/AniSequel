@@ -26,7 +26,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalView
 import coil.compose.AsyncImage
 import kotlin.math.max
 import kotlin.math.min
@@ -145,14 +148,25 @@ fun PannableBackdrop(
     var offsetX by remember(model) { mutableFloatStateOf(0f) }
     var offsetY by remember(model) { mutableFloatStateOf(0f) }
 
-    // The three conditions are the whole cost of this. `drift` is the caller's
+    // The four conditions are the whole cost of this. `drift` is the caller's
     // choice; the zoom check stops the sweep the moment the reader takes over; and
     // the slack check is what keeps a square banner from running an infinite
     // transition whose answer is always zero - the one thing AGENTS.md §3 says an
     // indefinite animation may not be.
+    //
+    // The visibility check is the newest. A profile banner is the *first* thing to
+    // leave a profile page when the reader scrolls, but a `rememberInfiniteTransition`
+    // runs for as long as it is composed - and a page scrolls compositions away
+    // without disposing them. The sweep therefore kept redrawing a hero nobody
+    // could see for as long as the page stayed open, which is exactly the case the
+    // empty-state orb's window gate was added for. Window coordinates rather than
+    // parent-relative, so the answer is "on screen", not "inside its own column".
     val resumed = rememberIsResumed()
+    val hostView = LocalView.current
+    var visibleInWindow by remember { mutableStateOf(false) }
     val drifting = drift &&
         resumed &&
+        visibleInWindow &&
         zoom <= BACKDROP_MIN_ZOOM &&
         backdropHorizontalLimit(
             containerWidth, containerHeight, imageSize.width, imageSize.height, zoom, fit
@@ -232,6 +246,17 @@ fun PannableBackdrop(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                if (!coordinates.isAttached || hostView.width <= 0 || hostView.height <= 0) {
+                    return@onGloballyPositioned
+                }
+                val bounds = coordinates.boundsInWindow()
+                val visible = bounds.right > 0f &&
+                    bounds.left < hostView.width &&
+                    bounds.bottom > 0f &&
+                    bounds.top < hostView.height
+                if (visibleInWindow != visible) visibleInWindow = visible
+            }
             .onSizeChanged {
                 val width = it.width.toFloat()
                 val height = it.height.toFloat()

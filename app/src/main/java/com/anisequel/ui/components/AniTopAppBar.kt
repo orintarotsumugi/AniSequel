@@ -230,7 +230,7 @@ fun AniTopAppBar(
                             scaleOut(
                                 targetScale = 0.82f,
                                 animationSpec = ExpressiveMotion.FastSpatial
-                            )
+                            ) using null
                     },
                     label = "refresh_state"
                 ) { refreshing ->

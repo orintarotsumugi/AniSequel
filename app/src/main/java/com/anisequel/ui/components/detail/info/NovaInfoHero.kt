@@ -417,6 +417,7 @@ private fun HeroLockup(
             modifier = Modifier
                 .width(116.dp)
                 .height(174.dp)
+                .bouncyPress(pressedScale = 0.97f, interactionSource = posterInteraction)
                 .shadow(
                     elevation = 18.dp,
                     shape = MaterialTheme.shapes.large,
@@ -430,7 +431,6 @@ private fun HeroLockup(
                     MaterialTheme.shapes.large
                 )
                 .background(coverColor)
-                .bouncyPress(pressedScale = 0.97f, interactionSource = posterInteraction)
                 .onGloballyPositioned { onPosterBounds(it.boundsInWindow()) }
                 .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
                 .semantics {

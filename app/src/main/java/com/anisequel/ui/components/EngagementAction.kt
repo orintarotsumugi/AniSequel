@@ -74,7 +74,8 @@ fun EngagementAction(
     // on the tap - the icon swaps in the same frame and the optimistic number is
     // already correct - so without this the control that confirms a like is the
     // one thing in the row that does not move. `FastColorEffects` and
-    // `FastSpatialInt` are the house tokens for exactly this pair.
+    // `FastEffectsInt` are the house tokens for exactly this pair; the count uses
+    // the effects spring so a like never ticks past the number and back.
     val appearance by animateColorAsState(
         targetValue = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
         animationSpec = ExpressiveMotion.FastColorEffects,
@@ -82,7 +83,7 @@ fun EngagementAction(
     )
     val shownCount by animateIntAsState(
         targetValue = count,
-        animationSpec = ExpressiveMotion.FastSpatialInt,
+        animationSpec = ExpressiveMotion.FastEffectsInt,
         label = "engagement_count"
     )
     val haptic = LocalHapticFeedback.current

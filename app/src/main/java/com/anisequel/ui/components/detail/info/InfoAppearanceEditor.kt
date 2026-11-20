@@ -130,9 +130,9 @@ internal fun InfoAppearanceEditor(
                     onClick = onClose,
                     modifier = Modifier
                         .size(48.dp)
+                        .bouncyPress(pressedScale = 0.9f)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .bouncyPress(pressedScale = 0.9f)
                         .testTag("info_appearance_back")
                 ) {
                     Icon(

@@ -33,6 +33,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
  * Modifier that applies a tactile bouncy spring press animation in the Draw phase.
  * Does not trigger composition or layout passes for maximum 120fps smoothness.
  *
+ * ## Install it before the clip and the background
+ *
+ * A `graphicsLayer` transforms only what is drawn inside it. Installed after
+ * `.clip(...).background(...)` - which a score of call sites had done - the press
+ * layer contains the label but not the pill, so a tap squashed the text inside a
+ * surface that did not move. It belongs immediately after the size, before the
+ * shape and the fill, so the whole control answers the finger.
+ *
  * Applied at two dozen call sites, so this is the most widely instantiated
  * modifier in the app - which is why the animated value is read inside the
  * [graphicsLayer] block rather than passed to it. Reading a `State` inside the

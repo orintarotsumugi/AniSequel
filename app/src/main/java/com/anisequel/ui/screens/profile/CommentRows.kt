@@ -363,9 +363,9 @@ internal fun CommentOlderRow(
                 // A wide, short row is a capsule, not a circle: `CircleShape` is
                 // percent-50 and happens to agree today, but the token says what
                 // this is meant to be.
+                .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                 .clip(ExpressiveShapes.pill)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
@@ -409,9 +409,9 @@ internal fun NewCommentsPill(count: Int, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .defaultMinSize(minHeight = 40.dp)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.primary)
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,

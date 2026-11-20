@@ -267,9 +267,9 @@ private fun ScheduleHeader(
             onClick = onBack,
             modifier = Modifier
                 .size(48.dp)
+                .bouncyPress(pressedScale = 0.9f)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .bouncyPress(pressedScale = 0.9f)
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,

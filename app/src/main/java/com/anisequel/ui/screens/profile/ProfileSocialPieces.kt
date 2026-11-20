@@ -77,9 +77,9 @@ internal fun SocialViewToggle(
         onClick = onToggle,
         modifier = modifier
             .size(48.dp)
+            .bouncyPress(pressedScale = 0.92f)
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .bouncyPress(pressedScale = 0.92f)
             .testTag("social_view_toggle")
     ) {
         Icon(
@@ -245,12 +245,12 @@ internal fun FollowerRow(
         modifier = modifier
             .widthIn(max = ProfileMaxContentWidth)
             .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clip(MaterialTheme.shapes.large)
             // The floor for a person whose account has no banner. AniList's
             // default accounts have none, and a transparent row would show
             // whatever the list happened to paint behind it.
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, onClick = onClick)
             .testTag("follower_row")
     ) {
