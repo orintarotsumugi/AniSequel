@@ -14,7 +14,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.domain.card.CardDesign
@@ -83,8 +83,8 @@ internal fun InterfaceLayoutSection(
     barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     // The slider's live value while the finger is down. The preview above reads
     // this, not the preference, so dragging moves the mini bar immediately; the
@@ -218,8 +218,8 @@ internal fun InterfaceSequelSection(
     previewEntries: List<MediaListEntryItem>
 ) {
     val scope = rememberCoroutineScope()
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
 
     SettingsScrollColumn {
@@ -280,8 +280,8 @@ internal fun InterfaceLibrarySection(
     previewEntries: List<MediaListEntryItem>
 ) {
     val scope = rememberCoroutineScope()
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
 
     SettingsScrollColumn {
@@ -418,11 +418,11 @@ internal fun CardDesignShelf(
     onOpen: (CardDesignPart) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val style by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
+    val style by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
+        initialValue = MediaCardStyle.DEFAULT
     )
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     val design = interfaceSettings.cardDesign
 
@@ -489,11 +489,11 @@ internal fun CardShapeSection(
     barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
-    val style by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
+    val style by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
+        initialValue = MediaCardStyle.DEFAULT
     )
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     val design = interfaceSettings.cardDesign
 
@@ -532,11 +532,11 @@ internal fun CardTextSection(
     barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
-    val style by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
+    val style by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
+        initialValue = MediaCardStyle.DEFAULT
     )
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     val design = interfaceSettings.cardDesign
 
@@ -599,11 +599,11 @@ internal fun CardPosterSection(
     barTabs: List<MainTab>
 ) {
     val scope = rememberCoroutineScope()
-    val style by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
+    val style by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
+        initialValue = MediaCardStyle.DEFAULT
     )
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     val design = interfaceSettings.cardDesign
     val context = LocalContext.current

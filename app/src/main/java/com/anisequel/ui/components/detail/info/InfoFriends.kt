@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,7 +40,8 @@ import com.anisequel.data.model.scoreLabel
 import com.anisequel.data.model.spokenLabel
 import com.anisequel.data.model.statusLabel
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.ShimmerBox
+import com.anisequel.ui.components.rememberShimmerPhase
 import java.util.Locale
 
 /**
@@ -107,27 +110,60 @@ fun InfoFriendsCard(
         }
     ) {
         if (friends.isEmpty()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 6.dp)
-            ) {
-                ExpressiveLoadingIndicator(
-                    modifier = Modifier.size(16.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Checking who you follow…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            FriendsLoadingRows()
         } else {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(friends, key = { it.userId }) { friend ->
                     FriendEntry(friend = friend, isManga = isManga, total = total)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The friends card's loading state, as the row it is about to become.
+ *
+ * A spinner and a sentence were the honest description of the request, but they
+ * reserved nothing: the row is about a card tall, so when the answer landed the
+ * card grew by that height and pushed the synopsis and the details down under the
+ * reader. Two shimmer rows hold the place instead.
+ */
+@Composable
+private fun FriendsLoadingRows() {
+    val phase = rememberShimmerPhase()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Checking who you follow" },
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        repeat(2) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShimmerBox(
+                    modifier = Modifier.size(44.dp),
+                    shape = CircleShape,
+                    phase = phase
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth(0.48f)
+                            .height(12.dp),
+                        phase = phase
+                    )
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth(0.3f)
+                            .height(10.dp),
+                        phase = phase
+                    )
                 }
             }
         }

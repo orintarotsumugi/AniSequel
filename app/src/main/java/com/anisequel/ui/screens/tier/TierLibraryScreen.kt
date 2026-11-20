@@ -179,7 +179,7 @@ internal fun TierLibraryScreen(
             item(key = "new") {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                     ExpressivePrimaryButton(
-                        text = "New ${section.mediaType.label.lowercase()} tier list",
+                        text = "New ${section.mediaType.label.lowercase(java.util.Locale.ROOT)} tier list",
                         onClick = { onCreate(section.mediaType) },
                         icon = AppVectorIcons.NewList,
                         // Nothing to rank on a shelf this account does not have.
@@ -471,8 +471,8 @@ private fun TierLibraryEmptyState(
         )
         Text(
             text = when {
-                section.isUnavailable -> "No ${section.mediaType.label.lowercase()} list to rank"
-                section.isLoading -> "Loading your ${section.mediaType.label.lowercase()} list"
+                section.isUnavailable -> "No ${section.mediaType.label.lowercase(java.util.Locale.ROOT)} list to rank"
+                section.isLoading -> "Loading your ${section.mediaType.label.lowercase(java.util.Locale.ROOT)} list"
                 section.loadFailed -> "Your ${section.mediaType.libraryLabel} did not load"
                 else -> "No tier lists yet"
             },
@@ -487,7 +487,7 @@ private fun TierLibraryEmptyState(
                 // honest empty state; inventing manga titles would be the app
                 // ranking somebody else's books as if they were the reader's.
                 section.isUnavailable ->
-                    "The demo account has no ${section.mediaType.label.lowercase()} list. " +
+                    "The demo account has no ${section.mediaType.label.lowercase(java.util.Locale.ROOT)} list. " +
                         "Sign in to rank your own."
 
                 section.isLoading ->

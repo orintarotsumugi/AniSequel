@@ -1,6 +1,10 @@
 package com.anisequel.ui.components.detail.info
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +39,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -58,14 +64,15 @@ import com.anisequel.data.model.sourceLabel
 import com.anisequel.data.model.studioCredits
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.toCoverColorOrNull
-import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.markdown.AniListMarkdownParser
 import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
 import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 
 /**
@@ -155,12 +162,27 @@ fun InfoProgressCard(
         title = if (isManga) "Reading Progress" else "Watching Progress",
         icon = AppVectorIcons.Trending,
         trailing = {
-            Text(
-                text = count,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
+            // The Nova page crossfades this count with no size transform; the
+            // classic card cut it in one frame, so the same write looked like a
+            // different app's behaviour depending on the page style. `using null`
+            // because the count is one line in a fixed slot: the default transform
+            // would measure both numbers on every frame to animate a size that
+            // does not change.
+            AnimatedContent(
+                targetState = count,
+                transitionSpec = {
+                    fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
+                },
+                label = "info_progress_count"
+            ) { progressCount ->
+                Text(
+                    text = progressCount,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     ) {
         StyledProgressBar(progress = fraction, entranceKey = media.type to media.id)
@@ -274,15 +296,7 @@ fun InfoSynopsisCard(
         icon = AppVectorIcons.SourceBook
     ) {
         when {
-            nodes.isEmpty() && isDetailLoading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                ExpressiveLoadingIndicator(modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Loading synopsis from AniList…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            nodes.isEmpty() && isDetailLoading -> SynopsisLoadingLines()
 
             nodes.isEmpty() -> Text(
                 text = "AniList has no synopsis for this title.",
@@ -481,7 +495,14 @@ fun InfoSpecsCard(
     }
 
     InfoCard(
-        modifier = modifier.testTag("info_specs_card"),
+        modifier = modifier
+            // The grid grows from two rows to six when the detail lands, and it
+            // used to do that in one frame: the studio skeleton held only its own
+            // row while the facts below it arrived all at once, so the whole card
+            // and every section under it jumped. The skeleton reserves the studio,
+            // and this springs the rest.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+            .testTag("info_specs_card"),
         title = "Details",
         icon = AppVectorIcons.AnimeSparkle
     ) {
@@ -490,15 +511,7 @@ fun InfoSpecsCard(
         // "Loading production details…" *underneath* a grid of real facts read as
         // though the whole card was still filling in.
         if (studios.isEmpty() && isDetailLoading) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ExpressiveLoadingIndicator(modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Loading production details…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            StudioLoadingRow()
         } else if (mainStudios.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -569,7 +582,7 @@ private fun InfoFact(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
-            text = label.uppercase(),
+            text = label.uppercase(java.util.Locale.ROOT),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
@@ -779,6 +792,76 @@ private fun StudioCreditChip(
         }
     }
 }
+
+/**
+ * The synopsis card's loading state, as text rather than a spinner.
+ *
+ * The card is the tallest one on the page, and its content used to arrive all at
+ * once behind a 16dp spinner: the synopsis then appeared in a single frame and
+ * every section below it moved by the height of a paragraph the instant the detail
+ * answer landed. Four shimmer lines reserve most of that height, so the card has
+ * already made room when the text fills in, and the card's `animateContentSize`
+ * only has to ease the difference.
+ */
+@Composable
+private fun SynopsisLoadingLines() {
+    val phase = rememberShimmerPhase()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Loading synopsis from AniList" },
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        repeat(SYNOPSIS_SKELETON_LINES) { line ->
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth(if (line == SYNOPSIS_SKELETON_LINES - 1) 0.56f else 1f)
+                    .height(13.dp),
+                phase = phase
+            )
+        }
+    }
+}
+
+/**
+ * The details card's studio row while the detail response is in flight.
+ *
+ * The studio is the one fact the list query cannot carry, so this row used to be a
+ * sentence above a grid that was already complete - and when the studio arrived
+ * the sentence collapsed and every fact below it moved up. The skeleton reserves
+ * the row's heading and chips instead.
+ */
+@Composable
+private fun StudioLoadingRow() {
+    val phase = rememberShimmerPhase()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "Loading production details" },
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        ShimmerBox(
+            modifier = Modifier
+                .width(46.dp)
+                .height(10.dp),
+            phase = phase
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(2) {
+                ShimmerBox(
+                    modifier = Modifier
+                        .width(104.dp)
+                        .height(30.dp),
+                    shape = ExpressiveShapes.pill,
+                    phase = phase
+                )
+            }
+        }
+    }
+}
+
+/** How many lines of the synopsis the loading skeleton reserves. */
+private const val SYNOPSIS_SKELETON_LINES = 4
 
 /** How many lines of synopsis show before "Read more". */
 private const val COLLAPSED_SYNOPSIS_LINES = 5

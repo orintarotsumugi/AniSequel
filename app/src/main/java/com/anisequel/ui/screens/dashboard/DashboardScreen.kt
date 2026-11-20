@@ -22,7 +22,6 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +34,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaCoverKey
@@ -124,7 +124,7 @@ fun DashboardScreen(
     onOpenLibrary: (String?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val uiState by dashboardViewModel.uiState.collectAsState()
+    val uiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
     val appLayout = LocalAppLayout.current
 
     // The connection status strip. The probe reads through the repository so it
@@ -134,12 +134,12 @@ fun DashboardScreen(
     val apiProbe = rememberApiStatusProbe {
         repository?.checkApiReachability() ?: ApiStatusSnapshot(ApiReachability.UNKNOWN)
     }
-    val apiStatus by apiProbe.ui.collectAsState()
+    val apiStatus by apiProbe.ui.collectAsStateWithLifecycle()
 
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository - the demo route - draws captions, not buttons.
     val profiles = rememberPersonProfileHost(repository)
-    val filterCriteria by dashboardViewModel.filterCriteria.collectAsState()
+    val filterCriteria by dashboardViewModel.filterCriteria.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val filterSheetState = rememberFullHeightSheetState()
 
@@ -148,8 +148,8 @@ fun DashboardScreen(
     // which changes the composable calls between recompositions - a Rules of
     // Compose violation, not just a wasted allocation, that would drop or
     // scramble state the moment the parameter flipped.
-    val quickAddSettings by quickAddPreferences.settings.collectAsState(
-        initial = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
+    val quickAddSettings by quickAddPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
     )
 
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -158,13 +158,13 @@ fun DashboardScreen(
     // key and resolved to a plain media subject below. One nullable key per
     // source keeps "what is open" unambiguous without a second sheet.
     var selectedArrivingKey by remember { mutableStateOf<String?>(null) }
-    val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsState()
-    val detailNodes by dashboardViewModel.detailNodes.collectAsState()
-    val detailFriends by dashboardViewModel.friends.collectAsState()
-    val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsState()
-    val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsState()
-    val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsState()
-    val arrivingSeparateGroups by dashboardViewModel.arrivingSeparateGroups.collectAsState()
+    val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsStateWithLifecycle()
+    val detailNodes by dashboardViewModel.detailNodes.collectAsStateWithLifecycle()
+    val detailFriends by dashboardViewModel.friends.collectAsStateWithLifecycle()
+    val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsStateWithLifecycle()
+    val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsStateWithLifecycle()
+    val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsStateWithLifecycle()
+    val arrivingSeparateGroups by dashboardViewModel.arrivingSeparateGroups.collectAsStateWithLifecycle()
 
     // The most recently hidden entry used to be mirrored here for the snackbar's
     // Undo. It lives on the event now: one slot could not tell two quick hides apart,
@@ -246,7 +246,7 @@ fun DashboardScreen(
         repository = repository,
         canWrite = canWrite
     )
-    val quickAddStatuses by planningAdd.statuses.collectAsState()
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
 
     // One subject for the sheet, resolved from whichever source was tapped.
     //

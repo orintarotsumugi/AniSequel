@@ -239,7 +239,7 @@ fun NovaSequelRow(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = sequel.relationLabel.uppercase(),
+                        text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
@@ -371,7 +371,7 @@ fun NovaSequelCard(
                         modifier = Modifier.testTag("nova_sequel_card_relation")
                     ) {
                         Text(
-                            text = sequel.relationLabel.uppercase(),
+                            text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,

@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -177,7 +177,7 @@ fun AppNavigation(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
-    val authState by authViewModel.uiState.collectAsState()
+    val authState by authViewModel.uiState.collectAsStateWithLifecycle()
 
     // Application-scoped: the hidden list is a property of the person, not of a
     // screen, and it has to survive the Settings screen and the detail sheet
@@ -213,10 +213,10 @@ fun AppNavigation(
     val jokePreferences = remember(context) {
         JokePreferences(context.applicationContext)
     }
-    val jokeSettings by jokePreferences.settings.collectAsState(initial = JokeSettings())
+    val jokeSettings by jokePreferences.settings.collectAsStateWithLifecycle(initialValue = JokeSettings())
     // A separate flow because saved lines are the reader's content rather than a
     // switch; the host needs them to draw the heart filled in the pill.
-    val jokeFavourites by jokePreferences.favourites.collectAsState(initial = emptySet())
+    val jokeFavourites by jokePreferences.favourites.collectAsStateWithLifecycle(initialValue = emptySet())
 
     // The Library page's remembered media type. Application-scoped and built here
     // for the same reason as the rest: one DataStore reader per process, so the
@@ -255,23 +255,23 @@ fun AppNavigation(
     val mainTabPreferences = remember(context) {
         MainTabPreferences(context.applicationContext)
     }
-    val tierListTab by mainTabPreferences.tierListTab.collectAsState(
-        initial = MainTabPreferences.DEFAULT_TIER_LIST_TAB
+    val tierListTab by mainTabPreferences.tierListTab.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_TIER_LIST_TAB
     )
-    val searchTab by mainTabPreferences.searchTab.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_TAB
+    val searchTab by mainTabPreferences.searchTab.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_SEARCH_TAB
     )
-    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_ANIME
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_SEARCH_ANIME
     )
-    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_MANGA
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_SEARCH_MANGA
     )
-    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_SEARCH_TOP_BAR
     )
-    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(
-        initial = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_TIER_TOP_BAR
     )
 
     val onboardingPreferences = remember(context) {
@@ -281,7 +281,7 @@ fun AppNavigation(
     // install paint Home and only then pop the setup wizard over it - the app's
     // first impression was a screen the reader was not allowed to use yet. The
     // gate below treats "not read" as a wait, not as "done".
-    val onboardingCompleted by onboardingPreferences.completed.collectAsState(initial = null)
+    val onboardingCompleted by onboardingPreferences.completed.collectAsStateWithLifecycle(initialValue = null)
 
     // How the media cards are drawn. Read here and handed down as a composition
     // local rather than as another parameter on every destination, because the
@@ -291,8 +291,8 @@ fun AppNavigation(
     val interfacePreferences = remember(context) {
         InterfacePreferences(context.applicationContext)
     }
-    val cardStyle by interfacePreferences.cardStyle.collectAsState(
-        initial = MediaCardStyle.DEFAULT
+    val cardStyle by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
+        initialValue = MediaCardStyle.DEFAULT
     )
 
     // The rest of the interface's answer - which layout, how dense the new
@@ -309,8 +309,8 @@ fun AppNavigation(
     // the same spring. The Settings page keeps its own live draft for the thumb.
     // Clamped again on this side: DataStore can hold a value written by an older
     // build, and a lift outside the slider's range is not a layout this app draws.
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
 
     // One instance for the app: its answer cache is the feature (see [BetterPostersApi]).
@@ -343,8 +343,8 @@ fun AppNavigation(
     // dashboard still collects this flow for its hold/swipe settings; this read is
     // only the tick/cross switch, and it is what makes the behaviour follow the
     // reader from card to detail sheet without every host being handed it.
-    val quickAddSettings by quickAddPreferences.settings.collectAsState(
-        initial = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
+    val quickAddSettings by quickAddPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
     )
     val appScope = rememberCoroutineScope()
 
@@ -470,7 +470,7 @@ fun AppNavigation(
     // where there is no session, and re-entering this lambda with a different
     // call sequence crashes at runtime.
     val dashboardFlow = mainDashboardViewModel?.uiState ?: EmptyDashboardState
-    val dashboardState by dashboardFlow.collectAsState()
+    val dashboardState by dashboardFlow.collectAsStateWithLifecycle()
 
     // Derived rather than read straight off the state, because `uiState` is
     // replaced on every dashboard recompute - which includes every character

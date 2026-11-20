@@ -990,15 +990,16 @@ private fun LibraryControls(
                 val selected = option == type
                 ExpressiveStateChip(
                     label = when {
-                        option != LibraryType.MANGA -> option.name.lowercase()
-                            .replaceFirstChar { it.uppercase() }
+                        option != LibraryType.MANGA -> option.name
+                            .lowercase(java.util.Locale.ROOT)
+                            .replaceFirstChar { it.uppercase(java.util.Locale.ROOT) }
                         isLoadingManga && selected -> "Loading..."
                         else -> "Manga"
                     },
                     selected = selected,
                     onClick = { onType(option) },
                     minTouchTargetHeight = 40.dp,
-                    modifier = Modifier.testTag("library_type_${option.name.lowercase()}")
+                    modifier = Modifier.testTag("library_type_${option.name.lowercase(java.util.Locale.ROOT)}")
                 )
             }
         }
@@ -1017,7 +1018,7 @@ private fun LibraryControls(
                     selected = option == filter,
                     onClick = { onFilter(option) },
                     minTouchTargetHeight = 44.dp,
-                    modifier = Modifier.testTag("library_filter_${option.name.lowercase()}")
+                    modifier = Modifier.testTag("library_filter_${option.name.lowercase(java.util.Locale.ROOT)}")
                 )
             }
         }
@@ -1075,7 +1076,7 @@ private fun LibraryControls(
                                 onSortChange(next.first, next.second)
                             },
                             minTouchTargetHeight = 40.dp,
-                            modifier = Modifier.testTag("library_sort_${option.name.lowercase()}")
+                            modifier = Modifier.testTag("library_sort_${option.name.lowercase(java.util.Locale.ROOT)}")
                         )
                     }
                 }

@@ -30,7 +30,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaNode
@@ -81,6 +81,7 @@ import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
@@ -235,8 +236,8 @@ fun SequelDetailSheet(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val themePreferences = remember(context) { ThemePreferences(context) }
-    val themeSettings by themePreferences.settings.collectAsState(
-        initial = ThemePreferences.ThemeSettings(
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
             useDynamicColor = false
         )
@@ -276,9 +277,17 @@ fun SequelDetailSheet(
         if (entryEditor != null) editState.load(entryEditor, subject.mediaId)
     }
 
-    LaunchedEffect(subject.mediaId, subject.media.type) {
+    // The ticker stops with the window. A sheet left open behind another app is
+    // still composed, and this loop was keeping a request every ten minutes for a
+    // page nobody could see - the one live-refresh loop in the app that no
+    // visibility gate covered. The first load is deliberately not gated: the answer
+    // is what the page needs the moment it comes back, and asking once costs less
+    // than repainting an empty hero.
+    val detailRefreshResumed = rememberIsResumed()
+    LaunchedEffect(subject.mediaId, subject.media.type, detailRefreshResumed) {
         onLoadDetail(subject.mediaId, subject.media.type)
         onLoadFriends(subject.mediaId, subject.media.type)
+        if (!detailRefreshResumed) return@LaunchedEffect
 
         // Keep the open title current. The store republishes its cache immediately
         // and performs a network refresh only after its ten-minute freshness window expires.

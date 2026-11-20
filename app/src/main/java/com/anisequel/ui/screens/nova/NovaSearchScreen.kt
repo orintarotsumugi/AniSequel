@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.anisequel.ui.components.icons.Icons
@@ -38,7 +39,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.mediaCoverKey
@@ -155,9 +156,9 @@ fun NovaSearchScreen(
 ) {
     val profiles = rememberPersonProfileHost(repository)
     val planningAdd = rememberPlanningAddHost(repository = repository, canWrite = canWrite)
-    val quickAddStatuses by planningAdd.statuses.collectAsState()
-    val quickAdd by quickAddPreferences.settings.collectAsState(
-        initial = QuickAddPreferences.QuickAddSettings()
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
+    val quickAdd by quickAddPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = QuickAddPreferences.QuickAddSettings()
     )
 
     val enabledTypes = remember(searchAnimeEnabled, searchMangaEnabled) {
@@ -181,9 +182,9 @@ fun NovaSearchScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var selectedMedia by remember { mutableStateOf<MediaNode?>(null) }
     var requestGeneration by remember { mutableIntStateOf(0) }
-    val details by detailHost.details.collectAsState()
-    val loadingDetailIds by detailHost.loading.collectAsState()
-    val friends by detailHost.friends.collectAsState()
+    val details by detailHost.details.collectAsStateWithLifecycle()
+    val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
+    val friends by detailHost.friends.collectAsStateWithLifecycle()
 
     LaunchedEffect(query, activeType) {
         val type = activeType
@@ -481,6 +482,15 @@ private fun CatalogueSearchBody(
     onOpenMedia: (MediaNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A settled search replaces the result set, and the grid kept its scroll
+    // offset across that swap - so a fresh answer could open halfway down a page
+    // the reader had never seen, with the top of it apparently missing. Hoisted
+    // here because the reset belongs to the grid, and keyed on the answer rather
+    // than on every keystroke: typing must not scroll a page that is not changing.
+    val resultGridState = rememberLazyGridState()
+    LaunchedEffect(searchedTerm, activeType) {
+        resultGridState.scrollToItem(0)
+    }
     Box(modifier = modifier) {
         when {
             activeType == null -> SearchNote(
@@ -507,6 +517,7 @@ private fun CatalogueSearchBody(
 
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
+                state = resultGridState,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("nova_search_results"),
@@ -521,7 +532,8 @@ private fun CatalogueSearchBody(
             ) {
                 item(
                     key = "search_result_summary",
-                    span = { GridItemSpan(maxLineSpan) }
+                    span = { GridItemSpan(maxLineSpan) },
+                    contentType = "search_summary"
                 ) {
                     Row(
                         modifier = Modifier
@@ -690,7 +702,7 @@ private fun SearchSkeleton() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         userScrollEnabled = false
     ) {
-        items(count = 6, key = { "search_skeleton_$it" }) {
+        items(count = 6, key = { "search_skeleton_$it" }, contentType = { "search_skeleton" }) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

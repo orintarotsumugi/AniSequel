@@ -26,7 +26,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.mediaCoverKey
 import com.anisequel.data.model.namespaceKey
@@ -131,14 +131,14 @@ fun StudioScreen(
     entryEditor: EntryEditor? = null,
     modifier: Modifier = Modifier
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     // The person whose profile is open, and the callbacks the cast and crew rows
     // open it with. Null repository draws captions, not buttons.
     val profiles = rememberPersonProfileHost(repository)
-    val detailNodes by detailHost.details.collectAsState()
-    val loadingDetailIds by detailHost.loading.collectAsState()
-    val detailFriends by detailHost.friends.collectAsState()
+    val detailNodes by detailHost.details.collectAsStateWithLifecycle()
+    val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
+    val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
 
     // One-tap Planning for a studio's title. A studio page carries no session of
     // its own, so the host is gated on the editor the navigation passed - the
@@ -147,7 +147,7 @@ fun StudioScreen(
         repository = repository,
         canWrite = entryEditor != null
     )
-    val quickAddStatuses by planningAdd.statuses.collectAsState()
+    val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val success = state as? StudioViewModel.StudioUiState.Success

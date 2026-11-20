@@ -699,13 +699,16 @@ private fun HeroChips(
         // "UNKNOWN" beside the score says the app looked and found nothing, when
         // the truth is that AniList did not send it.
         if (media.status != null) {
-            HeroChip(icon = AppVectorIcons.Info, label = media.statusLabel.uppercase())
+            HeroChip(
+                icon = AppVectorIcons.Info,
+                label = media.statusLabel.uppercase(java.util.Locale.ROOT)
+            )
         }
         // A manga's format is usually the word MANGA, which the medium chip above
         // already says; a Novel or a One Shot still gets its own chip because
         // those add something.
         val mediumLabel = if (media.isManga) "MANGA" else "ANIME"
-        if (media.formatLabel.uppercase() != mediumLabel || !media.isManga) {
+        if (media.formatLabel.uppercase(java.util.Locale.ROOT) != mediumLabel || !media.isManga) {
             HeroChip(
                 icon = when {
                     media.isManga -> AppVectorIcons.SourceBook
@@ -717,7 +720,7 @@ private fun HeroChips(
                 },
                 // Small caps, the way the other hero chips are set; `formatLabel`
                 // spells the enum instead of printing `TV_SHORT`.
-                label = media.formatLabel.uppercase()
+                label = media.formatLabel.uppercase(java.util.Locale.ROOT)
             )
         }
     }

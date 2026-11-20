@@ -31,7 +31,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +50,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.InfoBackdropBlur
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.InfoBackdropSource
@@ -124,8 +124,8 @@ internal fun ThemeTab(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    val themeSettings by themePreferences.settings.collectAsState(
-        initial = ThemePreferences.ThemeSettings(
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
             useDynamicColor = false
         )
@@ -518,9 +518,9 @@ private fun ThemeModeTile(
                     interactionSource = interactionSource,
                     indication = null,
                     role = Role.RadioButton,
-                    onClickLabel = "Use the ${mode.displayName.lowercase()} appearance"
+                    onClickLabel = "Use the ${mode.displayName.lowercase(java.util.Locale.ROOT)} appearance"
                 ) { onClick() }
-                .testTag("theme_mode_${mode.name.lowercase()}")
+                .testTag("theme_mode_${mode.name.lowercase(java.util.Locale.ROOT)}")
                 // `Role.RadioButton` alone says "a choice"; it does not say which
                 // one is chosen. Without this the three tiles were announced
                 // identically and the only evidence of the current mode was the

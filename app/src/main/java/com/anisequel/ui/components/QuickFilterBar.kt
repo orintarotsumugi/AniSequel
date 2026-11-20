@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -103,21 +104,26 @@ fun QuickFilterBar(
         // the only place they are restated. At most two genre names are
         // spelled out; the rest become a "+n" rather than wrapping the row to
         // two lines.
-        val activeGenres = filterCriteria.selectedGenres.sorted()
-        val genreSummary = when {
-            activeGenres.isEmpty() -> null
-            activeGenres.size <= 2 -> activeGenres.joinToString(", ")
-            else -> "${activeGenres.take(2).joinToString(", ")} +${activeGenres.size - 2}"
+        //
+        // Derived once per filter change rather than once per pass. This bar sits
+        // inside the dashboard's lazy list, so a scroll-adjacent state change
+        // recomposes it; the sort, the take(2) and the list allocation were all
+        // repeating for a row whose only input is the criteria.
+        val activeFilters = remember(filterCriteria, activeStatus, activeFormat) {
+            val activeGenres = filterCriteria.selectedGenres.sorted()
+            val genreSummary = when {
+                activeGenres.isEmpty() -> null
+                activeGenres.size <= 2 -> activeGenres.joinToString(", ")
+                else -> "${activeGenres.take(2).joinToString(", ")} +${activeGenres.size - 2}"
+            }
+            listOfNotNull(
+                activeStatus,
+                activeFormat,
+                genreSummary,
+                filterCriteria.minScore?.let { "$it+" },
+                filterCriteria.minEpisodes?.let { "$it+ eps" }
+            )
         }
-        val scoreSummary = filterCriteria.minScore?.let { "$it+" }
-        val episodeSummary = filterCriteria.minEpisodes?.let { "$it+ eps" }
-        val activeFilters = listOfNotNull(
-            activeStatus,
-            activeFormat,
-            genreSummary,
-            scoreSummary,
-            episodeSummary
-        )
 
         // The shared predicate rather than a local copy. This row's own
         // version used to look at status, search and "include unreleased" only,

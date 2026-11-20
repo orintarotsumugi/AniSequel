@@ -228,7 +228,10 @@ internal fun LibraryGroupHeading(label: String, count: Int) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = label.uppercase(),
+            // `Locale.ROOT`: this is a section label, not prose. Turkish would
+            // fold the `i` in a status name to a dotted capital and change the
+            // word on screen.
+            text = label.uppercase(java.util.Locale.ROOT),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface

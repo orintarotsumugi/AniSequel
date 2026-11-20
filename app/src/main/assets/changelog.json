@@ -1,6 +1,151 @@
 {
   "versions": [
     {
+      "version": "2.4.5",
+      "entries": [
+        {
+          "title": "Screens stop reading state they cannot see",
+          "detail": "Home, catalogue search, the studio page, the library, profiles, every Settings page, the sign-in flow and the app shell now collect their state with the lifecycle instead of always-on. A composition that is stopped behind another app no longer keeps forty-odd flows mapped and recomposed for a page nobody is looking at, and the first frame after resuming already has the latest value."
+        },
+        {
+          "title": "An open title page stops refreshing behind another app",
+          "detail": "The Info page's ten-minute live-refresh loop was the one request timer with no visibility gate, so a sheet left open kept spending AniList requests while the app was in the background. The first load still happens the moment the page opens; the ticker now only runs while the page is resumed."
+        },
+        {
+          "title": "Comment polling stops with the window",
+          "detail": "The chat-view comment poll is the only loop in the app whose tick spends a network request, and it kept polling AniList for new comments behind another app. It waits until the thread is on screen again."
+        },
+        {
+          "title": "A new catalogue search starts at the top",
+          "detail": "The search results grid kept its scroll offset when a new answer replaced the old one, so a fresh query could open halfway down a list the reader had never seen, with the first results apparently missing. The grid returns to the first result when the settled answer changes, and typing does not move a page that is not changing."
+        },
+        {
+          "title": "The statistics drawer computes its rows once",
+          "detail": "Opening a title's score or status drawer re-filtered, re-sorted and re-summed all four distributions on every pass. They are derived once per stats payload now, so the drawer's scrolling and the countdown above it no longer repeat that work."
+        },
+        {
+          "title": "The filter bar computes its summary once",
+          "detail": "The dashboard's Filtered row rebuilt its genre sort and label list on every recomposition of the bar. It is remembered against the criteria, which are that row's only input."
+        },
+        {
+          "title": "A changing count no longer re-measures its row",
+          "detail": "The count pill beside a section title animated its own width while the number faded, so the title row was re-measured for the length of every count change. The fade runs without a size transform, the same fix the library subtitle already carries."
+        },
+        {
+          "title": "A changing stat no longer re-measures its column",
+          "detail": "The four-up Nova number strip animated each value's width inside a quarter-width cell, which shifted the neighbouring numbers whenever a figure refreshed. The value now crossfades in place."
+        },
+        {
+          "title": "A changing progress count no longer re-measures its card",
+          "detail": "The Watching Progress count had the same width animation in its card header; the number fades in place now, so the header's label is not re-laid out on every edit."
+        },
+        {
+          "title": "Sequel labels read correctly in every language",
+          "detail": "The relation label on Nova's sequel cards is upper-cased with a fixed case fold. Turkish used to turn the i in a relation into a dotted capital and change the word drawn on the card."
+        },
+        {
+          "title": "Tier shelf wording reads correctly in every language",
+          "detail": "The tier library's New anime tier list and Loading your manga list sentences no longer depend on the device locale's case rules."
+        },
+        {
+          "title": "Library type labels read correctly in every language",
+          "detail": "The Anime/Manga switch label uses a fixed case fold, so a Turkic locale cannot re-spell the word."
+        },
+        {
+          "title": "Info chips read correctly in every language",
+          "detail": "The status and format chips on the classic Info hero use fixed case folds, so a title's own status cannot be re-cased by the phone's language."
+        },
+        {
+          "title": "Library headings read correctly in every language",
+          "detail": "Grouped-library headings and the filter sheet's section labels use a fixed case fold instead of the device locale's."
+        },
+        {
+          "title": "Person fact chips read correctly in every language",
+          "detail": "The label above each fact on a character or staff sheet uses a fixed case fold."
+        },
+        {
+          "title": "Seasonal and appearance wording reads correctly in every language",
+          "detail": "The Seasonal effect subtitle, the Device Manager's quality label, the UI-size picker and the appearance descriptions no longer re-case their words by locale."
+        },
+        {
+          "title": "Test tags no longer depend on the device language",
+          "detail": "Motion styles, UI size, theme modes, stats sections, cover-viewer sources, genre chips and the library's type and filter tags used the default locale to build their identifiers. On a Turkic device those tags differed and any UI test looking for them failed; they use a fixed case fold now."
+        },
+        {
+          "title": "Search placeholders recycle with the grid",
+          "detail": "The catalogue search's result summary and waiting rows now carry a content type, so the lazy grid can reuse their slots instead of rebuilding them when results arrive."
+        },
+        {
+          "title": "Category chips stop re-sorting on an unrelated refresh",
+          "detail": "A live detail refresh replaces the whole title node, and the categories section re-sorted every tag for a synopsis that changed. The sort is keyed on the tag list itself now, so a refresh with unchanged categories does no work."
+        },
+        {
+          "title": "The arriving countdown is formatted once",
+          "detail": "The dashboard's countdown clock and the Info page's next-episode line were formatted in an argument evaluated on every recomposition, reading the clock and building a string that was then discarded. Both are remembered against the airing they describe."
+        },
+        {
+          "title": "The title hero stops stepping down when the detail lands",
+          "detail": "The relation, status and format chips arrive with the detail response, and their strip used to fade in at full height: the hero's lockup moved down by a chip row the instant the answer landed, while the entrance stagger was still running. The strip now expands with the fade and shrinks on the way out, so the title stays where the reader is looking."
+        },
+        {
+          "title": "The episode countdown stops blinking once a minute",
+          "detail": "Nova's next-episode line crossfaded on every tick, so a page left open faded the same sentence in and out once a minute. Only a change between the episode-number and next-episode forms is a state change now; the minute updating its count rewrites the text in place."
+        },
+        {
+          "title": "The statistics bars paint without re-laying out the drawer",
+          "detail": "Each distribution bar animated its width through layout, so a score drawer opening a dozen bars recomposed, measured and laid out every row on every frame of every spring. The fill is now drawn in the draw phase: a frame invalidates one bar's drawing and nothing else."
+        },
+        {
+          "title": "The copy confirmation eases its container",
+          "detail": "The title copy button crossfaded its icon while the container around it cut straight to the confirmation colour, which read as two acknowledgements overlapping for a frame. The container animates with the icon now, on the shared colour spring."
+        },
+        {
+          "title": "Expanding categories no longer moves the control",
+          "detail": "Tapping Expand on the Categories card replaced the tag list in one frame: the control moved out from under the finger that had just pressed it and every section below jumped with the card. The card's height now springs, the same way the synopsis card's does."
+        },
+        {
+          "title": "The synopsis card waits with a paragraph, not a spinner",
+          "detail": "A 16dp spinner held the place of the tallest card on the page, so the synopsis arrived in one frame and pushed everything below it down by the height of a paragraph. Four shimmer lines reserve that height while the detail is in flight, and the card eases the difference when the text lands."
+        },
+        {
+          "title": "The details card holds its studio row while it loads",
+          "detail": "The studio is the one fact the list query cannot carry, so a loading sentence sat above a grid that was already complete and, on arrival, collapsed and moved every fact up. A shimmer heading and two chip outlines hold the row instead."
+        },
+        {
+          "title": "The friends card holds its row while it checks",
+          "detail": "Checking who you follow filled a single line, while the row it becomes is about a card tall - so when the answer landed the card grew and pushed the synopsis and the details down. Two placeholder rows keep the page still."
+        },
+        {
+          "title": "The docked bar leaves the page, not the screen",
+          "detail": "The bar's exit slide is a graphics-layer translation, which does not clip: it drew itself into the status-bar inset on its way out, so a ghost of it passed under the clock while it faded. It is clipped to its own box now."
+        },
+        {
+          "title": "The entry capsule makes room instead of popping",
+          "detail": "The Edit label and the capsule's text crossfade shared a weighted row, and the label faded in without taking its width first - for a frame the title was clipped by a word that was still arriving. Both expand and shrink with the spring, and the text crossfade no longer animates its size."
+        },
+        {
+          "title": "The progress count crossfades on the classic page too",
+          "detail": "The Nova page eased its progress count between values while the classic card cut to the new number in one frame, so the same entry write looked like two different apps. Both crossfade now, with no size transform on a fixed one-line slot."
+        },
+        {
+          "title": "The details card grows with its facts",
+          "detail": "The facts grid goes from two rows to six when the detail lands. It now springs to its new height instead of doubling in a frame, so the sections below the card stop jumping while the reader is at the top of the page."
+        },
+        {
+          "title": "The copy icon stops animating its own size",
+          "detail": "Both copy confirmations used a default size transform over two icons and two labels of identical size, which measured both halves on every frame to animate a size that never changed. They crossfade only."
+        },
+        {
+          "title": "Info labels stay spelled right on Turkic devices",
+          "detail": "The Nova hero's status and format chips, the classic hero's format chip, the details labels, the cast and crew roles, the appearance preview and the info facts uppercased with the device's own case rules, so a Turkish or Azeri phone could print a dotted capital I inside an English label. They use a fixed fold now."
+        },
+        {
+          "title": "Cast, staff and relation rows reuse their slots",
+          "detail": "The three artwork rows are long lists of one card shape, and their slots are now marked with that shape so a fast fling can recycle the card leaving the screen for the one arriving instead of disposing and rebuilding it."
+        }
+      ]
+    },
+    {
       "version": "2.4.4",
       "entries": [
         {

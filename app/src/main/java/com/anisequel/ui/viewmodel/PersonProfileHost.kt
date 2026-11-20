@@ -2,9 +2,9 @@ package com.anisequel.ui.viewmodel
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.PersonProfileState
 import com.anisequel.data.model.ProfileAppearance
 import com.anisequel.data.repository.AniListRepository
@@ -71,7 +71,7 @@ class PersonProfileHost internal constructor(
     fun Sheet(onOpenAppearance: (ProfileAppearance) -> Unit) {
         // Compared against `Closed` rather than null-checked: the state is not
         // nullable, and `Closed` is the answer meaning "nobody is looking at this".
-        val state by store.state.collectAsState()
+        val state by store.state.collectAsStateWithLifecycle()
         if (state == PersonProfileState.Closed) return
 
         PersonProfileSheet(

@@ -372,7 +372,7 @@ private fun ProfileFacts(facts: List<Pair<String, String>>) {
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
                 ) {
                     Text(
-                        text = label.uppercase(),
+                        text = label.uppercase(java.util.Locale.ROOT),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                         fontWeight = FontWeight.SemiBold

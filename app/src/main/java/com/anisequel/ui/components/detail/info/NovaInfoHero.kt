@@ -4,8 +4,12 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -530,8 +534,16 @@ private fun HeroLockup(
             }
             AnimatedVisibility(
                 visible = relationLabel != null || statusLabel != null || media.formatLabel.isNotBlank(),
-                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
-                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                // Expanded with the fade, not faded in place. The strip is absent
+                // on the summary node and arrives with the detail, so a fade-only
+                // entrance drew the chips at full height from the first frame and
+                // the hero's lockup jumped down by a chip row the instant the
+                // answer landed - under the reader's eye, while the stagger was
+                // still running.
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
             ) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -546,7 +558,7 @@ private fun HeroLockup(
                     if (statusLabel != null) {
                         HeroChip(
                             icon = AppVectorIcons.Info,
-                            label = statusLabel.uppercase(),
+                            label = statusLabel.uppercase(java.util.Locale.ROOT),
                             accent = true
                         )
                     }
@@ -558,7 +570,7 @@ private fun HeroLockup(
                         } else {
                             AppVectorIcons.Tv
                         },
-                        label = media.formatLabel.uppercase()
+                        label = media.formatLabel.uppercase(java.util.Locale.ROOT)
                     )
                     media.studioCredits.firstOrNull()?.let { studio ->
                         HeroChip(
@@ -629,7 +641,7 @@ private fun HeroEntryPill(
                 targetState = text,
                 transitionSpec = {
                     fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                        fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                 },
                 label = "nova_entry_pill_text",
                 modifier = Modifier.weight(1f)
@@ -644,8 +656,14 @@ private fun HeroEntryPill(
             }
             AnimatedVisibility(
                 visible = editable,
-                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects),
-                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                // The label shares a weighted row with the pill's text, so it
+                // expands rather than appearing: a fade-only entrance changed the
+                // text column's width in one frame, and the label being drawn over
+                // a title that had not made room yet read as a clipped string.
+                enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                    expandHorizontally(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
+                    shrinkHorizontally(animationSpec = ExpressiveMotion.FastSpatialSize)
             ) {
                 Text(
                     text = "Edit",

@@ -633,8 +633,15 @@ private fun ChatScrollEffects(
     // a plain value would be captured by the closure on the frame the effect started
     // and the poll would answer where the reader was when they opened the sheet, not
     // where they are now.
+    //
+    // Paused with the window, like every other clock in the app. This is the one
+    // loop whose tick spends a network request, so an ungated one kept polling
+    // AniList for new comments behind another app - battery, and the rate limit
+    // this app already rations.
+    val pollingResumed = rememberIsResumed()
     if (polling && state.isChatView && !state.isLoading) {
-        LaunchedEffect(state.activityId, pollIntervalMillis) {
+        LaunchedEffect(state.activityId, pollIntervalMillis, pollingResumed) {
+            if (!pollingResumed) return@LaunchedEffect
             while (isActive) {
                 delay(pollIntervalMillis)
                 onCheckForNewComments(isAtBottom.value)

@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -105,7 +106,11 @@ fun InfoFloatingBar(
             fadeIn(animationSpec = ExpressiveMotion.FastEffects),
         exit = slideOutVertically(animationSpec = ExpressiveMotion.DefaultSpatialOffset) { height -> -height } +
             fadeOut(animationSpec = ExpressiveMotion.FastEffects),
-        modifier = modifier
+        // The bar's slide is a graphics-layer translation, which does not clip:
+        // leaving upward by its own height drew it into the status-bar inset this
+        // modifier reserves, so a ghost of it passed under the clock while it
+        // faded. Clipped to its own box, it leaves the page instead of the screen.
+        modifier = modifier.clipToBounds()
     ) {
         Row(
             modifier = Modifier

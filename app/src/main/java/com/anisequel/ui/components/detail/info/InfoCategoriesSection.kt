@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.detail.info
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,6 +36,7 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTag
 import com.anisequel.data.model.genreList
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 
@@ -75,7 +77,11 @@ fun InfoCategoriesSection(
     modifier: Modifier = Modifier
 ) {
     val genres = media.genreList
-    val tags = remember(media) {
+    // Keyed on the tags, not the whole node: a live detail refresh replaces the
+    // node for a synopsis that changed, and re-sorting twenty tags on every
+    // refresh of a page nobody's categories moved on is work with no answer to
+    // change.
+    val tags = remember(media.tags) {
         media.tags.orEmpty()
             .filter { !it.name.isNullOrBlank() }
             .sortedByDescending { it.rank ?: 0 }
@@ -96,6 +102,12 @@ fun InfoCategoriesSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            // Expand, collapse and the spoiler strip all change this card's
+            // height, and it used to change in one frame: the control the reader
+            // had just tapped moved out from under their finger and every section
+            // below jumped with the card. The same size spring the synopsis card
+            // uses keeps the page still while the tags open.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
             .testTag("info_categories_section"),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {

@@ -222,7 +222,7 @@ private fun CopyLinkRow(
         targetState = copied,
         transitionSpec = {
             fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
         },
         label = "copy_link_confirmation",
         modifier = modifier

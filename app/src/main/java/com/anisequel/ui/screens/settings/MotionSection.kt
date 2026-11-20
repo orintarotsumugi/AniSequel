@@ -248,7 +248,7 @@ private fun MotionChip(
                 role = Role.RadioButton
             }
             .padding(horizontal = 14.dp, vertical = 10.dp)
-            .testTag("motion_style_${label.lowercase()}"),
+            .testTag("motion_style_${label.lowercase(java.util.Locale.ROOT)}"),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
