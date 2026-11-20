@@ -148,8 +148,8 @@ class JokeSettingsTest {
         // A downgrade can read a value a newer build wrote. Losing the choice is
         // recoverable; throwing on launch is not.
         assertEquals(JokeFrequency.NORMAL, JokeFrequency.fromStorage("warp-speed"))
-        assertEquals(JokePosition.BOTTOM, JokePosition.fromStorage(null))
-        assertEquals(JokeScope.MAIN_PAGES, JokeScope.fromStorage("somewhere-new"))
+        assertEquals(JokePosition.TOP, JokePosition.fromStorage(null))
+        assertEquals(JokeScope.EVERYWHERE, JokeScope.fromStorage("somewhere-new"))
         assertEquals(JokeDwell.STANDARD, JokeDwell.fromStorage("forever-and-a-day"))
         assertEquals(emptySet<JokeTone>(), JokeTone.fromStorage(setOf("vibes", "craft-ish")))
         assertEquals(emptySet<JokeMoment>(), JokeMoment.fromStorage(setOf("whenever")))
@@ -198,8 +198,8 @@ class JokeSettingsTest {
         assertTrue("jokes should ship on", defaults.enabled)
         assertTrue(defaults.autoJokesEnabled)
         assertEquals(JokeFrequency.NORMAL, defaults.frequency)
-        assertEquals(JokePosition.BOTTOM, defaults.position)
-        assertEquals(JokeScope.MAIN_PAGES, defaults.scope)
+        assertEquals(JokePosition.TOP, defaults.position)
+        assertEquals(JokeScope.EVERYWHERE, defaults.scope)
         assertEquals(JokeDwell.STANDARD, defaults.dwell)
         assertTrue(defaults.haptics)
         assertEquals(JokeTone.entries.toSet(), defaults.tones)

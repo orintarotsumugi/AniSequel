@@ -46,17 +46,26 @@ import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.MainTabPreferences
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.OnboardingPreferences
+import com.anisequel.data.repository.RefreshInterval
+import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.jokes.JokeFrequency
 import com.anisequel.domain.ui.AppLayout
+import com.anisequel.domain.ui.DisplayDpi
+import com.anisequel.domain.ui.DpiMode
 import com.anisequel.domain.ui.PosterSource
+import com.anisequel.domain.ui.UiSize
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.screens.settings.AppLayoutPreviews
+import com.anisequel.ui.screens.settings.MotionSample
 import com.anisequel.ui.screens.settings.SectionCard
 import com.anisequel.ui.screens.settings.SwitchRow
+import com.anisequel.ui.screens.settings.ThemePreviewCard
+import com.anisequel.ui.screens.settings.motionDescription
 import com.anisequel.ui.theme.DialogImmersiveEffect
+import com.anisequel.ui.theme.rememberDeviceDensityDpi
 import com.anisequel.ui.viewmodel.AuthUiState
 import kotlinx.coroutines.launch
 
@@ -69,7 +78,8 @@ fun FirstRunSetupHost(
     interfacePreferences: InterfacePreferences,
     themePreferences: ThemePreferences,
     jokePreferences: JokePreferences,
-    mainTabPreferences: MainTabPreferences
+    mainTabPreferences: MainTabPreferences,
+    refreshIntervalPreferences: RefreshIntervalPreferences
 ) {
     if (!shouldShowFirstRunSetup(completed, authState)) return
     FirstRunSetupDialog(
@@ -77,13 +87,21 @@ fun FirstRunSetupHost(
         interfacePreferences = interfacePreferences,
         themePreferences = themePreferences,
         jokePreferences = jokePreferences,
-        mainTabPreferences = mainTabPreferences
+        mainTabPreferences = mainTabPreferences,
+        refreshIntervalPreferences = refreshIntervalPreferences
     )
 }
 
-/** Pure gate so a restoring session can never flash first-run choices over Home. */
+/**
+ * Pure gate for the first-run walk.
+ *
+ * It waits for the stored session to be read, and it stays off the login screen:
+ * the setup is something a signed-in reader configures for their app, so it opens
+ * after AniList auth completes rather than before the reader has an account to
+ * land in. A demo or unauthenticated session does not count as "logged in".
+ */
 internal fun shouldShowFirstRunSetup(completed: Boolean, authState: AuthUiState): Boolean =
-    !completed && authState !is AuthUiState.Restoring
+    !completed && authState is AuthUiState.Authenticated
 
 /**
  * One page of the setup, as the header and footer read it.
@@ -114,6 +132,13 @@ internal val SETUP_STEPS = listOf(
         icon = AppVectorIcons.ViewGrid
     ),
     SetupStep(
+        label = "Size",
+        title = "Set the app size",
+        subtitle = "How large cards, text and gaps are drawn. You can fine-tune it later " +
+            "in Settings > Type & reading.",
+        icon = AppVectorIcons.Tune
+    ),
+    SetupStep(
         label = "Posters",
         title = "Choose your poster art",
         subtitle = "AniList covers, or BetterPosters art when it is available for a title.",
@@ -124,6 +149,13 @@ internal val SETUP_STEPS = listOf(
         title = "Pick a light",
         subtitle = "Follow the system, or keep the app light or dark whatever the phone does.",
         icon = AppVectorIcons.ThemeDark
+    ),
+    SetupStep(
+        label = "Colours",
+        title = "Keep a title's colour",
+        subtitle = "Let the show you open tint the app - and keep that colour when " +
+            "you leave its page.",
+        icon = AppVectorIcons.SectionAppearance
     ),
     SetupStep(
         label = "Motion",
@@ -137,6 +169,13 @@ internal val SETUP_STEPS = listOf(
         title = "Ani-chan's one-liners",
         subtitle = "An occasional line on the way through. Off is a perfectly good answer.",
         icon = AppVectorIcons.Star
+    ),
+    SetupStep(
+        label = "Refresh",
+        title = "Keep your list current",
+        subtitle = "How often the app asks AniList for a fresh copy of your list. " +
+            "You can change this later in Settings.",
+        icon = AppVectorIcons.Refresh
     ),
     SetupStep(
         label = "Shortcuts",
@@ -179,7 +218,8 @@ fun FirstRunSetupDialog(
     interfacePreferences: InterfacePreferences,
     themePreferences: ThemePreferences,
     jokePreferences: JokePreferences,
-    mainTabPreferences: MainTabPreferences
+    mainTabPreferences: MainTabPreferences,
+    refreshIntervalPreferences: RefreshIntervalPreferences
 ) {
     val scope = rememberCoroutineScope()
     // Shared with the Back button's own interaction source so the press spring
@@ -190,27 +230,49 @@ fun FirstRunSetupDialog(
     // shows the app's current strengths without hiding any existing data, while
     // every choice remains editable in Settings.
     var layout by rememberSaveable { mutableStateOf(AppLayout.NOVA.storageValue) }
+    var displayDpi by rememberSaveable { mutableIntStateOf(DisplayDpi.DEFAULT_DPI) }
     var posterSource by rememberSaveable { mutableStateOf(PosterSource.DEFAULT.storageValue) }
     var theme by rememberSaveable { mutableStateOf(ThemeMode.SYSTEM.storageValue) }
+    var retainAnimeColor by rememberSaveable { mutableStateOf(true) }
     var motion by rememberSaveable { mutableStateOf(MotionStyle.DEFAULT.storageValue) }
     var jokesEnabled by rememberSaveable { mutableStateOf(true) }
     var jokeFrequency by rememberSaveable { mutableStateOf(JokeFrequency.NORMAL.storageValue) }
+    var refreshInterval by rememberSaveable {
+        mutableStateOf(RefreshInterval.DEFAULT.storageValue)
+    }
     var searchShortcut by rememberSaveable { mutableStateOf(true) }
     var tiersShortcut by rememberSaveable { mutableStateOf(false) }
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
+    // Guard against double taps on Skip/Finish writing the batch twice or racing
+    // the completion flag while the dialog is still on screen.
+    var finishing by remember { mutableStateOf(false) }
 
-    val finishWithDefaults: () -> Unit = {
+    val finishWithDefaults: () -> Unit = finish@{
+        if (finishing) return@finish
+        finishing = true
         scope.launch { onboardingPreferences.setCompleted(true) }
     }
 
-    val saveChoices: () -> Unit = {
+    val saveChoices: () -> Unit = save@{
+        if (finishing) return@save
+        finishing = true
         scope.launch {
             interfacePreferences.setLayout(AppLayout.fromStorage(layout))
+            // The size chosen here is a number, so it only takes effect in Manual.
+            // Automatic stays available in Settings > Display size as an advanced
+            // choice for readers on tablets and foldables.
+            interfacePreferences.setDpiMode(DpiMode.MANUAL)
+            interfacePreferences.setDisplayDpi(displayDpi)
             interfacePreferences.setPosterSource(PosterSource.fromStorage(posterSource))
             themePreferences.setThemeMode(ThemeMode.fromStorage(theme))
+            // Retention is the whole choice here: enabling it also gives a title
+            // permission to recolour the app, so the switch means what it says.
+            themePreferences.setAnimeThemeEnabled(retainAnimeColor)
+            themePreferences.setAnimeThemeRetainColor(retainAnimeColor)
             themePreferences.setMotionStyle(MotionStyle.fromStorage(motion))
             jokePreferences.setEnabled(jokesEnabled)
             jokePreferences.setFrequency(JokeFrequency.fromStorage(jokeFrequency))
+            refreshIntervalPreferences.setInterval(RefreshInterval.fromStorage(refreshInterval))
             // The setup asks one question per page ("add this page to the bar"),
             // and the preference layer now keeps the tab and the top-bar shortcut
             // independent. Write both here so the wizard still means what its
@@ -230,21 +292,27 @@ fun FirstRunSetupDialog(
     // to the one object those controls read.
     val draft = SetupDraft(
         layout = layout,
+        displayDpi = displayDpi,
         posterSource = posterSource,
         theme = theme,
+        retainAnimeColor = retainAnimeColor,
         motion = motion,
         jokesEnabled = jokesEnabled,
         jokeFrequency = jokeFrequency,
+        refreshInterval = refreshInterval,
         searchShortcut = searchShortcut,
         tiersShortcut = tiersShortcut
     )
     val onDraftChange: (SetupDraft) -> Unit = { updated ->
         layout = updated.layout
+        displayDpi = updated.displayDpi
         posterSource = updated.posterSource
         theme = updated.theme
+        retainAnimeColor = updated.retainAnimeColor
         motion = updated.motion
         jokesEnabled = updated.jokesEnabled
         jokeFrequency = updated.jokeFrequency
+        refreshInterval = updated.refreshInterval
         searchShortcut = updated.searchShortcut
         tiersShortcut = updated.tiersShortcut
     }
@@ -303,12 +371,12 @@ fun FirstRunSetupDialog(
 /**
  * One question's controls, and the welcome page at index zero.
  *
- * The six-way `when` lives here, in its own function: six branches of a page
- * dispatcher are not the wizard's control flow, and the wizard is the method the
- * complexity gate measures. Passing the draft as one object rather than seven
- * delegated variables keeps the extraction from trading a complexity finding for
- * a long-parameter one.
+ * The page dispatch lives here, in its own function: the branching across setup
+ * steps is not the wizard's control flow, and the wizard is the method the
+ * complexity gate measures. Passing the draft as one object keeps the extraction
+ * from trading a complexity finding for a long-parameter one.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SetupStepChoices(
     index: Int,
@@ -330,6 +398,52 @@ internal fun SetupStepChoices(
             )
         }
         2 -> SectionCard(
+            title = "UI size",
+            icon = AppVectorIcons.Tune,
+            subtitle = "Pick a comfortable size now. You can fine-tune the exact density later."
+        ) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("onboarding_ui_size")
+            ) {
+                UiSize.entries.forEach { option ->
+                    ExpressiveStateChip(
+                        label = option.displayName,
+                        selected = UiSize.of(draft.displayDpi) == option,
+                        onClick = { onDraftChange(draft.copy(displayDpi = option.dpi)) },
+                        role = Role.RadioButton,
+                        minTouchTargetHeight = 48.dp,
+                        onClickLabel = "Draw the app at the ${option.displayName} UI size",
+                        modifier = Modifier.testTag("onboarding_ui_size_${option.name.lowercase(java.util.Locale.ROOT)}")
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = UiSize.of(draft.displayDpi)?.blurb
+                    ?: "A custom density. You can adjust it in Settings > Type & reading.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Manual · ${DisplayDpi.clamp(draft.displayDpi)} dpi",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Your device reports ${rememberDeviceDensityDpi()} dpi. " +
+                    "You can switch the app to Automatic density later in " +
+                    "Settings > Display size.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        3 -> SectionCard(
             title = "Poster art",
             icon = AppVectorIcons.SectionAppearance,
             subtitle = "You can change this later in Settings > Interface > Card design"
@@ -347,10 +461,18 @@ internal fun SetupStepChoices(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        3 -> SectionCard(
+        4 -> SectionCard(
             title = "Theme",
-            icon = AppVectorIcons.ThemeDark
+            icon = AppVectorIcons.ThemeDark,
+            subtitle = "A preview of how cards and accents look in the app"
         ) {
+            ThemePreviewCard(
+                themeSettings = ThemePreferences.ThemeSettings(
+                    themeMode = ThemeMode.fromStorage(draft.theme),
+                    useDynamicColor = true
+                )
+            )
+            Spacer(modifier = Modifier.height(10.dp))
             ChoiceChips(
                 values = listOf(
                     ThemeMode.SYSTEM.storageValue to "System",
@@ -361,11 +483,49 @@ internal fun SetupStepChoices(
                 onSelect = { onDraftChange(draft.copy(theme = it)) },
                 tag = "onboarding_theme"
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = when (ThemeMode.fromStorage(draft.theme)) {
+                    ThemeMode.LIGHT -> "Always light, even if your phone is in dark mode."
+                    ThemeMode.DARK -> "Always dark, even if your phone is in light mode."
+                    else -> "Follows your phone's light or dark appearance."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        4 -> SectionCard(
-            title = "Motion",
-            icon = AppVectorIcons.SectionMotion
+        5 -> SectionCard(
+            title = "Title colour",
+            icon = AppVectorIcons.SectionAppearance,
+            subtitle = "You can change this later in Settings > Appearance"
         ) {
+            SwitchRow(
+                title = "Keep a title's colour",
+                subtitle = "Opening a show tints the app, and the colour stays " +
+                    "after you leave its page.",
+                checked = draft.retainAnimeColor,
+                onCheckedChange = { onDraftChange(draft.copy(retainAnimeColor = it)) },
+                modifier = Modifier.testTag("onboarding_retain_anime_color")
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = if (draft.retainAnimeColor) {
+                    "On: the app takes each title's cover colour and keeps the last one."
+                } else {
+                    "Off: every page uses your own theme. You can turn this on later."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        6 -> SectionCard(
+            title = "Motion",
+            icon = AppVectorIcons.SectionMotion,
+            subtitle = "Tap the preview to replay it with the selected style"
+        ) {
+            val selectedMotion = MotionStyle.fromStorage(draft.motion)
+            MotionSample(style = selectedMotion)
+            Spacer(modifier = Modifier.height(10.dp))
             ChoiceChips(
                 values = MotionStyle.entries.map {
                     it.storageValue to it.displayName
@@ -374,8 +534,14 @@ internal fun SetupStepChoices(
                 onSelect = { onDraftChange(draft.copy(motion = it)) },
                 tag = "onboarding_motion"
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = motionDescription(selectedMotion),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        5 -> SectionCard(
+        7 -> SectionCard(
             title = "Jokes",
             icon = AppVectorIcons.Star
         ) {
@@ -397,6 +563,34 @@ internal fun SetupStepChoices(
                     tag = "onboarding_joke_frequency"
                 )
             }
+        }
+        8 -> SectionCard(
+            title = "List refresh",
+            icon = AppVectorIcons.Refresh,
+            subtitle = "How old your saved list may get before the app asks again"
+        ) {
+            ChoiceChips(
+                values = RefreshInterval.entries.map {
+                    it.storageValue to it.displayName
+                },
+                selected = draft.refreshInterval,
+                onSelect = { onDraftChange(draft.copy(refreshInterval = it)) },
+                tag = "onboarding_refresh_interval"
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = when (RefreshInterval.fromStorage(draft.refreshInterval)) {
+                    RefreshInterval.ALWAYS ->
+                        "Check every time you return to the app."
+                    RefreshInterval.MANUAL_ONLY ->
+                        "Only the refresh button asks AniList for a new copy."
+                    else ->
+                        "Ask again after ${RefreshInterval.fromStorage(draft.refreshInterval).displayName} " +
+                            "of being away. A shorter interval spends more requests."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         else -> SectionCard(
             title = "Top-bar shortcuts",
@@ -423,14 +617,17 @@ internal fun SetupStepChoices(
     }
 }
 
-/** The wizard's choices, bundled so one page can receive all seven in one value. */
+/** The wizard's choices, bundled so one page can receive all of them in one value. */
 internal data class SetupDraft(
     val layout: String,
+    val displayDpi: Int,
     val posterSource: String,
     val theme: String,
+    val retainAnimeColor: Boolean,
     val motion: String,
     val jokesEnabled: Boolean,
     val jokeFrequency: String,
+    val refreshInterval: String,
     val searchShortcut: Boolean,
     val tiersShortcut: Boolean
 )
@@ -528,7 +725,7 @@ private fun ChoiceChips(
                 selected = selected == value,
                 onClick = { onSelect(value) },
                 role = Role.RadioButton,
-                minTouchTargetHeight = 40.dp,
+                minTouchTargetHeight = 48.dp,
                 modifier = Modifier.testTag("${tag}_$value")
             )
         }

@@ -46,6 +46,7 @@ import com.anisequel.data.repository.MIN_FONT_SCALE
 import com.anisequel.data.repository.MIN_TITLE_SCROLL_DP_PER_SECOND
 import com.anisequel.data.repository.SystemFont
 import com.anisequel.data.repository.ThemePreferences
+import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.LocalTitleMotion
 import com.anisequel.ui.components.MarqueeText
@@ -56,6 +57,7 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.rememberBoundSliderState
+import com.anisequel.ui.theme.rememberDeviceDensityDpi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -77,12 +79,12 @@ import kotlin.math.roundToInt
 fun TypeSettingsTab(
     themePreferences: ThemePreferences,
     /**
-     * UI size lives on this page rather than under Interface.
-     *
-     * It is a reading size - the same question the text scale above it answers -
-     * and this is the page a reader opens when the app is too small to read.
+     * Read here only for the Display size pointer below. The density itself is
+     * configured on its own page, because it scales every dp rather than just text.
      */
     interfacePreferences: InterfacePreferences,
+    /** Opens the dedicated Display size page from the pointer card. */
+    onOpenDisplaySize: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -90,9 +92,16 @@ fun TypeSettingsTab(
     val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
         initialValue = ThemePreferences.ThemeSettings(
             themeMode = com.anisequel.data.repository.ThemeMode.DEFAULT,
-            useDynamicColor = false
+            useDynamicColor = true
         )
     )
+
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
+    )
+    val deviceDpi = rememberDeviceDensityDpi()
+    val displayAutomatic = interfaceSettings.dpiMode == com.anisequel.domain.ui.DpiMode.AUTOMATIC
+    val effectiveDpi = if (displayAutomatic) deviceDpi else DisplayDpi.clamp(interfaceSettings.displayDpi)
 
     var importError by remember { mutableStateOf<String?>(null) }
     var importing by remember { mutableStateOf(false) }
@@ -134,7 +143,11 @@ fun TypeSettingsTab(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        UiSizeSectionCard(interfacePreferences = interfacePreferences)
+        DisplaySizePointerCard(
+            effectiveDpi = effectiveDpi,
+            automatic = displayAutomatic,
+            onOpen = onOpenDisplaySize
+        )
 
         SectionCard(
             title = "Font",

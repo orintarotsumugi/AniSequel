@@ -160,7 +160,7 @@ internal fun InterfaceTab(
     val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
         initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
-            useDynamicColor = false
+            useDynamicColor = true
         )
     )
     val scope = rememberCoroutineScope()
@@ -206,7 +206,7 @@ internal fun InterfaceTab(
                         // A card part goes back to the Card design shelf, which is
                         // one step out - not two, which is what "Back to Interface"
                         // would promise from there.
-                        destination?.parent() != null -> "Back to Card design"
+                        destination.parent() != null -> "Back to Card design"
                         else -> "Back to Interface"
                     },
                     backTestTag = if (destination == null) {

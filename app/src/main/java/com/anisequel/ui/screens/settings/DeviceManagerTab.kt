@@ -143,7 +143,7 @@ fun DeviceManagerTab(
                 themePreferences = themePreferences,
                 settings = themeSettings ?: ThemePreferences.ThemeSettings(
                     themeMode = ThemeMode.DEFAULT,
-                    useDynamicColor = false
+                    useDynamicColor = true
                 ),
                 scope = scope
             )

@@ -103,12 +103,11 @@ enum class MotionStyle(val storageValue: String, val displayName: String) {
  * title whose art is the reason the reader opened it became a grey list of cards
  * halfway down the page.
  *
- * [BANNER] is the default because AniList's wide key visual is the one image the
- * sheet otherwise never shows at size, and it is already being decoded for the
- * hero. [COVER] is the poster for titles with no banner, and for readers who
- * prefer the shape they tapped in the grid. [OFF] keeps the page on its surface,
- * which is still an honest choice: the backdrop is decoration, the cards are what
- * the page is for.
+ * [OFF] is the default: the backdrop is decoration and the cards are what the
+ * page is for, so a fresh title opens on its own surface rather than over artwork
+ * that competes with every caption. [BANNER] and [COVER] remain one tap away in
+ * Settings for readers who want the atmosphere - the banner is already decoded
+ * for the hero, and the cover is the shape they tapped in the grid.
  */
 enum class InfoBackdropSource(val storageValue: String, val displayName: String) {
     BANNER("banner", "Banner"),
@@ -116,7 +115,7 @@ enum class InfoBackdropSource(val storageValue: String, val displayName: String)
     OFF("off", "Off");
 
     companion object {
-        val DEFAULT = BANNER
+        val DEFAULT = OFF
 
         fun fromStorage(value: String?): InfoBackdropSource =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT

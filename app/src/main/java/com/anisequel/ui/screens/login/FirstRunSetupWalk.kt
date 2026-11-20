@@ -149,6 +149,9 @@ internal fun SetupProgressBar(step: Int) {
  * The page transition lives here rather than in the wizard because its direction
  * is a fact about the page changing, not about the setup state changing - every
  * chip tap on a page would otherwise rebuild the transition spec too.
+ *
+ * Passing the draft as one object rather than a growing list of delegated
+ * variables keeps this frame stable as setup gains new choices.
  */
 @Composable
 internal fun SetupPage(

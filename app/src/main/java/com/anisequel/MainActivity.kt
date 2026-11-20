@@ -300,7 +300,7 @@ class MainActivity : ComponentActivity() {
             val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
                 initialValue = ThemePreferences.ThemeSettings(
                     themeMode = ThemeMode.DEFAULT,
-                    useDynamicColor = false
+                    useDynamicColor = true
                 )
             )
 
@@ -389,6 +389,7 @@ class MainActivity : ComponentActivity() {
                 appBackgroundColor = themeSettings.appBackgroundColor,
                 fontScale = themeSettings.fontScale,
                 displayDpi = interfaceSettings.displayDpi,
+                dpiMode = interfaceSettings.dpiMode,
                 customFontPath = themeSettings.customFontPath,
                 customFontBoldPath = themeSettings.customFontBoldPath,
                 systemFont = themeSettings.systemFont,

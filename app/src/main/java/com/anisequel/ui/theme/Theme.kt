@@ -150,12 +150,20 @@ internal fun applyCanvasColour(base: ColorScheme, canvas: Color?): ColorScheme {
         canvasContrast(Color.Black, canvas)
     val onCanvas = if (canvasIsDark) Color.White else Color.Black
     val ramp = CanvasRamp(canvas = canvas, hct = hct, isDark = canvasIsDark)
+    // Elevation tints every surface with `surfaceTint`. Leaving the scheme's old
+    // value here put the previous accent's hue over a newly picked canvas; derive
+    // it from the canvas so the raised surfaces agree with the flat ones.
+    val canvasTint = Color(
+        TonalPalette(hct.hue, canvasNeutralChroma(hct))
+            .tone(if (canvasIsDark) 80 else 40)
+    )
 
     return base.copy(
         background = canvas,
         onBackground = onCanvas,
         surface = canvas,
         onSurface = onCanvas,
+        surfaceTint = canvasTint,
         surfaceContainerLowest = ramp.lowest(),
         surfaceContainerLow = ramp.surface(4.0),
         surfaceContainer = ramp.surface(8.0),
@@ -215,14 +223,20 @@ private class CanvasRamp(
 
     fun onSurfaceVariant(): Color = canvasTextColor(
         variant,
-        canvas,
+        // Measured against the surface it is actually printed on. Comparing
+        // with the bare canvas let a light-leaning foreground clear 4.5:1 on
+        // the canvas and then fail on surfaceVariant, which sits several tones
+        // away from it on a picked light or dark canvas.
+        variantSurface(),
         preferredTone = if (isDark) 80 else 30,
         minimum = 4.5f
     )
 
     fun outline(): Color = canvasTextColor(
         variant,
-        canvas,
+        // Borders sit on the elevated surfaces, not on the raw background;
+        // measuring against the canvas picked a border that vanished on a card.
+        surface(8.0),
         preferredTone = if (isDark) 60 else 50,
         minimum = 3.0f
     )
@@ -430,6 +444,13 @@ fun AniSequelTheme(
      * [AppDisplayDensity] for what it replaces and what it deliberately keeps.
      */
     displayDpi: Int = com.anisequel.domain.ui.DisplayDpi.DEFAULT_DPI,
+    /**
+     * Whether [displayDpi] is used or the device's own density is followed.
+     *
+     * Defaulted to Manual so every existing call site keeps the shipped behaviour;
+     * `MainActivity` passes the reader's stored choice. See [AppDisplayDensity].
+     */
+    dpiMode: com.anisequel.domain.ui.DpiMode = com.anisequel.domain.ui.DpiMode.DEFAULT,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -635,7 +656,7 @@ fun AniSequelTheme(
                     // Above `content()` and nothing else: the theme has just built the
                     // type scale, and this is the point where every page it will be
                     // drawn on is inside the same density.
-                    AppDisplayDensity(displayDpi) {
+                    AppDisplayDensity(displayDpi, dpiMode) {
                         content()
                     }
                 }

@@ -1260,6 +1260,19 @@ other sliders do: density re-measures every dp, so a live value would resize the
 Settings page - including the slider track under the finger - on every frame of a
 drag.
 
+**Automatic is a mode, not a magic value.** Android's own density override has an
+implicit default of "whatever this panel reports", and device-management tools
+expose the same pair as Default/Automatic versus a custom number. `DpiMode` stores
+that choice beside the number, with Manual as the default so an install that
+upgrades keeps drawing at the size it already had. `DisplayDpi.densityFor` is the
+one place the two answers resolve: Automatic deliberately skips the manual clamp,
+because a tablet can report a density above the slider's ceiling and clamping it
+would make "follow the device" quietly draw at a different size than the device
+asked for. Switching modes never discards the chosen number, so Manual is a round
+trip rather than a reset. The "Settings > Display size" page owns the pair, and
+Type & reading keeps only a pointer: a duplicate slider over one preference is a
+control that can go stale off screen.
+
 ### Rows on the Schedule are the Library's row, larger
 
 The schedule used to draw a 62x88 thumbnail beside a name and an 8dp gap between

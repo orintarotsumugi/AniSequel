@@ -80,9 +80,14 @@ object CoverColorQuantizer {
     fun accent(histogram: Map<Int, Int>, seed: Int? = null): Int? {
         val total = histogram.values.sumOf { it.toLong() }
         if (total <= 0L) return null
-        val seedHue = seed?.let { Hct.fromInt(it).hue }
+        // A fallback seed (AniList's colour) is often a grey. Grey has no hue, so
+        // filtering by its HCT hue would silently reject every accent near that
+        // arbitrary number. Only apply the distance rule to a seed with a real hue.
+        val seedHct = seed?.let { Hct.fromInt(it) }
+        val seedHue = seedHct?.takeIf { it.chroma >= CUTOFF_CHROMA }?.hue
 
         var best: Int? = null
+        var bestPopulation = 0
         var bestScore = -1.0
         for ((argb, population) in histogram) {
             if (population <= 0) continue
@@ -98,12 +103,16 @@ object CoverColorQuantizer {
             // Chroma, tempered by how much of the image wears it: the same trade a
             // designer makes between "the accent colour" and "a bright speck".
             val score = hct.chroma * kotlin.math.sqrt(share)
-            // A named tie-break rather than the same Elvis expression inside the
-            // conjunction: it parses exactly the same and reads without counting
-            // parentheses.
-            val winsTie = best?.let { argb < it } ?: true
-            if (score > bestScore || (score == bestScore && winsTie)) {
+            // The seed's tie-break prefers the bigger region, then the smaller
+            // ARGB as a stable last resort. The accent used to break ties on ARGB
+            // alone, so a one-pixel bright bin could beat a large region of the
+            // same score depending on which colour happened to sort lower.
+            if (score > bestScore || (score == bestScore && (
+                    population > bestPopulation ||
+                        (population == bestPopulation && (best == null || argb < best))
+                    ))) {
                 bestScore = score
+                bestPopulation = population
                 best = argb
             }
         }
@@ -157,7 +166,13 @@ object CoverColorQuantizer {
      * histogram instead of a bitmap.
      */
     fun score(histogram: Map<Int, Int>): Int? {
+        // Greys must not reach the hue population: HCT gives an achromatic bin an
+        // arbitrary hue (usually 0), so a large black-and-white margin inflated
+        // excited[0] and could hand the seed to a coloured region near red that
+        // the artwork barely contained. The same chroma cutoff bestCandidate
+        // applies now filters the input too, as Material's Score does.
         val candidates = colorCandidates(histogram)
+            .filter { it.hct.chroma >= CUTOFF_CHROMA }
         val excitedProportion = excitedProportions(candidates) ?: return null
         return bestCandidate(candidates, excitedProportion)?.hct?.argb
     }
@@ -174,8 +189,7 @@ object CoverColorQuantizer {
 
         val huePopulation = IntArray(360)
         for (candidate in candidates) {
-            val hue = floor(candidate.hct.hue).toInt().coerceIn(0, 359)
-            huePopulation[hue] += candidate.population
+            huePopulation[hueBucket(candidate.hct.hue)] += candidate.population
         }
         val populationSum = huePopulation.sum().toDouble()
         if (populationSum <= 0.0) return null
@@ -200,8 +214,11 @@ object CoverColorQuantizer {
         for (candidate in candidates) {
             val hct = candidate.hct
             if (hct.chroma < CUTOFF_CHROMA) continue
-            val hue = sanitizeDegreesInt(hct.hue.roundToInt())
-            val proportion = excitedProportion[hue]
+            // The same bucket function that built the population. Rounding here
+            // while building used floor meant a hue of 20.6 read the excitation
+            // centred on 21 and could pick up a neighbour's population - a small
+            // error at the cutoff that changed which of two close hues won.
+            val proportion = excitedProportion[hueBucket(hct.hue)]
             if (proportion <= CUTOFF_EXCITED_PROPORTION) continue
 
             val score = scoreCandidate(hct, proportion)
@@ -235,6 +252,10 @@ object CoverColorQuantizer {
         return candidate.population > best.population ||
             (candidate.population == best.population && candidate.hct.argb < best.hct.argb)
     }
+
+    /** The 360-bucket a hue belongs to, used identically on write and on read. */
+    private fun hueBucket(hue: Double): Int =
+        floor(hue).toInt().let { sanitizeDegreesInt(it) }
 
     private fun sanitizeDegreesInt(degrees: Int): Int {
         var value = degrees % 360

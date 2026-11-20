@@ -14,6 +14,7 @@ import com.anisequel.domain.card.CardSize
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.domain.ui.AppLayout
 import com.anisequel.domain.ui.DisplayDpi
+import com.anisequel.domain.ui.DpiMode
 import com.anisequel.domain.ui.HomeSequelStyle
 import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.LibraryViewMode
@@ -136,6 +137,16 @@ class InterfacePreferences(private val context: Context) {
          * preference stores it and [DisplayDpi.density] divides it once.
          */
         val DISPLAY_DPI = intPreferencesKey("display_dpi")
+
+        /**
+         * Whether [DISPLAY_DPI] is in force or the device's own density is.
+         *
+         * Its own key so switching to Automatic does not throw away the number the
+         * reader chose: they can come back to Manual and find it waiting. Absent
+         * means [DpiMode.DEFAULT], which is Manual - the mode every install drew at
+         * before this key existed.
+         */
+        val DPI_MODE = stringPreferencesKey("dpi_mode")
     }
 
     /** Everything about the interface that is not the colour palette. */
@@ -217,7 +228,14 @@ class InterfacePreferences(private val context: Context) {
          * not the only writer: a hand-edited file or an older build's value must land
          * inside a drawable range rather than throw inside `Density`.
          */
-        val displayDpi: Int = DisplayDpi.DEFAULT_DPI
+        val displayDpi: Int = DisplayDpi.DEFAULT_DPI,
+        /**
+         * Whether [displayDpi] is used or the panel's own density is followed.
+         *
+         * Read at `MainActivity` beside the number: the two are one answer, and a
+         * second flow would let the mode change a frame after the number.
+         */
+        val dpiMode: DpiMode = DpiMode.DEFAULT
     )
 
     /**
@@ -297,7 +315,8 @@ class InterfacePreferences(private val context: Context) {
                 posterUniqueSeasons = preferences[Keys.POSTER_UNIQUE_SEASONS] ?: true,
                 displayDpi = DisplayDpi.clamp(
                     preferences[Keys.DISPLAY_DPI] ?: DisplayDpi.DEFAULT_DPI
-                )
+                ),
+                dpiMode = DpiMode.fromStorage(preferences[Keys.DPI_MODE])
             )
         }
 
@@ -466,6 +485,18 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
+    /**
+     * Automatic or Manual density.
+     *
+     * The chosen number is left alone either way: switching to Automatic is a
+     * preview of the device's density, not a decision to forget the reader's own.
+     */
+    suspend fun setDpiMode(mode: DpiMode) {
+        context.interfaceDataStore.edit { preferences ->
+            preferences[Keys.DPI_MODE] = mode.storageValue
+        }
+    }
+
     /** Back to the shipped layout, title page, density, rail, card style, poster source and bar position. */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
@@ -492,6 +523,7 @@ class InterfacePreferences(private val context: Context) {
             preferences.remove(Keys.POSTER_SHOW_TREND_TAGS)
             preferences.remove(Keys.POSTER_UNIQUE_SEASONS)
             preferences.remove(Keys.DISPLAY_DPI)
+            preferences.remove(Keys.DPI_MODE)
         }
     }
 }

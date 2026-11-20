@@ -239,7 +239,7 @@ fun SequelDetailSheet(
     val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
         initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
-            useDynamicColor = false
+            useDynamicColor = true
         )
     )
     val immersive = LocalImmersiveMode.current

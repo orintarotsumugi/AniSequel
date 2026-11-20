@@ -60,16 +60,16 @@ object CoverColors {
      */
     fun putAccent(url: String?, argb: Int) {
         if (url.isNullOrBlank()) return
+        // An accent belongs to a seed. Storing one for an unknown URL used to add
+        // that URL to the shared eviction order, so a handful of accent-only
+        // entries could evict real seeds from a full cache. It also left accents
+        // with no bound of their own once their seed was gone.
+        if (colors[url] == null) return
         val hex = ArgbHex.format(argb)
         if (accents[url] == hex) return
+        // No insertion-order change: the seed's entry already owns this URL's
+        // place in the cache, and eviction removes both halves together.
         accents[url] = hex
-        insertionOrder.remove(url)
-        insertionOrder.addLast(url)
-        while (insertionOrder.size > MAX_ENTRIES) {
-            val dropped = insertionOrder.removeFirst()
-            colors.remove(dropped)
-            accents.remove(dropped)
-        }
     }
 
     /** The extracted hex for [url], or null if it has not been read yet. */
