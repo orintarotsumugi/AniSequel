@@ -409,9 +409,9 @@ private fun NovaFilterPill(
 
     Row(
         modifier = Modifier
+            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .clip(ExpressiveShapes.pill)
             .background(container)
-            .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

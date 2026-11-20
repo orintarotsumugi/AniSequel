@@ -110,6 +110,11 @@ internal fun ColumnScope.ThreadList(
                     CommentRowsSkeleton(
                         phase = rememberShimmerPhase(),
                         modifier = Modifier.animateItem(
+                            // The placement spec too: without it this slot kept
+                            // Compose's default spring, so the skeleton moved on a
+                            // different physics from every row that replaced it and
+                            // ignored the Motion style setting while doing so.
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
                             fadeInSpec = ExpressiveMotion.ListItemFadeIn,
                             fadeOutSpec = ExpressiveMotion.ListItemFadeOut
                         )

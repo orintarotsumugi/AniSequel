@@ -317,7 +317,10 @@ private fun ActiveQuickAddPlanningButton(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(dragOffset.value.roundToInt(), 0) }
+                    // Clamped at zero: the settle is non-overshooting now, but a
+                    // stale or interrupted drag must not draw the fill outside its
+                    // own container either way.
+                    .offset { IntOffset(dragOffset.value.coerceAtLeast(0f).roundToInt(), 0) }
                     .clip(shape)
                     .background(buttonColor)
                     // The gestures are detached while the question is open. A tick

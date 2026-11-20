@@ -558,13 +558,18 @@ fun FavouriteStudioRow(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
+                    .then(
+                        if (id != null) {
+                            Modifier.bouncyPress(pressedScale = 0.94f)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .clip(ExpressiveShapes.pill)
                     .background(MaterialTheme.colorScheme.secondaryContainer)
                     .then(
                         if (id != null) {
-                            Modifier
-                                .bouncyPress(pressedScale = 0.94f)
-                                .clickable { onOpenStudio(id, label) }
+                            Modifier.clickable { onOpenStudio(id, label) }
                         } else {
                             Modifier
                         }

@@ -36,7 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
  * appeared at all and the roll read as a flicker.
  *
  * The spring used to be spelled out inline with exactly the parameters
- * [ExpressiveMotion.FastSpatialInt] already declares; it is now the token.
+ * [ExpressiveMotion.FastSpatialInt] already declares; it is now
+ * [ExpressiveMotion.FastEffectsInt], because a count must not overshoot the
+ * number it is counting to.
+ *
+ * The default `SizeTransform` is dropped with `using null` as well: the digits
+ * are tabular and therefore the same width, so there is no size to animate and
+ * the default one measured both numbers on every frame of every roll.
  */
 @Composable
 fun AnimatedCounterText(
@@ -48,7 +54,10 @@ fun AnimatedCounterText(
 ) {
     val animatedCount by animateIntAsState(
         targetValue = count,
-        animationSpec = ExpressiveMotion.FastSpatialInt,
+        // `FastEffectsInt`, not `FastSpatialInt`: a spatial spring on an Int
+        // overshoots the number itself on the expressive styles, so the counter
+        // showed counts that never existed. See the token's KDoc.
+        animationSpec = ExpressiveMotion.FastEffectsInt,
         label = "animated_counter_val"
     )
 
@@ -65,14 +74,14 @@ fun AnimatedCounterText(
                 } togetherWith
                     slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                         -height / 2
-                    }
+                    } using null
             } else {
                 slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                     -height / 2
                 } togetherWith
                     slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { height ->
                         height / 2
-                    }
+                    } using null
             }
         },
         label = "animated_counter_content",

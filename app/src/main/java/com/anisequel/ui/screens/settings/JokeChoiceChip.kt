@@ -95,10 +95,10 @@ internal fun JokeChoiceChip(
 
     Row(
         modifier = Modifier
+            .bouncyPress(pressedScale = 0.94f)
             .clip(ExpressiveShapes.pill)
             .background(container)
             .border(BorderStroke(width = borderWidth, color = borderColor), ExpressiveShapes.pill)
-            .bouncyPress(pressedScale = 0.94f)
             .clickable(enabled = enabled) {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()

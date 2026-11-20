@@ -430,10 +430,10 @@ private fun SeasonalEffectChip(
     val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier
+            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .clip(ExpressiveShapes.pill)
             .background(container)
             .border(BorderStroke(1.dp, borderColor), shape = ExpressiveShapes.pill)
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

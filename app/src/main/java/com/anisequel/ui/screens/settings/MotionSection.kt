@@ -228,16 +228,13 @@ private fun MotionChip(
 
     Row(
         modifier = Modifier
+            .bouncyPress(pressedScale = 0.94f)
             .clip(ExpressiveShapes.pill)
             .background(container)
             // 48dp rather than the 38dp the padding alone gives: five chips in a
             // wrapping row are the page's whole motion decision, so they are a
             // primary target and not a tag cluster.
             .defaultMinSize(minHeight = 48.dp)
-            // Same press physics as every other control in the app; the chips are
-            // not inside a scroll, so the fallback pointer loop cannot spring under
-            // a scrolling thumb.
-            .bouncyPress(pressedScale = 0.94f)
             .clickable(
                 onClickLabel = "Use the $label motion style",
                 role = Role.RadioButton,

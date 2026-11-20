@@ -514,9 +514,9 @@ private fun WriteCommentBar(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

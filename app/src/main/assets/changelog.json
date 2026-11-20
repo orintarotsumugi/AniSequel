@@ -1,6 +1,39 @@
 {
   "versions": [
     {
+      "version": "2.4.6",
+      "entries": [
+        {
+          "title": "Press feedback scales the whole control again",
+          "detail": "The press spring on the Settings pills, the motion and joke chips, the comment bar, the Nova back buttons, the relation cards and the profile's open-in-AniList button was installed inside the control's own clip and background, so a tap shrank the label while the surface it sits on stayed put. It now wraps the shape and the fill, which is what makes a press read as a button being pressed."
+        },
+        {
+          "title": "Counts no longer tick past their number",
+          "detail": "The completed total on the stats banner and a comment's like count were animated on a spatial spring, which overshoots the value it is counting to on the expressive motion styles - a like could visibly go 41, 43, 41. Counts use the effects spring now: still a roll, never a number that was not true."
+        },
+        {
+          "title": "A cancelled swipe settles inside its button",
+          "detail": "The Planning button's swipe fill returned to rest on a bouncy spring, which travelled a few pixels past zero and showed the container behind it at the end of every cancelled drag. The settle is non-overshooting and clamped at the button's own edge."
+        },
+        {
+          "title": "The cover viewer's title list follows the motion setting",
+          "detail": "The title-spellings disclosure in the artwork viewer was the one AnimatedVisibility still using Compose's default fade and expand, so it ignored both the reader's Motion style and Instant. It opens on the app's own springs."
+        },
+        {
+          "title": "A profile banner stops drifting off screen",
+          "detail": "The banner's slow sweep is an infinite animation, and it kept running after the reader had scrolled the header out of the window. It now stops, like the empty-state orb and the seasonal sky, when its bounds leave the screen."
+        },
+        {
+          "title": "Fixed-size crossfades no longer re-measure",
+          "detail": "The animated counter, the refresh button and the login icon rail swapped their content with the default size transform, which measured both copies on every frame of a change whose size was already known. The box animation is off: the digits and icons move, the rows around them do not."
+        },
+        {
+          "title": "The comment skeleton moves on the app's spring",
+          "detail": "The waiting comment rows were the one animateItem in a list without a placement spec, so they settled on Compose's default spring and ignored the Motion style that the rows replacing them follow."
+        }
+      ]
+    },
+    {
       "version": "2.4.5",
       "entries": [
         {

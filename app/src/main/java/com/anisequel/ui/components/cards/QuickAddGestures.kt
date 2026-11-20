@@ -120,12 +120,17 @@ internal fun Modifier.quickAddGestures(
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onAddToWatching()
                         }
-                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
+                        // `FastEffects`, not `PressSpatial`: the settle must not
+                        // overshoot. A bouncy spring on a horizontal offset travels
+                        // past zero on the way back, so the fill slid a few dp to
+                        // the left of its own clip and showed the container behind
+                        // it for the last frames of every cancelled swipe.
+                        dragOffset.animateTo(0f, ExpressiveMotion.FastEffects)
                     }
                 },
                 onDragCancel = {
                     coroutineScope.launch {
-                        dragOffset.animateTo(0f, ExpressiveMotion.PressSpatial)
+                        dragOffset.animateTo(0f, ExpressiveMotion.FastEffects)
                     }
                 },
                 onDrag = { change, dragAmount ->

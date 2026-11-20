@@ -146,7 +146,7 @@ fun IconCarousel(
                             targetScale = 0.82f,
                             animationSpec = ExpressiveMotion.FastSpatial
                         )
-                        )
+                        ) using null
                 },
                 label = "login_icon_carousel"
             ) { current ->

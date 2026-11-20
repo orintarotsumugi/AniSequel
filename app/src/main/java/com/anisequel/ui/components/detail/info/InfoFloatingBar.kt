@@ -275,9 +275,9 @@ internal fun HeroIconButton(
     Box(
         modifier = Modifier
             .size(48.dp)
+            .bouncyPress(pressedScale = 0.84f, interactionSource = interactionSource)
             .clip(CircleShape)
             .background(pressContainer)
-            .bouncyPress(pressedScale = 0.84f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
                 role = Role.Button,

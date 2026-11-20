@@ -111,9 +111,9 @@ internal fun ProfileHero(state: PersonProfileState.Loaded) {
                     .align(Alignment.TopEnd)
                     .padding(top = 10.dp, end = 12.dp)
                     .size(36.dp)
+                    .bouncyPress(pressedScale = 0.9f)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.34f))
-                    .bouncyPress(pressedScale = 0.9f)
                     .clickable(onClickLabel = "Open on AniList") {
                         openExternalUrl(context, siteUrl)
                     }

@@ -533,13 +533,13 @@ private fun RefreshIntervalChip(
 
     Row(
         modifier = Modifier
+            .bouncyPress(pressedScale = 0.94f)
             .clip(ExpressiveShapes.pill)
             .background(container)
             .border(
                 BorderStroke(width = borderWidth, color = borderColor),
                 shape = ExpressiveShapes.pill
             )
-            .bouncyPress(pressedScale = 0.94f)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .semantics {
