@@ -3,8 +3,8 @@ package com.anisequel.ui.navigation
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.ui.viewmodel.AuthUiState
 import com.anisequel.ui.viewmodel.DashboardUiState
 import kotlinx.coroutines.Dispatchers
@@ -56,7 +56,7 @@ internal fun WidgetSync(
     authState: AuthUiState,
     context: Context
 ) {
-    val dashboardState by dashboardFlow.collectAsState()
+    val dashboardState by dashboardFlow.collectAsStateWithLifecycle()
     val success = dashboardState as? DashboardUiState.Success
     val topMissedId = success?.missedSequels?.firstOrNull()?.sequelId
     val topArrivingId = success?.arriving?.firstOrNull()?.mediaId

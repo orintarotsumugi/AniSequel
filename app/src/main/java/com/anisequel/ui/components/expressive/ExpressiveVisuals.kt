@@ -83,7 +83,11 @@ fun ExpressiveCountBadge(
         AnimatedContent(
             targetState = if (count > 99) "99+" else "$count",
             transitionSpec = {
-                fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects)
+                // `using null`: the badge sits beside a title, and the default
+                // size transform re-measured that row for the length of every
+                // count fade. A number arriving is not a layout change.
+                fadeIn(ExpressiveMotion.FastEffects) togetherWith
+                    fadeOut(ExpressiveMotion.FastEffects) using null
             },
             label = "count_badge_text"
         ) { text ->

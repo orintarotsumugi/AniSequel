@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -22,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.UiSize
@@ -44,8 +44,8 @@ import kotlin.math.roundToInt
 @Composable
 internal fun UiSizeSectionCard(interfacePreferences: InterfacePreferences) {
     val scope = rememberCoroutineScope()
-    val interfaceSettings by interfacePreferences.settings.collectAsState(
-        initial = InterfacePreferences.InterfaceSettings()
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = InterfacePreferences.InterfaceSettings()
     )
     // The density draft, keyed on the stored value: density re-measures every dp in
     // the app, so a live value would resize the page - and the slider's own track -
@@ -87,7 +87,7 @@ internal fun UiSizeSectionCard(interfacePreferences: InterfacePreferences) {
                     minTouchTargetHeight = 48.dp,
                     role = Role.RadioButton,
                     onClickLabel = "Draw the app at the ${option.displayName} UI size",
-                    modifier = Modifier.testTag("ui_size_${option.name.lowercase()}")
+                    modifier = Modifier.testTag("ui_size_${option.name.lowercase(java.util.Locale.ROOT)}")
                 )
             }
         }

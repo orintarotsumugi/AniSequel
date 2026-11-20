@@ -2,7 +2,6 @@ package com.anisequel.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.domain.jokes.JokeMoment
 import com.anisequel.domain.jokes.JokePosition
 import com.anisequel.domain.jokes.JokeSettings
@@ -357,7 +357,7 @@ private fun JokePreviewSchedule(
     onSettle: suspend () -> Unit,
     onHide: (Int) -> Unit
 ) {
-    val request by JokePreviewBus.requests.collectAsState()
+    val request by JokePreviewBus.requests.collectAsStateWithLifecycle()
     var handledTick by remember { mutableIntStateOf(request.tick) }
     val currentShowNext by rememberUpdatedState(onShowNext)
     val currentShowLine by rememberUpdatedState(onShowLine)

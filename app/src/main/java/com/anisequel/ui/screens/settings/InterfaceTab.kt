@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MainTabPreferences
@@ -157,8 +157,8 @@ internal fun InterfaceTab(
     // Collected once for the page rather than once per sub-page: the motion sample
     // and the shelf are two views of the same settings object, and a second reader
     // would only be a second chance to disagree.
-    val themeSettings by themePreferences.settings.collectAsState(
-        initial = ThemePreferences.ThemeSettings(
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
             useDynamicColor = false
         )

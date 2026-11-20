@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.DEFAULT_SEASONAL_FRAME_HZ
 import com.anisequel.domain.seasonal.SeasonalSettings
@@ -56,7 +56,7 @@ import com.anisequel.ui.components.rememberIsResumed
  */
 @Composable
 fun BoxScope.SeasonalParticleHost(preferences: SeasonalPreferences) {
-    val settings by preferences.settings.collectAsState(initial = SeasonalSettings())
+    val settings by preferences.settings.collectAsStateWithLifecycle(initialValue = SeasonalSettings())
     val context = LocalContext.current
     val detected = remember { detectSeasonalQualityTier(context) }
     // Re-read when the app comes back, not on every settings emission. The active

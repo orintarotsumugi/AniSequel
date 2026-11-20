@@ -3,6 +3,7 @@ package com.anisequel.ui.components.detail.info
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.airingAtSeconds
 import com.anisequel.data.model.airingCountdown
@@ -55,8 +56,14 @@ internal fun rememberAiringCountdown(media: MediaNode): String? {
     val resumed = rememberIsResumed()
     val airingAt = media.airingAtSeconds
 
+    // The first value is formatted once. It used to be built in the argument list,
+    // which runs on every pass - so a detail page recomposing for a scroll read the
+    // clock and formatted a countdown string it then threw away.
+    val initialCountdown = remember(media.id, media.type, airingAt, resumed) {
+        if (resumed) media.airingCountdown() else null
+    }
     val countdown by produceState(
-        initialValue = if (resumed) media.airingCountdown() else null,
+        initialValue = initialCountdown,
         media.id,
         media.type,
         airingAt,

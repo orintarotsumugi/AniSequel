@@ -386,7 +386,7 @@ private fun FavouritesRow(
 private fun FilterSectionLabel(text: String) {
     Spacer(modifier = Modifier.height(16.dp))
     Text(
-        text = text.uppercase(),
+        text = text.uppercase(java.util.Locale.ROOT),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

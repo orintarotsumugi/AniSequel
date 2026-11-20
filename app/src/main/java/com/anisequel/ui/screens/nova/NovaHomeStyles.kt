@@ -103,7 +103,7 @@ internal fun NovaSequelBanner(
                 verticalArrangement = Arrangement.spacedBy(7.dp)
             ) {
                 Text(
-                    text = sequel.relationLabel.uppercase(),
+                    text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primaryContainer
@@ -197,7 +197,7 @@ internal fun NovaSequelShelfCard(
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = sequel.relationLabel.uppercase(),
+                    text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -297,7 +297,7 @@ internal fun NovaSequelTicket(
                     .padding(start = 12.dp, top = 14.dp, bottom = 12.dp)
             ) {
                 Text(
-                    text = sequel.relationLabel.uppercase(),
+                    text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -464,7 +464,7 @@ internal fun NovaSequelPolaroid(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = sequel.relationLabel.uppercase(),
+                    text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
                     color = ink.copy(alpha = 0.55f),
                     letterSpacing = 1.1.sp,

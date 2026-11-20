@@ -321,7 +321,7 @@ fun FilterSortSheet(
                                     it.equals(genre, ignoreCase = true)
                                 },
                                 onClick = { onToggleGenre(genre) },
-                                testTag = "genre_chip_${genre.lowercase().replace(' ', '_')}"
+                                testTag = "genre_chip_${genre.lowercase(java.util.Locale.ROOT).replace(' ', '_')}"
                             )
                         }
                     }

@@ -20,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.network.RateLimitNotice
 import com.anisequel.data.network.AniListErrorKind
@@ -297,8 +297,8 @@ class MainActivity : ComponentActivity() {
             //
             // Seeded from the defaults so the first frame has a real theme
             // instead of flashing the light one before the read completes.
-            val themeSettings by themePreferences.settings.collectAsState(
-                initial = ThemePreferences.ThemeSettings(
+            val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+                initialValue = ThemePreferences.ThemeSettings(
                     themeMode = ThemeMode.DEFAULT,
                     useDynamicColor = false
                 )
@@ -308,8 +308,8 @@ class MainActivity : ComponentActivity() {
             // scope above the theme. `initial` is the shipped default rather than the
             // device's dpi: a first frame at the panel's own density and a second at
             // 447 would be a visible resize of the whole app on every launch.
-            val interfaceSettings by interfacePreferences.settings.collectAsState(
-                initial = InterfacePreferences.InterfaceSettings()
+            val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
+                initialValue = InterfacePreferences.InterfaceSettings()
             )
 
             // A stall is the one failure a `.catch` cannot help with.
@@ -341,7 +341,7 @@ class MainActivity : ComponentActivity() {
             // `null` until the stored choice has been read, which is why the
             // initial value is not `false`: the two are different answers, and
             // treating "not read yet" as "off" is the flash this guards.
-            val storedAppLock: Boolean? by appLockPreferences.enabled.collectAsState(initial = null)
+            val storedAppLock: Boolean? by appLockPreferences.enabled.collectAsStateWithLifecycle(initialValue = null)
             LaunchedEffect(storedAppLock) {
                 val enabled = storedAppLock ?: return@LaunchedEffect
                 appLockEnabled = enabled

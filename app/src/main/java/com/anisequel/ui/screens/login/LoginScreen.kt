@@ -26,7 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveTabBar
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -75,7 +75,7 @@ fun LoginScreen(
     // at Sign In and came back. `rememberSaveable` also carries it across a
     // rotation.
     var scanUsername by rememberSaveable { mutableStateOf("") }
-    val currentClientId by authViewModel.clientId.collectAsState()
+    val currentClientId by authViewModel.clientId.collectAsStateWithLifecycle()
     // Built once per client id rather than on every recomposition of the tab
     // content, which re-runs on every crossfade.
     val authUrl = remember(currentClientId) { authViewModel.getAuthorizationUrl() }

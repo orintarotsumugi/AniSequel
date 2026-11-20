@@ -7,7 +7,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
@@ -63,9 +63,9 @@ fun DeviceManagerTab(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val seasonalSettings by seasonalPreferences.settings.collectAsState(initial = null)
-    val themeSettings by themePreferences.settings.collectAsState(initial = null)
-    val ceiling by devicePreferences.ceiling.collectAsState()
+    val seasonalSettings by seasonalPreferences.settings.collectAsStateWithLifecycle(initialValue = null)
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
+    val ceiling by devicePreferences.ceiling.collectAsStateWithLifecycle()
 
     // Re-read on resume, the same way the card did on the Seasonal page: a reader
     // who unlocks a higher refresh rate in the system settings should find the pill
@@ -106,7 +106,9 @@ fun DeviceManagerTab(
                     deviceHz = screen.currentHz
                 ),
                 screen = screen,
-                tierName = SeasonalQuality.of(resolvedQuality).displayName.lowercase(),
+                tierName = SeasonalQuality.of(resolvedQuality)
+                    .displayName
+                    .lowercase(java.util.Locale.ROOT),
                 ceiling = ceiling,
                 usedBytes = usedBytes,
                 onRateChange = { rate ->
@@ -173,7 +175,7 @@ fun DeviceManagerTab(
 private fun AppLockCard(appLockPreferences: AppLockPreferences) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val enabledState by appLockPreferences.enabled.collectAsState(initial = null)
+    val enabledState by appLockPreferences.enabled.collectAsStateWithLifecycle(initialValue = null)
     val deviceHasSecureLock = remember {
         context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
     }

@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +35,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.ArrivingPreferences
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
@@ -91,8 +91,8 @@ fun LibrarySettingsTab(
 @Composable
 private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val searchTopBar by mainTabPreferences.searchTopBar.collectAsState(initial = null)
-    val tierTopBar by mainTabPreferences.tierTopBar.collectAsState(initial = null)
+    val searchTopBar by mainTabPreferences.searchTopBar.collectAsStateWithLifecycle(initialValue = null)
+    val tierTopBar by mainTabPreferences.tierTopBar.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "Top bar",
@@ -152,8 +152,8 @@ private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
 @Composable
 private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val tierListTab by mainTabPreferences.tierListTab.collectAsState(initial = null)
-    val searchTab by mainTabPreferences.searchTab.collectAsState(initial = null)
+    val tierListTab by mainTabPreferences.tierListTab.collectAsStateWithLifecycle(initialValue = null)
+    val searchTab by mainTabPreferences.searchTab.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "Bottom bar",
@@ -210,8 +210,8 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
 @Composable
 private fun SearchPageSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
-    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsState(initial = null)
-    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsState(initial = null)
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled.collectAsStateWithLifecycle(initialValue = null)
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "Search page",
@@ -284,7 +284,7 @@ private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
         ) { type, filter, sort, ascending ->
             type != null || filter != null || sort != null || ascending != null
         }
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "Library view",
@@ -357,7 +357,7 @@ private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
 @Composable
 private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferences) {
     val scope = rememberCoroutineScope()
-    val interval by refreshIntervalPreferences.interval.collectAsState(initial = null)
+    val interval by refreshIntervalPreferences.interval.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "List refresh",
@@ -442,7 +442,7 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
 @Composable
 private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
     val scope = rememberCoroutineScope()
-    val settings by arrivingPreferences.settings.collectAsState(initial = null)
+    val settings by arrivingPreferences.settings.collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         // "Dashboard" was the name of the page these rows live on, not of the

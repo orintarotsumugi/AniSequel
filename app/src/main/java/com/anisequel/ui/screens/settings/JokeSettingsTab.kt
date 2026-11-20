@@ -20,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -32,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.domain.jokes.DEFAULT_SPEAKER_NAME
 import com.anisequel.domain.jokes.DEFAULT_STAMP
@@ -77,8 +77,8 @@ fun JokeSettingsTab(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    val settings by jokePreferences.settings.collectAsState(initial = JokeSettings())
-    val favourites by jokePreferences.favourites.collectAsState(initial = emptySet())
+    val settings by jokePreferences.settings.collectAsStateWithLifecycle(initialValue = JokeSettings())
+    val favourites by jokePreferences.favourites.collectAsStateWithLifecycle(initialValue = emptySet())
     // Pool order, with lines this build no longer knows about at the end - see
     // `AppJokes.orderedFavourites` for why a saved line is never dropped.
     val saved = remember(favourites) { AppJokes.orderedFavourites(favourites) }

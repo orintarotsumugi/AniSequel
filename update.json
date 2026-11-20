@@ -1,7 +1,7 @@
 {
-  "version": "2.4.4",
-  "version_code": 679,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.4.4",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.4.4/anisequel-universal.apk",
-  "notes": "- Detail pages keep anime and manga apart: shared detail, friends and loading state now use the media namespace.\n- The schedule keeps manga in its namespace: arriving entries carry their type into detail pages, tile keys and AniList links.\n- Dashboard relation cards keep their identity: selection and lazy-list keys include media namespaces.\n- Undated inbox and conversation rows stay at the end instead of appearing before dated messages.\n- Activity progress labels treat zero episode and chapter totals as unknown.\n- Profile counts use singular nouns for one change or favourite.\n- Nova chapter statistics show an unavailable marker for an unannounced total.\n- Search and statistics labels use stable locale-aware case folding."
+  "version": "2.4.5",
+  "version_code": 680,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.4.5",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.4.5/anisequel-universal.apk",
+  "notes": "- Screens stop reading state they cannot see: every remaining always-on collector now follows the lifecycle, so a stopped composition stops mapping forty-odd flows.\n- An open title page stops refreshing behind another app, and the chat-view comment poll stops with the window.\n- A new catalogue search starts at the top instead of keeping the previous query's scroll offset.\n- The statistics drawer, the filter bar summary and the category sort are computed once per input rather than once per pass.\n- Count badges, Nova's stat values and the progress count crossfade without animating their container's width, so the rows and columns beside them stop re-measuring.\n- Relation labels, tier shelf wording, Info chips, library headings, person fact chips and settings descriptions use a fixed case fold, so a Turkic locale cannot re-spell them.\n- UI test tags no longer depend on the device language, and search placeholders recycle their grid slots.\n- The arriving countdown and next-episode line are formatted once per airing rather than on every recomposition."
 }

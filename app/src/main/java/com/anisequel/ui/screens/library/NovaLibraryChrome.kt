@@ -268,7 +268,7 @@ internal fun NovaLibraryTools(
                 count = counts[option] ?: 0,
                 selected = option == filter,
                 onClick = { onChooseFilter(option) },
-                testTag = "nova_library_filter_${option.name.lowercase()}"
+                testTag = "nova_library_filter_${option.name.lowercase(java.util.Locale.ROOT)}"
             )
         }
     }
@@ -334,7 +334,7 @@ private fun NovaTypeSwitch(
                     .semantics { this.selected = option == type }
                     .clickable(role = Role.RadioButton) { onSelect(option) }
                     .padding(vertical = 8.dp)
-                    .testTag("nova_library_type_${option.name.lowercase()}"),
+                    .testTag("nova_library_type_${option.name.lowercase(java.util.Locale.ROOT)}"),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {

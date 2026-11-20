@@ -86,7 +86,7 @@ fun StatsSectionRow(
                 // two sections, and a mis-tap on a phone held in one hand leaves the
                 // reader on a screen they believe they asked to leave.
                 minTouchTargetHeight = 44.dp,
-                modifier = Modifier.testTag("stats_section_${option.name.lowercase()}")
+                modifier = Modifier.testTag("stats_section_${option.name.lowercase(java.util.Locale.ROOT)}")
             )
         }
     }

@@ -23,7 +23,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +36,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.CustomFontStore
 import com.anisequel.data.repository.DEFAULT_TITLE_SCROLL_DP_PER_SECOND
 import com.anisequel.data.repository.InterfacePreferences
@@ -87,8 +87,8 @@ fun TypeSettingsTab(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val themeSettings by themePreferences.settings.collectAsState(
-        initial = ThemePreferences.ThemeSettings(
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = ThemePreferences.ThemeSettings(
             themeMode = com.anisequel.data.repository.ThemeMode.DEFAULT,
             useDynamicColor = false
         )

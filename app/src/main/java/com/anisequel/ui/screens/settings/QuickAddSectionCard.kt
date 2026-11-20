@@ -7,12 +7,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
@@ -41,8 +41,8 @@ fun QuickAddSectionCard(
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val settings by quickAddPreferences.settings.collectAsState(
-        initial = QuickAddPreferences.QuickAddSettings()
+    val settings by quickAddPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = QuickAddPreferences.QuickAddSettings()
     )
 
     SectionCard(

@@ -25,7 +25,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +45,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.domain.seasonal.MAX_SEASONAL_DENSITY
@@ -118,7 +118,7 @@ fun SeasonalSettingsTab(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    val settings by seasonalPreferences.settings.collectAsState(initial = SeasonalSettings())
+    val settings by seasonalPreferences.settings.collectAsStateWithLifecycle(initialValue = SeasonalSettings())
     val context = LocalContext.current
     val detected = remember { detectSeasonalQualityTier(context) }
     val resolvedQuality = remember(settings.quality, detected) {
@@ -322,7 +322,7 @@ private fun PreviewCard(
         Spacer(modifier = Modifier.height(6.dp))
         SwitchRow(
             title = "Seasonal effect",
-            subtitle = "Float ${settings.effect.displayName.lowercase()} over every page. " +
+            subtitle = "Float ${settings.effect.displayName.lowercase(java.util.Locale.ROOT)} over every page. " +
                 "It never steals a tap and stops when the app is not on screen.",
             checked = settings.enabled,
             onCheckedChange = onEnabledChange,

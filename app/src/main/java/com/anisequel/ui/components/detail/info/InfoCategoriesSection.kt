@@ -75,7 +75,11 @@ fun InfoCategoriesSection(
     modifier: Modifier = Modifier
 ) {
     val genres = media.genreList
-    val tags = remember(media) {
+    // Keyed on the tags, not the whole node: a live detail refresh replaces the
+    // node for a synopsis that changed, and re-sorting twenty tags on every
+    // refresh of a page nobody's categories moved on is work with no answer to
+    // change.
+    val tags = remember(media.tags) {
         media.tags.orEmpty()
             .filter { !it.name.isNullOrBlank() }
             .sortedByDescending { it.rank ?: 0 }

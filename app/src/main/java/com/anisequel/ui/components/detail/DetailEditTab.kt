@@ -335,7 +335,7 @@ internal fun DetailEditTab(
                                 state.draft = entryState.copy(status = option.apiValue)
                             },
                             modifier = Modifier.testTag(
-                                "edit_status_option_${option.apiValue.lowercase()}"
+                                "edit_status_option_${option.apiValue.lowercase(java.util.Locale.ROOT)}"
                             )
                         )
                     }

@@ -333,8 +333,13 @@ internal fun ArrivingGroupLabel(
 @Composable
 private fun rememberArrivingNow(hasCountdown: Boolean): Long {
     val resumed = rememberIsResumed()
+    // Remembered so the clock is read once rather than once per recomposition of
+    // the section. `produceState` only *uses* its initial value on the first pass,
+    // but its argument list is evaluated on every one - and this row recomposes
+    // whenever the sequel list above it does.
+    val startedAt = remember { System.currentTimeMillis() }
     val now by produceState(
-        initialValue = System.currentTimeMillis(),
+        initialValue = startedAt,
         hasCountdown,
         resumed
     ) {

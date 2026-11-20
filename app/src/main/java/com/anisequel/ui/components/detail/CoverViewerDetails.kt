@@ -487,7 +487,7 @@ private fun ViewerPill(
                 onClickLabel = "Show the $label",
                 onClick = onClick
             )
-            .testTag("cover_source_${label.lowercase()}")
+            .testTag("cover_source_${label.lowercase(java.util.Locale.ROOT)}")
     ) {
         Text(
             text = label,
@@ -526,7 +526,7 @@ private fun ViewerActionPill(
                 role = Role.Button,
                 onClick = onClick
             )
-            .testTag("cover_action_${label.lowercase()}")
+            .testTag("cover_action_${label.lowercase(java.util.Locale.ROOT)}")
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),

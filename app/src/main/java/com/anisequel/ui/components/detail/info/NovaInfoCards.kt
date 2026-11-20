@@ -308,15 +308,24 @@ internal fun NovaStatsCard(
 
 @Composable
 private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
-    val scoreRows = media.stats?.scoreDistribution.orEmpty()
-        .filter { (it.score ?: 0) > 0 && (it.amount ?: 0) > 0 }
-        .sortedBy { it.score }
-    val statusRows = media.stats?.statusDistribution.orEmpty()
-        .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
-        .sortedByDescending { it.amount }
-    val totalRatings = scoreRows.sumOf { it.amount ?: 0 }
-    val maxScoreCount = scoreRows.maxOfOrNull { it.amount ?: 0 } ?: 0
-    val totalStatuses = statusRows.sumOf { it.amount ?: 0 }
+    // Derived once per stats payload rather than once per pass. The drawer is a
+    // scrolling `Column`, so opening it, dragging the sheet or a countdown above it
+    // re-running would otherwise re-filter, re-sort and re-sum four lists on every
+    // recomposition - for data that cannot have changed.
+    val stats = media.stats
+    val scoreRows = remember(stats) {
+        stats?.scoreDistribution.orEmpty()
+            .filter { (it.score ?: 0) > 0 && (it.amount ?: 0) > 0 }
+            .sortedBy { it.score }
+    }
+    val statusRows = remember(stats) {
+        stats?.statusDistribution.orEmpty()
+            .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
+            .sortedByDescending { it.amount }
+    }
+    val totalRatings = remember(scoreRows) { scoreRows.sumOf { it.amount ?: 0 } }
+    val maxScoreCount = remember(scoreRows) { scoreRows.maxOfOrNull { it.amount ?: 0 } ?: 0 }
+    val totalStatuses = remember(statusRows) { statusRows.sumOf { it.amount ?: 0 } }
 
     Column(
         modifier = Modifier
@@ -680,7 +689,7 @@ internal fun NovaProgressCard(
                     targetState = count,
                     transitionSpec = {
                         fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                            fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                     },
                     label = "nova_progress_count"
                 ) { progressCount ->
@@ -860,7 +869,7 @@ private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
             targetState = stat.value,
             transitionSpec = {
                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
             },
             label = "nova_stat_value_${stat.label}"
         ) { value ->

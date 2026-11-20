@@ -564,22 +564,17 @@ still has chunks is reported as a failure rather than a short success —
 What it would take (for the remaining half): a bounded `async` fan-out per batch
 of chunks with the merge below it unchanged.
 
-### 6.3 A bio's cover batch is one document with no upper bound
+### 6.3 ~~A bio's cover batch is one document with no upper bound~~ — resolved
 
-A bio's AniList links are resolved in a single `Page`-aliased document
-(`GraphQLQueries.getMediaCoversQuery`) — the right shape, since the alternative
-was one request per card, and a "hall of fame" bio carries a dozen links.
+This was already fixed in the repository: `getMediaCovers` splits the keys with
+`mediaCoverBatches` (`MAX_COVER_BATCH_KEYS = 10` per document), keeps the
+already-known covers out of the request entirely, and logs a refused batch at
+warning level instead of surfacing an error banner. The entry outlived the fix and
+is recorded here so nobody re-opens work that is done — `CoverBatchTest` covers
+the split.
 
-But the document grows with the bio and nothing caps it: one alias and one field
-set per link, all in one query. AniList rejects a query over its complexity limit
-with HTTP 400 for the *whole* document, and covers are the one request whose
-failure is deliberately invisible — a missing cover leaves the card as it was — so
-a link-heavy bio would sit on placeholder posters permanently with nothing on
-screen saying why.
-
-What it would take: a cap of N keys per request, with the remainder in further
-batches, and a log line (not an error banner) when a batch is refused, so the next
-occurrence is diagnosable instead of merely quiet.
+What remains unchanged on purpose: a failed batch still leaves its cards on their
+placeholder, because that is how a cover request has always been allowed to fail.
 
 ---
 

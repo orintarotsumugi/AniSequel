@@ -1,6 +1,91 @@
 {
   "versions": [
     {
+      "version": "2.4.5",
+      "entries": [
+        {
+          "title": "Screens stop reading state they cannot see",
+          "detail": "Home, catalogue search, the studio page, the library, profiles, every Settings page, the sign-in flow and the app shell now collect their state with the lifecycle instead of always-on. A composition that is stopped behind another app no longer keeps forty-odd flows mapped and recomposed for a page nobody is looking at, and the first frame after resuming already has the latest value."
+        },
+        {
+          "title": "An open title page stops refreshing behind another app",
+          "detail": "The Info page's ten-minute live-refresh loop was the one request timer with no visibility gate, so a sheet left open kept spending AniList requests while the app was in the background. The first load still happens the moment the page opens; the ticker now only runs while the page is resumed."
+        },
+        {
+          "title": "Comment polling stops with the window",
+          "detail": "The chat-view comment poll is the only loop in the app whose tick spends a network request, and it kept polling AniList for new comments behind another app. It waits until the thread is on screen again."
+        },
+        {
+          "title": "A new catalogue search starts at the top",
+          "detail": "The search results grid kept its scroll offset when a new answer replaced the old one, so a fresh query could open halfway down a list the reader had never seen, with the first results apparently missing. The grid returns to the first result when the settled answer changes, and typing does not move a page that is not changing."
+        },
+        {
+          "title": "The statistics drawer computes its rows once",
+          "detail": "Opening a title's score or status drawer re-filtered, re-sorted and re-summed all four distributions on every pass. They are derived once per stats payload now, so the drawer's scrolling and the countdown above it no longer repeat that work."
+        },
+        {
+          "title": "The filter bar computes its summary once",
+          "detail": "The dashboard's Filtered row rebuilt its genre sort and label list on every recomposition of the bar. It is remembered against the criteria, which are that row's only input."
+        },
+        {
+          "title": "A changing count no longer re-measures its row",
+          "detail": "The count pill beside a section title animated its own width while the number faded, so the title row was re-measured for the length of every count change. The fade runs without a size transform, the same fix the library subtitle already carries."
+        },
+        {
+          "title": "A changing stat no longer re-measures its column",
+          "detail": "The four-up Nova number strip animated each value's width inside a quarter-width cell, which shifted the neighbouring numbers whenever a figure refreshed. The value now crossfades in place."
+        },
+        {
+          "title": "A changing progress count no longer re-measures its card",
+          "detail": "The Watching Progress count had the same width animation in its card header; the number fades in place now, so the header's label is not re-laid out on every edit."
+        },
+        {
+          "title": "Sequel labels read correctly in every language",
+          "detail": "The relation label on Nova's sequel cards is upper-cased with a fixed case fold. Turkish used to turn the i in a relation into a dotted capital and change the word drawn on the card."
+        },
+        {
+          "title": "Tier shelf wording reads correctly in every language",
+          "detail": "The tier library's New anime tier list and Loading your manga list sentences no longer depend on the device locale's case rules."
+        },
+        {
+          "title": "Library type labels read correctly in every language",
+          "detail": "The Anime/Manga switch label uses a fixed case fold, so a Turkic locale cannot re-spell the word."
+        },
+        {
+          "title": "Info chips read correctly in every language",
+          "detail": "The status and format chips on the classic Info hero use fixed case folds, so a title's own status cannot be re-cased by the phone's language."
+        },
+        {
+          "title": "Library headings read correctly in every language",
+          "detail": "Grouped-library headings and the filter sheet's section labels use a fixed case fold instead of the device locale's."
+        },
+        {
+          "title": "Person fact chips read correctly in every language",
+          "detail": "The label above each fact on a character or staff sheet uses a fixed case fold."
+        },
+        {
+          "title": "Seasonal and appearance wording reads correctly in every language",
+          "detail": "The Seasonal effect subtitle, the Device Manager's quality label, the UI-size picker and the appearance descriptions no longer re-case their words by locale."
+        },
+        {
+          "title": "Test tags no longer depend on the device language",
+          "detail": "Motion styles, UI size, theme modes, stats sections, cover-viewer sources, genre chips and the library's type and filter tags used the default locale to build their identifiers. On a Turkic device those tags differed and any UI test looking for them failed; they use a fixed case fold now."
+        },
+        {
+          "title": "Search placeholders recycle with the grid",
+          "detail": "The catalogue search's result summary and waiting rows now carry a content type, so the lazy grid can reuse their slots instead of rebuilding them when results arrive."
+        },
+        {
+          "title": "Category chips stop re-sorting on an unrelated refresh",
+          "detail": "A live detail refresh replaces the whole title node, and the categories section re-sorted every tag for a synopsis that changed. The sort is keyed on the tag list itself now, so a refresh with unchanged categories does no work."
+        },
+        {
+          "title": "The arriving countdown is formatted once",
+          "detail": "The dashboard's countdown clock and the Info page's next-episode line were formatted in an argument evaluated on every recomposition, reading the clock and building a string that was then discarded. Both are remembered against the airing they describe."
+        }
+      ]
+    },
+    {
       "version": "2.4.4",
       "entries": [
         {
