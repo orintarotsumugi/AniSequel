@@ -338,8 +338,9 @@ class ProfileViewModelTest {
         viewModel.loadFirstPage()
         advanceUntilIdle()
 
-        // Should be waiting in Loading, not permanently failing
-        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Loading)
+        // A missing id cannot be fetched, but it must be recoverable rather than
+        // leaving the tab in a spinner with no request behind it.
+        assertTrue(viewModel.state.value is UserActivityViewModel.ActivityState.Error)
         assertEquals(0, repository.activityFetchCount)
 
         // Once the profile resolves the user id, it should fetch automatically

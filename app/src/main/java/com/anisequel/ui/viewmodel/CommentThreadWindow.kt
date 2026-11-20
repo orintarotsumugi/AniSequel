@@ -346,7 +346,14 @@ internal class CommentThreadWindow(
                 isRefresh = isRefresh,
                 prepending = prepending
             ),
-            unseenNewComments = if (isRefresh) unseen else unseenNewComments,
+            // A refresh merge can arrive while earlier new comments are still
+            // unread below the fold; count what this merge added on top of them
+            // instead of replacing the running total with only this delta.
+            unseenNewComments = if (isRefresh) {
+                unseenNewComments + unseen
+            } else {
+                unseenNewComments
+            },
             lastCheckedAtMillis = System.currentTimeMillis(),
             // Each kind of request answers for its own failure only. An Older page
             // that arrived does not excuse a background check that did not, and the
@@ -610,6 +617,28 @@ internal class CommentThreadWindow(
         cachedReplies = cachedReplies.filterNot { it.id == replyId }
         cachedWindow = cachedWindow.copy(
             replyCount = (cachedWindow.replyCount - 1).coerceAtLeast(0)
+        )
+    }
+
+    /**
+     * Records a reply posted after the sheet closed.
+     *
+     * The mutation's answer can land once the reader has already dismissed the
+     * thread - posting and swiping away is normal - and `capture` ran before it.
+     * Without this the snapshot reopens without the comment the notice just
+     * confirmed, which reads as "the post did not stick" until a refresh replaces
+     * the cache.
+     */
+    fun rememberReply(activityId: Int, reply: ActivityReply) {
+        if (cachedActivityId != activityId) return
+        cachedReplies = cachedReplies.filterNot { it.id == reply.id } + reply
+        cachedWindow = cachedWindow.copy(
+            replyCount = cachedWindow.replyCount + 1,
+            shownRows = if (cachedWindow.shownRows > 0) {
+                cachedWindow.shownRows + 1
+            } else {
+                cachedWindow.shownRows
+            }
         )
     }
 

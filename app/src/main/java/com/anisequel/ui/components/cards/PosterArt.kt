@@ -87,7 +87,8 @@ internal fun posterLookupTitle(media: MediaNode): String? = listOfNotNull(
 fun cardPosterUrl(media: MediaNode): String? = cardPosterUrl(
     mediaId = media.id,
     fallback = media.posterUrl,
-    title = posterLookupTitle(media)
+    title = posterLookupTitle(media),
+    mediaType = media.type
 )
 
 /**
@@ -97,9 +98,18 @@ fun cardPosterUrl(media: MediaNode): String? = cardPosterUrl(
  * projection of a list entry - id, title, cover, dates - built for the page, so it has
  * no `MediaNode` to hand in. Looking the poster up by id keeps the schedule on the
  * reader's chosen source instead of being the one list still drawing AniList art.
+ *
+ * [mediaType] is not sent to btttr (it maps by AniList id), but it is part of the
+ * composition key: anime and manga ids can collide, and the UI must not reuse one
+ * title's resolved poster state for a different title that shares the same number.
  */
 @Composable
-fun cardPosterUrl(mediaId: Int, fallback: String?, title: String? = null): String? {
+fun cardPosterUrl(
+    mediaId: Int,
+    fallback: String?,
+    title: String? = null,
+    mediaType: String? = null
+): String? {
     if (LocalPosterSource.current != PosterSource.BETTER_POSTERS) return fallback
     // btttr addresses the IMDb *series*, so every season resolves to one picture.
     // A sequel keeps its own AniList cover instead of repeating season one's art;
@@ -115,8 +125,8 @@ fun cardPosterUrl(mediaId: Int, fallback: String?, title: String? = null): Strin
     // keep drawing the score the reader had just removed.
     val overlays = LocalPosterOverlays.current
 
-    var better by remember(mediaId, overlays, uniqueSeasons) { mutableStateOf<String?>(null) }
-    LaunchedEffect(mediaId, api, overlays, uniqueSeasons) {
+    var better by remember(mediaId, mediaType, overlays, uniqueSeasons) { mutableStateOf<String?>(null) }
+    LaunchedEffect(mediaId, mediaType, api, overlays, uniqueSeasons) {
         better = api.posterUrl(mediaId, overlays, skipSequels = uniqueSeasons)
     }
     return better ?: fallback
@@ -158,10 +168,10 @@ fun betterPosterGallery(media: MediaNode): List<BetterPosterVariant> {
     val api = LocalBetterPosters.current ?: return emptyList()
     val overlays = LocalPosterOverlays.current
 
-    var variants by remember(media.id, overlays) {
+    var variants by remember(media.id, media.type, overlays) {
         mutableStateOf(emptyList<BetterPosterVariant>())
     }
-    LaunchedEffect(media.id, api, overlays) {
+    LaunchedEffect(media.id, media.type, api, overlays) {
         variants = api.posterVariants(media.id, overlays, skipSequels = false)
     }
     return variants

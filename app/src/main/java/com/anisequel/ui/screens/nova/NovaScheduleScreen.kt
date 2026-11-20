@@ -402,7 +402,7 @@ private fun ScheduleRow(
                     .background(entry.coverColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
                 AsyncImage(
-                    model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title),
+                    model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title, entry.mediaType),
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

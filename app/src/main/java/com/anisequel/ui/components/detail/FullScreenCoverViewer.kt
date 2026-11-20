@@ -597,8 +597,13 @@ private fun CoverViewerPager(
 private fun rememberLiveChartArtwork(media: MediaNode): LiveChartArtwork? {
     if (media.isManga) return null
     val searchUrl = media.liveChartUrl
-    val titles = listOfNotNull(media.romajiName, media.englishName, media.displayName)
-    return produceState(initialValue = null as LiveChartArtwork?, searchUrl) {
+    val titles = remember(media.id, media.type, searchUrl) {
+        listOfNotNull(media.romajiName, media.englishName, media.displayName)
+    }
+    // Keyed by the title's identity as well as the search URL so a fast open/switch
+    // between different titles (or colliding ids across namespaces) cannot reuse a
+    // stale in-flight or completed artwork state for the wrong media.
+    return produceState(initialValue = null as LiveChartArtwork?, media.id, media.type, searchUrl) {
         value = LiveChartCovers.repository().artwork(searchUrl, titles)
     }.value
 }

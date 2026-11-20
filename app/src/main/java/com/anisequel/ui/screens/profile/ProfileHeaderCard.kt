@@ -108,7 +108,7 @@ fun ProfileHeaderCard(
             Banner(state = state, shape = bannerShape)
 
             AsyncImage(
-                model = state.avatarUrl,
+                model = state.avatarUrl?.takeIf { it.isNotBlank() },
                 contentDescription = "${state.username}'s Avatar",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -309,7 +309,7 @@ private fun Banner(
     shape: ProfileBannerShape,
     modifier: Modifier = Modifier
 ) {
-    val banner = state.bannerUrl
+    val banner = state.bannerUrl?.takeIf { it.isNotBlank() }
     // Keyed on the URL: a different picture is a different measurement, and reusing
     // the last one drew a portrait banner at the previous landscape height for the
     // frame before its own size landed.

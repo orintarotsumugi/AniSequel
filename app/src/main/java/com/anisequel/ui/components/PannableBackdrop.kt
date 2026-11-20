@@ -69,6 +69,10 @@ enum class BackdropFit {
     FIT
 }
 
+/** Blank URL strings are treated as missing so image loaders don't attempt bad requests. */
+private fun normalizedBackdropModel(model: Any?): Any? =
+    if (model is String) model.takeIf { it.isNotBlank() } else model
+
 /**
  * A hero image that covers its box, can be pinched, and can be dragged once there
  * is somewhere to drag to.
@@ -271,9 +275,10 @@ fun PannableBackdrop(
                 containerHeight = height
             }
     ) {
-        if (model != null) {
+        val imageModel = normalizedBackdropModel(model)
+        if (imageModel != null) {
             AsyncImage(
-                model = model,
+                model = imageModel,
                 contentDescription = contentDescription,
                 onSuccess = { state ->
                     // The source image's own pixels - the only measurement available

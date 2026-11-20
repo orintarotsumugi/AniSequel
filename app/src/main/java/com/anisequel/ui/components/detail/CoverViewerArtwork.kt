@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
@@ -36,10 +37,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.cards.unseamedCover
@@ -205,15 +208,26 @@ internal fun CoverViewerBackdrop(
                         translationX = -drift
                     }
             ) { activeUrl ->
-                AsyncImage(
-                    model = activeUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(BACKDROP_BLUR)
-                        .unseamedCover()
-                )
+                val imageUrl = activeUrl.takeIf { it.isNotBlank() }
+                if (imageUrl != null) {
+                    val context = LocalContext.current
+                    AsyncImage(
+                        model = remember(imageUrl, context) {
+                            ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                // AnimatedContent already fades between pages; per-image
+                                // crossfade here adds a second transition and can flash.
+                                .crossfade(false)
+                                .build()
+                        },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(BACKDROP_BLUR)
+                            .unseamedCover()
+                    )
+                }
             }
 
             // The title's own colour, as light in the room. Over the blur and

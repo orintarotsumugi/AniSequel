@@ -352,10 +352,18 @@ class UserMessagesViewModel(
                 aniListRepository.getActivityReplies(messageId)
             }.fold(
                 onSuccess = { replies ->
-                    if (_thread.value.messageId != messageId) return@fold
+                    val current = _thread.value
+                    if (current.messageId != messageId) return@fold
+                    val fetched = replies.distinctBy { it.id }
+                    val fetchedIds = fetched.mapTo(HashSet()) { it.id }
+                    // A reply posted while this read was in flight is already on
+                    // screen and may not appear in the response yet. Keep any row the
+                    // user just sent so a successful post cannot vanish when the
+                    // background load lands.
+                    val pendingLocals = current.replies.filter { it.id !in fetchedIds }
                     _thread.value = ThreadState(
                         messageId = messageId,
-                        replies = replies.distinctBy { it.id },
+                        replies = fetched + pendingLocals,
                         loaded = true
                     )
                 },
@@ -363,6 +371,7 @@ class UserMessagesViewModel(
                     if (_thread.value.messageId != messageId) return@fold
                     _thread.value = ThreadState(
                         messageId = messageId,
+                        replies = _thread.value.replies,
                         loaded = true,
                         error = failure.message ?: "Couldn't load this conversation."
                     )
@@ -573,6 +582,19 @@ class UserMessagesViewModel(
                             messages = (listOf(sent) + current.messages).distinctBy { it.id }
                         )
                     }
+                    // The first message created the activity this conversation now
+                    // lives in. Promoting the open sheet to that message turns every
+                    // follow-up reply into a thread reply on the same activity,
+                    // instead of sending a second top-level message beside it.
+                    val latestOpen = _detail.value
+                    if (latestOpen?.message == null && latestOpen?.counterpart?.id == recipientId) {
+                        _detail.value = MessageDetail(
+                            message = sent,
+                            sent = true,
+                            counterpart = counterpart
+                        )
+                        loadThread(messageId)
+                    }
                     // `ifBlank`, not `?:`: the name is a non-null field, so the fallback was
                     // never reachable as written and the compiler said so. An empty one is the
                     // case it meant to catch.
@@ -634,6 +656,13 @@ class UserMessagesViewModel(
     private var sentNextPage = 1
     private var receivedJob: Job? = null
     private var sentJob: Job? = null
+    // One token per source, bumped on every request. A result carries the token it
+    // was asked with, so a late answer for a request that was cancelled or replaced
+    // cannot overwrite the rows a newer request already owns - the same "stale page"
+    // failure the feed guards against with its own job, made explicit for the two
+    // sources that page independently.
+    private var receivedRequestId = 0
+    private var sentRequestId = 0
     // Whether the inbox has ever been opened. The page-level refresh button asks
     // only the feeds that have been looked at, the same rule the Activity tab
     // follows: refreshing a page nobody opened is a request spent on nothing.
@@ -792,6 +821,7 @@ class UserMessagesViewModel(
         if (refuseWithoutViewer(source)) return
 
         val page = cursorFor(source, appending)
+        val requestId = nextRequestId(source)
         if (source == MessageFilter.RECEIVED) receivedJob?.cancel() else sentJob?.cancel()
         updateSource(source) { current ->
             if (appending) {
@@ -803,12 +833,27 @@ class UserMessagesViewModel(
 
         val job = viewModelScope.launch {
             loadSourcePage(source, page, forceRefresh).fold(
-                onSuccess = { pageResult -> recordPage(source, page, appending, pageResult) },
-                onFailure = { error -> recordFailure(source, appending, error) }
+                onSuccess = { pageResult ->
+                    recordPage(source, requestId, page, appending, pageResult)
+                },
+                onFailure = { error ->
+                    recordFailure(source, requestId, appending, error)
+                }
             )
         }
         if (source == MessageFilter.RECEIVED) receivedJob = job else sentJob = job
     }
+
+    private fun nextRequestId(source: MessageFilter): Int {
+        return if (source == MessageFilter.RECEIVED) {
+            ++receivedRequestId
+        } else {
+            ++sentRequestId
+        }
+    }
+
+    private fun isCurrentRequest(source: MessageFilter, requestId: Int): Boolean =
+        requestId == if (source == MessageFilter.RECEIVED) receivedRequestId else sentRequestId
 
     /**
      * Marks the sent source as unreadable when there is nobody to ask for, and
@@ -877,10 +922,12 @@ class UserMessagesViewModel(
      */
     private fun recordPage(
         source: MessageFilter,
+        requestId: Int,
         page: Int,
         appending: Boolean,
         pageResult: UserMessagesPage
     ) {
+        if (!isCurrentRequest(source, requestId)) return
         if (source == MessageFilter.RECEIVED) {
             receivedNextPage = page + 1
         } else {
@@ -915,7 +962,13 @@ class UserMessagesViewModel(
      * feed's paging makes, and for the same reason: replacing loaded messages with
      * an error screen throws away the half that worked.
      */
-    private fun recordFailure(source: MessageFilter, appending: Boolean, error: Throwable) {
+    private fun recordFailure(
+        source: MessageFilter,
+        requestId: Int,
+        appending: Boolean,
+        error: Throwable
+    ) {
+        if (!isCurrentRequest(source, requestId)) return
         updateSource(source) { current ->
             if (appending) {
                 current.copy(

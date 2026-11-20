@@ -335,8 +335,10 @@ class CommentThreadStore(
                         // inline confirmation - the new comment scrolled into
                         // view - has nowhere to draw. Say it app-wide instead, so
                         // a reader who posted and dismissed is not left guessing
-                        // whether the comment went through. The count delta above
-                        // still applied; this only replaces the lost notice.
+                        // whether the comment went through. Keep the cached
+                        // snapshot in step too, or the next open draws the thread
+                        // as if this comment never existed.
+                        window.rememberReply(activityId, reply)
                         SystemNotices.report(SystemNotices.Notice.CommentPosted)
                         return@fold
                     }
@@ -594,7 +596,7 @@ class CommentThreadStore(
                         // next Older press then revealed a page that was already
                         // on screen and looked like it did nothing.
                         shownRows = if (latest.isChatView && latest.shownRows > 0) {
-                            (latest.shownRows - 1).coerceAtLeast(1)
+                            (latest.shownRows - 1).coerceAtLeast(0)
                         } else {
                             latest.shownRows
                         },

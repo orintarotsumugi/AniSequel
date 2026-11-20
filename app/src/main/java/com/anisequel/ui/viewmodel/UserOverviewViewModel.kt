@@ -270,14 +270,19 @@ class UserOverviewViewModel(
         val id = userId ?: scannedUserId
         mangaLibraryProblem(isDemo = isDemo, userId = id)?.let { problem ->
             _mangaError.value = problem
+            _isLoadingManga.value = false
             return
         }
         // Unreachable beside the guard above, and written anyway: everything between
         // here and the launch flips the in-flight flag, and returning after that with
         // nothing left to clear it is how a page ends up spinning for an answer that
         // was never asked for.
-        if (id == null) return
+        if (id == null) {
+            _isLoadingManga.value = false
+            return
+        }
 
+        mangaJob?.cancel()
         _isLoadingManga.value = true
         _mangaError.value = null
         mangaJob = viewModelScope.launch {
@@ -374,6 +379,9 @@ class UserOverviewViewModel(
 
     fun load(forceRefresh: Boolean = false) {
         loadJob?.cancel()
+        // A fresh load supersedes any lazy library fetch for the previous page
+        // state; letting it finish would publish its answer over this reload.
+        listJob?.cancel()
         // Who this screen is about, decided once from the two route arguments.
         //
         // The by-id route used to read its argument as `getInt("userId") ?: 0`, so an

@@ -1035,9 +1035,12 @@ class DashboardViewModel(
             aniListRepository.getUserMangaPreviews(viewerId).fold(
                 onSuccess = { previews ->
                     cachedMangaPreviews = previews
-                    val current = _uiState.value as? DashboardUiState.Success ?: return@fold
-                    if (current.mangaPreviews != previews) {
-                        _uiState.value = current.copy(mangaPreviews = previews)
+                    // Cache first: recompute already publishes this value, and a
+                    // transient non-Success state must not throw the fetch away.
+                    (_uiState.value as? DashboardUiState.Success)?.let { current ->
+                        if (current.mangaPreviews != previews) {
+                            _uiState.value = current.copy(mangaPreviews = previews)
+                        }
                     }
                 },
                 onFailure = {
@@ -1082,9 +1085,13 @@ class DashboardViewModel(
                         return@fold
                     }
                     cachedRandomArtwork = artwork
-                    val current = _uiState.value as? DashboardUiState.Success ?: return@fold
-                    if (current.randomArtwork != artwork) {
-                        _uiState.value = current.copy(randomArtwork = artwork)
+                    // Cache first: a success that arrives while the screen is not in
+                    // Success state is still the session's artwork, and dropping it
+                    // would pin the request as "done" with nothing to show.
+                    (_uiState.value as? DashboardUiState.Success)?.let { current ->
+                        if (current.randomArtwork != artwork) {
+                            _uiState.value = current.copy(randomArtwork = artwork)
+                        }
                     }
                 },
                 onFailure = {
@@ -1139,7 +1146,10 @@ class DashboardViewModel(
     }
 
     fun updateSearchQuery(query: String) {
-        _filterCriteria.value = _filterCriteria.value.copy(searchQuery = query)
+        val normalized = query.trimStart()
+        val current = _filterCriteria.value
+        if (current.searchQuery == normalized) return
+        _filterCriteria.value = current.copy(searchQuery = normalized)
 
         // Debounced here, but the run itself goes through [requestRecompute] so
         // it cancels an in-flight recompute the way every other filter change
