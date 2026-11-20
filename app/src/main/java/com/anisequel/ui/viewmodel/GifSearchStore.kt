@@ -169,16 +169,6 @@ class GifSearchStore(
         // page of the new search behind a spinner that never stops.
         searchJob?.cancel()
         pageJob?.cancel()
-        _state.value = current.copy(
-            query = query,
-            error = null,
-            isLoadingMore = false,
-            next = null,
-            // The note belongs to the answer being replaced: a hand-off sentence
-            // left over the dimmed grid named an index that is no longer answering
-            // while the new query waited out its debounce.
-            note = null
-        )
         if (query.isBlank()) {
             // Clearing the field clears the grid with it. Leaving another search's
             // results under an empty field is how a reader taps a GIF they did not
@@ -186,6 +176,11 @@ class GifSearchStore(
             _state.value = State(note = BLANK_QUERY_NOTE)
             return
         }
+        // A new query replaces the previous one immediately in state: the results,
+        // note and loading flags all belonged to the field's old contents, and
+        // leaving any of them on screen would make a stale grid or spinner answer
+        // for text the reader has already changed.
+        _state.value = State(query = query)
         val cached = synchronized(firstPages) { firstPages.containsKey(cacheKey(query)) }
         searchJob = scope.launch {
             if (!cached) delay(DEBOUNCE_MILLIS)
@@ -199,7 +194,7 @@ class GifSearchStore(
         if (query.isBlank()) return
         searchJob?.cancel()
         pageJob?.cancel()
-        _state.value = _state.value.copy(isLoadingMore = false)
+        _state.value = _state.value.copy(isLoadingMore = false, error = null)
         searchJob = scope.launch { runFirstSearch(query) }
     }
 
@@ -224,7 +219,7 @@ class GifSearchStore(
         searchJob?.cancel()
         pageJob?.cancel()
         synchronized(firstPages) { firstPages.remove(cacheKey(query)) }
-        _state.value = _state.value.copy(isLoadingMore = false)
+        _state.value = _state.value.copy(isLoadingMore = false, error = null, note = null)
         searchJob = scope.launch { runFirstSearch(query) }
     }
 
@@ -240,11 +235,9 @@ class GifSearchStore(
         }
         val current = _state.value
         if (current.query != query) {
-            // The field moved on, so this answer belongs to nothing - but the
-            // "searching" flag was set *for* this query, and a newer search only
-            // raises it again behind its own debounce. Returning without lowering it
-            // left the skeleton shimmering over a grid that would never arrive.
-            _state.value = current.copy(isSearching = false)
+            // The field moved on, so this answer belongs to nothing. A newer
+            // search owns the state now, and mutating it from here would clear the
+            // wrong query's loading flag or paint stale results.
             return
         }
         result.fold(
@@ -300,10 +293,9 @@ class GifSearchStore(
             val result = repositoryResult { provider.search(current.query, cursor) }
             val latest = _state.value
             if (latest.query != current.query) {
-                // The same race as the first search, with the same reason: the
-                // "loading more" flag belongs to the request that just gave up, and
-                // nothing else is going to lower it.
-                _state.value = latest.copy(isLoadingMore = false)
+                // The same race as the first search: this page belongs to a query
+                // that is no longer on screen, so it must not touch the state that
+                // replaced it.
                 return@launch
             }
             result.fold(

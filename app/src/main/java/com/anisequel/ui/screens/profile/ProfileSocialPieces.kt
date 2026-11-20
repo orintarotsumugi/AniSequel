@@ -192,7 +192,7 @@ internal fun FollowerCard(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             AsyncImage(
-                model = person.avatar?.medium ?: person.avatar?.large,
+                model = (person.avatar?.medium ?: person.avatar?.large)?.takeIf { it.isNotBlank() },
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()

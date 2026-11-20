@@ -245,9 +245,10 @@ private fun LikerAvatar(url: String?, name: String) {
     val base = Modifier
         .size(34.dp)
         .clip(shape)
-    if (url != null) {
+    val imageUrl = url?.takeIf { it.isNotBlank() }
+    if (imageUrl != null) {
         AsyncImage(
-            model = url,
+            model = imageUrl,
             contentDescription = null,
             modifier = base.background(MaterialTheme.colorScheme.surfaceContainerHigh),
             contentScale = ContentScale.Crop

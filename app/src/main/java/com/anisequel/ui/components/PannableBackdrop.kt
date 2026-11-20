@@ -271,9 +271,13 @@ fun PannableBackdrop(
                 containerHeight = height
             }
     ) {
-        if (model != null) {
+        val imageModel = when (model) {
+            is String -> model.takeIf { it.isNotBlank() }
+            else -> model
+        }
+        if (imageModel != null) {
             AsyncImage(
-                model = model,
+                model = imageModel,
                 contentDescription = contentDescription,
                 onSuccess = { state ->
                     // The source image's own pixels - the only measurement available

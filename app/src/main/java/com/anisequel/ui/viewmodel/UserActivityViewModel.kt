@@ -324,9 +324,12 @@ class UserActivityViewModel(
         if (this.userId == newUserId) return
         this.userId = newUserId
         val current = _state.value
-        if (current is ActivityState.Error || current is ActivityState.Loading) {
+        if (current is ActivityState.Error || current is ActivityState.Loading || current is ActivityState.Idle) {
+            // `Idle` is reachable before the tab has loaded anything, and a profile
+            // whose id arrives late must not stay there forever with no request ever
+            // started for it.
             started = false
-            loadFirstPage(forceRefresh = true)
+            loadFirstPage(forceRefresh = current !is ActivityState.Idle)
         }
     }
 
@@ -357,7 +360,13 @@ class UserActivityViewModel(
     fun loadFirstPage(forceRefresh: Boolean = false) {
         if (started && !forceRefresh) return
         if (userId == null && requiresUserId()) {
-            _state.value = ActivityState.Loading("Loading recent activity...")
+            // A profile that has not resolved an id yet has nothing to ask for, but
+            // reporting that as a load would leave the tab spinning with no request
+            // behind it and nothing that can clear it.
+            loadJob?.cancel()
+            _state.value = ActivityState.Error(
+                "This profile hasn't finished loading yet. Try again in a moment."
+            )
             return
         }
         started = true
@@ -448,6 +457,7 @@ class UserActivityViewModel(
     private fun fetch(forceRefresh: Boolean, appending: Boolean = false) {
         val currentId = userId
         if (currentId == null && requiresUserId()) {
+            loadJob?.cancel()
             _state.value = ActivityState.Error(
                 "AniList does not serve activity by name, and this profile was opened without an id."
             )

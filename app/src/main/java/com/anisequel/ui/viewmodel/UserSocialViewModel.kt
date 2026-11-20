@@ -111,18 +111,22 @@ class UserSocialViewModel(
         if (this.userId == newUserId) return
         this.userId = newUserId
         val current = _state.value
-        if (current is SocialState.Error || current is SocialState.Loading) {
-            // No `else` branch: the guard above narrows `current` to those two
-            // states, so a fallback to `SocialList.FOLLOWERS` could never run.
-            // The compiler reported it on every build ("'when' is exhaustive so
-            // 'else' is redundant here"); removing it means the day someone
-            // widens the guard, this stops compiling instead of quietly fetching
-            // a different list than the one the user is looking at.
-            val selected = when (current) {
-                is SocialState.Error -> current.list
-                is SocialState.Loading -> current.list
+        when (current) {
+            is SocialState.Error,
+            is SocialState.Loading,
+            SocialState.Idle -> {
+                val selected = when (current) {
+                    is SocialState.Error -> current.list
+                    is SocialState.Loading -> current.list
+                    SocialState.Idle -> SocialList.FOLLOWERS
+                    is SocialState.Success -> current.selected
+                }
+                // `Idle` used to be excluded, so a profile whose id arrived after the
+                // tab was first shown stayed on its placeholder forever: nothing else
+                // re-asked for a fetch once the id became known.
+                load(selected, forceRefresh = current !is SocialState.Idle)
             }
-            load(selected, forceRefresh = true)
+            is SocialState.Success -> Unit
         }
     }
 
@@ -141,6 +145,10 @@ class UserSocialViewModel(
      */
     fun load(selected: SocialList, forceRefresh: Boolean = false) {
         if (userId == null && !isDemo) {
+            // A previous request has nobody left to answer for: the id it needs is
+            // gone, and letting it finish would publish a result for a profile this
+            // screen is no longer showing.
+            loadJob?.cancel()
             // `Loading` here was a spinner with no way out. The only thing that
             // ever clears it is the answer to this very request, and this branch
             // returns before making one, so a slow or failed profile overview left

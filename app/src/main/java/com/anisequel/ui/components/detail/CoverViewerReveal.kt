@@ -5,17 +5,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.ui.components.cards.unseamedCover
 import kotlin.math.roundToInt
 
@@ -84,13 +87,24 @@ internal fun CoverRevealOverlay(
             .background(coverBg)
             .testTag("cover_reveal_artwork")
     ) {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .matchParentSize()
-                .unseamedCover()
-        )
+        val imageUrl = url.takeIf { it.isNotBlank() }
+        if (imageUrl != null) {
+            val context = LocalContext.current
+            AsyncImage(
+                model = remember(imageUrl, context) {
+                    ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        // The overlay is the transition itself; crossfading here would
+                        // fight the reveal spring and can show a brief double image.
+                        .crossfade(false)
+                        .build()
+                },
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .unseamedCover()
+            )
+        }
     }
 }

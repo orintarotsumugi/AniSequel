@@ -352,6 +352,7 @@ private fun PosterArtwork(
     // `MaterialTheme.shapes.small` was a second answer to the same question, and it
     // is why the settings preview could disagree with the grid after a theme change.
     val artworkShape = RoundedCornerShape(LocalCardDesign.current.cornerRadius.dp)
+    val imageUrl = coverUrl?.takeIf { it.isNotBlank() }
     Box(
         modifier = posterModifier
             .fillMaxWidth()
@@ -382,8 +383,8 @@ private fun PosterArtwork(
                 }
             )
     ) {
-        if (coverUrl != null) {
-            val url = coverUrl
+        if (imageUrl != null) {
+            val url = imageUrl
             val context = LocalContext.current
             // Remembered rather than built inline: Coil compares requests by value,
             // and a new instance on every recomposition is a lookup that can never

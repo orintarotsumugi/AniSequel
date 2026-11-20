@@ -1,6 +1,67 @@
 {
   "versions": [
     {
+      "version": "2.4.7",
+      "entries": [
+        {
+          "title": "GIF search follows the query you typed",
+          "detail": "Changing a GIF search now clears the previous grid, note and loading flags immediately, and late results from an older query or page can no longer blank or overwrite the search that replaced it. Manual retries and rerolls also start from a clean error state."
+        },
+        {
+          "title": "Inbox pages stop landing on the wrong state",
+          "detail": "Received and sent message fetches now carry request tokens, so a late page response from a cancelled or replaced request cannot advance the wrong cursor, clear the wrong spinner, or replace rows that a newer load already owns."
+        },
+        {
+          "title": "Starting a conversation keeps replies in one thread",
+          "detail": "Sending the first message from a name-opened conversation now promotes the sheet to the created message activity and loads its thread, so follow-up replies are posted into the same conversation instead of creating separate top-level messages."
+        },
+        {
+          "title": "Replies survive a thread refresh",
+          "detail": "If a reply is posted while the thread is being re-read, the loaded reply list now keeps locally posted rows that have not appeared in the server response yet, and a failed refresh no longer throws away replies already on screen."
+        },
+        {
+          "title": "Social and Activity tabs recover from late profile ids",
+          "detail": "When a profile's id arrives after the tab is first shown, the Social and Activity screens now start loading from their idle state instead of sitting on a placeholder forever. Missing-id load paths also cancel stale work and report a recoverable state."
+        },
+        {
+          "title": "Dashboard shortcut artwork is cached safely",
+          "detail": "Manga preview and random artwork fetches now keep their results even if the dashboard is briefly not in a success state when the response arrives, preventing a completed request from leaving the shortcut empty for the rest of the session."
+        },
+        {
+          "title": "Comment threads keep counts and closed-sheet posts consistent",
+          "detail": "Posting a reply after the sheet is closed now updates the cached thread snapshot so reopening shows the sent comment, background refreshes accumulate unseen-comment counts correctly, and deleting the last visible chat row no longer leaves the window's row accounting off by one."
+        },
+        {
+          "title": "Profile and Library loading recover cleanly",
+          "detail": "Starting a fresh profile load cancels stale lazy anime-list work so older results cannot publish over the new page, and manga library loading now clears loading flags on early exits and cancels superseded requests so retries can run."
+        },
+        {
+          "title": "Search and filter updates avoid redundant loading work",
+          "detail": "Dashboard search now skips redundant debounce/recompute work when the normalized query has not changed, reducing unnecessary loading churn while typing or applying equivalent filters."
+        },
+        {
+          "title": "Better Posters stay with the right title",
+          "detail": "Card and cover-viewer Better Posters lookups now keep their UI state scoped by media type as well as AniList id, so anime and manga titles that share a numeric id can no longer reuse each other's resolved poster or gallery art."
+        },
+        {
+          "title": "Schedule posters resolve the correct media",
+          "detail": "Arriving schedule cards now pass the entry's media type into poster lookup, preventing anime and manga rows with the same id from showing the wrong Better Posters artwork."
+        },
+        {
+          "title": "Cover viewer loads the correct images",
+          "detail": "The full-screen viewer ignores blank AniList poster/banner URLs instead of adding broken sources, and LiveChart artwork requests are keyed to the opened title so gallery art stays tied to the correct media."
+        },
+        {
+          "title": "Cover transitions and backdrops load more reliably",
+          "detail": "Cover reveal and backdrop images now load through stable image requests, skip blank URLs, and avoid competing crossfades during viewer transitions so artwork appears and switches more consistently."
+        },
+        {
+          "title": "Blank image URLs fall back cleanly",
+          "detail": "Pannable backdrops, profile banners and avatars, poster cards, and social/liker avatars now treat blank image URLs as missing, showing the intended placeholders or fallbacks instead of failed image loads."
+        }
+      ]
+    },
+    {
       "version": "2.4.6",
       "entries": [
         {

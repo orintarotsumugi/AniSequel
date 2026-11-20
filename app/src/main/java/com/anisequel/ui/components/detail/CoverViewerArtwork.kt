@@ -40,10 +40,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.remember
 
 /**
  * The artwork and its gestures, split out of [FullScreenCoverViewer].
@@ -205,15 +208,26 @@ internal fun CoverViewerBackdrop(
                         translationX = -drift
                     }
             ) { activeUrl ->
-                AsyncImage(
-                    model = activeUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(BACKDROP_BLUR)
-                        .unseamedCover()
-                )
+                val imageUrl = activeUrl.takeIf { it.isNotBlank() }
+                if (imageUrl != null) {
+                    val context = LocalContext.current
+                    AsyncImage(
+                        model = remember(imageUrl, context) {
+                            ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                // AnimatedContent already fades between pages; per-image
+                                // crossfade here adds a second transition and can flash.
+                                .crossfade(false)
+                                .build()
+                        },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .blur(BACKDROP_BLUR)
+                            .unseamedCover()
+                    )
+                }
             }
 
             // The title's own colour, as light in the room. Over the blur and

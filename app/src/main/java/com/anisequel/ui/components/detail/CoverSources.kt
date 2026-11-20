@@ -27,12 +27,12 @@ internal fun buildCoverSources(
     betterPostersLead: Boolean
 ): List<CoverSource> {
     val anilist = buildList {
-        media.posterUrl?.let {
+        media.posterUrl?.takeIf { it.isNotBlank() }?.let {
             add(CoverSource(ANILIST_POSTER, listOf(CoverImage(it)), DEFAULT_COVER_ASPECT))
         }
         // AniList banners are about 1900x400. The fallback is only ever read
         // for the frame before the image reports its real size.
-        media.bannerImage?.let {
+        media.bannerImage?.takeIf { it.isNotBlank() }?.let {
             add(CoverSource(ANILIST_BANNER, listOf(CoverImage(it)), DEFAULT_BANNER_ASPECT))
         }
     }
