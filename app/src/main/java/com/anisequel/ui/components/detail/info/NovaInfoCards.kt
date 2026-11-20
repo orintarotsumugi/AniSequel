@@ -47,6 +47,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -272,9 +274,17 @@ internal fun NovaStatsCard(
                             } else {
                                 "Next episode $countdown"
                             },
+                            // The only thing that changes every minute is the
+                            // countdown itself, and that is an update to one
+                            // sentence, not a new state. Keyed on the sentence's
+                            // *kind*, a tick rewrites the text in place; only the
+                            // episode number arriving or disappearing crossfades.
+                            // Before this, the line faded in and out once a minute
+                            // for as long as the page was open.
+                            contentKey = { text -> text.startsWith("Episode") },
                             transitionSpec = {
                                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                             },
                             label = "nova_countdown_text",
                             modifier = Modifier.weight(1f, fill = false)
@@ -566,7 +576,13 @@ private fun DistributionBarRow(
     fraction: Float,
     accent: Color
 ) {
-    val animatedFraction by animateFloatAsState(
+    // The State object, not the delegated value. The fill is drawn below, so a
+    // frame of the spring invalidates this row's draw pass and nothing else. The
+    // row used to read the value in composition and paint it with
+    // `fillMaxWidth(fraction)`, which recomposed, re-measured and re-laid-out
+    // every bar in the drawer on every frame of every spring - a statistics
+    // sheet animating up to a dozen bars at once is exactly where that shows.
+    val animatedFraction = animateFloatAsState(
         targetValue = fraction.coerceIn(0f, 1f),
         animationSpec = ExpressiveMotion.FastSpatial,
         label = "nova_stat_distribution_bar"
@@ -598,10 +614,13 @@ private fun DistributionBarRow(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(animatedFraction)
-                    .height(9.dp)
-                    .clip(CircleShape)
-                    .background(accent)
+                    .fillMaxSize()
+                    .drawBehind {
+                        val filled = size.width * animatedFraction.value
+                        if (filled > 0f) {
+                            drawRect(color = accent, size = Size(filled, size.height))
+                        }
+                    }
             )
         }
     }

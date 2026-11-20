@@ -454,7 +454,10 @@ private fun InfoAppearancePreview(
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 if (media.formatLabel.isNotBlank()) {
-                                    PreviewChip(media.formatLabel.uppercase(), onArtwork)
+                                    PreviewChip(
+                                        media.formatLabel.uppercase(java.util.Locale.ROOT),
+                                        onArtwork
+                                    )
                                 }
                                 media.averageScore?.takeIf { it > 0 }?.let { score ->
                                     PreviewChip("$score%", onArtwork)

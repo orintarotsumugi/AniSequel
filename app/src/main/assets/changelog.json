@@ -82,6 +82,66 @@
         {
           "title": "The arriving countdown is formatted once",
           "detail": "The dashboard's countdown clock and the Info page's next-episode line were formatted in an argument evaluated on every recomposition, reading the clock and building a string that was then discarded. Both are remembered against the airing they describe."
+        },
+        {
+          "title": "The title hero stops stepping down when the detail lands",
+          "detail": "The relation, status and format chips arrive with the detail response, and their strip used to fade in at full height: the hero's lockup moved down by a chip row the instant the answer landed, while the entrance stagger was still running. The strip now expands with the fade and shrinks on the way out, so the title stays where the reader is looking."
+        },
+        {
+          "title": "The episode countdown stops blinking once a minute",
+          "detail": "Nova's next-episode line crossfaded on every tick, so a page left open faded the same sentence in and out once a minute. Only a change between the episode-number and next-episode forms is a state change now; the minute updating its count rewrites the text in place."
+        },
+        {
+          "title": "The statistics bars paint without re-laying out the drawer",
+          "detail": "Each distribution bar animated its width through layout, so a score drawer opening a dozen bars recomposed, measured and laid out every row on every frame of every spring. The fill is now drawn in the draw phase: a frame invalidates one bar's drawing and nothing else."
+        },
+        {
+          "title": "The copy confirmation eases its container",
+          "detail": "The title copy button crossfaded its icon while the container around it cut straight to the confirmation colour, which read as two acknowledgements overlapping for a frame. The container animates with the icon now, on the shared colour spring."
+        },
+        {
+          "title": "Expanding categories no longer moves the control",
+          "detail": "Tapping Expand on the Categories card replaced the tag list in one frame: the control moved out from under the finger that had just pressed it and every section below jumped with the card. The card's height now springs, the same way the synopsis card's does."
+        },
+        {
+          "title": "The synopsis card waits with a paragraph, not a spinner",
+          "detail": "A 16dp spinner held the place of the tallest card on the page, so the synopsis arrived in one frame and pushed everything below it down by the height of a paragraph. Four shimmer lines reserve that height while the detail is in flight, and the card eases the difference when the text lands."
+        },
+        {
+          "title": "The details card holds its studio row while it loads",
+          "detail": "The studio is the one fact the list query cannot carry, so a loading sentence sat above a grid that was already complete and, on arrival, collapsed and moved every fact up. A shimmer heading and two chip outlines hold the row instead."
+        },
+        {
+          "title": "The friends card holds its row while it checks",
+          "detail": "Checking who you follow filled a single line, while the row it becomes is about a card tall - so when the answer landed the card grew and pushed the synopsis and the details down. Two placeholder rows keep the page still."
+        },
+        {
+          "title": "The docked bar leaves the page, not the screen",
+          "detail": "The bar's exit slide is a graphics-layer translation, which does not clip: it drew itself into the status-bar inset on its way out, so a ghost of it passed under the clock while it faded. It is clipped to its own box now."
+        },
+        {
+          "title": "The entry capsule makes room instead of popping",
+          "detail": "The Edit label and the capsule's text crossfade shared a weighted row, and the label faded in without taking its width first - for a frame the title was clipped by a word that was still arriving. Both expand and shrink with the spring, and the text crossfade no longer animates its size."
+        },
+        {
+          "title": "The progress count crossfades on the classic page too",
+          "detail": "The Nova page eased its progress count between values while the classic card cut to the new number in one frame, so the same entry write looked like two different apps. Both crossfade now, with no size transform on a fixed one-line slot."
+        },
+        {
+          "title": "The details card grows with its facts",
+          "detail": "The facts grid goes from two rows to six when the detail lands. It now springs to its new height instead of doubling in a frame, so the sections below the card stop jumping while the reader is at the top of the page."
+        },
+        {
+          "title": "The copy icon stops animating its own size",
+          "detail": "Both copy confirmations used a default size transform over two icons and two labels of identical size, which measured both halves on every frame to animate a size that never changed. They crossfade only."
+        },
+        {
+          "title": "Info labels stay spelled right on Turkic devices",
+          "detail": "The Nova hero's status and format chips, the classic hero's format chip, the details labels, the cast and crew roles, the appearance preview and the info facts uppercased with the device's own case rules, so a Turkish or Azeri phone could print a dotted capital I inside an English label. They use a fixed fold now."
+        },
+        {
+          "title": "Cast, staff and relation rows reuse their slots",
+          "detail": "The three artwork rows are long lists of one card shape, and their slots are now marked with that shape so a fast fling can recycle the card leaving the screen for the one arriving instead of disposing and rebuilding it."
         }
       ]
     },

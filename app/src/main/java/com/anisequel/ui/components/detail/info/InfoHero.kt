@@ -720,7 +720,7 @@ private fun HeroChips(
                 },
                 // Small caps, the way the other hero chips are set; `formatLabel`
                 // spells the enum instead of printing `TV_SHORT`.
-                label = media.formatLabel.uppercase()
+                label = media.formatLabel.uppercase(java.util.Locale.ROOT)
             )
         }
     }

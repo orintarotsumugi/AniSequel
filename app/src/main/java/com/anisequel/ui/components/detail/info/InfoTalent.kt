@@ -104,7 +104,12 @@ fun InfoCharactersSection(
             // opening. The position only disambiguates; it changes nothing drawn.
             itemsIndexed(
                 items = cast,
-                key = { index, edge -> "cast_${edge.node?.id ?: "row"}#$index" }
+                key = { index, edge -> "cast_${edge.node?.id ?: "row"}#$index" },
+                // Every card in the row is the same composable at the same size,
+                // so a slot scrolled out of reach can be reused for the one
+                // arriving instead of being disposed and rebuilt - a cast row is
+                // routinely fifty entries long.
+                contentType = { _, _ -> "cast_card" }
             ) { _, edge ->
                 CharacterCard(edge = edge, onOpen = onOpenCharacter)
             }
@@ -214,7 +219,7 @@ private fun CharacterCard(
                     }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = edge.roleLabel.uppercase(),
+                    text = edge.roleLabel.uppercase(java.util.Locale.ROOT),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -346,7 +351,9 @@ fun InfoStaffSection(
         ) {
             itemsIndexed(
                 items = crew,
-                key = { index, edge -> "staff_${edge.node?.id ?: "row"}#$index" }
+                key = { index, edge -> "staff_${edge.node?.id ?: "row"}#$index" },
+                // See the cast row's note: one card shape, so one reusable slot.
+                contentType = { _, _ -> "staff_card" }
             ) { _, edge ->
                 StaffCard(edge = edge, onOpen = onOpenStaff)
             }
@@ -463,7 +470,9 @@ fun InfoRelationsSection(
         ) {
             itemsIndexed(
                 items = related,
-                key = { index, edge -> "relation_${edge.node.id}#$index" }
+                key = { index, edge -> "relation_${edge.node.id}#$index" },
+                // See the cast row's note: one card shape, so one reusable slot.
+                contentType = { _, _ -> "relation_card" }
             ) { _, edge ->
                 RelationCard(subject = media, edge = edge, onOpen = onOpen)
             }
@@ -578,7 +587,7 @@ private fun RolePill(
         modifier = modifier
     ) {
         Text(
-            text = label.uppercase(),
+            text = label.uppercase(java.util.Locale.ROOT),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimary,
             fontWeight = FontWeight.Bold,

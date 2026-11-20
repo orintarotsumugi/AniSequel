@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -315,17 +316,25 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
-            Surface(
-                shape = ExpressiveShapes.pill,
-                // The container changes with the glyph rather than only the glyph
-                // changing: a 17dp tick is a small thing to notice out of the corner
-                // of an eye, and the row it sits on is the confirmation the reader
-                // is actually looking at.
-                color = if (copied) {
+            // The container changes with the glyph rather than only the glyph changing: a
+            // 17dp tick is a small thing to notice out of the corner of an eye, and the
+            // row it sits on is the confirmation the reader is actually looking at. Eased
+            // with the icon rather than snapped under it - the icon was crossfading while
+            // the container it sits in cut to the other tone, which read as two different
+            // confirmations overlapping for a frame.
+            val copyContainer by animateColorAsState(
+                targetValue = if (copied) {
                     MaterialTheme.colorScheme.primaryContainer
                 } else {
                     MaterialTheme.colorScheme.surfaceContainerHigh
                 },
+                animationSpec = ExpressiveMotion.FastColorEffects,
+                label = "title_copy_container"
+            )
+
+            Surface(
+                shape = ExpressiveShapes.pill,
+                color = copyContainer,
                 border = border,
                 modifier = Modifier
                     // 48dp: a copy control sized to its glyph is the
@@ -342,7 +351,7 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
                         targetState = copied,
                         transitionSpec = {
                             fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                                fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                                fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
                         },
                         label = "title_copy_confirmation"
                     ) { confirmed ->
