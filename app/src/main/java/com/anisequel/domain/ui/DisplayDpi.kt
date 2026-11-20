@@ -43,6 +43,60 @@ object DisplayDpi {
      * 2000 does not draw a wrong page - it throws.
      */
     fun density(value: Int): Float = clamp(value) / 160f
+
+    /**
+     * The density scale a given mode resolves to.
+     *
+     * [DpiMode.AUTOMATIC] deliberately skips the manual range clamp: a tablet or a
+     * foldable can report a density above [MAX_DPI], and clamping it would make
+     * "follow the device" quietly draw at a different size than the device asked
+     * for. A device that reports nothing usable falls back to [DEFAULT_DPI].
+     * [DpiMode.MANUAL] keeps the clamp, because its value can come from a
+     * hand-edited preferences file as well as from the slider.
+     */
+    fun densityFor(mode: DpiMode, manualDpi: Int, deviceDpi: Int): Float =
+        if (mode == DpiMode.AUTOMATIC) {
+            (deviceDpi.takeIf { it > 0 } ?: DEFAULT_DPI) / 160f
+        } else {
+            density(manualDpi)
+        }
+}
+
+/**
+ * Whether the app follows the device's density or draws at a chosen one.
+ *
+ * Android's own display-density override is a number, but its natural state is
+ * "whatever this panel reports" - and device-management tools expose the same
+ * choice as Default/Automatic versus a custom value. [MANUAL] is the shipped
+ * default here so an install that upgrades keeps drawing at the size it already
+ * had; [AUTOMATIC] is opt-in and stops the app forcing a phone-sized number on a
+ * tablet or a foldable.
+ */
+enum class DpiMode(
+    val storageValue: String,
+    val displayName: String,
+    val blurb: String
+) {
+    AUTOMATIC(
+        storageValue = "automatic",
+        displayName = "Automatic",
+        blurb = "Follow the density your device reports. Nothing is forced, so a " +
+            "tablet or a foldable draws at the size its own panel asks for."
+    ),
+    MANUAL(
+        storageValue = "manual",
+        displayName = "Manual",
+        blurb = "Draw at one size everywhere, whatever the device reports. " +
+            "This is what a fresh install has always done."
+    );
+
+    companion object {
+        /** The shipped mode: an upgrade must not silently resize every screen. */
+        val DEFAULT: DpiMode = MANUAL
+
+        fun fromStorage(value: String?): DpiMode =
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
+    }
 }
 
 /**

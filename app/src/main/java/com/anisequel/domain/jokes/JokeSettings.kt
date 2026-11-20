@@ -92,27 +92,29 @@ enum class JokePosition(val storageValue: String, val displayName: String) {
     TOP("top", "Top");
 
     companion object {
+        /** Top by default: the pill sits above the content instead of over the bar. */
         fun fromStorage(value: String?): JokePosition =
-            entries.firstOrNull { it.storageValue == value } ?: BOTTOM
+            entries.firstOrNull { it.storageValue == value } ?: TOP
     }
 }
 
 /**
  * How much of the app jokes are allowed to appear over.
  *
- * [MAIN_PAGES] is the shape the feature shipped with: the bar's three pages,
- * where the reader has settled. [EVERYWHERE] includes the screens pushed from
- * those pages - Settings, the tier list, a profile - which is the "when I open
- * something" case. Login is excluded by the host in both arms: a joke over the
- * sign-in screen is an interruption at the one moment the reader is deciding.
+ * [EVERYWHERE] is the default: a line can join the reader on any page, including
+ * the screens pushed from the bar - Settings, the tier list, a profile. [MAIN_PAGES]
+ * stays for readers who only want the bar's three pages. Login is excluded by the
+ * host in both arms: a joke over the sign-in screen is an interruption at the one
+ * moment the reader is deciding.
  */
 enum class JokeScope(val storageValue: String, val displayName: String) {
     MAIN_PAGES("main_pages", "Main pages"),
     EVERYWHERE("everywhere", "Everywhere");
 
     companion object {
+        /** Everywhere by default: a line can join the reader on any page. */
         fun fromStorage(value: String?): JokeScope =
-            entries.firstOrNull { it.storageValue == value } ?: MAIN_PAGES
+            entries.firstOrNull { it.storageValue == value } ?: EVERYWHERE
     }
 }
 
@@ -296,8 +298,8 @@ const val JOKE_WRITER_BUDGET_MILLIS = 2_600L
 data class JokeSettings(
     val enabled: Boolean = true,
     val frequency: JokeFrequency = JokeFrequency.NORMAL,
-    val position: JokePosition = JokePosition.BOTTOM,
-    val scope: JokeScope = JokeScope.MAIN_PAGES,
+    val position: JokePosition = JokePosition.TOP,
+    val scope: JokeScope = JokeScope.EVERYWHERE,
     val dwell: JokeDwell = JokeDwell.STANDARD,
     /** The light tick when a line arrives. Nothing else in the toast has a haptic. */
     val haptics: Boolean = true,

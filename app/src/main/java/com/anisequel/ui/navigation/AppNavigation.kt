@@ -924,7 +924,8 @@ fun AppNavigation(
                     interfacePreferences = interfacePreferences,
                     themePreferences = themePreferences,
                     jokePreferences = jokePreferences,
-                    mainTabPreferences = mainTabPreferences
+                    mainTabPreferences = mainTabPreferences,
+                    refreshIntervalPreferences = refreshIntervalPreferences
                 )
             }
         }

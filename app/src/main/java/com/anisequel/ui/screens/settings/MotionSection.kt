@@ -288,7 +288,7 @@ private fun MotionChip(
  * that never stops is a screen that never settles.
  */
 @Composable
-private fun MotionSample(style: MotionStyle) {
+internal fun MotionSample(style: MotionStyle) {
     var replay by remember(style) { mutableIntStateOf(0) }
 
     // Two drivers rather than one: the travel and the press are two springs with
@@ -481,7 +481,7 @@ private fun MotionSample(style: MotionStyle) {
     }
 }
 
-private fun motionDescription(style: MotionStyle): String = when (style) {
+internal fun motionDescription(style: MotionStyle): String = when (style) {
     MotionStyle.INSTANT ->
         "No movement at all: screen changes, sheets and presses land where they end. " +
             "Long titles stay still and ellipsize."

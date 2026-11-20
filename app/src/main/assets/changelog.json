@@ -1,6 +1,91 @@
 {
   "versions": [
     {
+      "version": "2.4.8",
+      "entries": [
+        {
+          "title": "Cover colours pick the right hue",
+          "detail": "Grey pixels no longer inflate a nearby hue's score, the excitation histogram and the candidate lookup use the same bucket, a grey fallback colour no longer hides every second hue, and equal-scoring accents now prefer the larger coloured region. A cover whose main colour is near-red can no longer win on a black-and-white margin."
+        },
+        {
+          "title": "Grey has no hue",
+          "detail": "HCT now resolves an achromatic colour at hue zero instead of carrying a meaningless hue. That hue was being used to reject accents near it, so a show with a plain fallback colour could never get a second hue from its artwork."
+        },
+        {
+          "title": "A picked canvas keeps its own contrast",
+          "detail": "The foreground on surfaceVariant and the outline are now measured against the surfaces they are actually drawn on, instead of the bare canvas, so a border or caption cannot clear contrast on the background and then vanish on a card. The elevation tint is now derived from the canvas hue too, rather than leaving the previous accent's colour over a newly picked background."
+        },
+        {
+          "title": "Stored accents and cover cache hardened",
+          "detail": "An unreadable stored accent hex now reads as no accent instead of a bogus 'Custom hue' label with nothing selected. An extracted accent can no longer occupy a cover-cache slot and evict a real seed, so opening many titles cannot push out colours still on screen."
+        },
+        {
+          "title": "Settings search understands more words",
+          "detail": "Search now reaches Retain anime colour and the Info page backdrop, and the words for list refresh, joke placement, DPI and poster-colour choices are much broader. Typing interval, everywhere or dpi lands on the card that owns the setting instead of a dead end."
+        },
+        {
+          "title": "Reset appearance no longer sticks around",
+          "detail": "With Material You on by default, the Reset appearance button stayed visible on a fresh install because the old comparison treated the new default as a change. It now appears only when something was actually changed."
+        },
+        {
+          "title": "Small fixes in Settings",
+          "detail": "Removed a redundant safe call in the Interface page's sub-header and made preview cover requests stable and crossfaded so the build stays clean and previews stop flickering while images load."
+        },
+        {
+          "title": "Title pages open on their own surface",
+          "detail": "The Info page backdrop is off by default, so a title's cards are read against the app's own surface instead of artwork competing with every caption. Banner and cover backdrops are still one tap away in Settings > Appearance."
+        },
+        {
+          "title": "Material You is on by default",
+          "detail": "A fresh install now takes its accent from your wallpaper through Android's dynamic colour. The app's own palettes remain in Settings for anyone who prefers a fixed identity."
+        },
+        {
+          "title": "Ani-chan sits at the top, everywhere",
+          "detail": "The joke pill now ships at the top of the screen and is allowed on every page, including Settings, the tier list and profiles. Its position and scope are still switchable in Settings > Jokes."
+        },
+        {
+          "title": "More first-run choices",
+          "detail": "Setup now also asks how often your list should refresh and whether a title's cover colour may tint the app and be kept after you leave its page. Both are written with the rest of the first-run choices and stay editable in Settings."
+        },
+        {
+          "title": "Home sequel preview fixed, loading softened",
+          "detail": "The Cards preview no longer stretches a portrait poster into a wide banner: it holds the 2:3 poster shape and centres it above the caption. Preview covers also use a remembered, crossfaded image request, the same one the real card cell uses, so they no longer flicker while loading."
+        },
+        {
+          "title": "A Display size page of its own",
+          "detail": "UI size and the exact density slider moved out of Type & reading into a dedicated Display size page, with an About density card that explains what the number changes. Type & reading keeps a shortcut so the setting is still easy to find."
+        },
+        {
+          "title": "Automatic density, like other devices",
+          "detail": "Display size now has Automatic and Manual modes. Automatic follows the density your phone or tablet reports instead of forcing the same number on every device, which is what Android's own display override and device-management tools do when left unset. Manual keeps the chosen size and is the default, so upgrading never silently resizes the app."
+        },
+        {
+          "title": "Switching modes keeps your number",
+          "detail": "The chosen density is stored separately from the mode. Going Automatic previews the device's density without throwing away your size, and switching back brings the exact number - and the Small, Default and Large presets - straight back."
+        },
+        {
+          "title": "Density controls stay consistent",
+          "detail": "The onboarding size step now writes Manual explicitly so its choice takes effect, and shows the device's reported dpi; Settings search finds Display size and Automatic density; and the old UI-size card no longer appears twice over one preference."
+        },
+        {
+          "title": "UI size in first-run setup",
+          "detail": "Onboarding now includes a Size step with the Small, Default and Large presets, so you can pick a comfortable app density on a fresh install instead of fixing it later in Settings. The choice is saved with the rest of the setup and can still be fine-tuned in Settings > Type & reading."
+        },
+        {
+          "title": "Setup appears after sign-in",
+          "detail": "First-run setup now opens after AniList authentication instead of appearing on the login screen, so it no longer covers sign-in, loading, or sign-in error states."
+        },
+        {
+          "title": "Actual previews in onboarding",
+          "detail": "The layout step now shows sample app layout previews instead of empty placeholders, the motion step includes the live motion sample and style description, and the theme step includes the theme preview card so choices are easier to judge before finishing setup."
+        },
+        {
+          "title": "Onboarding interaction fixes",
+          "detail": "Choice chips now use full-size tap targets, Finish and Skip are guarded against duplicate taps, and setup step handling and copy were updated to stay consistent with the expanded first-run flow."
+        }
+      ]
+    },
+    {
       "version": "2.4.7",
       "entries": [
         {

@@ -156,6 +156,10 @@ internal enum class SettingsPage(
         "Fonts, saved typefaces, text size and title behaviour",
         AppVectorIcons.TextBold
     ),
+    // Display size is its own page rather than a card under Interface or Type:
+    // the mode and the advanced density controls need room, and the number scales
+    // every dp in the app, not just the text beside it.
+    DISPLAY("Display size", "Automatic or manual app density", AppVectorIcons.Tune),
     JOKES("Jokes", "Ani-chan personality, jokes, triggers and animations", AppVectorIcons.AnimeSparkle),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
@@ -434,6 +438,11 @@ fun SettingsScreen(
                                         page = null
                                         interfaceTarget = null
                                         themeTarget = null
+                                    },
+                                    onOpenPage = { destination ->
+                                        interfaceTarget = null
+                                        themeTarget = null
+                                        page = destination
                                     }
                                 )
                             }
@@ -539,6 +548,10 @@ private fun SettingsRoot(
                         ),
                         SettingsPage.TYPE.entry(
                             "settings_row_type",
+                            onOpen
+                        ),
+                        SettingsPage.DISPLAY.entry(
+                            "settings_row_display",
                             onOpen
                         ),
                         SettingsPage.JOKES.entry(
@@ -664,7 +677,9 @@ private fun SettingsPageContent(
     themeTarget: ThemeSection?,
     onThemeTargetConsumed: () -> Unit,
     /** Leaves the open page for the Settings shelf; used by the pages that own theirs. */
-    onClosePage: () -> Unit
+    onClosePage: () -> Unit,
+    /** Opens another Settings page from inside one - Type & reading links to Display size. */
+    onOpenPage: (SettingsPage) -> Unit
 ) {
     when (page) {
         SettingsPage.APPEARANCE -> ThemeTab(
@@ -689,7 +704,12 @@ private fun SettingsPageContent(
         )
         SettingsPage.TYPE -> TypeSettingsTab(
             themePreferences = themePreferences,
-            interfacePreferences = interfacePreferences
+            interfacePreferences = interfacePreferences,
+            onOpenDisplaySize = { onOpenPage(SettingsPage.DISPLAY) }
+        )
+        SettingsPage.DISPLAY -> DpiSettingsTab(
+            interfacePreferences = interfacePreferences,
+            modifier = Modifier.fillMaxSize()
         )
         SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
         SettingsPage.SEASONAL -> SeasonalSettingsTab(

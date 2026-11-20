@@ -127,7 +127,7 @@ internal fun ThemeTab(
     val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
         initialValue = ThemePreferences.ThemeSettings(
             themeMode = ThemeMode.DEFAULT,
-            useDynamicColor = false
+            useDynamicColor = true
         )
     )
 
@@ -342,7 +342,10 @@ private fun ThemeHub(
         )
 
         val appearanceChanged = settings.themeMode != ThemeMode.DEFAULT ||
-            settings.useDynamicColor ||
+            // Dynamic colour now ships on. Testing the value itself would leave
+            // Reset appearance permanently on screen for a reader who changed
+            // nothing - the button would describe a default as a modification.
+            !settings.useDynamicColor ||
             settings.paletteId != ThemePalette.ANISDK.id ||
             settings.motionStyle != MotionStyle.DEFAULT ||
             settings.trueBlack ||

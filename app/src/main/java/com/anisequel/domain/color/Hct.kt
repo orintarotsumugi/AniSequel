@@ -73,7 +73,11 @@ class Hct private constructor(
                     safeTone >= 100.0 -> ColorMath.WHITE
                     else -> ColorMath.argbFromTone(safeTone)
                 }
-                return Hct(safeHue, 0.0, safeTone, gray)
+                // A grey has no hue. Keeping the requested one made
+                // TonalPalette.fromInt(grey) carry a meaningless hue that the
+                // quantizer then used to reject accents "near" it. Material
+                // resolves achromatic colours at hue zero.
+                return Hct(0.0, 0.0, safeTone, gray)
             }
             val argb = HctSolver.solve(safeHue, chroma, safeTone)
             val cam = Cam16.fromInt(argb)

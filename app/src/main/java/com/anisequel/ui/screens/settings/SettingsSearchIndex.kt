@@ -334,6 +334,34 @@ internal object SettingsSearch {
                 priority = 20
             )
         )
+        add(
+            searchResult(
+                id = "anime_colour",
+                page = SettingsPage.APPEARANCE,
+                themeSection = ThemeSection.ARTWORK,
+                title = "Retain anime colour",
+                subtitle = "Keep the colour of the title you opened",
+                eyebrow = "Appearance · Poster colour",
+                icon = AppVectorIcons.AnimeSparkle,
+                keywords = "retain anime colour color cover tint keep title palette " +
+                    "dynamic hue revert duration kept accent",
+                priority = 25
+            )
+        )
+        add(
+            searchResult(
+                id = "info_backdrop",
+                page = SettingsPage.APPEARANCE,
+                themeSection = ThemeSection.PAGES,
+                title = "Info page backdrop",
+                subtitle = "Banner, cover or nothing behind a title's cards",
+                eyebrow = "Appearance · Anime pages",
+                icon = AppVectorIcons.SectionBackground,
+                keywords = "backdrop banner cover off info title page blur soft tint " +
+                    "artwork key visual background",
+                priority = 25
+            )
+        )
 
         add(
             searchResult(
@@ -343,7 +371,8 @@ internal object SettingsSearch {
                 subtitle = "How often the saved list asks AniList again",
                 eyebrow = "Library & dashboard",
                 icon = AppVectorIcons.Refresh,
-                keywords = "refresh interval sync update cache",
+                keywords = "refresh interval sync update cache list stale age always " +
+                    "fifteen thirty minutes hourly manual only data requests",
                 priority = 25
             )
         )
@@ -460,6 +489,32 @@ internal object SettingsSearch {
         )
         add(
             searchResult(
+                id = "display_size",
+                page = SettingsPage.DISPLAY,
+                title = "Display size",
+                subtitle = "Automatic or manual app density",
+                eyebrow = "Display size",
+                icon = AppVectorIcons.Tune,
+                keywords = "dpi display density automatic manual scale ui size bigger " +
+                    "smaller app zoom presets exact slider reset dpi size",
+                priority = 35
+            )
+        )
+        add(
+            searchResult(
+                id = "dpi_mode",
+                page = SettingsPage.DISPLAY,
+                title = "Automatic density",
+                subtitle = "Follow the density your phone or tablet reports",
+                eyebrow = "Display size · Advanced",
+                icon = AppVectorIcons.DevicePhone,
+                keywords = "dpi automatic device density panel tablet foldable default " +
+                    "follow phone screen wm density scale mode",
+                priority = 30
+            )
+        )
+        add(
+            searchResult(
                 id = "long_titles",
                 page = SettingsPage.TYPE,
                 title = "Long titles",
@@ -515,7 +570,8 @@ internal object SettingsSearch {
                 subtitle = "The edge of the screen, the pages, and the arrival tick",
                 eyebrow = "Jokes",
                 icon = AppVectorIcons.AnimeSparkle,
-                keywords = "placement position pages vibration",
+                keywords = "placement position pages vibration top bottom edge scope " +
+                    "everywhere main pages where she appears",
                 priority = 10
             )
         )
@@ -842,34 +898,56 @@ internal object SettingsSearch {
     private val NON_WORD = Regex("[^a-z0-9]+")
 
     private val pageKeywords = mapOf(
-        SettingsPage.APPEARANCE to "theme appearance colour color dark light oled accent background",
-        SettingsPage.UI to "interface layout cards motion gestures navigation bar",
-        SettingsPage.TYPE to "font text size reading accessibility",
-        SettingsPage.JOKES to "ani chan jokes pill humour humor",
-        SettingsPage.SEASONAL to "snow petals leaves seasonal sky animation",
-        SettingsPage.LIBRARY to "dashboard refresh arriving list grid search bar",
-        SettingsPage.DEVICE to "device phone performance cache lock full screen",
-        SettingsPage.ACCOUNT to "anilist account sign in login oauth client id",
-        SettingsPage.UPDATES to "updates version changelog release notes download",
-        SettingsPage.ABOUT to "about support privacy links build"
+        SettingsPage.APPEARANCE to "theme appearance colour color dark light oled accent " +
+            "background wallpaper dynamic material you backdrop banner cover retain anime tint",
+        SettingsPage.UI to "interface layout cards motion gestures navigation bar " +
+            "poster design shelf bar lift info page",
+        SettingsPage.TYPE to "font text size reading accessibility scale title scroll " +
+            "display size density pointer",
+        SettingsPage.DISPLAY to "dpi density display size automatic manual scale ui " +
+            "zoom bigger smaller device panel presets exact",
+        SettingsPage.JOKES to "ani chan jokes pill humour humor top bottom edge " +
+            "everywhere scope position placement",
+        SettingsPage.SEASONAL to "snow petals leaves seasonal sky animation " +
+            "density speed quality particles",
+        SettingsPage.LIBRARY to "dashboard refresh arriving list grid search bar " +
+            "interval staleness sync cache manual always",
+        SettingsPage.DEVICE to "device phone performance cache lock full screen " +
+            "frame rate diagnostics dpi",
+        SettingsPage.ACCOUNT to "anilist account sign in login oauth client id " +
+            "profile viewer list counts",
+        SettingsPage.UPDATES to "updates version changelog release notes download " +
+            "what's new apk manifest",
+        SettingsPage.ABOUT to "about support privacy links build diagnostics " +
+            "repository issue tracker"
     )
 
     private val interfaceKeywords = mapOf(
-        InterfaceSection.LAYOUT to "info page title page classic nova bar lift continue rail",
-        InterfaceSection.SEQUELS to "home sequel feed rows cards banners continue watching",
-        InterfaceSection.LIBRARY to "library view grid shelf covers list grouped table",
-        InterfaceSection.CARDS to "card design shape text poster art",
-        InterfaceSection.CARD_SHAPE to "card shape corner ratio frame",
-        InterfaceSection.CARD_TEXT to "card name score title size bold rating",
-        InterfaceSection.CARD_POSTER to "poster art source betterposters overlays",
-        InterfaceSection.MOTION to "animation motion display system bars",
-        InterfaceSection.GESTURES to "quick add hold swipe confirm"
+        InterfaceSection.LAYOUT to "info page title page classic nova bar lift continue rail " +
+            "layout home bottom navigation float",
+        InterfaceSection.SEQUELS to "home sequel feed rows cards banners continue watching " +
+            "shelf tickets polaroids poster style preview",
+        InterfaceSection.LIBRARY to "library view grid shelf covers list grouped table " +
+            "columns captions browsing",
+        InterfaceSection.CARDS to "card design shape text poster art " +
+            "preview style",
+        InterfaceSection.CARD_SHAPE to "card shape corner ratio frame radius border",
+        InterfaceSection.CARD_TEXT to "card name score title size bold rating caption",
+        InterfaceSection.CARD_POSTER to "poster art source betterposters overlays " +
+            "unique seasons rating genre trend",
+        InterfaceSection.MOTION to "animation motion display system bars " +
+            "fullscreen immersive edge swipe",
+        InterfaceSection.GESTURES to "quick add hold swipe confirm planning button"
     )
 
     private val themeKeywords = mapOf(
-        ThemeSection.BACKGROUND to "oled black canvas background blur",
-        ThemeSection.ACCENT to "accent colour color palette wallpaper dynamic",
-        ThemeSection.ARTWORK to "anime poster colour color dynamic theme cover",
-        ThemeSection.PAGES to "anime pages backdrop blur tint detail sheet"
+        ThemeSection.BACKGROUND to "oled black canvas background blur " +
+            "true black glow home wallpaper",
+        ThemeSection.ACCENT to "accent colour color palette wallpaper dynamic " +
+            "material you hue custom hex",
+        ThemeSection.ARTWORK to "anime poster colour color dynamic theme cover " +
+            "retain tint revert duration kept accent",
+        ThemeSection.PAGES to "anime pages backdrop blur tint detail sheet " +
+            "banner cover off key visual"
     )
 }

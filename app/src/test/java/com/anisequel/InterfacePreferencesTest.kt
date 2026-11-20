@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.domain.card.MediaCardStyle
+import com.anisequel.domain.ui.DpiMode
 import com.anisequel.domain.ui.NavBarLift
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -42,6 +43,31 @@ class InterfacePreferencesTest {
             "an install that never saw the setting keeps the card it already had",
             MediaCardStyle.DEFAULT,
             preferences().cardStyle.first()
+        )
+    }
+
+    /**
+     * An install that upgrades must keep drawing at the size it already had, so
+     * the mode defaults to Manual. The stored value is a stable key, not the
+     * display label: a wording change must not flip a reader back to Manual.
+     */
+    @Test
+    fun `density mode defaults to manual and round trips by key`() = runTest {
+        assertEquals(
+            "an install that never saw the mode keeps the size it had",
+            DpiMode.DEFAULT,
+            preferences().settings.first().dpiMode
+        )
+        DpiMode.entries.forEach { mode ->
+            preferences().reset()
+            preferences().setDpiMode(mode)
+            assertEquals("${mode.name} round trip", mode, preferences().settings.first().dpiMode)
+        }
+        preferences().reset()
+        assertEquals(
+            "Reset restores the shipped mode",
+            DpiMode.DEFAULT,
+            preferences().settings.first().dpiMode
         )
     }
 

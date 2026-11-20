@@ -3,6 +3,7 @@ package com.anisequel.ui.screens.settings
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -95,12 +96,25 @@ internal fun SequelStylePreview(
                     }
 
                     HomeSequelStyle.CARDS -> Column(modifier = Modifier.fillMaxSize()) {
-                        MiniCover(
-                            entry = previewEntry(entries, 0),
+                        // A poster is 2:3. Filling the whole preview box with it
+                        // stretched a portrait cover into a wide banner, which is
+                        // the opposite of what "Cards" promises. Hold the poster
+                        // aspect and centre it, so this reads as the same shape a
+                        // reader gets on Home with the caption underneath.
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
-                        )
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            MiniCover(
+                                entry = previewEntry(entries, 0),
+                                modifier = Modifier
+                                    .fillMaxHeight(0.86f)
+                                    .aspectRatio(2f / 3f)
+                                    .clip(RoundedCornerShape(10.dp))
+                            )
+                        }
                         Spacer(modifier = Modifier.height(7.dp))
                         Text(
                             text = previewTitle(previewEntry(entries, 0)),

@@ -24,21 +24,22 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.domain.ui.DisplayDpi
+import com.anisequel.domain.ui.DpiMode
 import com.anisequel.domain.ui.UiSize
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.rememberBoundSliderState
+import com.anisequel.ui.theme.rememberDeviceDensityDpi
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * UI size, on Type & reading rather than Interface.
+ * The manual half of Display size: named sizes and the exact dpi slider.
  *
- * It is a reading size, not a layout: the picker changes how large every card,
- * caption and gap is drawn, exactly like the text scale above it in that page. It
- * used to sit under "App layout", where it was one more control in a card about
- * the shelf and the bar, and a reader looking for "make the app bigger" had no
- * reason to open a layout page for it.
+ * It lives with the mode picker on the dedicated Display size page. In Automatic
+ * the controls are not shown at all rather than shown disabled: a slider that
+ * cannot do anything is a dead control, and the readout above it already says
+ * which number is in force. The reader switches back to Manual to get them.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -47,6 +48,25 @@ internal fun UiSizeSectionCard(interfacePreferences: InterfacePreferences) {
     val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
         initialValue = InterfacePreferences.InterfaceSettings()
     )
+    val deviceDpi = rememberDeviceDensityDpi()
+
+    if (interfaceSettings.dpiMode == DpiMode.AUTOMATIC) {
+        SectionCard(
+            title = "Size presets",
+            icon = AppVectorIcons.Tune,
+            subtitle = "Manual only"
+        ) {
+            CollapsibleText(
+                text = "Your ${deviceDpi} dpi panel is driving the app. Choose Manual " +
+                    "on the card above to use Small, Default and Large again - the " +
+                    "number you had before is kept.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
     // The density draft, keyed on the stored value: density re-measures every dp in
     // the app, so a live value would resize the page - and the slider's own track -
     // while the finger is still on it. The preference is written on release, and

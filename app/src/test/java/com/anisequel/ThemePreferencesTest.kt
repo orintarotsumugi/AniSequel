@@ -51,12 +51,12 @@ class ThemePreferencesTest {
     }
 
     @Test
-    fun `defaults to following the system with wallpaper theming off`() = runTest {
+    fun `defaults to following the system with wallpaper theming on`() = runTest {
         val settings = preferences().settings.first()
 
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
-        assertFalse(
-            "an upgrade must not repaint the app's colours unasked",
+        assertTrue(
+            "a fresh install should see the phone's own colours",
             settings.useDynamicColor
         )
     }
@@ -97,7 +97,7 @@ class ThemePreferencesTest {
     fun `reset returns appearance to the shipped defaults`() = runTest {
         val preferences = preferences()
         preferences.setThemeMode(ThemeMode.LIGHT)
-        preferences.setUseDynamicColor(true)
+        preferences.setUseDynamicColor(false)
         preferences.setAnimeThemeRetainColor(false)
         preferences.setCustomColorHex("#00BFA5")
 
@@ -105,7 +105,7 @@ class ThemePreferencesTest {
 
         val settings = preferences.settings.first()
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
-        assertFalse(settings.useDynamicColor)
+        assertTrue(settings.useDynamicColor)
         assertEquals(null, settings.customColorHex)
         assertTrue(settings.animeThemeRetainColor)
     }
@@ -136,19 +136,16 @@ class ThemePreferencesTest {
     }
 
     /**
-     * The Info page backdrop defaults to the banner, soft.
-     *
-     * Both halves are asserted together because the pair is what the reader sees
-     * on first open: a default that picked the cover would make the banner - the
-     * one image the page could not otherwise show at size - unreachable until a
-     * Settings visit, and a crisp default would put the artwork's lettering
-     * behind every card caption.
+     * The Info page backdrop is off by default, with a soft blur kept for the
+     * reader who turns it on. A title opens on its own surface so artwork cannot
+     * compete with the card captions; the banner and cover are one tap away in
+     * Settings, and the soft blur is what they get when chosen.
      */
     @Test
-    fun `the info backdrop defaults to a soft banner`() = runTest {
+    fun `the info backdrop defaults to off`() = runTest {
         val settings = preferences().settings.first()
 
-        assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
+        assertEquals(InfoBackdropSource.OFF, settings.infoBackdropSource)
         assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
         assertEquals(
             "natural is the default: the cover's own colour is the title's, and a " +
@@ -193,14 +190,14 @@ class ThemePreferencesTest {
     @Test
     fun `reset appearance restores the info backdrop defaults`() = runTest {
         val preferences = preferences()
-        preferences.setInfoBackdropSource(InfoBackdropSource.OFF)
+        preferences.setInfoBackdropSource(InfoBackdropSource.BANNER)
         preferences.setInfoBackdropBlur(InfoBackdropBlur.HEAVY)
         preferences.setInfoBackdropTint(InfoBackdropTint.TINTED)
 
         preferences.reset()
 
         val settings = preferences.settings.first()
-        assertEquals(InfoBackdropSource.BANNER, settings.infoBackdropSource)
+        assertEquals(InfoBackdropSource.OFF, settings.infoBackdropSource)
         assertEquals(InfoBackdropBlur.SOFT, settings.infoBackdropBlur)
         assertEquals(InfoBackdropTint.NATURAL, settings.infoBackdropTint)
     }
@@ -208,8 +205,8 @@ class ThemePreferencesTest {
     /**
      * The stored words and the radii are part of the file's contract.
      *
-     * A rename would silently turn a reader's "off" back into the banner on the
-     * next launch, and the radii have to stay ordered for the labels to mean
+     * A rename would silently turn a reader's chosen backdrop back into the
+     * default on the next launch, and the radii have to stay ordered for the labels to mean
      * anything - Crisp must actually be sharper than Soft, not merely earlier in
      * the enum.
      */
@@ -218,8 +215,8 @@ class ThemePreferencesTest {
         assertEquals("banner", InfoBackdropSource.BANNER.storageValue)
         assertEquals("cover", InfoBackdropSource.COVER.storageValue)
         assertEquals("off", InfoBackdropSource.OFF.storageValue)
-        assertEquals(InfoBackdropSource.BANNER, InfoBackdropSource.fromStorage("sepia"))
-        assertEquals(InfoBackdropSource.BANNER, InfoBackdropSource.fromStorage(null))
+        assertEquals(InfoBackdropSource.OFF, InfoBackdropSource.fromStorage("sepia"))
+        assertEquals(InfoBackdropSource.OFF, InfoBackdropSource.fromStorage(null))
 
         assertEquals("crisp", InfoBackdropBlur.CRISP.storageValue)
         assertEquals("soft", InfoBackdropBlur.SOFT.storageValue)
@@ -231,6 +228,20 @@ class ThemePreferencesTest {
         assertEquals("natural", InfoBackdropTint.NATURAL.storageValue)
         assertEquals("tinted", InfoBackdropTint.TINTED.storageValue)
         assertEquals(InfoBackdropTint.NATURAL, InfoBackdropTint.fromStorage("sepia"))
+    }
+
+    @Test
+    fun `an unparseable stored accent reads as no accent`() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.themeDataStore.edit { preferences ->
+            preferences[androidx.datastore.preferences.core.stringPreferencesKey("custom_color_hex")] =
+                "not-a-colour"
+        }
+
+        assertNull(
+            "Settings must not print a custom hue the theme builder cannot draw",
+            preferences().settings.first().customColorHex
+        )
     }
 
     @Test

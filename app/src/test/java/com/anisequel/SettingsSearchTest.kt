@@ -2,6 +2,7 @@ package com.anisequel
 
 import com.anisequel.ui.screens.settings.InterfaceSection
 import com.anisequel.ui.screens.settings.SettingsPage
+import com.anisequel.ui.screens.settings.ThemeSection
 import com.anisequel.ui.screens.settings.SettingsSearch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,6 +43,35 @@ class SettingsSearchTest {
 
         assertEquals("Theme mode", result.title)
         assertEquals(SettingsPage.APPEARANCE, result.page)
+    }
+
+    @Test
+    fun `appearance colour and backdrop questions reach their exact sections`() {
+        val colour = SettingsSearch.search("retain anime colour").first()
+        assertEquals("Retain anime colour", colour.title)
+        assertEquals(SettingsPage.APPEARANCE, colour.page)
+        assertEquals(ThemeSection.ARTWORK, colour.themeSection)
+
+        val backdrop = SettingsSearch.search("info page backdrop").first()
+        assertEquals("Info page backdrop", backdrop.title)
+        assertEquals(SettingsPage.APPEARANCE, backdrop.page)
+        assertEquals(ThemeSection.PAGES, backdrop.themeSection)
+    }
+
+    @Test
+    fun `aliases find list refresh and joke placement`() {
+        assertTrue(
+            "interval should find List refresh through its keywords",
+            SettingsSearch.search("interval").any { it.title == "List refresh" }
+        )
+        assertTrue(
+            "everywhere should find the joke scope through its keywords",
+            SettingsSearch.search("everywhere").any { it.title == "Where she appears" }
+        )
+        assertTrue(
+            "dpi should find the dedicated page",
+            SettingsSearch.search("dpi").any { it.title == "Display size" }
+        )
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anisequel.domain.color.ArgbHex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,11 +40,11 @@ internal val Context.themeDataStore: DataStore<Preferences> by preferencesDataSt
  * would only mean every screen collecting the same preference to draw one
  * switch.
  *
- * Material You (dynamic colour) defaults to **off**. That is a deliberate
- * default rather than an oversight - see [setUseDynamicColor]. It was also
- * previously unreachable entirely: the flag existed on `AniSequelTheme` but
- * nothing ever set it, so the "themes from my wallpaper" behaviour could not be
- * turned on even by a developer.
+ * Material You (dynamic colour) defaults to **on**. A fresh install draws from
+ * the wallpaper through [setUseDynamicColor]; a switch beside it keeps the app's
+ * own palette one tap away. It was previously unreachable - the flag existed on
+ * `AniSequelTheme` but nothing ever set it - so the default now reaches readers
+ * instead of leaving the feature dormant.
  */
 class ThemePreferences(context: Context) {
 
@@ -256,11 +257,17 @@ class ThemePreferences(context: Context) {
     ) { preferences, layerHex ->
         ThemeSettings(
             themeMode = ThemeMode.fromStorage(preferences[Keys.THEME_MODE]),
-            useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: false,
+            useDynamicColor = preferences[Keys.USE_DYNAMIC_COLOR] ?: true,
             paletteId = preferences[Keys.THEME_PALETTE] ?: "anisequel",
             motionStyle = MotionStyle.fromStorage(preferences[Keys.MOTION_STYLE]),
             trueBlack = preferences[Keys.TRUE_BLACK] ?: false,
-            customColorHex = preferences[Keys.CUSTOM_COLOR_HEX],
+            // A value written by an older build or a hand-edited file can be a
+            // string the theme builder cannot parse. Left as-is, the app quietly
+            // drew the palette while Settings printed "Custom hue: <garbage>" and
+            // no chip looked selected. Normalise at the read boundary so every
+            // consumer sees either a usable opaque hex or null.
+            customColorHex = preferences[Keys.CUSTOM_COLOR_HEX]
+                ?.let { ArgbHex.parse(it)?.let(ArgbHex::format) },
             animeThemeEnabled = preferences[Keys.ANIME_THEME_ENABLED]
                 // An upgrade that has never written the new key had the switch on
                 // if the old flag was set, which is the honest reading: that flag
@@ -317,7 +324,7 @@ class ThemePreferences(context: Context) {
                 emit(
                     ThemeSettings(
                         themeMode = ThemeMode.DEFAULT,
-                        useDynamicColor = false,
+                        useDynamicColor = true,
                         isLoaded = true
                     )
                 )
