@@ -113,19 +113,16 @@ class UserSocialViewModel(
         val current = _state.value
         when (current) {
             is SocialState.Error,
-            is SocialState.Loading,
-            SocialState.Idle -> {
+            is SocialState.Loading -> {
+                // No `else` branch: the guard above narrows `current` to those two
+                // states, so a fallback to `SocialList.FOLLOWERS` could never run.
                 val selected = when (current) {
                     is SocialState.Error -> current.list
                     is SocialState.Loading -> current.list
-                    SocialState.Idle -> SocialList.FOLLOWERS
-                    is SocialState.Success -> current.selected
                 }
-                // `Idle` used to be excluded, so a profile whose id arrived after the
-                // tab was first shown stayed on its placeholder forever: nothing else
-                // re-asked for a fetch once the id became known.
-                load(selected, forceRefresh = current !is SocialState.Idle)
+                load(selected, forceRefresh = true)
             }
+            SocialState.Idle,
             is SocialState.Success -> Unit
         }
     }

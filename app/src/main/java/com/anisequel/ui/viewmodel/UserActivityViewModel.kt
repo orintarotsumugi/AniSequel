@@ -324,12 +324,9 @@ class UserActivityViewModel(
         if (this.userId == newUserId) return
         this.userId = newUserId
         val current = _state.value
-        if (current is ActivityState.Error || current is ActivityState.Loading || current is ActivityState.Idle) {
-            // `Idle` is reachable before the tab has loaded anything, and a profile
-            // whose id arrives late must not stay there forever with no request ever
-            // started for it.
+        if (current is ActivityState.Error || current is ActivityState.Loading) {
             started = false
-            loadFirstPage(forceRefresh = current !is ActivityState.Idle)
+            loadFirstPage(forceRefresh = true)
         }
     }
 

@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
@@ -36,6 +37,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -45,8 +47,6 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.remember
 
 /**
  * The artwork and its gestures, split out of [FullScreenCoverViewer].
