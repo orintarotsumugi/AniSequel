@@ -452,11 +452,11 @@ private fun readNovaAngleImage(
 }
 
 private fun readNovaAngleEscape(text: String, close: Int): Pair<NovaInline?, Int> {
-    val end = text.indexOf("</escape", close + 1, ignoreCase = true)
-    if (end < 0) return null to close + 1
-    val tagEnd = text.indexOf('>', end)
-    val next = if (tagEnd >= 0) tagEnd + 1 else end + "</escape>".length
-    return NovaInline.Text(text.substring(close + 1, end)) to next
+    // Search for the whole closing tag. `indexOf("</escape")` also matches
+    // `</escaped>`, and a later `>` may belong to an unrelated tag; either can
+    // truncate the literal run.
+    val end = ESCAPE_CLOSE.find(text, close + 1) ?: return null to close + 1
+    return NovaInline.Text(text.substring(close + 1, end.range.first)) to end.range.last + 1
 }
 
 private fun readNovaAngleAnchor(

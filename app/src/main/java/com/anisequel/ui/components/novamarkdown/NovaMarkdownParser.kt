@@ -149,6 +149,17 @@ private fun startsNovaBlock(lines: List<String>, index: Int): Boolean {
 private fun novaAnchorDelta(line: String): Int =
     ANCHOR_OPEN_TAG.findAll(line).count() - ANCHOR_CLOSE_TAG.findAll(line).count()
 
+/**
+ * A block starter that may be swallowed into a paragraph while an anchor is open.
+ *
+ * AniList routinely writes `<a>`, then a picture, then `</a>` on three lines. The
+ * picture looks like a media block to [startsNovaBlock], so it has to stay in the
+ * link. Nothing else may cross that boundary: an unclosed `<a>` followed by a
+ * heading used to turn the entire rest of the bio into one literal paragraph.
+ */
+private fun continuesNovaAnchor(trimmed: String): Boolean =
+    standaloneNovaImage(trimmed) != null || parseNovaVideo(trimmed) != null
+
 private fun startsNovaTextBlock(raw: String, trimmed: String): Boolean =
     FENCE.matches(trimmed) ||
         ATX_HEADING.matches(trimmed) ||
@@ -168,6 +179,7 @@ private fun startsNovaHtmlBlock(trimmed: String): Boolean =
         HTML_PRE.matches(trimmed) ||
         HTML_LIST.matches(trimmed) ||
         HTML_IMAGE_LINE.matches(trimmed) ||
+        ESCAPE_OPEN.matches(trimmed) ||
         isLegacySpoilerStart(trimmed) ||
         looksLikeHtmlSpoiler(trimmed)
 
@@ -237,14 +249,19 @@ internal fun parseNovaBlocks(
         }
 
         // ---- paragraph -----------------------------------------------------
-        // A paragraph normally stops at the next block. While an anchor is open
-        // it keeps consuming those starts, because an image or a `<br>` between
-        // `<a>` and `</a>` belongs to the link, not to the document around it.
+        // A paragraph normally stops at the next block. An open anchor keeps it
+        // going across a picture line, because a picture between `<a>` and
+        // `</a>` belongs to the link. That is the only block it may cross: a
+        // stray opening tag must not eat the headings and spoilers after it.
         val paragraphLines = mutableListOf<String>()
         var openAnchors = 0
         while (i < lines.size) {
-            if (openAnchors == 0 && startsNovaBlock(lines, i)) break
             val line = lines[i].trim()
+            if (startsNovaBlock(lines, i) &&
+                (openAnchors == 0 || !continuesNovaAnchor(line))
+            ) {
+                break
+            }
             paragraphLines += line
             openAnchors = (openAnchors + novaAnchorDelta(line)).coerceAtLeast(0)
             i++
@@ -395,6 +412,15 @@ private fun parseNovaHtmlBlock(
         return listOf(legacy.first) to legacy.second
     }
 
+    // `<escape>` is a block here, not just an inline span. A bare AniList URL or
+    // an image on its own line inside it is a block starter, so the paragraph
+    // walk would otherwise peel it off and draw a card the author asked not to
+    // have. Collect the whole body as literal text before the inline scanner.
+    val escapeOpen = ESCAPE_OPEN.matchEntire(trimmed)
+    if (escapeOpen != null) {
+        return readNovaEscapeBlock(lines, start, escapeOpen.groupValues[1], align)
+    }
+
     val htmlQuote = HTML_QUOTE.matchEntire(trimmed)
     if (htmlQuote != null) {
         val first = htmlQuote.groupValues[1]
@@ -477,6 +503,42 @@ private fun parseNovaHtmlBlock(
         return emptyList<NovaBlock>() to start + 1
     }
     return null
+}
+
+/** Reads `<escape>…</escape>` as one literal paragraph. */
+private fun readNovaEscapeBlock(
+    lines: List<String>,
+    start: Int,
+    afterOpen: String,
+    align: NovaAlign
+): Pair<List<NovaBlock>, Int> {
+    val literal = StringBuilder()
+    var rest = ""
+    var next = start + 1
+
+    val inlineClose = ESCAPE_CLOSE.find(afterOpen)
+    if (inlineClose != null) {
+        literal.append(afterOpen, 0, inlineClose.range.first)
+        rest = afterOpen.substring(inlineClose.range.last + 1)
+    } else {
+        literal.append(afterOpen)
+        while (next < lines.size) {
+            val line = lines[next]
+            val close = ESCAPE_CLOSE.find(line)
+            if (close != null) {
+                literal.append('\n').append(line, 0, close.range.first)
+                rest = line.substring(close.range.last + 1)
+                next++
+                break
+            }
+            literal.append('\n').append(line)
+            next++
+        }
+    }
+
+    val inlines = mutableListOf<NovaInline>(NovaInline.Text(literal.toString().trim('\n')))
+    if (rest.isNotBlank()) inlines += parseNovaInlineLine(rest.trim())
+    return listOf(NovaBlock.Paragraph(inlines, align)) to next
 }
 
 /** Quotes, real lists, tables, media and entity cards. */

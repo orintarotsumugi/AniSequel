@@ -313,6 +313,52 @@ class NovaMarkdownParserTest {
     }
 
     @Test
+    fun `a bare entity URL inside escape is still literal on its own line`() {
+        val blocks = NovaMarkdown.parse(
+            """
+            <escape>
+            https://anilist.co/anime/1
+            </escape>
+            """.trimIndent()
+        )
+        val paragraph = blocks.single() as NovaBlock.Paragraph
+
+        // A bare AniList URL is a block starter. Without a block-level reader it
+        // peeled off into a preview card and the wrapper collapsed to nothing,
+        // leaving the card the author asked not to have.
+        assertTrue(paragraph.inlines.none { it is NovaInline.MediaLink })
+        assertEquals(
+            "https://anilist.co/anime/1",
+            paragraph.inlines.novaPlainText().trim()
+        )
+    }
+
+    @Test
+    fun `an image inside escape is still literal on its own line`() {
+        val blocks = NovaMarkdown.parse(
+            """
+            <escape>
+            ![cover](https://x/a.png)
+            </escape>
+            """.trimIndent()
+        )
+        val paragraph = blocks.single() as NovaBlock.Paragraph
+
+        assertTrue(paragraph.inlines.none { it is NovaInline.Image })
+        assertEquals(
+            "![cover](https://x/a.png)",
+            paragraph.inlines.novaPlainText().trim()
+        )
+    }
+
+    @Test
+    fun `a lookalike close tag does not cut escape content short`() {
+        val inlines = NovaMarkdown.parseInlines("<escape>a</escaped> b</escape>")
+
+        assertEquals("a</escaped> b", inlines.novaPlainText())
+    }
+
+    @Test
     fun `an anchor without href is accent text, not a dead link`() {
         val accent = NovaMarkdown.parseInlines("<a>coloured</a>").single() as NovaInline.Accent
 
