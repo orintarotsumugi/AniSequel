@@ -37,6 +37,8 @@ class NovaTrailerViewerTest {
         // Inline playback is what keeps the video inside the card instead of
         // handing the whole screen to the system player when the reader taps it.
         assertTrue(html.contains("playsinline=1"))
+        assertTrue("the embed needs the secure origin to initialise YouTube's player API", html.contains("enablejsapi=1&origin=https%3A%2F%2Fwww.youtube.com"))
+        assertTrue("the player needs a valid referrer for YouTube's embed checks", html.contains("referrerpolicy=\"origin\""))
         assertEquals(1, html.split("<iframe").size - 1)
     }
 

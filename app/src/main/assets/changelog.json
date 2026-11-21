@@ -10,6 +10,10 @@
         {
           "title": "Settings colours and search destinations agree",
           "detail": "Full-screen mode now opens from its actual Device Manager location in Settings search. Secondary Settings actions use the app's primary-tonal colours, invalid colour previews use theme surfaces, and widget highlight/accent colours no longer vary with the phone manufacturer's theme."
+        },
+        {
+          "title": "The Info-page trailer starts reliably",
+          "detail": "YouTube could open its player shell without starting the video because the embedded player lacked its required origin and referrer information. The player now declares both and can show YouTube's full-screen playback above the page."
         }
       ]
     },
