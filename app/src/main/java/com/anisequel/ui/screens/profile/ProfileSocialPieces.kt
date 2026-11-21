@@ -136,6 +136,22 @@ internal fun SocialSearchBar(
     )
 }
 
+/**
+ * How many people this tab can currently prove are in a list.
+ *
+ * The query asks for one page of 50 and the model carries no `pageInfo`, so a
+ * full page is a lower bound, not a total. Printing it as exact was the one
+ * number on the tab that could not be wrong in a visible way: both a person
+ * with 50 followers and one with 5,000 read "Followers (50)".
+ */
+internal const val SOCIAL_LIST_PAGE_SIZE = 50
+
+internal fun socialCountLabel(label: String, count: Int?): String = when {
+    count == null -> label
+    count >= SOCIAL_LIST_PAGE_SIZE -> "$label ($count+)"
+    else -> "$label ($count)"
+}
+
 @Composable
 internal fun SocialSelector(
     selected: SocialList,
@@ -144,8 +160,8 @@ internal fun SocialSelector(
     onSelect: (SocialList) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val followersLabel = if (followersCount != null) "Followers ($followersCount)" else "Followers"
-    val followingLabel = if (followingCount != null) "Following ($followingCount)" else "Following"
+    val followersLabel = socialCountLabel("Followers", followersCount)
+    val followingLabel = socialCountLabel("Following", followingCount)
 
     Row(
         modifier = modifier,
@@ -185,7 +201,11 @@ internal fun FollowerCard(
     Column(
         modifier = modifier
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                onClickLabel = "Open ${person.name}'s profile",
+                onClick = onClick
+            )
             .padding(bottom = 6.dp)
             .testTag("follower_card"),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -251,7 +271,11 @@ internal fun FollowerRow(
             // default accounts have none, and a transparent row would show
             // whatever the list happened to paint behind it.
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                onClickLabel = "Open ${person.name}'s profile",
+                onClick = onClick
+            )
             .testTag("follower_row")
     ) {
         PersonBannerBackdrop(person.bannerImage)

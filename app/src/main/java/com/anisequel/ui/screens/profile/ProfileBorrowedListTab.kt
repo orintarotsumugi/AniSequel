@@ -94,6 +94,10 @@ fun ProfileBorrowedListTab(
         libraryError = state.libraryError,
         mangaError = mangaError,
         onLoadManga = { overviewViewModel.loadMangaLibrary() },
+        // Pulling this tab already refreshes the anime half. Without the force
+        // flag the manga half returned from its guard and stayed as stale as the
+        // gesture was meant to fix.
+        onRefreshManga = { overviewViewModel.loadMangaLibrary(forceRefresh = true) },
         contentPadding = profileListPadding(contentPadding),
         onOpenDetail = onOpenDetail,
         modifier = modifier,

@@ -17,7 +17,7 @@ import com.squareup.moshi.JsonClass
  * One comment on an activity.
  *
  * `text` is AniList Markdown, the same dialect the bio uses, and is parsed by
- * `AniListMarkdownParser` at render time rather than here - a reply that is
+ * `NovaMarkdown` at render time rather than here - a reply that is
  * never expanded should not pay to be parsed.
  *
  * [user] is [FollowUser] rather than a new author type: it is exactly the same

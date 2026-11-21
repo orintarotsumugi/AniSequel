@@ -264,7 +264,7 @@ internal fun HeroIconButton(
 ) {
     // One source for the press spring and the click, so the spring actually sees
     // the press and the ripple is not drawn by a second, competing pipeline - the
-    // same pairing `SpoilerChip` and `HeroChip` use.
+    // same pairing `NovaSpoiler` and `HeroChip` use.
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val pressContainer by animateColorAsState(

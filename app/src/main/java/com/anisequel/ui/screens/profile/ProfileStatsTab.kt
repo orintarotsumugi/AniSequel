@@ -284,13 +284,26 @@ private fun ScoreDistributionCard(
 
 @Composable
 private fun ScoreRow(row: BucketTally, maxScore: Int) {
-    val fraction = row.label.toIntOrNull()?.toFloat()?.div(maxScore.coerceAtLeast(100)) ?: 0f
+    val fraction = scoreBarFraction(row.label, maxScore)
     // Red for the bottom of the scale, amber in the middle, the app's green at the
     // top. Interpolated through the status colours the rest of the app uses, so
     // the "high score" green here is the same green as the success chip.
     val color = scoreColor(fraction)
 
     BarRow(row = row, labelWidth = 48.dp, color = color)
+}
+
+/**
+ * Where a score sits on the scale the profile actually uses.
+ *
+ * This divided by 100 unconditionally while the label scale can end at 10, so
+ * every row on a ten-point account was a tenth of the way up the ramp and the
+ * whole chart stayed warning-red. The denominator is the chart's own top score.
+ */
+internal fun scoreBarFraction(label: String, maxScore: Int): Float {
+    if (maxScore <= 0) return 0f
+    val score = label.toIntOrNull() ?: return 0f
+    return (score.toFloat() / maxScore).coerceIn(0f, 1f)
 }
 
 @Composable
@@ -411,8 +424,13 @@ private fun FormatRow(label: String, count: Int, share: Float, color: Color) {
 }
 
 private fun episodeBucketSubtitle(insights: ListEntryInsights): String? {
-    if (insights.entriesWithoutEpisodes <= 0) return null
-    return "${insights.entriesWithoutEpisodes} entries have no episode count yet"
+    val entries = insights.entriesWithoutEpisodes
+    if (entries <= 0) return null
+    return if (entries == 1) {
+        "1 entry has no episode count yet"
+    } else {
+        "$entries entries have no episode count yet"
+    }
 }
 
 private fun countryTotal(insights: ListEntryInsights): Int = insights.countries.sumOf { it.count }

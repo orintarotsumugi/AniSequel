@@ -250,6 +250,46 @@ class ProfileViewModelTest {
     }
 
     /**
+     * The page-level Refresh has to include a Social tab that is already open.
+     * It used to refresh the feed, messages and friends but skip this list, so
+     * the one tab whose counts are visible stayed stale under a button that
+     * claimed to refresh the page.
+     */
+    @Test
+    fun `refreshIfStarted re-asks for a social list already on screen`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository(
+            followersResult = listOf(FollowUser(1, "Follower1")),
+            followingResult = listOf(FollowUser(2, "Following1"))
+        )
+        val viewModel = UserSocialViewModel(repository, userId = 1)
+        viewModel.load(SocialList.FOLLOWERS)
+        advanceUntilIdle()
+
+        viewModel.refreshIfStarted()
+        advanceUntilIdle()
+
+        assertEquals("the visible list was refreshed", 2, repository.followersFetchCount)
+        assertEquals("the prefetched half was refreshed too", 2, repository.followingFetchCount)
+        assertFalse(
+            "the refresh marker must not outlive the answer",
+            (viewModel.state.value as UserSocialViewModel.SocialState.Success).isRefreshing
+        )
+    }
+
+    @Test
+    fun `refreshIfStarted leaves an unopened social tab alone`() = runTest(testDispatcher) {
+        val repository = FakeProfileRepository()
+        val viewModel = UserSocialViewModel(repository, userId = 1)
+
+        viewModel.refreshIfStarted()
+        advanceUntilIdle()
+
+        assertEquals(0, repository.followersFetchCount)
+        assertEquals(0, repository.followingFetchCount)
+        assertTrue(viewModel.state.value is UserSocialViewModel.SocialState.Idle)
+    }
+
+    /**
      * The prefetch must not outrank the list being read.
      *
      * `load` fetches followers *and* following in one job and the tab only ever

@@ -809,19 +809,43 @@ constantly-drawn animation in the app existed — and it sweeps linearly, becaus
 ease-in-out braked into both edges, which read as the highlight stopping in the
 middle of a card and starting again.
 
-**Bios** are AniList-flavoured Markdown, rendered by `ui/components/markdown/`:
-headings, lists and checklists, code, blockquotes, spoilers (`~!like this!~`),
-inline GIFs, `~~~a centred line~~~`, AniList links lifted into cover cards, and
-images. A spoiler is two controls rather than one: the collapsed prompt reveals
-it, and a labelled **Hide** closes it. The whole block used to be a single
-toggle, so *any* tap on revealed text closed it again — a thumb resting on the
-card hid what was being read, and a link inside a spoiler could never be opened,
-because the tap that reached it was swallowed by the toggle. A bio's cover cards
-cost **one** request: see `MediaCoversQueryTest` for why that document asks
-through a `Page`, and what used to make AniList reject it. Two deliberate gaps:
-tables and `(video)`-style embeds are only partly AniList-documented, so they are
-parsed conservatively, and underline has no working AniList syntax (`<u>` is
-accepted anyway rather than dropped, since dropping it would print the tag).
+**Bios and every other AniList document are rendered by NovaMarkdown**
+(`ui/components/novamarkdown/`). The old renderer was a regex pipeline that read
+the site's HTML-shaped output; NovaMarkdown reads the *raw* Markdown
+(`User.about(asHtml: false)` in `GraphQLQueries.GET_USER_OVERVIEW`) and builds an
+AST the Compose layer draws. The parser is split by responsibility:
+`NovaMarkdownParser.kt` owns normalisation and the block walk,
+`NovaMarkdownElements.kt` owns spoilers, lists, tables, images, videos and HTML
+attributes, `NovaMarkdownInlineParser.kt` owns emphasis, links and inline
+spoilers, and `NovaMarkdownSyntax.kt` holds the one copy of every pattern.
+Headings, setext titles, checklists, code, quotes, `~~~` centring, `img220(url)`
+and `img50%(url)`, `youtube()`/`webm()`, AniList link cards and all three HTML
+spoiler spellings are supported.
+
+**Alignment is a property of the block, not a wrapper.** Dantotsu's renderer
+turned `~~~…~~~` into `<align center>`, which is not an HTML element, and a
+container that only sets `TextAlign` centres the text while leaving an image or
+a card flush left. Every `NovaBlock` carries a `NovaAlign`, so the paragraph, the
+image and the preview card each honour the same value. That is what makes a
+centred banner and the text beneath it line up.
+
+**A spoiler is one control that toggles.** The collapsed chip reveals the block,
+and the same chip says **Hide spoiler** to close it; the revealed text itself
+takes no tap, so a thumb resting on the card does not dismiss it and a link
+inside can still be opened. The inline form is a `LinkAnnotation.Clickable` over
+the obscured run, with `rememberSaveable` indices so a revealed sentence survives
+the list item being recycled. A block's payload is parsed as a full document, so
+a heading, list or image behind the lid reads like the rest of the bio.
+
+**Live SVG cards are the one leaf that is not native.** AniList profiles embed
+stat cards and banners that nest `data:` SVG images, embed WOFF2 fonts and use
+CSS animation and filters. AndroidSVG implements none of the nested-image or
+font parts, so those cards arrived as an empty frame. NovaMarkdown fetches the
+SVG, strips scripts, event attributes and `javascript:` hrefs, and draws it in a
+transparent, JavaScript-disabled WebView with file access, navigation and
+network mixing refused; the view is disabled so the Compose card still owns the
+tap and the list still owns the scroll. Everything else stays native. A failed
+fetch falls back to Coil, which still carries `SvgDecoder` for flat SVG.
 
 **One provider, every markdown surface.** A cover card is only half a card
 without its poster, and the poster is a *request*: the document is parsed, the
@@ -829,15 +853,17 @@ media links are collected, and the repository is asked for all of them at once.
 That plumbing used to be per-caller, and the surface nobody had wired was the one
 that needed it most — a person's biography drew every AniList link as a badge in
 an empty frame while the profile's About card beside it drew posters, because
-only the latter had been given a loader. It is one `CompositionLocal` now:
-`ProvideMediaCovers` is called once, at the app's composition root, and
-`AniListMarkdownWithCovers` is the only call a renderer needs — it collects the
-keys, asks once, and draws. `LocalMediaCoverLoader` is null when there is no
+only the latter had been given a loader. It is two `CompositionLocal`s now:
+`ProvideNovaCovers` is called once, at the app's composition root, and
+`NovaMarkdownWithCovers` is the only call a renderer needs — it collects the
+keys, asks once, and draws. `LocalNovaMediaCovers` is null when there is no
 repository (a demo), and a null loader is a real answer: the cards fall back to
 the badge rather than pretending a request succeeded. The fetch is keyed on the
 *keys* and the loader, not on the parsed nodes — an edit that only changes the
 prose around the same links must neither re-request the posters nor clear the
-ones already drawn, which is exactly what keying the state on the nodes did.
+ones already drawn. Character, staff and studio cards resolve through the same
+provider, because a title's poster beside a character's raw heading is a worse
+card than either one alone.
 
 **The comment thread is a place you can manage, not just read.** Replies hang off
 an activity and are fetched when the sheet is opened, with the composer in the
@@ -2155,30 +2181,29 @@ how the work is made stays in `JokeLinesShow`, what happens to it afterwards mov
 not a halving to satisfy a number: the two lists are still read together when a line
 is added or moved, because a reader who switches one off usually switches both off.
 
-## A centred image, and why the parser could not see one
+## A centred image, and why alignment lives on the block
 
 `~~~img100%(https://…/card.svg)~~~` is what AniList's own editor writes for a
 centred banner, and the API answers the same bio as
-`<center><img width='100%' src='…'></center>`. The app printed the markup as a
-centred sentence. Every whole-line image form in
-[AniListMarkdownParser](app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownParser.kt)
-is matched with `matchEntire` on the **source line**, and inside a single-line
-`~~~…~~~` span the source line is the whole span including the tildes - so the image
-code could never be the whole line, and the centred branch went straight to the
-paragraph builder. `centredSingleImage` re-parses the inner text as a block and keeps
-the result only when it is exactly one `ImageBlock`, which leaves centred prose and
-centred AniList media cards on their old path. The width suffix travels with the
-node, so `img100%` is a banner and `img220` stays a strip.
+`<center><img width='100%' src='…'></center>`. The old parser matched every
+whole-line image form with `matchEntire` on the **source line**, and inside a
+single-line `~~~…~~~` span the source line is the whole span including the
+tildes — so the image code could never be the whole line, and the centred branch
+printed the markup as a sentence.
+[NovaMarkdownElements.kt](app/src/main/java/com/anisequel/ui/components/novamarkdown/NovaMarkdownElements.kt)
+parses the inner text as a block and
+[NovaMarkdownParser.kt](app/src/main/java/com/anisequel/ui/components/novamarkdown/NovaMarkdownParser.kt)
+stamps `NovaAlign.Center` on whatever it produced. The width suffix travels with
+the node, so `img100%` is a banner and `img220` stays a strip.
 
 The second half was not a parser bug at all: an SVG could not be *decoded*.
-Android's `ImageDecoder` - the only decoder this app registered, and the one that
-runs at `minSdk = 31` - reads PNG, JPEG, GIF, WebP and HEIF. A bio card drawn live by
-a server arrives as `image/svg+xml` and failed silently, so the image area was an
-error placeholder over a picture the site itself shows. `coil-svg` registers
-`SvgDecoder` beside it. **AndroidSVG is a partial implementation of a large
-specification**: a card that nests `data:` images, `@font-face` fonts or animated
-WebP inside itself may draw incompletely, which is a limit of the format on Android
-rather than something this registration can fix.
+Android's `ImageDecoder` at `minSdk = 31` reads PNG, JPEG, GIF, WebP and HEIF; a
+bio card drawn live by a server arrives as `image/svg+xml` and failed silently.
+`coil-svg` still registers `SvgDecoder` as the fallback, but **AndroidSVG is a
+partial implementation of a large specification**: a card that nests `data:`
+images or embeds `@font-face` fonts draws incompletely. NovaMarkdown therefore
+gives SVG its own Chromium leaf (`NovaDynamicSvg.kt`) and leaves the rest of the
+document native; see the NovaMarkdown notes above.
 
 **Every image is a link on AniList, and every image is now tappable here.** The
 renderer only installed `clickable` when the markup wrapped the image in a link
@@ -2460,8 +2485,8 @@ nowhere to put its tap target, while the text is still readable.
 
 The label is metadata, not markup: it is trimmed, an empty one disappears, and one containing
 braces, angle brackets or a line break is dropped whole rather than sanitised. What is behind
-the lid is parsed as a full Markdown document, which is why `RenderSpoilerBlock` now re-enters
-`AniListMarkdownView` with the host's cover and preview maps instead of drawing a paragraph.
+the lid is parsed as a full Markdown document, which is why `NovaSpoiler` now re-enters
+`NovaMarkdownView` with the host's cover and preview maps instead of drawing a paragraph.
 The inline form parses its payload too, but keeps its children out of the link annotation:
 two `LinkAnnotation`s over one run is the shape Compose resolves arbitrarily, so a nested
 inline spoiler is not independently tappable - the block form is.

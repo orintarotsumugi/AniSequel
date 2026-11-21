@@ -44,7 +44,7 @@ import com.anisequel.domain.usecase.ContentLimits
 import com.anisequel.domain.usecase.MediaAttachment
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 
 /**
  * The comment editor.
@@ -471,7 +471,7 @@ private fun ColumnScope.DraftBody(
                 // shows what readers will get rather than an approximation -
                 // including the poster on an AniList title the draft links, and the
                 // photo or GIF that was just uploaded or chosen.
-                AniListMarkdownWithCovers(markdown = draft.text)
+                NovaMarkdownWithCovers(markdown = draft.text)
             }
         }
     } else {

@@ -187,6 +187,7 @@ private fun ActivityListCard(
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
+                onClickLabel = "Open ${media.title?.displayTitle.orEmpty()} details",
                 onClick = { onOpenDetail(media) }
             )
             .testTag("activity_card"),

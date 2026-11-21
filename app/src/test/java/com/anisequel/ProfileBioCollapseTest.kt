@@ -1,7 +1,7 @@
 package com.anisequel
 
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.novamarkdown.NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.screens.profile.isBioCollapsible
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,8 +11,8 @@ import org.junit.Test
  * Guards the bio card's collapse rule.
  *
  * The rule exists because the card and the markdown renderer were asking two
- * different questions about the same bio. `AniListMarkdownView` drops whole
- * blocks past [MARKDOWN_COLLAPSED_BLOCK_LIMIT] when it is asked to collapse, and
+ * different questions about the same bio. `NovaMarkdownView` drops whole
+ * blocks past [NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT] when it is asked to collapse, and
  * the card decided whether to offer a "Show more" toggle from the raw character
  * count. Those disagree in both directions, and both failures are silent:
  *
@@ -42,7 +42,7 @@ class ProfileBioCollapseTest {
 
         assertTrue(
             "a bio with ${6} blocks should be collapsible, its length is only ${bio.length}",
-            isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
+            isBioCollapsible(bio, NovaMarkdown.parse(bio))
         )
     }
 
@@ -54,7 +54,7 @@ class ProfileBioCollapseTest {
 
         assertFalse(
             "a two-block bio of ${bio.length} characters has nothing to expand",
-            isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
+            isBioCollapsible(bio, NovaMarkdown.parse(bio))
         )
     }
 
@@ -65,7 +65,7 @@ class ProfileBioCollapseTest {
         // long paragraph with no toggle and no line clamp at all.
         val bio = "a".repeat(COLLAPSED_CHAR_HINT + 1)
 
-        assertTrue(isBioCollapsible(bio, AniListMarkdownParser.parse(bio)))
+        assertTrue(isBioCollapsible(bio, NovaMarkdown.parse(bio)))
     }
 
     @Test
@@ -75,19 +75,19 @@ class ProfileBioCollapseTest {
         // This goes through the real parser rather than a hand-passed count so
         // that a change to how blocks are split shows up here.
         val bio = listOf("one", "two", "three", "four", "five").joinToString("\n\n")
-        val nodes = AniListMarkdownParser.parse(bio)
+        val nodes = NovaMarkdown.parse(bio)
         val blocks = nodes.size
 
         assertTrue(
             "expected five one-line paragraphs to parse as separate blocks, got $blocks",
-            blocks > MARKDOWN_COLLAPSED_BLOCK_LIMIT
+            blocks > NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
         )
         assertTrue(isBioCollapsible(bio, nodes))
     }
 
     @Test
     fun `a one line bio is never collapsible`() {
-        assertFalse(isBioCollapsible("hi", AniListMarkdownParser.parse("hi")))
+        assertFalse(isBioCollapsible("hi", NovaMarkdown.parse("hi")))
     }
 
     /**
@@ -110,7 +110,7 @@ class ProfileBioCollapseTest {
         // the first place proves nothing about the image rule.
         assertTrue(
             "the same text without an image is long enough to collapse",
-            isBioCollapsible(filler, AniListMarkdownParser.parse(filler))
+            isBioCollapsible(filler, NovaMarkdown.parse(filler))
         )
         listOf(
             // Blank line between the embed and the text: a single newline is a
@@ -122,7 +122,7 @@ class ProfileBioCollapseTest {
         ).forEach { bio ->
             assertFalse(
                 "with an image in it the card shows the whole bio",
-                isBioCollapsible(bio, AniListMarkdownParser.parse(bio))
+                isBioCollapsible(bio, NovaMarkdown.parse(bio))
             )
         }
     }

@@ -452,12 +452,12 @@ layer.
    AniSequel's parser already handles `imgN(url)`; a hostile or malformed N is a
    guaranteed layout crash on a public bio or synopsis. Add the two caps and a
    test that a 2,147,483,647-wide image renders without throwing.
-   *File:* `ui/components/markdown/AniListMarkdownBlocks.kt`.
+   *File:* `ui/components/novamarkdown/NovaMarkdownMedia.kt`.
 2. **Cache parsed markdown — P1, S.** AniSequel re-parses on every composition of
    a scroll-recycled item. Add an `LruCache<String, ParsedMarkdown>(200)` keyed
    by the raw source, seeded before the async pass. This removes a known class of
    jank in the Activity tab and the title page at once.
-   *File:* `ui/components/markdown/AniListMarkdownParser.kt`.
+   *File:* `ui/components/novamarkdown/NovaMarkdownParser.kt`.
 3. **Where-to-watch chips — P1, S.** `Media.externalLinks` is one more field on
    the detail query AniSequel already makes. Filter `type == STREAMING` and draw
    them in `InfoCards`/`InfoHero` above the synopsis. This is the highest
@@ -1297,8 +1297,8 @@ unblock bigger ones.
 
 | Change | File(s) | Why |
 | --- | --- | --- |
-| Clamp markdown image dimensions | `ui/components/markdown/` | Prevents a real layout crash on public content |
-| Cache parsed markdown (`LruCache(200)`) | `AniListMarkdownParser.kt` | Removes jank on every scroll-back |
+| Clamp markdown image dimensions | `ui/components/novamarkdown/` | Prevents a real layout crash on public content |
+| Cache parsed markdown (`LruCache(200)`) | `NovaMarkdownParser.kt` | Removes jank on every scroll-back |
 | Status-keyed detail TTL + countdown override | `AniListRepositoryImpl.kt` | Weekend-long cache for finished shows; correctness for airing ones |
 | Empty-response guard | `AniListRepositoryImpl.kt` | A 429 must never look like "list deleted" |
 | Gesture vs auto cooldown | `ListFreshnessWatch.kt` | Stops double-refresh reports |
@@ -1425,7 +1425,7 @@ know they were considered and kept:
 | `ui/screens/profile/ProfileStatsTab.kt` | `presentation/statistics/*` |
 | `ui/screens/profile/ActivityCalendarCard.kt` | `presentation/statistics/ActivityHeatmapSection.kt` + `ActivityWeekBreakdown.kt` + `ActivityDaySheet.kt` |
 | `ui/screens/profile/ActivityCommentsSheet.kt` | `presentation/activity/*` + `presentation/components/richtext/*` |
-| `ui/components/markdown/*` | `domain/parser/*` + `presentation/components/RichTextRenderer.kt` |
+| `ui/components/novamarkdown/*` | `domain/parser/*` + `presentation/components/RichTextRenderer.kt` |
 | `ui/widget/*` | `widget/*` + `widget/core/*` |
 | `data/update/UpdateManager.kt` | `data/update/UpdateManager.kt` + `worker/UpdateCheckWorker.kt` |
 | `ui/screens/settings/*` | `presentation/settings/*` + `data/AppSettings.kt` |

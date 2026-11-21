@@ -26,12 +26,12 @@ data class UserOverview(
     /**
      * The bio, as Markdown - the query asks for `about(asHtml: false)`.
      *
-     * Kept as raw text, and parsed by `AniListMarkdownParser` at render time.
+     * Kept as raw text, and parsed by `NovaMarkdown` at render time.
      *
      * This comment used to say the opposite - that the bio was "rendered as plain
      * text with the syntax stripped", because there was no Markdown renderer in
-     * the app. That stopped being true when `ui/components/markdown/` was added,
-     * and `AboutCard` has rendered these nodes rich ever since, so the sentence was
+     * the app. That stopped being true when the Markdown renderer was added, and
+     * `AboutCard` has rendered these nodes rich ever since, so the sentence was
      * describing a renderer that no longer exists while the one that does went
      * unmentioned. (`stripMarkdown` was the leftover from that approach. Nothing
      * ever rendered it — only its own test suite did — and it has since been

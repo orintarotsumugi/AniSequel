@@ -1,6 +1,67 @@
 {
   "versions": [
     {
+      "version": "2.4.9",
+      "entries": [
+        {
+          "title": "NovaMarkdown, a new Markdown system",
+          "detail": "The old renderer is gone. NovaMarkdown parses the raw Markdown AniList returns for a profile, a comment or a synopsis, and draws it with a parser and Compose renderer written together rather than a regex pipeline patched over time."
+        },
+        {
+          "title": "Centred blocks actually centre",
+          "detail": "AniList's `~~~` spans, `<center>`, `align` attributes and `text-align` styles now put alignment on every block. A centred banner, link card and paragraph line up together; the old wrapper only centred text and left images and cards flush left."
+        },
+        {
+          "title": "Live SVG cards render again",
+          "detail": "AniList profile banners and stat cards nest images and embed WOFF2 fonts, which the old SVG renderer could not draw. NovaMarkdown gives only those images to a Chromium WebView with JavaScript, file access and navigation disabled, and strips scripts and event handlers from the markup first."
+        },
+        {
+          "title": "Spoilers open and close",
+          "detail": "`~!...!~`, HTML spoiler divs and spans, and inline spoilers inside a sentence are all real controls now. A revealed block or inline run can be hidden again with a second tap, and the state survives scrolling away and back."
+        },
+        {
+          "title": "Sizes and links in images",
+          "detail": "`img220(...)`, `img50%(...)` and HTML `width` attributes keep the size the author asked for, a size inside a CDN query string is not mistaken for the author's, and every image opens its target or the picture itself on a tap."
+        },
+        {
+          "title": "AniList cards with their artwork",
+          "detail": "Bare AniList links, labelled links and a title inside a bold run become preview cards, and the document asks for their posters and character portraits in one batch instead of one request per card."
+        },
+        {
+          "title": "Links and encoded markup",
+          "detail": "Bare anilist.co links now become cards inside a sentence, not only when they own a line, and an AniList hostname inside a word is left as text. Markup that decodes from an HTML entity into a script or style tag is stripped before the parser can read it."
+        },
+        {
+          "title": "A parser that cannot stall the UI",
+          "detail": "The parser is a hand-written scanner with explicit inline, block and spoiler depth caps, an LRU document cache and no regex that can backtrack across a bio. Malformed markup is text, not a frozen frame."
+        },
+        {
+          "title": "Profile state stays with its profile",
+          "detail": "The Stats group, Social search and layout, Activity segment and calendar day, and an expanded bio no longer carry over from the last person whose profile was opened. About text also resets its expanded state when the bio changes."
+        },
+        {
+          "title": "Refresh finishes the job",
+          "detail": "The top-bar Refresh now also refreshes the Social tab once it has been opened, and is disabled while a refresh is already running. Pulling a borrowed list refreshes both the anime and manga halves instead of leaving the manga half at its old contents."
+        },
+        {
+          "title": "Failed lists stop pretending",
+          "detail": "A failed empty library no longer shows the same failure twice, and it now has a Try again button that asks for the half that failed. Hiding every favourite section no longer makes the Home tab claim nothing is pinned."
+        },
+        {
+          "title": "Scores use the profile's own scale",
+          "detail": "Score distribution bars now read a ten-point score against ten instead of one hundred, so a ten-point account no longer draws its whole chart as warning-red."
+        },
+        {
+          "title": "Counts, plurals and search tell the truth",
+          "detail": "A full 50-person social page is shown as 50+ rather than an exact total, the search box stays visible while a query is active, and activity summaries say 1 change, No changes and 1 week instead of the plural every time."
+        },
+        {
+          "title": "Tablet widths, large text and touch targets",
+          "detail": "The Social grid and the Activity and Messages filter rows now share the profile's centred content width on tablets, message filter chips wrap instead of clipping at large font scale, and Read more and the activity message button meet the 48dp touch minimum. Layout switches and person, title and activity cards have proper TalkBack labels."
+        }
+      ]
+    },
+    {
       "version": "2.4.8",
       "entries": [
         {

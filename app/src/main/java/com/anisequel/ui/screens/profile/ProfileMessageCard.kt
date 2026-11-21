@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,7 +48,7 @@ import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import java.time.Instant
 
@@ -166,7 +167,7 @@ internal fun MessageCard(
                 MessageHideButton(onHide = onHide)
             }
 
-            AniListMarkdownWithCovers(
+            NovaMarkdownWithCovers(
                 markdown = body,
                 maxLines = if (expanded) Int.MAX_VALUE else MESSAGE_COLLAPSED_LINES,
                 onOverflowChange = { hidden -> if (hidden) everOverflowed = true },
@@ -331,6 +332,8 @@ private fun MessageExpandToggle(
             .padding(top = 6.dp)
             .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onToggle)
+            // Text height alone left this under the 48dp touch minimum.
+            .defaultMinSize(minHeight = 48.dp)
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .testTag("message_read_more")
     )

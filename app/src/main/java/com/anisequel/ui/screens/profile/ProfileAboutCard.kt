@@ -38,11 +38,11 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownView
-import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
-import com.anisequel.ui.components.markdown.MarkdownNode
-import com.anisequel.ui.components.markdown.containsEmbeddedImage
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownView
+import com.anisequel.ui.components.novamarkdown.NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.novamarkdown.NovaBlock
+import com.anisequel.ui.components.novamarkdown.containsNovaImage
 
 /**
  * How many lines a collapsed bio shows before the fade takes over.
@@ -68,7 +68,7 @@ private const val COLLAPSED_CHAR_HINT = 280
  * Extracted, and taking the parsed nodes, because the two halves have to
  * agree and the card is the only place that knows both. Keying off
  * [COLLAPSED_CHAR_HINT] alone was the bug: it disagreed with what
- * [AniListMarkdownView] actually clips, in both directions. A 400-character bio
+ * [NovaMarkdownView] actually clips, in both directions. A 400-character bio
  * in two paragraphs clipped nothing, so "Show more" offered to reveal a change
  * that was not there; and a 200-character bio in six paragraphs had two of them
  * dropped by the renderer with no cue at all, while the toggle that would have
@@ -87,15 +87,15 @@ private const val COLLAPSED_CHAR_HINT = 280
  * document, because the banner of a centred `~~~` span or a spoilered reveal is not
  * in a top-level paragraph at all.
  */
-internal fun isBioCollapsible(about: String, nodes: List<MarkdownNode>): Boolean {
+internal fun isBioCollapsible(about: String, nodes: List<NovaBlock>): Boolean {
     // The whole document, not the top level: a bio's banner is just as likely to
     // arrive inside a centred `~~~` span, a `~!…!~` spoiler or a quoted comment, and
     // each of those hides its image in a child list rather than in a top-level
     // paragraph. Answering "no image" for those is what collapsed the bio and clipped
     // the one thing it was written around.
-    if (nodes.containsEmbeddedImage()) return false
+    if (nodes.containsNovaImage()) return false
     return about.length > COLLAPSED_CHAR_HINT ||
-        nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT
+        nodes.size > NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
 }
 
 /**
@@ -114,10 +114,10 @@ fun AboutCard(
      * carry a dozen AniList links and a request per card would spend a dozen of
      * AniList's 30-a-minute budget before the reader had scrolled.
      *
-     * ## Why this one surface does not use `AniListMarkdownWithCovers`
+     * ## Why this one surface does not use `NovaMarkdownWithCovers`
      *
      * Every other markdown renderer resolves its covers through
-     * `LocalMediaCoverLoader`, provided once at the navigation root. This card
+     * `LocalNovaMediaCovers`, provided once at the navigation root. This card
      * keeps its own map because the fetch is deliberately started by the
      * *ViewModel*, the moment the overview arrives, rather than when this card
      * first composes: the bio's posters are already on their way while the
@@ -128,8 +128,11 @@ fun AboutCard(
      */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
-    val nodes = remember(about) { AniListMarkdownParser.parse(about) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    val nodes = remember(about) { NovaMarkdown.parse(about) }
+    // Keyed to the bio: the card keeps its composition slot when the screen
+    // swaps one profile's overview for another's, so an unkeyed flag opened the
+    // next person's bio already expanded (and remembered that across rotation).
+    var expanded by rememberSaveable(about) { mutableStateOf(false) }
     val isCollapsed = isBioCollapsible(about, nodes) && !expanded
 
     Card(
@@ -189,14 +192,14 @@ fun AboutCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Box {
-                AniListMarkdownView(
-                    nodes = nodes,
+                NovaMarkdownView(
+                    blocks = nodes,
                     maxLines = if (isCollapsed) MARKDOWN_COLLAPSED_LINES else Int.MAX_VALUE,
                     mediaCovers = mediaCovers
                 )
                 // The fade is the point of this block.
                 //
-                // [AniListMarkdownView] clips a collapsed bio to a few blocks and
+                // [NovaMarkdownView] clips a collapsed bio to a few blocks and
                 // a few lines, and a clip with nothing at its edge is a bio that
                 // simply stops - the reader has no way to tell a person's
                 // truncated sentence from the whole of what they wrote, and no
@@ -241,7 +244,7 @@ internal fun NoBioNote() {
 // ProfileTextFormattingTest.kt.
 //
 // Nothing rendered it. `AboutCard` draws the parsed AST through
-// `AniListMarkdownView`, so the only thing keeping a Markdown-to-plain-text
+// `NovaMarkdownView`, so the only thing keeping a Markdown-to-plain-text
 // formatter alive was its own test - and that is the worst kind of evidence,
 // because a tested-but-uncalled function reads as "some screen must be using
 // this" to the next person who opens the file.

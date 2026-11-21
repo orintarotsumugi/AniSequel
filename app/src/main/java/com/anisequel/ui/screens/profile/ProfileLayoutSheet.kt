@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileLayout
@@ -153,9 +155,14 @@ internal fun ProfileLayoutSheet(
                     Switch(
                         checked = visible,
                         onCheckedChange = { onToggle(section) },
-                        modifier = Modifier.testTag(
-                            "profile_layout_visible_${section.storageValue}"
-                        )
+                        modifier = Modifier
+                            .testTag("profile_layout_visible_${section.storageValue}")
+                            // A bare Switch announces only "On"/"Off"; the row's
+                            // visible text is not part of its merged semantics, so
+                            // TalkBack could not say which section it toggled.
+                            .semantics {
+                                contentDescription = section.displayName
+                            }
                     )
                 }
             }
@@ -184,9 +191,11 @@ internal fun ProfileLayoutSheet(
                     Switch(
                         checked = layout.charactersTwoColumn,
                         onCheckedChange = onCharactersTwoColumn,
-                        modifier = Modifier.testTag(
-                            "profile_layout_characters_two_column"
-                        )
+                        modifier = Modifier
+                            .testTag("profile_layout_characters_two_column")
+                            .semantics {
+                                contentDescription = "Two-column characters"
+                            }
                     )
                 }
             }

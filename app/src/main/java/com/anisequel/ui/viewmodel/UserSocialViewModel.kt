@@ -317,6 +317,22 @@ class UserSocialViewModel(
         load(selected, forceRefresh = true)
     }
 
+    /**
+     * Re-asks for the social list only if this tab has already opened it.
+     *
+     * The page-level Refresh is allowed to skip a tab nobody has visited - that
+     * is the whole lazy rule - but it used to skip Social even while the reader
+     * was looking at a list it claimed to refresh. A failure is retried too, or
+     * the one control that can recover the tab leaves the error card behind.
+     */
+    fun refreshIfStarted() {
+        when (val current = _state.value) {
+            is SocialState.Success -> load(current.selected, forceRefresh = true)
+            is SocialState.Error -> load(current.list, forceRefresh = true)
+            SocialState.Idle, is SocialState.Loading -> Unit
+        }
+    }
+
     private suspend fun fetchFollowers(forceRefresh: Boolean): Result<List<FollowUser>> =
         if (isDemo) {
             Result.success(aniListRepository.getDemoFollowers())

@@ -408,8 +408,13 @@ fun UserProfileScreen(
                     // The feed joins in only when its tab has been opened: this is
                     // a page-level control, and fetching a feed nobody has looked at
                     // is the lazy-loading rule the Activity tab is built around.
-                    if ((uiState as? UserOverviewUiState.Success)?.isDemoMode == false) {
+                    val overview = uiState as? UserOverviewUiState.Success
+                    if (overview != null && !overview.isDemoMode) {
                         IconButton(
+                            // A second tap while the first refresh is in flight
+                            // cannot ask for anything the page is not already
+                            // fetching; it only restarts the indicator.
+                            enabled = !overview.isRefreshing,
                             onClick = {
                                 overviewViewModel.refresh()
                                 activityViewModel.refreshIfStarted()
@@ -424,6 +429,10 @@ fun UserProfileScreen(
                                 // drawn over.
                                 globalViewModel.refreshIfStarted()
                                 messagesViewModel.refreshIfStarted()
+                                // The Social tab is lazy too, and had been left
+                                // out of the one control that claims to refresh
+                                // the whole page.
+                                socialViewModel.refreshIfStarted()
                             },
                             modifier = Modifier
                                 .testTag("profile_refresh_button")
@@ -542,6 +551,7 @@ fun UserProfileScreen(
                             ProfileTabsContent(
                                 state = state,
                                 selectedTab = selectedTab,
+                                profileKey = viewModelKey,
                                 onSelectTab = { selectedTab = it },
                                 initialSegment = initialSegment,
                                 overviewViewModel = overviewViewModel,

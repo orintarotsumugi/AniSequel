@@ -236,7 +236,12 @@ fun ProfileActivityPage(
         onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
     )
 
-    Column(modifier = modifier.fillMaxSize()) {
+    // Centred so the segment capsule keeps the content column's width on a
+    // tablet instead of hugging the left edge while every card sits centred.
+    Column(
+        modifier = modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         if (showViewerSegments) {
             ActivitySegments(
                 selected = shownSegment,

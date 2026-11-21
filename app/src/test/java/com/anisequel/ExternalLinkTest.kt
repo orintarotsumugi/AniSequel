@@ -34,7 +34,7 @@ class ExternalLinkTest {
 
     private fun markdownSource(name: String) = File(
         findProjectRoot(),
-        "app/src/main/java/com/anisequel/ui/components/markdown/$name.kt"
+        "app/src/main/java/com/anisequel/ui/components/novamarkdown/$name.kt"
     ).readText()
 
     private fun linksSource() = File(
@@ -96,7 +96,7 @@ class ExternalLinkTest {
      */
     @Test
     fun `every link in a rendered bio uses the fallback`() {
-        listOf("AniListMarkdownBlocks", "AniListMarkdownParagraph", "AniListMarkdownTable").forEach { name ->
+        listOf("NovaMarkdownBlocks", "NovaMarkdownView", "NovaMarkdownMedia").forEach { name ->
             val source = markdownSource(name)
 
             assertFalse(

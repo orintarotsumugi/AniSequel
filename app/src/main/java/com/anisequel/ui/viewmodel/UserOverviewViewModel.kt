@@ -18,7 +18,8 @@ import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.domain.usecase.mangaLibraryProblem
 import com.anisequel.domain.usecase.profileIdentityFromRoute
 import com.anisequel.domain.usecase.shouldFetchProfileList
-import com.anisequel.ui.components.markdown.mediaCoverKeysIn
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.novaMediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,7 +192,7 @@ class UserOverviewViewModel(
         _mediaCovers.value = emptyMap()
 
         val bio = about?.takeIf { it.isNotBlank() } ?: return
-        val keys = mediaCoverKeysIn(bio)
+        val keys = novaMediaCoverKeysIn(NovaMarkdown.parse(bio))
         if (keys.isEmpty()) return
 
         coverJob = viewModelScope.launch {
@@ -260,8 +261,9 @@ class UserOverviewViewModel(
      * 30 requests a minute, and the repository's cache would have prevented the
      * network call one layer too late to matter.
      */
-    fun loadMangaLibrary() {
-        if (_mangaLibrary.value != null || _isLoadingManga.value) return
+    fun loadMangaLibrary(forceRefresh: Boolean = false) {
+        if (_isLoadingManga.value) return
+        if (_mangaLibrary.value != null && !forceRefresh) return
         // Named rather than silent. The `return` this replaces left the Manga filter
         // of the Library page on a list that was never arriving: no entries, no
         // error, no reason - which is the same "nothing here" lie as a flattened
@@ -294,7 +296,9 @@ class UserOverviewViewModel(
                 // the thread's handler and Android closes the app. Here it also left
                 // [_isLoadingManga] true for the life of the screen, and the guard above
                 // turns every later tap into a no-op, so the chip stops being a retry.
-                val result = repositoryResult { aniListRepository.getUserMangaList(id, false) }
+                val result = repositoryResult {
+                    aniListRepository.getUserMangaList(id, forceRefresh)
+                }
                 result.fold(
                     onSuccess = { collection ->
                         _mangaLibrary.value = flattenLibrary(collection)

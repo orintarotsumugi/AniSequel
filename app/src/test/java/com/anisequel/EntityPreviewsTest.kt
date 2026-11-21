@@ -2,9 +2,9 @@ package com.anisequel
 
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.network.GraphQLQueries
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.entityPreviewKeysIn
-import com.anisequel.ui.components.markdown.mediaCoverKeysIn
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.novaEntityPreviewKeysIn
+import com.anisequel.ui.components.novamarkdown.novaMediaCoverKeysIn
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,7 +31,7 @@ import org.junit.Test
 class EntityPreviewsTest {
 
     private fun keys(markdown: String) =
-        entityPreviewKeysIn(AniListMarkdownParser.parse(markdown))
+        novaEntityPreviewKeysIn(NovaMarkdown.parse(markdown))
 
     @Test
     fun `character staff and studio links keep their own kinds`() {
@@ -63,9 +63,9 @@ class EntityPreviewsTest {
 
     @Test
     fun `an entity id is never sent to the media cover lookup`() {
-        val nodes = AniListMarkdownParser.parse("https://anilist.co/character/1")
+        val nodes = NovaMarkdown.parse("https://anilist.co/character/1")
 
-        assertTrue(mediaCoverKeysIn(nodes).isEmpty())
+        assertTrue(novaMediaCoverKeysIn(nodes).isEmpty())
     }
 
     @Test

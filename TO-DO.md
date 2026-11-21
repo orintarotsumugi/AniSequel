@@ -471,8 +471,8 @@ review cannot see.
 
 ### 5.3 ~~Markdown nesting stops at four levels~~ — not a defect, moved out of the backlog
 
-`AniListMarkdownParser` re-parses an emphasis run's or link label's inner
-expression, capped at `MAX_INLINE_DEPTH = 4`, and past the cap the renderer falls
+`NovaMarkdownParser` re-parses an emphasis run's or link label's inner
+expression, capped at `MAX_INLINE_DEPTH = 6`, and past the cap the renderer falls
 back to the flat source text.
 
 This is a **working guard, not a known problem**, and it was only ever in this
