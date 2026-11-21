@@ -96,7 +96,11 @@ internal fun novaSvgBitmapHasInk(bitmap: Bitmap): Boolean {
     while (y < bitmap.height) {
         var x = 0
         while (x < bitmap.width) {
-            if ((bitmap.getPixel(x, y) ushr 24) >= INK_MIN_ALPHA) {
+            // The alpha byte of an ARGB pixel, named rather than parenthesised:
+            // `ushr` binds tighter than `>=`, so a reader should not have to know
+            // that to be sure this compares the alpha and not the colour.
+            val alpha = bitmap.getPixel(x, y) ushr 24
+            if (alpha >= INK_MIN_ALPHA) {
                 inked++
                 if (inked >= INK_MIN_PIXELS) return true
             }

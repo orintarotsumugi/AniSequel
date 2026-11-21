@@ -482,10 +482,12 @@ private fun NovaStatValue(
     AnimatedContent(
         targetState = stat.value,
         transitionSpec = {
-            (slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { it / 3 } +
-                fadeIn(animationSpec = ExpressiveMotion.FastEffects)) togetherWith
-                (slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 3 } +
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)) using null
+            // No parentheses: `+` binds tighter than the `togetherWith` infix, and
+            // grouping these two enter/exit pairs was only ever noise.
+            slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { it / 3 } +
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
+                slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 3 } +
+                fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
         },
         label = "nova_stat_value_${stat.label}"
     ) { value ->

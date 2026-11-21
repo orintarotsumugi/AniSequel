@@ -37,11 +37,14 @@ on:
         type: boolean
         default: false
 
+# Read-only by default. The two write scopes live on the one job that needs them
+# (`build-and-release`): `contents: write` to publish a release and commit the
+# manifest, and `pull-requests: write` for the "where is the APK" comment. Granting
+# them here gave the lint job - which only compiles - the right to write to the
+# repository, and a workflow-level grant is what a code-analysis gate reports as an
+# overly broad permission.
 permissions:
-  contents: write
-  # Only for the "tell reviewers where the APK is" comment below. Scoped to
-  # pull-requests so it cannot be used to touch issues or reviews.
-  pull-requests: write
+  contents: read
 
 # Two pushes landing together would both mint a release tag and race to write
 # update.json. One run per ref keeps the newest run the one that publishes.
@@ -131,6 +134,8 @@ jobs:
   # risk to a release, and a manual dispatch already covers "run it eventually".
   lint:
     name: Android Lint (advisory)
+    permissions:
+      contents: read
     if: github.event_name != 'pull_request'
     # Pinned rather than `ubuntu-latest`: GitHub's `ubuntu-latest` is mid-migration
     # from 24.04 to 26.04 (October 19 - November 19, 2026), and every run on the
@@ -201,6 +206,14 @@ jobs:
     #
     # Nothing here may hardcode a password: this file is public, so a literal
     # would hand every reader the key to sign updates.
+    #
+    # The write scopes the workflow used to hold at the top, granted to the job that
+    # uses them: publishing the release and committing `update.json` need
+    # `contents: write`, and the "tell reviewers where the APK is" comment needs
+    # `pull-requests: write`. Nothing else in this file writes anything.
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/release-key.jks
 
@@ -531,6 +544,10 @@ jobs:
         env:
           # Empty unless the run was dispatched with `profile`, so the normal path is
           # byte-for-byte what it was. See the `workflow_dispatch` input.
+          #
+          # Expanded as `${GRADLE_PROFILE:+"$GRADLE_PROFILE"}` at the call site, not
+          # as `$GRADLE_PROFILE`: an empty expansion would reach Gradle as an empty
+          # task name ("Task '' not found"), and quoting it bare would do the same.
           GRADLE_PROFILE: ${{ inputs.profile && '--profile' || '' }}
         run: |
           # A real gate, not an advisory step.
@@ -556,7 +573,7 @@ jobs:
           # second has to re-run both compilers before R8 even starts. Passing the
           # resolved version here means the build step inherits this one's
           # compiled release classes instead of rebuilding them.
-          ./gradlew test --stacktrace $GRADLE_PROFILE \
+          ./gradlew test --stacktrace ${GRADLE_PROFILE:+"$GRADLE_PROFILE"} \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
@@ -579,7 +596,7 @@ jobs:
           ./gradlew "assemble${BUILD_VARIANT^}" \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
-            $GRADLE_PROFILE --stacktrace
+            ${GRADLE_PROFILE:+"$GRADLE_PROFILE"} --stacktrace
 
       - name: Prepare APK Artifact
         env:
