@@ -1,6 +1,59 @@
 {
   "versions": [
     {
+      "version": "2.5.2",
+      "entries": [
+        {
+          "title": "SVG cards load when you reach them",
+          "detail": "A long bio used to start every remote SVG together, delaying visible cards and fetching artwork you might never reach. SVGs now load as they approach the screen, duplicate requests share their result, and failed captures fall back to image rendering instead of keeping an uncapturable WebView alive while you scroll."
+        },
+        {
+          "title": "Settings colours and search destinations agree",
+          "detail": "Full-screen mode now opens from its actual Device Manager location in Settings search. Secondary Settings actions use the app's primary-tonal colours, invalid colour previews use theme surfaces, and widget highlight/accent colours no longer vary with the phone manufacturer's theme."
+        },
+        {
+          "title": "The Info-page trailer starts reliably",
+          "detail": "YouTube could open its player shell without starting the video because the embedded player lacked its required origin and referrer information. The player now declares both and can show YouTube's full-screen playback above the page."
+        },
+        {
+          "title": "Friends on a title keep their own loading state",
+          "detail": "The Friends card could disappear before its results arrived whenever the title details had already loaded. It now tracks the followed-users request independently, so both Info layouts keep the checking placeholder visible until that request finishes."
+        },
+        {
+          "title": "Unrated titles stop reporting a score of zero",
+          "detail": "AniList answers zero for a title nobody has scored, and the hero chip and poster badges printed that as 0% - a community verdict that did not exist. Titles without a score now show no score at all, matching the details grid and the Nova summary strip."
+        },
+        {
+          "title": "The Info page settles instead of jumping",
+          "detail": "Sections that arrive with the title details - categories, links, cast, relations, crew and rankings - used to appear in one frame and shove everything below them up the page. They now take their place on the app's shared list spring, and a Friends card that turns out empty leaves without a snap."
+        },
+        {
+          "title": "The demo opens on Android 12 and 13 again",
+          "detail": "The demo's sample dates were built with a date call that only exists on Android 14 and newer, so opening demo mode on Android 12 or 13 stopped the app. It now uses the same arithmetic through an API every supported version has."
+        },
+        {
+          "title": "Widget data stays out of backups",
+          "detail": "The rule that keeps the widget store - your handle, your counts and the titles you are watching - out of cloud backups and device transfers named a backup domain Android does not recognise, so it was silently ignored. The rule is valid now, and a test keeps it that way."
+        },
+        {
+          "title": "Dates follow the app's language",
+          "detail": "The activity calendar's day labels, a studio's favourites count and the schedule's airing labels read the device language once and kept it, so switching the app language left those three in the old one. They now read the language the current screen is drawn in."
+        },
+        {
+          "title": "Larger text no longer overlaps itself",
+          "detail": "A title's synopsis and every comment body, the tier list captions, the segmented bars under Settings and both title-page heroes kept their line spacing at the default size while the letters grew with Text size, so at the larger stops the lines ran into each other. Line spacing and letter tracking now grow with the type, and a character card on the Info page grows with its text instead of cutting the actor's name off."
+        },
+        {
+          "title": "Display size explains the right direction",
+          "detail": "Both Display size explanations said a higher dpi fits more on the screen. Density is pixels per dp, so a higher number draws everything larger and fits less - the old sentence sent a reader who wanted a bigger app the wrong way up the slider. The copy and the Small preset's description now match what the setting does."
+        },
+        {
+          "title": "Animated SVG cards in a bio move again",
+          "detail": "A profile's live cards are drawn once and kept as a picture so a long bio scrolls; a card that animates itself in - bars filling, panels fading up, a strip scrolling - was therefore frozen on whichever frame was captured a fraction of a second after it loaded, which often looked like an empty image. Cards that actually animate now keep a real renderer while they are on screen and give it up when they scroll away, and a reader who has switched the system's animations off still gets the still picture."
+        }
+      ]
+    },
+    {
       "version": "2.5.1",
       "entries": [
         {

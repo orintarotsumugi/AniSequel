@@ -10,8 +10,13 @@
    Excluding it costs nothing: signing in again is one tap, and the token is
    scoped to the device that requested it anyway.
 
-   Note: this file is ignored for devices older than API 31, which use
-   data_extraction_rules.xml.
+   Note: this document is the `android:fullBackupContent` form, which the platform
+   reads on Android 11 and below. `minSdk` is 31, so the rules that actually apply
+   on every device this app installs on are in data_extraction_rules.xml - and the
+   two files are kept identical on purpose, because the alternative is a rule that
+   is right in the document nobody reads and wrong in the one that runs. (The
+   sentence that used to be here said this file was the one for old devices and
+   that data_extraction_rules.xml was the fallback, which is the other way round.)
 -->
 <full-backup-content>
     <exclude
@@ -24,6 +29,6 @@
         signed in.
     -->
     <exclude
-        domain="shared_pref"
+        domain="sharedpref"
         path="anisequel_widget_cache.xml" />
 </full-backup-content>

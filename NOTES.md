@@ -883,11 +883,32 @@ the *software* layer type first, because a hardware-accelerated Chromium draws
 into its own surface and `draw` into a software `Canvas` then comes back empty;
 and the result is sampled for ink before it is used, so a card that did not paint
 keeps its WebView instead of being replaced by a blank. Three attempts over about
-a quarter of a second cover late fonts. The trades are deliberate: an animated
-banner becomes the frame it animated from, and a card drawn at a new column width
-(a rotation, a fold, a split screen) is captured again — `novaSvgRasterKey`
-carries the slot size for that reason, since keyed on the URL alone a rotation
-would stretch the old capture.
+a quarter of a second cover late fonts. A card drawn at a new column width (a
+rotation, a fold, a split screen) is captured again — `novaSvgRasterKey` carries
+the slot size for that reason, since keyed on the URL alone a rotation would
+stretch the old capture.
+
+**A card that animates is not captured at all** (`NovaSvgAnimation.kt`). The
+capture runs a fraction of a second after `onPageFinished`, and these cards
+routinely animate themselves in — a bar growing from zero, a panel fading up, a
+strip scrolling its text — so the frame it landed on was whatever the animation
+was doing at that instant, frequently an empty or half-drawn card shown as a
+broken image for as long as the bio is open. `novaSvgIsAnimated` reads the
+sanitised document for the two ways an SVG moves without script: SMIL
+(`<animate>`, `<animateTransform>`, `<animateMotion>`, `<animateColor>`, `<set>`)
+and CSS (`@keyframes`, an `animation`/`-webkit-animation` declaration), the latter
+only inside a `<style>` block or a `style="..."` attribute — a caption that reads
+"animation: the art of moving things" is still one picture. CSS *transitions* are
+not matched: they need hover or focus, which a disabled WebView in a scrolling
+list never gets. An animated card keeps a real renderer, and that renderer exists
+only while the card overlaps the window, so scrolling away disposes it and
+scrolling back restarts the animation rather than resuming it — the honest half
+of the trade, since a restarted loop is invisible next to a card frozen on its own
+first frame. `novaSvgCanBeCaptured` is the single decision: capture when the card
+is static *or* when the device has stopped animating things
+(`ValueAnimator.areAnimatorsEnabled`, the same check the app's own motion already
+obeys), because a reader who switched motion off did not ask for a remote banner
+to ignore them.
 
 The two caches behind it are byte budgets, not entry counts (`NovaByteCache.kt`).
 Twelve retained documents at the 2 MiB fetch ceiling was 48 MiB of UTF-16 heap for
@@ -3502,6 +3523,34 @@ them. `BuildConfig` is an input to KSP and Kotlin, so that difference rebuilt th
 release variant before R8 could start. Both invocations now receive the resolved
 version. R8 itself remains a single pass; optimized resource shrinking is already
 AGP 9's default with `isShrinkResources = true`.
+
+### Remote SVGs start at the viewport and stop being browsers
+
+A bio can contain many SVG cards below the fold. Fetching all of them when the
+Markdown tree composed delayed the first visible image and spent requests on cards
+the reader might never reach. SVGs now wait for their slot to enter the window,
+and same-URL fetches publish into the markup cache before waking other callers, so
+two cards cannot slip through the in-flight/cache hand-off and duplicate the request.
+
+A WebView that still cannot produce pixels after the bounded capture retries used
+to stay alive and redraw during every fling. It now falls back to Coil's SVG image
+path, and a size change keys a new capture session so a failed small-size attempt
+does not strand a resized card in a live WebView. Sanitization also removes complete
+`foreignObject` subtrees and unquoted or whitespace-padded `javascript:` URLs; merely
+removing the opening `foreignObject` tag left its HTML payload in a document the
+renderer would still receive. SVG media URLs whose extension is hidden behind a
+format query continue through this renderer rather than Android's static image path.
+
+### Settings destinations and widget colour are explicit
+
+The Full-screen search result remained under Interface after the control moved to
+Device Manager, so search landed on a page that did not contain the setting. Its
+index now carries the actual destination. Secondary Settings buttons use the
+primary tonal roles like the rest of the brand hierarchy, and invalid stored colour
+strings fall back to the current theme surface rather than platform gray. Widgets
+are RemoteViews and cannot see Compose's Material roles; their platform accent and
+control-highlight attributes are now explicitly tied to AniList blue instead of
+inheriting an arbitrary OEM `DeviceDefault` palette.
 
 ### R8 was the build, and the icons were R8
 

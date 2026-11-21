@@ -62,7 +62,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
@@ -87,6 +86,7 @@ import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.asHeroTitle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
 
@@ -193,7 +193,12 @@ fun InfoHero(
     // title on this page: take it somewhere else. The full name sheet with its
     // four copy buttons is still the discoverable path; this is the one gesture
     // a reader who already knows the title tries first.
-    var titleCopied by remember(media.id) { mutableStateOf(false) }
+    // Keyed on the type as well as the id: a relation can cross the anime/manga
+    // boundary, where `anime/7` and `manga/7` are different titles, and the
+    // adjacent `posterBounds` below is keyed the same way. Id alone let a
+    // confirmation still on screen from the title the reader left appear over the
+    // one they just opened.
+    var titleCopied by remember(media.id, media.type) { mutableStateOf(false) }
     // `expressiveHoldGesture`'s `pointerInput(Unit)` keeps the first lambda it saw,
     // and the sheet can swap the list node for the detail node under a live hero -
     // so the title is read through a state rather than captured.
@@ -576,15 +581,7 @@ fun InfoHero(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = media.displayName,
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        // Set tighter than the body's default line height: a
-                        // three-line title in `ExtraBold` with headlineSmall's
-                        // 32sp leading read as three separate sentences. The
-                        // slightly negative tracking is what makes it read as one
-                        // display block against the artwork.
-                        lineHeight = 30.sp,
-                        letterSpacing = (-0.4).sp
-                    ),
+                    style = MaterialTheme.typography.headlineSmall.asHeroTitle(),
                     // The artwork behind is sharp now, so the title carries its own
                     // shadow rather than relying on the gradient alone. One shadow on
                     // one short block of text: it is what keeps a white
@@ -691,7 +688,13 @@ private fun HeroChips(
         }
         // The score is the number most people open a title to check. `averageScore`
         // is AniList's 0-100 mean, already a percentage, so it is not rescaled.
-        media.averageScore?.let { score ->
+        //
+        // `takeIf { it > 0 }` because AniList reports an unrated title as 0, and a
+        // "0%" chip with a star beside it reads as a community verdict of zero on a
+        // show nobody has scored - an announced title's most likely case. The
+        // details grid and the Nova strip already suppress the zero; this was the
+        // one surface on the page that did not.
+        media.averageScore?.takeIf { it > 0 }?.let { score ->
             HeroChip(icon = AppVectorIcons.Star, label = "$score%")
         }
         // Gated on a real status. `statusLabel` answers "Unknown" for a null,

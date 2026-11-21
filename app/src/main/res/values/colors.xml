@@ -9,20 +9,21 @@
     carries its own values. They were dead weight from a template that predated
     the Compose theming, and they are gone.
 
-    It is now deliberately empty.
-
     The launcher icon's blues were briefly duplicated here as `anilist_blue` &
     friends, on the theory that a vector should read them from a colour
     resource. It cannot: a `<vector>` resolves `@color/...` through the
     resource table, but a *gradient* inside it is compiled into the drawable at
     build time and AAPT will not follow a reference into an `<item>` inside a
-    `<gradient>`. Lint reported all three as unused, which is the accurate
-    verdict - the values had to be literals in the vector regardless. Duplicating
-    them here would have created a second copy of the brand palette that could
-    drift with nothing to catch it.
+    `<gradient>`. Lint reported all three as unused, which was the accurate
+    verdict - the values had to be literals in the vector regardless.
 
-    So the palette lives in exactly two places, both of which are literals and
-    both of which are commented as such: Color.kt for the running app, and
-    ic_launcher_background.xml for the icon.
+    These two values are different: widget RemoteViews cannot read Compose's
+    Material roles, so their platform accent and translucent highlight are a
+    small, intentional mirror of `AniBlue` in Color.kt. The launcher still has
+    its own literal gradient in ic_launcher_background.xml.
 -->
-<resources />
+<resources>
+    <!-- RemoteViews cannot read Compose Material roles, so keep its brand role in sync. -->
+    <color name="widget_accent">#0B67D1</color>
+    <color name="widget_highlight">#1F0B67D1</color>
+</resources>

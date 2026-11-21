@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,7 +37,6 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.viewmodel.StudioViewModel
 import java.text.NumberFormat
-import java.util.Locale
 
 /**
  * The studio page's parts: the header, the shelf headings, and the three states the
@@ -99,9 +99,14 @@ internal fun StudioIdentity(
                 )
             }
             studio.favourites?.let { favourites ->
+                // The observable locale rather than `Locale.getDefault()`: a static
+                // read does not invalidate this composable when the reader changes
+                // the app's language, so the grouping separator stayed in the old
+                // one. Same rule as the activity calendar's day labels.
+                val locale = LocalConfiguration.current.locales[0]
                 StudioMetaChip(
                     icon = AppVectorIcons.ActivityLiked,
-                    label = "${NumberFormat.getIntegerInstance(Locale.getDefault()).format(favourites)} favourites"
+                    label = "${NumberFormat.getIntegerInstance(locale).format(favourites)} favourites"
                 )
             }
             titleCount?.takeIf { it > 0 }?.let { count ->

@@ -2,6 +2,8 @@ package com.anisequel
 
 import com.anisequel.ui.components.novamarkdown.NOVA_SVG_RASTER_MAX_PIXELS
 import com.anisequel.ui.components.novamarkdown.NovaByteCache
+import com.anisequel.ui.components.novamarkdown.novaSvgAspect
+import com.anisequel.ui.components.novamarkdown.sanitizeNovaSvg
 import com.anisequel.ui.components.novamarkdown.novaSvgRasterKey
 import com.anisequel.ui.components.novamarkdown.novaSvgRasterSize
 import org.junit.Assert.assertEquals
@@ -127,6 +129,32 @@ class NovaSvgCacheTest {
             "a different width is a different card",
             key != novaSvgRasterKey("https://s4.anilist.co/file/x.svg", 720, 360)
         )
+    }
+
+    // endregion
+
+    // region SVG document handling
+
+    @Test
+    fun `SVG sanitizer removes scripts handlers active embeds and javascript links`() {
+        val sanitized = sanitizeNovaSvg(
+            """<svg onload="run()"><script>bad()</script><a href=javascript:bad()><text>safe</text></a><foreignObject><iframe src="x"></iframe></foreignObject></svg>"""
+        )!!
+
+        assertTrue(sanitized.contains("<text>safe</text>"))
+        assertTrue(!sanitized.contains("script", ignoreCase = true))
+        assertTrue(!sanitized.contains("onload", ignoreCase = true))
+        assertTrue(!sanitized.contains("javascript:", ignoreCase = true))
+        assertTrue(!sanitized.contains("foreignObject", ignoreCase = true))
+        assertTrue(!sanitized.contains("iframe", ignoreCase = true))
+    }
+
+    @Test
+    fun `SVG aspect rejects non-finite and degenerate dimensions`() {
+        assertEquals(2f, novaSvgAspect("<svg viewBox=\"0 0 NaN 10\"></svg>"))
+        assertEquals(2f, novaSvgAspect("<svg viewBox=\"0 0 10 0\"></svg>"))
+        assertEquals(2f, novaSvgAspect("<svg width=\"Infinity\" height=\"10\"></svg>"))
+        assertEquals(2f, novaSvgAspect("<svg width=\"10\" height=\"0\"></svg>"))
     }
 
     // endregion

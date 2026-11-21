@@ -9,11 +9,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +43,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -211,6 +213,10 @@ fun ExpressivePolygonSegmentedBar(
         // than one of two competing for it.
         modifier = modifier
             .fillMaxWidth()
+            // Every segment is measured against the tallest label, so a bar whose
+            // text has been enlarged grows as one control instead of clipping two of
+            // its three choices.
+            .height(IntrinsicSize.Min)
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(4.dp),
@@ -247,7 +253,14 @@ fun ExpressivePolygonSegmentedBar(
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    // `heightIn(min = ...)`, not a fixed 44dp. The segment's label is
+                    // `labelLarge`, which the reader's Text size setting scales - so
+                    // at 175% two lines of it are ~70sp in a 44dp box and the bar cut
+                    // the second line through the middle. The bar grows instead; the
+                    // outer row's `IntrinsicSize.Min` is what keeps every segment the
+                    // same height while one of them needs two lines.
+                    .heightIn(min = 44.dp)
+                    .fillMaxHeight()
                     .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
@@ -302,7 +315,11 @@ fun ExpressivePolygonSegmentedBar(
                     // control where being wrong means editing the wrong setting.
                     maxLines = 2,
                     textAlign = TextAlign.Center,
-                    lineHeight = 16.sp
+                    // A factor of the style's own leading rather than a literal: the
+                    // 16sp this used to pin is right for 100% and wrong at every
+                    // larger size, where the two lines overlapped each other.
+                    lineHeight = MaterialTheme.typography.labelLarge.lineHeight *
+                        SEGMENT_LEADING_FACTOR
                 )
             }
         }
@@ -502,3 +519,12 @@ fun ExpressiveStateChip(
         )
     }
 }
+
+/**
+ * The segmented bar's two-line leading, as a share of `labelLarge`'s own line height.
+ *
+ * 0.8 is the 16sp the segment drew with against the style's 20sp default, kept as a
+ * ratio so the reader's Text size reaches it: a pinned 16sp is right for 14sp text
+ * and overlaps it at 175%.
+ */
+private const val SEGMENT_LEADING_FACTOR = 16f / 20f

@@ -7,6 +7,7 @@ import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.novaPlainText
 import com.anisequel.ui.components.novamarkdown.novaYouTubeId
 import com.anisequel.ui.components.novamarkdown.novaYouTubeThumbnail
+import com.anisequel.ui.components.novamarkdown.isNovaSvgUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -52,6 +53,15 @@ class NovaMarkdownMediaTest {
     fun `a bare image url is an image embed`() {
         assertTrue(NovaMarkdown.parse("https://x/a.gif").single() is NovaBlock.Image)
         assertTrue(NovaMarkdown.parse("(https://x/a.webp)").single() is NovaBlock.Image)
+    }
+
+    @Test
+    fun `svg paths and format query URLs use the dynamic renderer`() {
+        assertTrue(isNovaSvgUrl("https://cdn.example/card.svg"))
+        assertTrue(isNovaSvgUrl("https://cdn.example/card.SVG?width=600"))
+        assertTrue(isNovaSvgUrl("https://cdn.example/image?format=svg&width=600"))
+        assertTrue(isNovaSvgUrl("https://cdn.example/image?width=600&format=svg"))
+        assertTrue(!isNovaSvgUrl("https://cdn.example/card.png?format=png"))
     }
 
     @Test

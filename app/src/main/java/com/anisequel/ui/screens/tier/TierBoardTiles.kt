@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.anisequel.domain.tier.TierCandidate
@@ -56,6 +55,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.withLeadingFactor
 import kotlin.math.roundToInt
 
 /**
@@ -414,7 +414,8 @@ internal fun TierPosterTile(
                 ) {
                     Text(
                         text = caption,
-                        style = MaterialTheme.typography.labelSmall.copy(lineHeight = 13.sp),
+                        style = MaterialTheme.typography.labelSmall
+                            .withLeadingFactor(COVER_TITLE_LEADING_FACTOR),
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         maxLines = 2,
@@ -436,7 +437,8 @@ internal fun TierPosterTile(
                 // A tighter line height than `labelSmall` ships with: two lines
                 // have to fit the band the layout reserved, and a clipped second
                 // line reads as a missing title rather than as a long one.
-                style = MaterialTheme.typography.labelSmall.copy(lineHeight = 14.sp),
+                style = MaterialTheme.typography.labelSmall
+                    .withLeadingFactor(TITLE_BAND_LEADING_FACTOR),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -533,3 +535,15 @@ internal fun TierDragGhost(
             .testTag("tier_drag_ghost")
     )
 }
+
+/**
+ * The two title leadings in a tier tile, as shares of `labelSmall`'s own line height.
+ *
+ * Both used to be absolute - 13sp and 14sp against the style's default 15sp - which
+ * is right for two lines of 11sp text and wrong for two lines of the 19.25sp text a
+ * 175% reading size produces: the lines collided inside the band that was reserved
+ * for them. As factors they keep the design at 100% and grow with the text.
+ */
+private const val COVER_TITLE_LEADING_FACTOR = 13f / 15f
+
+private const val TITLE_BAND_LEADING_FACTOR = 14f / 15f

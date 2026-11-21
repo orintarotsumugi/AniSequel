@@ -27,19 +27,29 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
  * The scrim is `Color.Black` and not a theme colour because the artwork underneath it
  * is arbitrary: it has to darken under every poster, and the alpha is what keeps the
  * poster visible through it.
+ *
+ * ## An unrated title draws no badge
+ *
+ * AniList answers `averageScore: 0` for a title nobody has scored, so every caller
+ * that guarded with `averageScore?.let { }` - which is all three of them - put a
+ * **0%** capsule on an unreleased show's artwork: a number presented as a community
+ * verdict when the truth is that there is no verdict yet. The zero is suppressed here
+ * rather than at each call site, so a fourth caller cannot reintroduce it, and the
+ * callers stay declarative (`averageScore?.let { ScoreBadge(it) }`).
  */
 @Composable
 fun ScoreBadge(
     score: Int,
     modifier: Modifier = Modifier
 ) {
+    val label = scoreBadgeLabel(score) ?: return
     Surface(
         shape = ExpressiveShapes.pill,
         color = Color.Black.copy(alpha = 0.62f),
         modifier = modifier
     ) {
         Text(
-            text = "$score%",
+            text = label,
             style = MaterialTheme.typography.labelSmall,
             color = Color.White,
             fontWeight = FontWeight.Bold,
@@ -47,3 +57,13 @@ fun ScoreBadge(
         )
     }
 }
+
+/**
+ * What the badge prints, or null when it has nothing true to say.
+ *
+ * Split out from the composable so the rule - a non-positive score is an absent
+ * score, not a zero one - is a plain function a unit test can pin. Compose UI tests
+ * are not in the unit-test source set, and the bug this guards is a string.
+ */
+internal fun scoreBadgeLabel(score: Int): String? =
+    if (score > 0) "$score%" else null

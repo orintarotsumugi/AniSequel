@@ -112,6 +112,7 @@ import kotlinx.coroutines.launch
 fun NovaInfoPage(
     subject: AnimeDetailSubject,
     isDetailLoading: Boolean,
+    isFriendsLoading: Boolean = false,
     canWriteToAniList: Boolean,
     holdDurationSeconds: Int,
     swipeEnabled: Boolean,
@@ -248,6 +249,7 @@ fun NovaInfoPage(
                     sections = sections,
                     themeSongs = themeSongs,
                     isDetailLoading = isDetailLoading,
+                    isFriendsLoading = isFriendsLoading,
                     canWriteToAniList = canWriteToAniList,
                     holdDurationSeconds = holdDurationSeconds,
                     swipeEnabled = swipeEnabled,
@@ -305,6 +307,7 @@ private fun LazyListScope.novaPageItems(
     sections: InfoSections,
     themeSongs: List<ThemeSong>,
     isDetailLoading: Boolean,
+    isFriendsLoading: Boolean,
     canWriteToAniList: Boolean,
     holdDurationSeconds: Int,
     swipeEnabled: Boolean,
@@ -389,13 +392,13 @@ private fun LazyListScope.novaPageItems(
         key = "nova_friends",
         index = 5,
         entranceKey = revealKey,
-        visible = friends.isNotEmpty() || isDetailLoading
+        visible = friends.isNotEmpty() || isFriendsLoading
     ) {
         InfoFriendsCard(
             friends = friends,
             media = media,
             modifier = it,
-            isLoading = isDetailLoading
+            isLoading = isFriendsLoading
         )
     }
 

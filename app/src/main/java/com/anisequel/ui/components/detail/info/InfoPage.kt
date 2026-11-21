@@ -91,6 +91,7 @@ import kotlinx.coroutines.launch
 fun AnimeInfoPage(
     subject: AnimeDetailSubject,
     isDetailLoading: Boolean,
+    isFriendsLoading: Boolean = false,
     canWriteToAniList: Boolean,
     holdDurationSeconds: Int,
     swipeEnabled: Boolean,
@@ -262,6 +263,7 @@ fun AnimeInfoPage(
                 sections = sections,
                 themeSongs = themeSongs,
                 isDetailLoading = isDetailLoading,
+                isFriendsLoading = isFriendsLoading,
                 canWriteToAniList = canWriteToAniList,
                 holdDurationSeconds = holdDurationSeconds,
                 swipeEnabled = swipeEnabled,

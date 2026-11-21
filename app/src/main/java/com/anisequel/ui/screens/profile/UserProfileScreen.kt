@@ -276,6 +276,7 @@ fun UserProfileScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
+    val friendsLoadingIds by detailHost.friendsLoading.collectAsStateWithLifecycle()
 
     // `rememberSaveable` keys its registry entry on the *composition slot*, not on
     // the value passed here, so an unkeyed call shares one saved tab between every
@@ -658,6 +659,7 @@ fun UserProfileScreen(
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
             friends = detailFriends[subject.media.mediaCoverKey].orEmpty(),
+            isFriendsLoading = subject.media.mediaCoverKey in friendsLoadingIds,
             isDetailLoading = detailLoading,
             // Same sheet, same access as every other host: the tab follows the
             // editor, and with no session the page is exactly what it was.

@@ -45,6 +45,55 @@ private fun style(
 )
 
 /**
+ * The same style with its leading multiplied.
+ *
+ * ## The bug this replaces
+ *
+ * `lineHeight` is a `TextUnit` in sp, and every style in [anisequelTypography] is
+ * built *at the reader's scale* - so a style's own line height already grows with
+ * Settings > Type & reading. An override written as an absolute value does not:
+ * `bodyMedium.copy(lineHeight = 22.sp)` holds 22sp for the default 14sp body text
+ * and then, at the slider's 175%, lays 24.5sp glyphs on a 22sp line. The lines
+ * overlap each other, which on a synopsis or a comment reads as a rendering fault
+ * rather than as the size the reader asked for. The same shape was in the tier
+ * tiles, the segmented bars and both hero titles.
+ *
+ * A factor of the style's own line height is the same design at 100% and stays
+ * correct at every stop, because it inherits the scale rather than replacing it.
+ * It is a function here, rather than a multiplication at each call site, so the
+ * ratio and its reason live in one place - the three call sites that had grown
+ * their own literal were each a slightly different mistake.
+ */
+internal fun TextStyle.withLeadingFactor(factor: Float): TextStyle =
+    copy(lineHeight = lineHeight * factor)
+
+/**
+ * The hero's display title: `headlineSmall`, pulled tighter in lead and tracking.
+ *
+ * Both numbers are ratios of the style's own font size, which is what makes this
+ * survive the text-size setting. They used to be absolute - `lineHeight = 30.sp`,
+ * `letterSpacing = (-0.4).sp` - so at 175% the title's glyphs grew to 38.5sp while
+ * its lines stayed 30sp apart and a three-line title overlapped itself, with the
+ * tracking still at its 100% value while every measurement around it had grown.
+ *
+ * The ratios are the original pair against `headlineSmall`'s 22sp base, so the
+ * design is identical at 100%: 30sp leading and -0.4sp tracking.
+ *
+ * Shared by the classic and Nova heroes because the two draw the same lockup, and
+ * two copies of these two numbers is how one of them would keep the old bug.
+ */
+internal fun TextStyle.asHeroTitle(): TextStyle = copy(
+    lineHeight = fontSize * HERO_TITLE_LEADING,
+    letterSpacing = fontSize * HERO_TITLE_TRACKING
+)
+
+/** `headlineSmall`'s 30sp leading as a share of its 22sp font size. */
+private const val HERO_TITLE_LEADING = 30f / 22f
+
+/** `headlineSmall`'s -0.4sp tracking as a share of its 22sp font size. */
+private const val HERO_TITLE_TRACKING = -0.4f / 22f
+
+/**
  * The Compose family for one of the platform's five generic faces.
  *
  * Kept out of [SystemFont] itself because that enum lives in `data/repository`,

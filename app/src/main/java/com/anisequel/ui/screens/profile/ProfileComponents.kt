@@ -578,7 +578,11 @@ fun FavouriteStudioRow(
                     .then(
                         if (id != null) {
                             Modifier.clickable(
-                                onClickLabel = "Open ${label ?: "studio"}",
+                                // `label` is already the non-null name - the
+                                // `?: return@forEach` above dropped nameless
+                                // studios - so the elvis that used to be here
+                                // was dead code the compiler warned about.
+                                onClickLabel = "Open $label",
                                 onClick = { onOpenStudio(id, label) }
                             )
                         } else {

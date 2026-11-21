@@ -154,6 +154,8 @@ fun SequelDetailSheet(
      * nobody, or a title nobody they follow has opened.
      */
     friends: List<MediaFriend> = emptyList(),
+    /** Whether the independent followed-users request is still in flight. */
+    isFriendsLoading: Boolean = false,
     canWriteToAniList: Boolean,
     modifier: Modifier = Modifier,
     onAddToWatching: (MissedSequel) -> Unit = {},
@@ -561,6 +563,7 @@ fun SequelDetailSheet(
                     NovaInfoPage(
                         subject = subject,
                         isDetailLoading = isDetailLoading,
+                        isFriendsLoading = isFriendsLoading,
                         canWriteToAniList = canWriteToAniList,
                         holdDurationSeconds = holdDurationSeconds,
                         swipeEnabled = swipeEnabled,
@@ -589,6 +592,7 @@ fun SequelDetailSheet(
                     AnimeInfoPage(
                         subject = subject,
                         isDetailLoading = isDetailLoading,
+                        isFriendsLoading = isFriendsLoading,
                         canWriteToAniList = canWriteToAniList,
                         holdDurationSeconds = holdDurationSeconds,
                         swipeEnabled = swipeEnabled,

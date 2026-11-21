@@ -329,7 +329,7 @@ private fun HueChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val color = DynamicThemeBuilder.parseHexColor(hex) ?: Color.Gray
+    val color = DynamicThemeBuilder.parseHexColor(hex) ?: MaterialTheme.colorScheme.surfaceContainerHigh
     val checkColor = if (ColorUtils.calculateLuminance(color.toArgb()) > 0.5f) {
         Color.Black
     } else {

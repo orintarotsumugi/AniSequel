@@ -2,6 +2,8 @@ package com.anisequel.ui.components.detail.info
 
 import android.graphics.Color as AndroidColor
 import android.view.View
+import android.view.ViewGroup
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -415,6 +417,8 @@ private fun NovaTrailerPlayer(
                 settings.loadsImagesAutomatically = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 settings.mediaPlaybackRequiresUserGesture = false
+                val chromeClient = NovaTrailerChromeClient(this)
+                webChromeClient = chromeClient
                 settings.setSupportZoom(false)
                 settings.builtInZoomControls = false
                 settings.displayZoomControls = false
@@ -430,9 +434,10 @@ private fun NovaTrailerPlayer(
                         view: WebView?,
                         request: WebResourceRequest?
                     ): Boolean = handle(playerNav = request?.url?.toString())
-
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
-                        handle(playerNav = url)
+                    // The deprecated `(WebView, String)` overload is gone rather
+                    // than suppressed: the platform stopped calling it in API 24
+                    // and `minSdk` is 31, so its `handle(playerNav = url)` was a
+                    // second entry point to the same rule that could never fire.
 
                     private fun handle(playerNav: String?): Boolean {
                         // `true` for everything: this view is a player, not a
@@ -455,15 +460,55 @@ private fun NovaTrailerPlayer(
         },
         onRelease = { view ->
             // Stop before destroy: an embed still buffering when the reader closes
-            // the viewer tears down a live media pipeline otherwise.
+            // the viewer tears down a live media pipeline otherwise. Remove a
+            // fullscreen surface first, or it would outlive its WebView in the dialog.
+            (view.webChromeClient as? NovaTrailerChromeClient)?.hideCustomView()
             view.stopLoading()
             view.destroy()
         }
     )
 }
 
-/** Where the wrapper page claims to live, so the embed has an origin. */
+/**
+ * YouTube requires the API's origin to match the wrapper's secure base URL. The
+ * old iframe omitted it, so some providers showed a player shell that never started.
+ */
 private const val NOVA_TRAILER_BASE_URL = "https://www.youtube.com/"
+private const val NOVA_TRAILER_ORIGIN_QUERY = "https%3A%2F%2Fwww.youtube.com"
+
+/** Routes YouTube's full-screen video surface above the Compose dialog. */
+@Suppress("OVERRIDE_DEPRECATION")
+private class NovaTrailerChromeClient(private val webView: WebView) : WebChromeClient() {
+    private var customView: View? = null
+    private var customViewCallback: CustomViewCallback? = null
+
+    override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+        val root = webView.rootView as? ViewGroup
+        if (root == null || customView != null) {
+            callback.onCustomViewHidden()
+            return
+        }
+        customView = view
+        customViewCallback = callback
+        root.addView(
+            view,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+    }
+
+    override fun onHideCustomView() = hideCustomView()
+
+    fun hideCustomView() {
+        val view = customView ?: return
+        (view.parent as? ViewGroup)?.removeView(view)
+        customView = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+    }
+}
 
 /** The hosts the player frame is allowed to load. */
 private val NOVA_TRAILER_HOSTS = listOf("youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com")
@@ -505,7 +550,11 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
         } else {
             append("<iframe src=\"https://www.youtube-nocookie.com/embed/")
             append(safeId)
-            append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1\"")
+            append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
+            append("&enablejsapi=1&origin=")
+            append(NOVA_TRAILER_ORIGIN_QUERY)
+            append("\"")
+            append(" referrerpolicy=\"origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
         }

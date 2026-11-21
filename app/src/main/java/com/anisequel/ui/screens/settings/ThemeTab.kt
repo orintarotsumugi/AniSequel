@@ -685,7 +685,7 @@ private fun CanvasChip(
     onClick: () -> Unit
 ) {
     val dotColor = if (hex != null) {
-        DynamicThemeBuilder.parseHexColor(hex) ?: Color.DarkGray
+        DynamicThemeBuilder.parseHexColor(hex) ?: MaterialTheme.colorScheme.surfaceContainer
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }

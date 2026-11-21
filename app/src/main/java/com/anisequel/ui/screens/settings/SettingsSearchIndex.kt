@@ -272,11 +272,10 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "display",
-                page = SettingsPage.UI,
-                interfaceSection = InterfaceSection.MOTION,
+                page = SettingsPage.DEVICE,
                 title = "Full-screen mode",
                 subtitle = "Hide the status and navigation bars",
-                eyebrow = "Interface · Motion",
+                eyebrow = "Device Manager",
                 icon = AppVectorIcons.DevicePhone,
                 keywords = "immersive display bars edge to edge",
                 priority = 10

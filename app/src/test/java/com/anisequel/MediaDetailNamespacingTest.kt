@@ -1,6 +1,7 @@
 package com.anisequel
 
 import com.anisequel.data.model.MediaCoverKey
+import com.anisequel.data.model.MediaFriend
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
@@ -8,12 +9,14 @@ import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.viewmodel.MediaDetailStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -252,6 +255,34 @@ class MediaDetailNamespacingTest {
         assertEquals(2, repository.requests.size)
     }
 
+    /**
+     * Friends has its own request and must own its own loading state. A cached
+     * detail makes `loading` false while this request is still on the wire; using
+     * the detail flag for the Info card made the Friends section disappear in
+     * precisely that common case.
+     */
+    @Test
+    fun `friends loading remains visible after cached detail has finished`() = runTest {
+        val friendAnswer = CompletableDeferred<Result<List<MediaFriend>>>()
+        val repository = RecordingRepository(friendsAnswer = friendAnswer)
+        val store = storeFor(repository, testScheduler)
+        val key = MediaCoverKey("ANIME", 1)
+
+        store.load(1, "ANIME")
+        advanceUntilIdle()
+        assertFalse("the detail request has finished", key in store.loading.value)
+
+        store.loadFriends(1, "ANIME")
+        runCurrent()
+
+        assertTrue("the separate friends request is still pending", key in store.friendsLoading.value)
+        assertFalse("friends loading must not depend on detail loading", key in store.loading.value)
+
+        friendAnswer.complete(Result.success(emptyList()))
+        advanceUntilIdle()
+        assertFalse("the friends marker clears when its request completes", key in store.friendsLoading.value)
+    }
+
     // ---- helpers -----------------------------------------------------------------
 
     /**
@@ -301,7 +332,8 @@ class MediaDetailNamespacingTest {
          * store does when one gets past that, which is the shape that used to
          * close the app.
          */
-        private val throwOnDetail: Boolean = false
+        private val throwOnDetail: Boolean = false,
+        private val friendsAnswer: CompletableDeferred<Result<List<MediaFriend>>>? = null
     ) : AniListRepository {
         val requests = mutableListOf<Pair<String?, Int>>()
 
@@ -317,6 +349,12 @@ class MediaDetailNamespacingTest {
                 )
             )
         }
+
+        override suspend fun getMediaFriends(
+            mediaId: Int,
+            mediaType: String?,
+            forceRefresh: Boolean
+        ): Result<List<MediaFriend>> = friendsAnswer?.await() ?: Result.success(emptyList())
 
         override suspend fun getViewer(): Result<ViewerProfile> = failure()
         override suspend fun getUserByName(userName: String): Result<ViewerProfile> = failure()

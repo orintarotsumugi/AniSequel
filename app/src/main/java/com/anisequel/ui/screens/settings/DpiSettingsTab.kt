@@ -120,13 +120,20 @@ fun DpiSettingsTab(
             subtitle = "What the number actually changes"
         ) {
             CollapsibleText(
+                // The direction is the whole point of the paragraph, and it was
+                // written backwards: it said a higher dpi fits *more* on the screen.
+                // Density is pixels per dp, so raising it makes every dp - and every
+                // card, caption and gap drawn in one - physically larger, which fits
+                // less. A reader who followed the old sentence to make the app bigger
+                // moved the slider the wrong way and got a finer page.
                 text = "Every length in the app is a dp, and a dp is only as large as " +
-                    "the density says it is. A higher dpi fits more on the screen; a " +
-                    "lower one draws text, cards and gaps larger. Automatic hands that " +
-                    "decision back to the device, the same way Android's own display " +
-                    "density override does when it is left unset. Your phone reports " +
-                    "$deviceDpi dpi; ${DisplayDpi.DEFAULT_DPI} dpi is the number a fresh " +
-                    "install uses in Manual.",
+                    "the density says it is. A higher dpi draws text, cards and gaps " +
+                    "larger, so less fits on the screen; a lower one makes everything " +
+                    "finer and fits more. Automatic hands that decision back to the " +
+                    "device, the same way Android's own display density override does " +
+                    "when it is left unset. Your phone reports $deviceDpi dpi; " +
+                    "${DisplayDpi.DEFAULT_DPI} dpi is the number a fresh install uses " +
+                    "in Manual.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

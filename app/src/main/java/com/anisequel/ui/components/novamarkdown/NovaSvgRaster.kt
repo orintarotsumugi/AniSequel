@@ -125,8 +125,12 @@ internal class NovaSvgCaptureSession {
     /** Set by `onRelease`, which runs before the view is destroyed. */
     var released = false
 
-    fun schedule(view: View, onCaptured: (Bitmap) -> Unit) {
-        if (released) return
+    fun schedule(
+        view: View,
+        onCaptured: (Bitmap) -> Unit,
+        onExhausted: () -> Unit
+    ) {
+        if (released || attempts >= CAPTURE_ATTEMPTS) return
         val delay = if (attempts == 0) 0L else CAPTURE_RETRY_DELAY_MS
         view.postDelayed(
             {
@@ -136,7 +140,9 @@ internal class NovaSvgCaptureSession {
                 if (bitmap != null) {
                     onCaptured(bitmap)
                 } else if (attempts < CAPTURE_ATTEMPTS) {
-                    schedule(view, onCaptured)
+                    schedule(view, onCaptured, onExhausted)
+                } else {
+                    onExhausted()
                 }
             },
             delay

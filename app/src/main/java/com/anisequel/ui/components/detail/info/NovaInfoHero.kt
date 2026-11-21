@@ -71,7 +71,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
@@ -100,6 +99,7 @@ import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.asHeroTitle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
 
@@ -148,7 +148,10 @@ internal fun NovaInfoHero(
     // The classic hero's hold-to-copy shortcut, kept: the title is the one thing a
     // reader takes out of this page, and the full name sheet in Extras is the
     // discoverable path rather than a replacement for the gesture.
-    var titleCopied by remember(media.id) { mutableStateOf(false) }
+    // Keyed on the type as well as the id, like `posterBounds` above: following a
+    // relation across the anime/manga boundary reaches a different title that can
+    // share this number, and the left-behind confirmation must not follow it.
+    var titleCopied by remember(media.id, media.type) { mutableStateOf(false) }
     // `expressiveHoldGesture` keeps the first lambda it saw; the sheet can swap
     // the list node for the detail node under a live hero, so read the title
     // through state rather than capturing it.
@@ -503,10 +506,7 @@ private fun HeroLockup(
                 ) {
                     Text(
                         text = media.displayName,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            lineHeight = 30.sp,
-                            letterSpacing = (-0.4).sp
-                        ),
+                        style = MaterialTheme.typography.headlineSmall.asHeroTitle(),
                         color = titleInk,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 3,

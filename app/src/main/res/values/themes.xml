@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <!-- DeviceDefault's accent varies by OEM and looked unrelated to the app's blue. -->
+        <item name="android:colorAccent">@color/widget_accent</item>
+        <item name="android:colorControlHighlight">@color/widget_highlight</item>
+    </style>
 </resources>
