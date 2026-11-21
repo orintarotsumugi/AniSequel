@@ -554,7 +554,7 @@ private fun readNovaEmphasis(
         2 -> NovaInline.Bold(children)
         else -> NovaInline.BoldItalic(children)
     }
-    return token to closeAt + 1
+    return token to closeAt + size
 }
 
 private fun findNovaEmphasisClose(
