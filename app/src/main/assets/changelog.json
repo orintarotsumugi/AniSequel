@@ -26,6 +26,18 @@
         {
           "title": "The Info page settles instead of jumping",
           "detail": "Sections that arrive with the title details - categories, links, cast, relations, crew and rankings - used to appear in one frame and shove everything below them up the page. They now take their place on the app's shared list spring, and a Friends card that turns out empty leaves without a snap."
+        },
+        {
+          "title": "The demo opens on Android 12 and 13 again",
+          "detail": "The demo's sample dates were built with a date call that only exists on Android 14 and newer, so opening demo mode on Android 12 or 13 stopped the app. It now uses the same arithmetic through an API every supported version has."
+        },
+        {
+          "title": "Widget data stays out of backups",
+          "detail": "The rule that keeps the widget store - your handle, your counts and the titles you are watching - out of cloud backups and device transfers named a backup domain Android does not recognise, so it was silently ignored. The rule is valid now, and a test keeps it that way."
+        },
+        {
+          "title": "Dates follow the app's language",
+          "detail": "The activity calendar's day labels, a studio's favourites count and the schedule's airing labels read the device language once and kept it, so switching the app language left those three in the old one. They now read the language the current screen is drawn in."
         }
       ]
     },

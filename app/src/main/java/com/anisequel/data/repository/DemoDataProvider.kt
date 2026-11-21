@@ -321,8 +321,14 @@ object DemoDataProvider {
      * Same reasoning as the computed `airingAt` further up.
      */
     private fun daysAgo(days: Long): FuzzyDate {
-        val instant = java.time.Instant.now().minusSeconds(days * 24L * 60L * 60L)
-        val date = java.time.LocalDate.ofInstant(instant, java.time.ZoneOffset.UTC)
+        // `LocalDate.now(zone).minusDays(n)` rather than
+        // `LocalDate.ofInstant(Instant.now().minusSeconds(...))`: the `ofInstant`
+        // overloads arrived with Java 9 and Android only exposes them from API 34,
+        // while this app's floor is 31 - so the demo crashed with
+        // `NoSuchMethodError` on Android 12 and 13, the two versions the floor
+        // exists to keep. `now`/`minusDays` have been there since API 26 and are
+        // the same arithmetic in UTC, which has no daylight saving to cross.
+        val date = java.time.LocalDate.now(java.time.ZoneOffset.UTC).minusDays(days)
         return FuzzyDate(year = date.year, month = date.monthValue, day = date.dayOfMonth)
     }
 }

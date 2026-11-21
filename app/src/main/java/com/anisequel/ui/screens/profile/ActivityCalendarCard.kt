@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,7 +58,6 @@ import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
-import java.util.Locale
 
 private val CellSize = 13.dp
 private val CellGap = 3.dp
@@ -218,6 +218,12 @@ fun ActivityCalendarCard(
 @Composable
 private fun WeekBreakdown(week: List<ActivityDay>) {
     val maxCount = week.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+    // The configuration's locale, not `Locale.getDefault()`: the latter is a plain
+    // static read, so a reader who changes the app's language while it is open kept
+    // last week's language in this card until something else forced a
+    // recomposition. `LocalConfiguration` is the observable one, and it is what
+    // recomposes this row when the locale changes.
+    val locale = LocalConfiguration.current.locales[0]
 
     Column(
         modifier = Modifier
@@ -227,7 +233,7 @@ private fun WeekBreakdown(week: List<ActivityDay>) {
     ) {
         week.forEach { day ->
             val label = LocalDate.ofEpochDay(day.epochDay).dayOfWeek
-                .getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                .getDisplayName(TextStyle.SHORT, locale)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = label,
@@ -486,9 +492,11 @@ private fun ActivityDaySummary(day: ActivityDay?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
+            // The same observable locale `WeekBreakdown` uses; see the note there.
+            val locale = LocalConfiguration.current.locales[0]
             Text(
                 text = LocalDate.ofEpochDay(day.epochDay)
-                    .format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())),
+                    .format(DateTimeFormatter.ofPattern("EEE, MMM d", locale)),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)

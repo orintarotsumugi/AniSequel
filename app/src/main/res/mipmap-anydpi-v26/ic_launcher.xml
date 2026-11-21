@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    The `-v26` on this folder is load-bearing, and lint calls it dead weight.
+
+    `ObsoleteSdkInt` reports the qualifier as unnecessary because `minSdk` is 31,
+    and the reasoning is right about the *attribute*: no device this app installs
+    on is below API 26. Merging the folder into `mipmap-anydpi` was tried, and it
+    broke the build rather than the drawing - AAPT then failed to resolve
+    `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round` outright, because an
+    `<adaptive-icon>` document needs a platform-qualified folder to be compiled
+    against the API level that defines the element. So the warning is not a chore
+    to do; it is the one lint note in this repository that is wrong, and this
+    comment is here so the next reader does not spend the same twenty minutes on it.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />

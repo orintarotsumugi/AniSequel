@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,7 +73,6 @@ import com.anisequel.ui.viewmodel.toMediaNode
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * The viewer's own airing and announced titles, as a schedule.
@@ -449,10 +449,11 @@ private fun ScheduleRow(
 @Composable
 private fun ScheduleDatePill(entry: ArrivingEntry) {
     val nextAiringAt = entry.nextAiringAt
+    val airingFormatter = rememberAiringDateFormatter()
     val text = when {
         entry.isAiring && nextAiringAt != null -> {
             val episode = entry.nextEpisodeNumber?.let { "Ep $it · " }.orEmpty()
-            "$episode${airingDate(nextAiringAt)}"
+            "$episode${airingDate(nextAiringAt, airingFormatter)}"
         }
 
         entry.isAiring -> "Airing now"
@@ -511,10 +512,24 @@ private fun progressLabel(entry: ArrivingEntry): String {
     }
 }
 
-private val AIRING_DATE: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("EEE d MMM · HH:mm", Locale.getDefault())
+private const val AIRING_DATE_PATTERN = "EEE d MMM · HH:mm"
 
-private fun airingDate(epochSeconds: Long): String =
+/**
+ * One formatter per locale, remembered for as long as that locale is current.
+ *
+ * The formatter used to be a file-level `val` built with `Locale.getDefault()`.
+ * That freezes the locale at class-load, so a reader who switched the app's language
+ * while it was open kept the schedule's date pill in the old one for the rest of the
+ * process - and lint is right that a `Locale.getDefault()` in a constant is the shape
+ * of that bug. Keyed on the observable configuration locale, a change re-derives it.
+ */
+@Composable
+private fun rememberAiringDateFormatter(): DateTimeFormatter {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(locale) { DateTimeFormatter.ofPattern(AIRING_DATE_PATTERN, locale) }
+}
+
+private fun airingDate(epochSeconds: Long, formatter: DateTimeFormatter): String =
     Instant.ofEpochSecond(epochSeconds)
         .atZone(ZoneId.systemDefault())
-        .format(AIRING_DATE)
+        .format(formatter)
