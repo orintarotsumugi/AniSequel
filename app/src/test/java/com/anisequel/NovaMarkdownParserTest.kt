@@ -352,6 +352,36 @@ class NovaMarkdownParserTest {
     }
 
     @Test
+    fun `an anchor spanning an escape line still makes a link`() {
+        val blocks = NovaMarkdown.parse(
+            """
+            <a href="https://discord.com/users/1">
+            <escape>literal</escape>
+            </a>
+            """.trimIndent()
+        )
+
+        // `<escape>` is a block start, but inside an open anchor its line belongs
+        // to the link. Dropping it used to leave the `<a>` as dead text and the
+        // literal body as a separate paragraph.
+        val link = (blocks.single() as NovaBlock.Paragraph)
+            .inlines.filterIsInstance<NovaInline.Link>().single()
+
+        assertEquals("https://discord.com/users/1", link.url)
+        assertEquals("literal", link.children.novaPlainText().trim())
+    }
+
+    @Test
+    fun `text after an escape close keeps its leading space`() {
+        val blocks = NovaMarkdown.parse("<escape>literal</escape> and more")
+
+        assertEquals(
+            "literal and more",
+            (blocks.single() as NovaBlock.Paragraph).inlines.novaPlainText()
+        )
+    }
+
+    @Test
     fun `a lookalike close tag does not cut escape content short`() {
         val inlines = NovaMarkdown.parseInlines("<escape>a</escaped> b</escape>")
 

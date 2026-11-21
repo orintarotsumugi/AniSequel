@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -114,28 +115,27 @@ private fun NovaImageContent(
     // A declared size is also a decode budget. Without this, five 50dp icons are
     // decoded at whatever the source file happens to be - the social art on the
     // profiles that exposed this bug is several times the 50x60 it is drawn at.
+    // SVGs go through the WebView below, so there is no Coil request to size.
     val model = remember(context, url, width, height, density, screenWidthDp) {
-        // A declared 2300dp banner must not become a 2300dp decode. The screen
-        // width is a safe upper bound for every surface that draws this image;
-        // the actual card may be narrower still, and AsyncImage's own constraint
-        // sizing handles that when no request size is supplied.
-        val widthPx = novaImageWidthDp(width)
-            ?.coerceAtMost(screenWidthDp)
-            ?.let { with(density) { it.dp.roundToPx() } }
-        val heightPx = novaImageHeightDp(height)?.let { with(density) { it.dp.roundToPx() } }
-        if (widthPx == null && heightPx == null) {
-            url
-        } else {
-            ImageRequest.Builder(context)
-                .data(url)
-                .size(
-                    Size(
-                        widthPx?.let { Dimension(it) } ?: Size.ORIGINAL.width,
-                        heightPx?.let { Dimension(it) } ?: Size.ORIGINAL.height
+        if (isNovaSvgUrl(url)) return@remember url
+
+        val (decodeWidthDp, decodeHeightDp) = novaImageDecodeDp(width, height, screenWidthDp)
+        ImageRequest.Builder(context)
+            .data(url)
+            // A slow CDN should fade the artwork in rather than pop it over the
+            // placeholder; this adds no extra request.
+            .crossfade(true)
+            .apply {
+                if (decodeWidthDp != null || decodeHeightDp != null) {
+                    size(
+                        Size(
+                            decodeWidthDp.toDecodeDimension(density),
+                            decodeHeightDp.toDecodeDimension(density)
+                        )
                     )
-                )
-                .build()
-        }
+                }
+            }
+            .build()
     }
 
     val fillsBox = fillWidth || novaImageWidthPercent(width) != null
@@ -168,6 +168,11 @@ private fun NovaImageContent(
         }
     }
 }
+
+/** An undefined budget tells Coil to fit whichever dimension the view leaves free. */
+private fun Int?.toDecodeDimension(density: Density): Dimension =
+    this?.let { with(density) { it.dp.roundToPx() } }?.let(::Dimension)
+        ?: Size.ORIGINAL.width
 
 /**
  * The box an image occupies, before its own content is drawn.

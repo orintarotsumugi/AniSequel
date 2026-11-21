@@ -208,6 +208,25 @@ internal fun novaImageWidthPercent(width: String?): Float? {
     return percent.takeIf { it > 0 }?.coerceAtMost(100)?.div(100f)
 }
 
+/**
+ * The dp decode budget for a declared image size, as (width, height).
+ *
+ * A percentage has no column to resolve against here, so the screen is the
+ * upper bound: a `100%` banner never decodes wider than the device. A size-less
+ * image gets no budget at all and lets Coil measure the view instead.
+ */
+internal fun novaImageDecodeDp(
+    width: String?,
+    height: String?,
+    screenWidthDp: Int
+): Pair<Int?, Int?> {
+    val widthDp = (novaImageWidthDp(width)
+        ?: novaImageWidthPercent(width)?.let { (screenWidthDp * it).toInt().coerceAtLeast(1) })
+        ?.coerceAtMost(screenWidthDp)
+    val heightDp = novaImageHeightDp(height)
+    return widthDp to heightDp
+}
+
 /** What a tap on [image] opens: the author's target, or the picture itself. */
 internal fun novaImageTapUrl(image: NovaBlock.Image): String =
     image.targetUrl ?: image.url

@@ -158,7 +158,9 @@ private fun novaAnchorDelta(line: String): Int =
  * heading used to turn the entire rest of the bio into one literal paragraph.
  */
 private fun continuesNovaAnchor(trimmed: String): Boolean =
-    standaloneNovaImage(trimmed) != null || parseNovaVideo(trimmed) != null
+    standaloneNovaImage(trimmed) != null ||
+        parseNovaVideo(trimmed) != null ||
+        ESCAPE_OPEN.matches(trimmed)
 
 private fun startsNovaTextBlock(raw: String, trimmed: String): Boolean =
     FENCE.matches(trimmed) ||
@@ -561,7 +563,9 @@ private fun readNovaEscapeBlock(
     }
 
     val inlines = mutableListOf<NovaInline>(NovaInline.Text(literal.toString().trim('\n')))
-    if (rest.isNotBlank()) inlines += parseNovaInlineLine(rest.trim())
+    // Keep the leading space of text after `</escape>`: trimming it glues the
+    // two halves into one word ("literaland more").
+    if (rest.isNotBlank()) inlines += parseNovaInlineLine(rest.trimEnd())
     return listOf(NovaBlock.Paragraph(inlines, align)) to next
 }
 

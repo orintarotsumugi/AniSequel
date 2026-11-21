@@ -6,6 +6,7 @@ import com.anisequel.ui.components.novamarkdown.NovaInline
 import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.containsNovaImage
 import com.anisequel.ui.components.novamarkdown.nestedInlines
+import com.anisequel.ui.components.novamarkdown.novaImageDecodeDp
 import com.anisequel.ui.components.novamarkdown.normalizeNovaImageHeight
 import com.anisequel.ui.components.novamarkdown.normalizeNovaImageWidth
 import org.junit.Assert.assertEquals
@@ -138,6 +139,40 @@ class BioImageLoadingTest {
 
         assertEquals("50", image.width)
         assertEquals("60", image.height)
+    }
+
+    @Test
+    fun `an unreadable attribute falls back to the inline style`() {
+        val image = NovaMarkdown.parse(
+            "<img width='auto' style='width: 50px; height: 60px' src='https://x/icon.png'>"
+        ).single() as NovaBlock.Image
+
+        // `width="auto"` is not a size. Taking the attribute's raw value and
+        // stopping there threw away a perfectly good `width: 50px` in the style.
+        assertEquals("50", image.width)
+        assertEquals("60", image.height)
+    }
+
+    @Test
+    fun `important and spaced units are still sizes`() {
+        val image = NovaMarkdown.parse(
+            "<img src='https://x/icon.png' style='width: 50px !important; height: 60px'>"
+        ).single() as NovaBlock.Image
+
+        assertEquals("50", image.width)
+        assertEquals("60", image.height)
+        assertEquals("50%", normalizeNovaImageWidth("50 %"))
+    }
+
+    @Test
+    fun `a percentage width gets a decode budget but a size-less image does not`() {
+        // A 100% banner used to be decoded at the source resolution because only
+        // plain-number widths were passed to Coil. The screen is an upper bound.
+        assertEquals(360 to null, novaImageDecodeDp("100%", null, 360))
+        assertEquals(90 to 60, novaImageDecodeDp("25%", "60", 360))
+        assertEquals(220 to 60, novaImageDecodeDp("220", "60", 360))
+        assertEquals(360 to null, novaImageDecodeDp("2300", null, 360))
+        assertEquals(null to null, novaImageDecodeDp(null, null, 360))
     }
 
     @Test

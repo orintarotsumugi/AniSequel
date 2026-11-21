@@ -407,14 +407,26 @@ internal fun htmlNovaImage(attrs: String): NovaInline.Image? {
     return NovaInline.Image(
         url = novaAbsoluteUrl(src),
         alt = novaHtmlAttribute(attrs, "alt")?.trim()?.takeIf { it.isNotEmpty() },
-        width = normalizeNovaImageWidth(
-            novaHtmlAttribute(attrs, "width") ?: novaHtmlStyleLength(attrs, STYLE_WIDTH)
-        ),
-        height = normalizeNovaImageHeight(
-            novaHtmlAttribute(attrs, "height") ?: novaHtmlStyleLength(attrs, STYLE_HEIGHT)
-        )
+        width = novaImageAttributeLength(attrs, "width", STYLE_WIDTH, allowPercent = true),
+        height = novaImageAttributeLength(attrs, "height", STYLE_HEIGHT, allowPercent = false)
     )
 }
+
+/**
+ * The size an `width=`/`height=` attribute or an inline style asks for.
+ *
+ * A declared attribute that is unreadable (`width="auto"`, `width="50 %"`) is not
+ * a size, so the style still gets a say. Taking the first *raw* value instead
+ * threw the style away whenever the attribute was present but useless.
+ */
+private fun novaImageAttributeLength(
+    attrs: String,
+    attribute: String,
+    stylePattern: Regex,
+    allowPercent: Boolean
+): String? =
+    normalizeNovaImageLength(novaHtmlAttribute(attrs, attribute), allowPercent)
+        ?: normalizeNovaImageLength(novaHtmlStyleLength(attrs, stylePattern), allowPercent)
 
 /** A `width:`/`height:` value in the image's inline `style`, if it has one. */
 private fun novaHtmlStyleLength(attrs: String, pattern: Regex): String? {
@@ -445,13 +457,16 @@ internal fun normalizeNovaImageHeight(raw: String?): String? {
 }
 
 private fun normalizeNovaImageLength(raw: String?, allowPercent: Boolean): String? {
-    val value = raw?.trim()?.lowercase(Locale.ROOT)?.removeSuffix("px")
+    val value = raw?.trim()?.lowercase(Locale.ROOT)
+        ?.substringBefore('!') // `width: 50px !important`
+        ?.trim()
+        ?.removeSuffix("px")
         ?.takeIf { it.isNotEmpty() }
         ?: return null
     if (value == "auto") return null
     val percent = value.endsWith("%")
     if (percent && !allowPercent) return null
-    val number = (if (percent) value.dropLast(1) else value).toIntOrNull() ?: return null
+    val number = (if (percent) value.dropLast(1) else value).trim().toIntOrNull() ?: return null
     if (number <= 0) return null
     return if (percent) "$number%" else number.toString()
 }
