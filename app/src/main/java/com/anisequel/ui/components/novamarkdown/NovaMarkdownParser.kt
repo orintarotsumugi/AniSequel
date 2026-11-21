@@ -256,7 +256,7 @@ internal fun parseNovaBlocks(
         }
 
         // ---- setext heading ------------------------------------------------
-        val underlined = lines.getOrNulli + 1?.trim()
+        val underlined = lines.getOrNull(i + 1)?.trim()
         val isTitleLine = !startsNovaBlock(lines, i) && !HORIZONTAL_RULE.matches(trimmed)
         if (underlined != null && isTitleLine && SETEXT_H1.matches(underlined)) {
             out += NovaBlock.Heading(1, parseNovaInlineLine(trimmed), align)
