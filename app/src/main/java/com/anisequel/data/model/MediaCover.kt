@@ -20,7 +20,7 @@ import java.util.Locale
  * linking an anime and a manga with a shared id shows the same poster twice.
  * Nothing about that looks broken. It looks correct.
  *
- * Filtering character/staff/studio/user out of the key (`mediaCoverKeysIn` in the
+ * Filtering character/staff/studio/user out of the key (`novaMediaCoverKeysIn` in the
  * markdown package) does not help: those are filtered because they name a
  * different thing entirely, and anime vs manga are filtered for the opposite
  * reason - they *are* media, in different namespaces.

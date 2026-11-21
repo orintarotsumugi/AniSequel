@@ -1,9 +1,12 @@
 package com.anisequel
 
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.InlineToken
-import com.anisequel.ui.components.markdown.MarkdownNode
-import com.anisequel.ui.components.markdown.containsEmbeddedImage
+import com.anisequel.ui.components.novamarkdown.NovaAlign
+import com.anisequel.ui.components.novamarkdown.NovaBlock
+import com.anisequel.ui.components.novamarkdown.NovaInline
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.containsNovaImage
+import com.anisequel.ui.components.novamarkdown.nestedInlines
+import com.anisequel.ui.components.novamarkdown.normalizeNovaImageWidth
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -46,10 +49,10 @@ class BioImageLoadingTest {
 
     @Test
     fun `an HTML image keeps the width the API wrote`() {
-        val nodes = AniListMarkdownParser.parse(
+        val image = NovaMarkdown.parse(
             "<img width='220' src='https://s4.anilist.co/file/a.jpg' alt='card'>"
-        )
-        val image = nodes.single() as MarkdownNode.ImageBlock
+        ).single() as NovaBlock.Image
+
         assertEquals("https://s4.anilist.co/file/a.jpg", image.url)
         assertEquals("card", image.alt)
         assertEquals("220", image.width)
@@ -59,36 +62,40 @@ class BioImageLoadingTest {
     fun `a centred HTML banner keeps its percent`() {
         // The multi-line form the API uses for a profile banner. Losing `100%` is what
         // made a full-bleed banner arrive at whatever the size-less default is.
-        val nodes = AniListMarkdownParser.parse(
+        val image = NovaMarkdown.parse(
             """
             <center>
             <img width="100%" src="https://s4.anilist.co/file/card.svg">
             </center>
             """.trimIndent()
-        )
-        val block = nodes.first() as MarkdownNode.CenteredBlock
-        val image = block.children.single() as MarkdownNode.ImageBlock
+        ).single() as NovaBlock.Image
+
         assertEquals("100%", image.width)
+        assertEquals(NovaAlign.Center, image.align)
     }
 
     @Test
     fun `a banner written on one line keeps its size inside the sentence`() {
         // `<center>` and `</center>` flanking the tag on the *same* line is not the
-        // block form above, so the image arrives as an inline token instead. The size
-        // still has to survive, because inline images are drawn through the same width
-        // rule and a lost size here is the same full-column slab.
-        val nodes = AniListMarkdownParser.parse(
+        // block form above, so the image arrives through the single-line centre
+        // branch. The size still has to survive, because block and inline images are
+        // drawn through the same width rule and a lost size here is the same
+        // full-column slab.
+        val image = NovaMarkdown.parse(
             "<center><img width='100%' src='https://s4.anilist.co/file/card.jpg'></center>"
-        )
-        val paragraph = nodes.first { it is MarkdownNode.Paragraph } as MarkdownNode.Paragraph
-        assertEquals("100%", paragraph.inlines.images().single().width)
+        ).single() as NovaBlock.Image
+
+        assertEquals("100%", image.width)
+        assertEquals(NovaAlign.Center, image.align)
     }
 
     @Test
     fun `a sized image between two words keeps its size too`() {
-        val nodes = AniListMarkdownParser.parse("Look <img width=220px src='https://x/a.gif'> here")
-        val paragraph = nodes.single() as MarkdownNode.Paragraph
+        val paragraph = NovaMarkdown.parse(
+            "Look <img width=220px src='https://x/a.gif'> here"
+        ).single() as NovaBlock.Paragraph
         val image = paragraph.inlines.images().single()
+
         // `px` is the browser's spelling and this app's sizes are dp numbers, so the
         // unit is stripped rather than carried into a clamp that cannot read it.
         assertEquals("220", image.width)
@@ -104,7 +111,8 @@ class BioImageLoadingTest {
 
             img220(https://x/c.gif)
         """.trimIndent()
-        val widths = imagesIn(AniListMarkdownParser.parse(bio)).map { it.width }
+        val widths = imagesIn(NovaMarkdown.parse(bio)).map { it.width }
+
         // The block banner at 100%, then the two in the sentence - the markdown image
         // with no size asked for, which is the file's own size, and the HTML one at
         // 220 - then the trailing strip. Four images, four answers.
@@ -115,10 +123,10 @@ class BioImageLoadingTest {
     fun `a width inside the image URL is not the image's size`() {
         // Query strings carry `width=` too, and an attribute search that takes the
         // first match in the tag reads the CDN's parameter as the author's size.
-        val nodes = AniListMarkdownParser.parse(
+        val image = NovaMarkdown.parse(
             "<img src='https://s4.anilist.co/file/a.jpg?width=100' width='220'>"
-        )
-        val image = nodes.single() as MarkdownNode.ImageBlock
+        ).single() as NovaBlock.Image
+
         assertEquals("220", image.width)
         assertEquals("https://s4.anilist.co/file/a.jpg?width=100", image.url)
     }
@@ -128,15 +136,15 @@ class BioImageLoadingTest {
         // `auto`, zero, negative and nonsense all mean "the author did not mean a
         // number here", and the renderer's size-less branch is what the site does with
         // them. Clamping `0` to `1` would draw a line of nothing and call it a picture.
-        assertNull(AniListMarkdownParser.htmlImageWidth("auto"))
-        assertNull(AniListMarkdownParser.htmlImageWidth("0"))
-        assertNull(AniListMarkdownParser.htmlImageWidth("-5"))
-        assertNull(AniListMarkdownParser.htmlImageWidth("wide"))
-        assertNull(AniListMarkdownParser.htmlImageWidth(null))
-        assertNull(AniListMarkdownParser.htmlImageWidth("   "))
-        assertEquals("220", AniListMarkdownParser.htmlImageWidth(" 220 "))
-        assertEquals("220", AniListMarkdownParser.htmlImageWidth("220PX"))
-        assertEquals("50%", AniListMarkdownParser.htmlImageWidth("50%"))
+        assertNull(normalizeNovaImageWidth("auto"))
+        assertNull(normalizeNovaImageWidth("0"))
+        assertNull(normalizeNovaImageWidth("-5"))
+        assertNull(normalizeNovaImageWidth("wide"))
+        assertNull(normalizeNovaImageWidth(null))
+        assertNull(normalizeNovaImageWidth("   "))
+        assertEquals("220", normalizeNovaImageWidth(" 220 "))
+        assertEquals("220", normalizeNovaImageWidth("220PX"))
+        assertEquals("50%", normalizeNovaImageWidth("50%"))
     }
 
     // endregion
@@ -146,14 +154,15 @@ class BioImageLoadingTest {
     fun `a GIF inside a bold run is an embedded image`() {
         // The shape a bio's bold heading line produces. Answering false here is what
         // made the paragraph print the alt text instead of the animation.
-        val nodes = AniListMarkdownParser.parse("**![banner](https://x/a.gif)**")
-        assertTrue(nodes.containsEmbeddedImage())
-        val paragraph = nodes.single() as MarkdownNode.Paragraph
-        assertTrue(paragraph.inlines.containsEmbeddedImage())
-        val bold = paragraph.inlines.single() as InlineToken.Bold
+        val nodes = NovaMarkdown.parse("**![banner](https://x/a.gif)**")
+
+        assertTrue(nodes.containsNovaImage())
+        val paragraph = nodes.single() as NovaBlock.Paragraph
+        assertTrue(paragraph.inlines.containsNovaImage())
+        val bold = paragraph.inlines.single() as NovaInline.Bold
         assertTrue(
             "the image is one level down, inside the run",
-            bold.children.any { it is InlineToken.Image }
+            bold.children.any { it is NovaInline.Image }
         )
     }
 
@@ -165,15 +174,17 @@ class BioImageLoadingTest {
             "[![cover](https://x/a.gif)](https://anilist.co/anime/1)",
             "**![a](https://x/a.gif)** and words"
         ).forEach { bio ->
-            val nodes = AniListMarkdownParser.parse(bio)
-            assertTrue("'$bio' carries a bitmap at some depth", nodes.containsEmbeddedImage())
+            val nodes = NovaMarkdown.parse(bio)
+
+            assertTrue("'$bio' carries a bitmap at some depth", nodes.containsNovaImage())
         }
     }
 
     @Test
     fun `text without an image is still text`() {
-        val nodes = AniListMarkdownParser.parse("**just words**, and [a link](https://x)")
-        assertFalse(nodes.containsEmbeddedImage())
+        val nodes = NovaMarkdown.parse("**just words**, and [a link](https://x)")
+
+        assertFalse(nodes.containsNovaImage())
     }
 
     // endregion
@@ -187,10 +198,11 @@ class BioImageLoadingTest {
             "> ![quoted](https://x/a.gif)",
             "~~~![span](https://x/a.gif)~~~"
         ).forEach { bio ->
-            val nodes = AniListMarkdownParser.parse(bio)
+            val nodes = NovaMarkdown.parse(bio)
+
             assertTrue(
                 "'$bio' hides its image in a child list, not in a top-level paragraph",
-                nodes.containsEmbeddedImage()
+                nodes.containsNovaImage()
             )
         }
     }
@@ -202,9 +214,9 @@ class BioImageLoadingTest {
         // neither is a `Text` that cannot hold a picture, and reporting them would drop
         // the "Show more" from a long hall-of-fame bio for no reason.
         assertFalse(
-            AniListMarkdownParser.parse("https://anilist.co/anime/128893").containsEmbeddedImage()
+            NovaMarkdown.parse("https://anilist.co/anime/128893").containsNovaImage()
         )
-        assertFalse(AniListMarkdownParser.parse("youtube(abc1234)").containsEmbeddedImage())
+        assertFalse(NovaMarkdown.parse("youtube(abc1234)").containsNovaImage())
     }
 
     // endregion
@@ -215,30 +227,28 @@ class BioImageLoadingTest {
      * A bio mixes the two: a banner on its own line and a GIF between two words. The
      * size has to survive down both paths, so this walks both. Writing the walk here
      * rather than reusing the production one is the point: if the two disagree about
-     * where an image can hide, [containsEmbeddedImage] is wrong too, and a second walk
+     * where an image can hide, [containsNovaImage] is wrong too, and a second walk
      * is what notices.
      */
-    private fun imagesIn(nodes: List<MarkdownNode>): List<InlineToken.Image> {
-        val out = mutableListOf<InlineToken.Image>()
+    private fun imagesIn(nodes: List<NovaBlock>): List<NovaInline.Image> {
+        val out = mutableListOf<NovaInline.Image>()
         nodes.forEach { node ->
             when (node) {
                 // A block image is normalised into the inline shape here, so one list
                 // holds both kinds and the sizes can be compared across them.
-                is MarkdownNode.ImageBlock ->
-                    out += InlineToken.Image(node.url, node.alt, node.width)
-                is MarkdownNode.CenteredBlock -> out += imagesIn(node.children)
-                is MarkdownNode.Blockquote -> {
-                    out += node.inlines.images()
-                    out += imagesIn(node.blocks)
+                is NovaBlock.Image ->
+                    out += NovaInline.Image(node.url, node.alt, node.width)
+
+                is NovaBlock.Paragraph -> out += node.inlines.images()
+                is NovaBlock.Heading -> out += node.inlines.images()
+                is NovaBlock.Quote -> out += imagesIn(node.blocks)
+                is NovaBlock.Spoiler -> out += imagesIn(node.blocks)
+                is NovaBlock.BulletList -> node.items.forEach { out += imagesIn(it.blocks) }
+                is NovaBlock.Table -> {
+                    node.headers.forEach { out += it.inlines.images() }
+                    node.rows.forEach { row -> row.forEach { out += it.inlines.images() } }
                 }
-                is MarkdownNode.SpoilerBlock -> {
-                    out += node.inlines.images()
-                    out += imagesIn(node.blocks)
-                }
-                is MarkdownNode.Paragraph -> out += node.inlines.images()
-                is MarkdownNode.Header -> out += node.inlines.images()
-                is MarkdownNode.ListBlock -> node.items.forEach { out += it.images() }
-                is MarkdownNode.CheckListBlock -> node.items.forEach { out += it.inlines.images() }
+
                 else -> Unit
             }
         }
@@ -246,21 +256,11 @@ class BioImageLoadingTest {
     }
 
     /** The images in a token list, at any nesting depth, in order. */
-    private fun List<InlineToken>.images(): List<InlineToken.Image> =
+    private fun List<NovaInline>.images(): List<NovaInline.Image> =
         flatMap { token ->
             when (token) {
-                is InlineToken.Image -> listOf(token)
-                else -> token.nested().images()
+                is NovaInline.Image -> listOf(token)
+                else -> token.nestedInlines().images()
             }
         }
-
-    private fun InlineToken.nested(): List<InlineToken> = when (this) {
-        is InlineToken.Bold -> children
-        is InlineToken.Italic -> children
-        is InlineToken.BoldItalic -> children
-        is InlineToken.Underline -> children
-        is InlineToken.Strikethrough -> children
-        is InlineToken.Link -> children
-        else -> emptyList()
-    }
 }

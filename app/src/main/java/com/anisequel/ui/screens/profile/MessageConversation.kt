@@ -24,7 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.MessageNode
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -190,7 +190,7 @@ private fun ConversationRow(line: ConversationLine) {
                 // message with an image, a spoiler or an AniList link in it shows
                 // the image, hides the spoiler and draws the poster - the body of a
                 // message is AniList Markdown, not plain text.
-                AniListMarkdownWithCovers(
+                NovaMarkdownWithCovers(
                     markdown = line.body,
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -472,7 +472,7 @@ private fun GifSuggestionRow(
                 // One interaction source for the spring and the click. `bouncyPress`
                 // without one installs its own fallback pointer loop on the same
                 // element `clickable` is driving, and the two compete for the tap -
-                // the failure `SpoilerChip` documents, and the reason the picker's
+                // the failure `NovaSpoiler` documents, and the reason the picker's
                 // own tiles pass a source while these chips used to not.
                 val interactionSource = remember(tag) { MutableInteractionSource() }
                 Box(

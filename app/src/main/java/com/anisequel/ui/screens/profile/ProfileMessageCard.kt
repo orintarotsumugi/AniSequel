@@ -47,7 +47,7 @@ import com.anisequel.ui.components.cards.SequelInfoChip
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 import java.time.Instant
 
@@ -166,7 +166,7 @@ internal fun MessageCard(
                 MessageHideButton(onHide = onHide)
             }
 
-            AniListMarkdownWithCovers(
+            NovaMarkdownWithCovers(
                 markdown = body,
                 maxLines = if (expanded) Int.MAX_VALUE else MESSAGE_COLLAPSED_LINES,
                 onOverflowChange = { hidden -> if (hidden) everOverflowed = true },

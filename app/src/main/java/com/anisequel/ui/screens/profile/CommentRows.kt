@@ -42,7 +42,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 import java.time.Instant
 
 /**
@@ -296,9 +296,9 @@ private fun ReplyBody(text: String?) {
 private fun MarkdownBody(text: String) {
     // The cover-aware renderer: a comment can link an AniList title, and the card
     // that link becomes draws a poster only if a loader is in scope. The loader
-    // comes from `LocalMediaCoverLoader`, provided by the sheet's host, and the
+    // comes from `LocalNovaMediaCovers`, provided by the sheet's host, and the
     // document is parsed once inside this call rather than per frame.
-    AniListMarkdownWithCovers(markdown = text)
+    NovaMarkdownWithCovers(markdown = text)
 }
 
 @Composable

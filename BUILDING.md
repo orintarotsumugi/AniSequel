@@ -103,8 +103,8 @@ pure JUnit.
 | | `MediaDetailQueryTest`, `MediaDetailNamespacingTest`, `MediaNodeDisplayTest` | The detail document itself — the `title` it has to ask for, the relation fields it shares with the list query — and what a node prints when the summary it was opened from is replaced |
 | | `MediaEntryEditorTest` | The entry editor's writes: the score scale untouched, volumes carried through, and no null for a numeric argument |
 | | `ActivityEngagementJsonTest`, `ActivityLikesJsonTest`, `ReplyManagementQueryTest`, `CommentManagementTest`, `DemoActivityFixtureTest` | Comment threads, like toggles, likers, and editing or deleting your own comment; the demo-mode activity fixture |
-| Bio Markdown | `AniListMarkdownTest` | Which constructs parse, and which of them AniList writes differently from GFM |
-| | `MarkdownMediaPreviewTest` | How long one bio parse may take before the watchdog calls it looping |
+| Bio Markdown | `NovaMarkdownParserTest` | Which constructs parse, and which of them AniList writes differently from GFM |
+| | `NovaMarkdownMediaTest` | Images, embeds and preview cards: the media half of the same dialect |
 | | `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variables it needs, and why every alias goes through a `Page` |
 | Auth | `AuthRedirectTest`, `AniListOAuthTest` | Redirect handling, token storage, and the silent OAuth failures |
 | Updater | `UpdateManifestTest` | Manifest parsing and the version comparison everything rests on |

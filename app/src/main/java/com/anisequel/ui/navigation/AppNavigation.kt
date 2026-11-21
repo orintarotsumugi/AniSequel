@@ -37,7 +37,7 @@ import com.anisequel.ui.components.cards.LocalPosterOverlays
 import com.anisequel.ui.components.cards.LocalPosterSource
 import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.detail.RepositoryEntryEditor
-import com.anisequel.ui.components.markdown.ProvideMediaCovers
+import com.anisequel.ui.components.novamarkdown.ProvideNovaCovers
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
@@ -656,7 +656,7 @@ fun AppNavigation(
     // how the Creator page ended up drawing badges with no posters while the
     // profile's About card beside it drew them correctly. Provided here, at
     // the app's only composition root, a surface gets covers by rendering its
-    // document with `AniListMarkdownWithCovers` and nothing else.
+    // document with `NovaMarkdownWithCovers` and nothing else.
     // Scrolls and taps from every page are observed at the root and become wind
     // for the seasonal sky. This is a *parent* observer: it never consumes the
     // gesture, so every control under it still gets the tap it always did. It is
@@ -664,7 +664,7 @@ fun AppNavigation(
     // added retroactively to a gesture in progress. See SeasonalWind.
     val seasonalAmbient = rememberSeasonalAmbientModifier()
 
-    ProvideMediaCovers(aniListRepository) {
+    ProvideNovaCovers(aniListRepository) {
         CompositionLocalProvider(
             LocalMediaCardStyle provides cardStyle,
             // The card design beside the card style it belongs with. Both are facts

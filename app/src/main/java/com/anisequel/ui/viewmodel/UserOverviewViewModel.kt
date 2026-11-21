@@ -18,7 +18,8 @@ import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.domain.usecase.mangaLibraryProblem
 import com.anisequel.domain.usecase.profileIdentityFromRoute
 import com.anisequel.domain.usecase.shouldFetchProfileList
-import com.anisequel.ui.components.markdown.mediaCoverKeysIn
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.novaMediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,7 +192,7 @@ class UserOverviewViewModel(
         _mediaCovers.value = emptyMap()
 
         val bio = about?.takeIf { it.isNotBlank() } ?: return
-        val keys = mediaCoverKeysIn(bio)
+        val keys = novaMediaCoverKeysIn(NovaMarkdown.parse(bio))
         if (keys.isEmpty()) return
 
         coverJob = viewModelScope.launch {

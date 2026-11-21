@@ -69,9 +69,9 @@ import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
-import com.anisequel.ui.components.markdown.MARKDOWN_COLLAPSED_BLOCK_LIMIT
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 
@@ -256,7 +256,7 @@ fun InfoSynopsisCard(
     // card - see `MediaNode.descriptionBody`.
     val raw = media.descriptionBody
     val nodes = remember(raw) {
-        raw?.takeIf { it.isNotBlank() }?.let { AniListMarkdownParser.parse(it) } ?: emptyList()
+        raw?.takeIf { it.isNotBlank() }?.let { NovaMarkdown.parse(it) } ?: emptyList()
     }
 
     // `rememberSaveable`, not `remember`, and that is the whole point: this card is a
@@ -305,15 +305,15 @@ fun InfoSynopsisCard(
             )
 
             else -> {
-                AniListMarkdownWithCovers(
-                    nodes = nodes,
+                NovaMarkdownWithCovers(
+                    blocks = nodes,
                     maxLines = if (isExpanded) Int.MAX_VALUE else COLLAPSED_SYNOPSIS_LINES,
                     onOverflowChange = { overflowed -> if (overflowed) clampedByLines = true }
                 )
 
                 // The toggle is gated on the same two things the view clamps on, and
-                // the view clamps two different ways: `AniListMarkdownView` drops
-                // whole blocks past MARKDOWN_COLLAPSED_BLOCK_LIMIT, *and* clamps each
+                // the view clamps two different ways: `NovaMarkdownView` drops
+                // whole blocks past NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT, *and* clamps each
                 // remaining paragraph to `maxLines`.
                 //
                 // The block case is countable here. The line case is not - it was
@@ -322,8 +322,8 @@ fun InfoSynopsisCard(
                 // lines and the guess said they did not (text the reader could not
                 // reach), while on a tablet 300 characters fit and the guess offered
                 // a "Read more" that revealed nothing. `clampedByLines` is the layout
-                // answering directly, via `RenderParagraph`'s `hasVisualOverflow`.
-                val isClamped = nodes.size > MARKDOWN_COLLAPSED_BLOCK_LIMIT || clampedByLines
+                // answering directly, via `NovaParagraph`'s `hasVisualOverflow`.
+                val isClamped = nodes.size > NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT || clampedByLines
 
                 if (isClamped) {
                     TextButton(

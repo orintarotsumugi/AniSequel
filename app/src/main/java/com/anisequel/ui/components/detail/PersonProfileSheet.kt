@@ -48,8 +48,8 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.rememberPersonReadingScroll
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.markdown.AniListMarkdownParser
-import com.anisequel.ui.components.markdown.AniListMarkdownWithCovers
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
 import com.anisequel.ui.components.openExternalUrl
 
 /**
@@ -394,7 +394,7 @@ private fun ProfileFacts(facts: List<Pair<String, String>>) {
 @Composable
 private fun ProfileBiography(description: String?) {
     if (description.isNullOrBlank()) return
-    val nodes = remember(description) { AniListMarkdownParser.parse(description) }
+    val nodes = remember(description) { NovaMarkdown.parse(description) }
     if (nodes.isEmpty()) return
 
     Column(
@@ -408,8 +408,8 @@ private fun ProfileBiography(description: String?) {
         // links to titles, and this surface was the one markdown renderer nobody
         // had given a cover loader to - so every card drew the badge and no poster
         // while the profile's About card beside it drew them correctly. The loader
-        // comes from `LocalMediaCoverLoader`, provided by whoever draws the sheet.
-        AniListMarkdownWithCovers(nodes = nodes)
+        // comes from `LocalNovaMediaCovers`, provided by whoever draws the sheet.
+        NovaMarkdownWithCovers(blocks = nodes)
     }
 }
 

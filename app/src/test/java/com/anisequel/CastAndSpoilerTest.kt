@@ -161,7 +161,7 @@ class CastAndSpoilerTest {
 
     private fun spoilerSource() = File(
         findProjectRoot(),
-        "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownBlocks.kt"
+        "app/src/main/java/com/anisequel/ui/components/novamarkdown/NovaMarkdownBlocks.kt"
     ).readText()
 
     /**
@@ -177,13 +177,16 @@ class CastAndSpoilerTest {
         val source = spoilerSource()
 
         assertTrue(
-            "the chip has to be its own composable, so the toggle is one thing " +
-                "rather than a header row plus a Hide button",
-            source.contains("private fun SpoilerChip(")
+            "the spoiler must be one composable with one control, not a header row " +
+                "plus a Hide button",
+            source.contains("internal fun NovaSpoiler(")
         )
         assertTrue(
-            "and it is drawn before the surface, so it sits on the block's top edge:\n$source",
-            Regex("""SpoilerChip\([\s\S]{0,400}?\n\s*if \(revealed\) \{\s*\n\s*Surface\(""").containsMatchIn(source)
+            "and the chip is drawn before the revealed surface, so it sits on the " +
+                "block's top edge:\n$source",
+            Regex(
+                """testTag\("nova_markdown_spoiler_chip"\)[\s\S]{0,1200}?if \(revealed\) \{\s*\n\s*Surface\("""
+            ).containsMatchIn(source)
         )
     }
 
@@ -234,43 +237,28 @@ class CastAndSpoilerTest {
     fun `revealed spoiler text is not a close button`() {
         val source = spoilerSource()
 
-        // The whole block used to carry the click handler, so a tap anywhere on the
-        // revealed text closed it - and a link inside a spoiler was swallowed by it.
+        // The block used to carry the click handler on its whole surface, so a tap
+        // anywhere on the revealed text closed it - and a link inside a spoiler was
+        // swallowed by it. The toggle now lives on the chip and nowhere else.
+        val block = source.substringAfter("internal fun NovaSpoiler(").substringBefore("\n\n/**")
         assertFalse(
-            "nothing outside SpoilerChip may take the toggle - the revealed text has " +
-                "to behave like any other paragraph:\n$source",
-            source.contains("clickable { revealed = !revealed }")
+            "the revealed text has to behave like any other paragraph:\n$block",
+            block.substringAfter("if (revealed) {").contains("clickable")
         )
 
-        // And the chip is where the click lands. The clickable is now written across
-        // several lines because it has to hand its `interactionSource` to
-        // `bouncyPress` - a `bouncyPress` given none installs a second pointer-input
-        // loop, and two handlers on one element mean the tap never arrives. The
-        // assertion matches `onClick = onToggle` rather than the whole call, so this
-        // keeps meaning "the chip is the target" if the call is reformatted again.
-        val chip = source.substringAfter("private fun SpoilerChip(")
         assertTrue(
             "the chip itself is the click target",
-            chip.contains("onClick = onToggle")
+            block.contains("onClick = { revealed = !revealed }")
         )
         assertTrue(
-            "and the press signal is shared with it, or the tap never lands:\n$chip",
+            "and the press signal is shared with it, or the tap never lands:\n$block",
             Regex("""clickable\([\s\S]{0,200}interactionSource = interactionSource""")
-                .containsMatchIn(chip)
+                .containsMatchIn(block)
         )
-
-        // The revealed body is a plain `Text` inside a plain `Surface` - no clickable
-        // anywhere in `RenderSpoilerBlock` itself. Bounded by that function's own
-        // declaration, not by the file: `RenderImage` and `RenderVideo` sit above it
-        // and legitimately have clicks, so a wider window asserts the opposite of
-        // what it says.
-        val renderer = source
-            .substringAfter("fun RenderSpoilerBlock(")
-            .substringBefore("private fun SpoilerChip(")
-        assertFalse(
-            "nothing in RenderSpoilerBlock may take a tap - the revealed text has to " +
-                "behave like any other paragraph:\n$renderer",
-            renderer.contains("clickable")
+        assertEquals(
+            "one control, or a second tap target appears inside the card",
+            1,
+            Regex("""\bclickable\(""").findAll(block).count()
         )
     }
 

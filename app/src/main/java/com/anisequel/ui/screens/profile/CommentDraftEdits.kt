@@ -15,7 +15,7 @@ package com.anisequel.ui.screens.profile
  * ## Markers
  *
  * These are AniList's own markdown spellings, and they are the same ones
- * [com.anisequel.ui.components.markdown.AniListMarkdownParser] renders - a
+ * [com.anisequel.ui.components.novamarkdown.NovaMarkdown] renders - a
  * composer that writes a marker the reader's own parser does not understand is
  * a preview that disagrees with the posted comment.
  */

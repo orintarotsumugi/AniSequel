@@ -14,7 +14,7 @@ destination instead — see `ui/screens/*/`.
 | `components/cards/` | Poster cards and the controls that live on them. |
 | `components/expressive/` | The Material 3 Expressive layer: motion tokens, shapes, buttons, indicators. |
 | `components/icons/` | Custom `ImageVector`s that `AppVectorIcons` re-exports. |
-| `components/markdown/` | AniList-flavored Markdown: parser, AST, inline model, renderer. Pure — no state, no screens. |
+| `components/novamarkdown/` | NovaMarkdown: raw AniList Markdown parser, AST, Compose renderer and the dynamic SVG leaf. Pure — no state, no screens. |
 | `components/update/` | The in-app updater's dialogs. |
 
 ## Rules

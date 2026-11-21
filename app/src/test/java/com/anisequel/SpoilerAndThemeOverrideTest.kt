@@ -54,7 +54,7 @@ class SpoilerAndThemeOverrideTest {
 
     private fun markdownSource() = File(
         findProjectRoot(),
-        "app/src/main/java/com/anisequel/ui/components/markdown/AniListMarkdownBlocks.kt"
+        "app/src/main/java/com/anisequel/ui/components/novamarkdown/NovaMarkdownBlocks.kt"
     ).readText()
 
     /**
@@ -96,7 +96,7 @@ class SpoilerAndThemeOverrideTest {
     @Test
     fun `the spoiler chip shares one interaction source with its press modifier`() {
         val source = markdownSource()
-        val chip = declarationStartingAt(source, "private fun SpoilerChip(")
+        val chip = declarationStartingAt(source, "internal fun NovaSpoiler(")
 
         assertTrue(
             "the chip must build one MutableInteractionSource: a `bouncyPress` given " +
@@ -127,7 +127,7 @@ class SpoilerAndThemeOverrideTest {
         // is the whole rest of the file, so `wrapContentWidth()` appearing in some
         // unrelated composable further down would satisfy an assertion about the chip
         // - a test that passes when the bug is still there is worse than no test.
-        val chip = declarationStartingAt(source, "private fun SpoilerChip(")
+        val chip = declarationStartingAt(source, "internal fun NovaSpoiler(")
 
         // Comments removed before searching. The chip's own comment explains the
         // fix - "A `Row`, not a `FlowRow`" - so a name search over the raw text
@@ -165,14 +165,17 @@ class SpoilerAndThemeOverrideTest {
     @Test
     fun `only the chip is interactive`() {
         val source = markdownSource()
-        val renderer = source
-            .substringAfter("fun RenderSpoilerBlock(")
-            .substringBefore("private fun SpoilerChip(")
+        val block = declarationStartingAt(source, "internal fun NovaSpoiler(")
 
         assertFalse(
-            "nothing in the renderer may take a tap, or a thumb resting on the card " +
-                "hides what is being read:\n$renderer",
-            renderer.contains("clickable")
+            "nothing after the chip may take a tap, or a thumb resting on the card " +
+                "hides what is being read:\n$block",
+            block.substringAfter("if (revealed) {").contains("clickable")
+        )
+        assertEquals(
+            "the chip is the only control: one clickable in the whole block",
+            1,
+            Regex("""\bclickable\(""").findAll(block).count()
         )
     }
 

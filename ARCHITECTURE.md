@@ -215,7 +215,7 @@ UpdateController / UI              UpdateManager                     GitHub Asse
         │       │   └── usecase/             # Business logic use cases (Sequel traversal, Insights, Calendar)
         │       │
         │       └── ui/                      # Presentation Layer
-        │           ├── components/          # Reusable Compose components (cards, detail, expressive, markdown, update)
+        │           ├── components/          # Reusable Compose components (cards, detail, expressive, novamarkdown, update)
         │           ├── navigation/          # NavHost, transition animation specs, route graphs
         │           ├── screens/             # Top-level screen composables & sub-sections (dashboard, login, profile, settings)
         │           ├── theme/               # Color palettes, Expressive M3 theme setup, typography
@@ -572,7 +572,7 @@ The codebase includes an extensive JVM unit test suite running on Gradle (`./gra
 | `KeystoreIntegrityTest` | Ensures zero keystore secrets/binaries are committed to git repository. |
 | `ApkPackagingTest` | Asserts `dex.useLegacyPackaging = true` setting in Gradle config. |
 | `ExpressiveShapesTest` | Verifies capsule shape math avoiding stretched polygon distortions. |
-| `AniListMarkdownTest` | Bio Markdown constructs, including the AniList-specific ones (`~~~centred~~~`, parenthesised embeds, `===` headings) and the URL/mention boundaries. |
+| `NovaMarkdownParserTest` / `NovaMarkdownMediaTest` | NovaMarkdown blocks, alignment, inline syntax, images, videos and AniList preview cards, including the AniList-specific ones (`~~~centred~~~`, parenthesised embeds, `===` headings). |
 | `UserOverviewLoadOrderTest` | The profile is published before the media list arrives and clears `isLibraryLoading` when it lands - or when it fails. |
 | `MediaCoversQueryTest` | The bio cover batch: one request per profile, the variable declarations it needs, and why every alias is resolved through a `Page` rather than the `Media` root field. |
 | `MediaEntryEditorTest` | The entry editor's writes: the score scale is not rescaled, volumes read are carried through, and no numeric argument is ever sent as null. |
@@ -621,4 +621,4 @@ Subpackages:
 
 - `data/changelog`, `data/diagnostics`, `data/model`, `data/network`, `data/repository`, `data/security`, `data/update`.
 - `domain/card`, `domain/color`, `domain/gif`, `domain/jokes`, `domain/library`, `domain/list`, `domain/motion`, `domain/profile`, `domain/seasonal`, `domain/studio`, `domain/tier`, `domain/ui`, `domain/usecase`.
-- `ui/components` (+ cards, detail, detail/info, expressive, icons, markdown, nova, seasonal, update), `ui/navigation`, `ui/screens` (+ dashboard, library, login, nova, profile, settings, studio, tier), `ui/security`, `ui/theme`, `ui/viewmodel`, `ui/widget`.
+- `ui/components` (+ cards, detail, detail/info, expressive, icons, novamarkdown, nova, seasonal, update), `ui/navigation`, `ui/screens` (+ dashboard, library, login, nova, profile, settings, studio, tier), `ui/security`, `ui/theme`, `ui/viewmodel`, `ui/widget`.
