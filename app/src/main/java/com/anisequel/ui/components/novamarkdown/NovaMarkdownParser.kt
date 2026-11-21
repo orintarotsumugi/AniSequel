@@ -421,88 +421,112 @@ private fun parseNovaHtmlBlock(
         return readNovaEscapeBlock(lines, start, escapeOpen.groupValues[1], align)
     }
 
-    val htmlQuote = HTML_QUOTE.matchEntire(trimmed)
-    if (htmlQuote != null) {
-        val first = htmlQuote.groupValues[1]
-        if (first.contains("</blockquote", ignoreCase = true)) {
-            val inner = first.substringBefore("</blockquote", "")
-            return listOf(
-                NovaBlock.Quote(parseNovaBlocks(inner.lines(), align, depth + 1), align)
-            ) to start + 1
-        }
-        val (body, next) = collectUntilToken(lines, start + 1, "</blockquote>")
-        val content = listOf(first).filter { it.isNotBlank() } + body.lines()
+    return readNovaQuoteBlock(lines, start, trimmed, align, depth)
+        ?: readNovaPreBlock(lines, start, trimmed, align)
+        ?: readNovaHtmlListBlock(lines, start, trimmed, align)
+        ?: readNovaAlignBlock(lines, start, trimmed, align, depth)
+        ?: strayNovaCloseTag(start, trimmed)
+}
+
+/** A stray close is a wrapper's remainder, not a sentence. */
+private fun strayNovaCloseTag(start: Int, trimmed: String): Pair<List<NovaBlock>, Int>? =
+    if (trimmed.startsWith("</") && trimmed.endsWith(">")) {
+        emptyList<NovaBlock>() to start + 1
+    } else {
+        null
+    }
+
+/** `<blockquote>` as a quote, inline or collected over the following lines. */
+private fun readNovaQuoteBlock(
+    lines: List<String>,
+    start: Int,
+    first: String,
+    align: NovaAlign,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val quote = HTML_QUOTE.matchEntire(first) ?: return null
+    val inner = quote.groupValues[1]
+    if (inner.contains("</blockquote", ignoreCase = true)) {
         return listOf(
             NovaBlock.Quote(
-                parseNovaBlocks(content.joinToString("\n").lines(), align, depth + 1),
+                parseNovaBlocks(inner.substringBefore("</blockquote", "").lines(), align, depth + 1),
                 align
             )
-        ) to next
+        ) to start + 1
     }
+    val (body, next) = collectUntilToken(lines, start + 1, "</blockquote>")
+    val content = listOf(inner).filter { it.isNotBlank() } + body.lines()
+    return listOf(
+        NovaBlock.Quote(
+            parseNovaBlocks(content.joinToString("\n").lines(), align, depth + 1),
+            align
+        )
+    ) to next
+}
 
-    val htmlPre = HTML_PRE.matchEntire(trimmed)
-    if (htmlPre != null) {
-        val first = htmlPre.groupValues[1]
-        if (first.contains("</pre", ignoreCase = true)) {
-            return listOf(
-                NovaBlock.Code(
-                    null,
-                    HTML_TAG.replace(first.substringBefore("</pre"), ""),
-                    align
-                )
-            ) to start + 1
-        }
-        val (body, next) = collectUntilToken(lines, start + 1, "</pre>")
-        val content = (listOf(first) + body.lines()).joinToString("\n")
+/** `<pre>` as a plain code block, with the tags stripped from its body. */
+private fun readNovaPreBlock(
+    lines: List<String>,
+    start: Int,
+    first: String,
+    align: NovaAlign
+): Pair<List<NovaBlock>, Int>? {
+    val pre = HTML_PRE.matchEntire(first) ?: return null
+    val inner = pre.groupValues[1]
+    if (inner.contains("</pre", ignoreCase = true)) {
         return listOf(
-            NovaBlock.Code(null, HTML_TAG.replace(content, ""), align)
-        ) to next
+            NovaBlock.Code(null, HTML_TAG.replace(inner.substringBefore("</pre"), ""), align)
+        ) to start + 1
     }
+    val (body, next) = collectUntilToken(lines, start + 1, "</pre>")
+    val content = (listOf(inner) + body.lines()).joinToString("\n")
+    return listOf(NovaBlock.Code(null, HTML_TAG.replace(content, ""), align)) to next
+}
 
-    val htmlList = HTML_LIST.matchEntire(trimmed)
-    if (htmlList != null) {
-        val ordered = htmlList.groupValues[1].equals("ol", ignoreCase = true)
-        val closeToken = if (ordered) "</ol>" else "</ul>"
-        val openingHasClose = trimmed.contains(closeToken, ignoreCase = true)
-        val (body, next) = if (openingHasClose) {
-            "" to start + 1
-        } else {
-            collectUntilToken(lines, start + 1, closeToken)
-        }
-        val source = (listOf(trimmed) + body.lines()).joinToString("\n")
-        val items = HTML_LI.findAll(source).map { item ->
-            NovaListItem(
-                listOf(NovaBlock.Paragraph(parseNovaInlineLine(item.groupValues[1].trim())))
-            )
-        }.toList()
-        return listOf(NovaBlock.BulletList(ordered, 1, items, align)) to next
+/** `<ul>`/`<ol>` as a bullet list. */
+private fun readNovaHtmlListBlock(
+    lines: List<String>,
+    start: Int,
+    first: String,
+    align: NovaAlign
+): Pair<List<NovaBlock>, Int>? {
+    val list = HTML_LIST.matchEntire(first) ?: return null
+    val ordered = list.groupValues[1].equals("ol", ignoreCase = true)
+    val closeToken = if (ordered) "</ol>" else "</ul>"
+    val (body, next) = if (first.contains(closeToken, ignoreCase = true)) {
+        "" to start + 1
+    } else {
+        collectUntilToken(lines, start + 1, closeToken)
     }
+    val source = (listOf(first) + body.lines()).joinToString("\n")
+    val items = HTML_LI.findAll(source).map { item ->
+        NovaListItem(
+            listOf(NovaBlock.Paragraph(parseNovaInlineLine(item.groupValues[1].trim())))
+        )
+    }.toList()
+    return listOf(NovaBlock.BulletList(ordered, 1, items, align)) to next
+}
 
-    val aligned = ALIGN_OPEN.matchEntire(trimmed)
-    if (aligned != null) {
-        val tag = aligned.groupValues[1].lowercase(Locale.ROOT)
-        val attrs = aligned.groupValues[2]
-        val innerAlign = novaAlignFrom(attrs) ?: align
-        val first = aligned.groupValues[3]
-        val close = "</$tag>"
-        val inlineClose = first.indexOf(close, ignoreCase = true)
-        if (inlineClose >= 0) {
-            return parseAligned(
-                first.substring(0, inlineClose),
-                innerAlign,
-                depth + 1
-            ) to start + 1
-        }
-        val (body, next) = collectUntilToken(lines, start + 1, close)
-        val content = listOf(first).filter { it.isNotBlank() } + body.lines()
-        return parseAligned(content.joinToString("\n"), innerAlign, depth + 1) to next
+/** `<p>`/`<div>` with an alignment attribute, parsed as a sub-document. */
+private fun readNovaAlignBlock(
+    lines: List<String>,
+    start: Int,
+    first: String,
+    align: NovaAlign,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val aligned = ALIGN_OPEN.matchEntire(first) ?: return null
+    val tag = aligned.groupValues[1].lowercase(Locale.ROOT)
+    val innerAlign = novaAlignFrom(aligned.groupValues[2]) ?: align
+    val inner = aligned.groupValues[3]
+    val close = "</$tag>"
+    val inlineClose = inner.indexOf(close, ignoreCase = true)
+    if (inlineClose >= 0) {
+        return parseAligned(inner.substring(0, inlineClose), innerAlign, depth + 1) to start + 1
     }
-
-    // A stray close is a wrapper's remainder, not a sentence.
-    if (trimmed.startsWith("</") && trimmed.endsWith(">")) {
-        return emptyList<NovaBlock>() to start + 1
-    }
-    return null
+    val (body, next) = collectUntilToken(lines, start + 1, close)
+    val content = listOf(inner).filter { it.isNotBlank() } + body.lines()
+    return parseAligned(content.joinToString("\n"), innerAlign, depth + 1) to next
 }
 
 /** Reads `<escape>…</escape>` as one literal paragraph. */
