@@ -193,7 +193,12 @@ fun InfoHero(
     // title on this page: take it somewhere else. The full name sheet with its
     // four copy buttons is still the discoverable path; this is the one gesture
     // a reader who already knows the title tries first.
-    var titleCopied by remember(media.id) { mutableStateOf(false) }
+    // Keyed on the type as well as the id: a relation can cross the anime/manga
+    // boundary, where `anime/7` and `manga/7` are different titles, and the
+    // adjacent `posterBounds` below is keyed the same way. Id alone let a
+    // confirmation still on screen from the title the reader left appear over the
+    // one they just opened.
+    var titleCopied by remember(media.id, media.type) { mutableStateOf(false) }
     // `expressiveHoldGesture`'s `pointerInput(Unit)` keeps the first lambda it saw,
     // and the sheet can swap the list node for the detail node under a live hero -
     // so the title is read through a state rather than captured.

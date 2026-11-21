@@ -148,7 +148,10 @@ internal fun NovaInfoHero(
     // The classic hero's hold-to-copy shortcut, kept: the title is the one thing a
     // reader takes out of this page, and the full name sheet in Extras is the
     // discoverable path rather than a replacement for the gesture.
-    var titleCopied by remember(media.id) { mutableStateOf(false) }
+    // Keyed on the type as well as the id, like `posterBounds` above: following a
+    // relation across the anime/manga boundary reaches a different title that can
+    // share this number, and the left-behind confirmation must not follow it.
+    var titleCopied by remember(media.id, media.type) { mutableStateOf(false) }
     // `expressiveHoldGesture` keeps the first lambda it saw; the sheet can swap
     // the list node for the detail node under a live hero, so read the title
     // through state rather than capturing it.
