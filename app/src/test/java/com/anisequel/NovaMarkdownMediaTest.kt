@@ -60,6 +60,68 @@ class NovaMarkdownMediaTest {
     }
 
     @Test
+    fun `a row of linked icons stays in one paragraph`() {
+        val paragraph = NovaMarkdown.parse(
+            """
+            <a href="https://a"><img src="https://x/a.png" width="50" height="60"></a>
+            <a href="https://b"><img src="https://x/b.png" width="40" height="60"></a>
+            """.trimIndent()
+        ).single() as NovaBlock.Paragraph
+        val links = paragraph.inlines.filterIsInstance<NovaInline.Link>()
+
+        // The renderer draws these side by side; the parser's job is to keep them
+        // as one paragraph instead of turning each linked image into a block.
+        assertEquals(2, links.size)
+        assertEquals(
+            listOf("50", "40"),
+            links.map { link ->
+                link.children.filterIsInstance<NovaInline.Image>().single().width
+            }
+        )
+    }
+
+    @Test
+    fun `an anchor that opens on its own line keeps its image inside the link`() {
+        val blocks = NovaMarkdown.parse(
+            """
+            <a href="https://discord.com/users/1">
+            <img src="https://x/history.png" width="500" height="60">
+            </a>
+            """.trimIndent()
+        )
+
+        // A line-based parser used to end the paragraph at the image, leaving
+        // the opening `<a href=…>` as literal text in the bio.
+        assertEquals(1, blocks.size)
+        val link = (blocks.single() as NovaBlock.Paragraph)
+            .inlines.filterIsInstance<NovaInline.Link>().single()
+        val image = link.children.filterIsInstance<NovaInline.Image>().single()
+
+        assertEquals("https://discord.com/users/1", link.url)
+        assertEquals("500", image.width)
+        assertEquals("60", image.height)
+    }
+
+    @Test
+    fun `a stray anchor does not swallow the blocks after it`() {
+        val blocks = NovaMarkdown.parse(
+            """
+            <a href="https://x">
+            some text
+
+            # Next heading
+            """.trimIndent()
+        )
+
+        // Keeping a paragraph open for every unclosed `<a>` ate the blank line,
+        // the heading and everything after it, printing them as one literal run.
+        // Only a picture line may cross an anchor's paragraph boundary.
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is NovaBlock.Paragraph)
+        assertTrue(blocks[1] is NovaBlock.Heading)
+    }
+
+    @Test
     fun `an inline image survives a sentence and keeps its size`() {
         val paragraph = NovaMarkdown.parse("before <img width='220' src='https://x/a.png'> after")
             .single() as NovaBlock.Paragraph

@@ -95,8 +95,10 @@ sealed interface NovaBlock {
         val url: String,
         val alt: String? = null,
         val targetUrl: String? = null,
-        /** `220` is pixels, `50%` is a share of the column, null is full width. */
+        /** `220` is pixels, `50%` is a share of the column, null is the image's own size. */
         val width: String? = null,
+        /** `60` is pixels; null keeps the file's own aspect ratio. */
+        val height: String? = null,
         override val align: NovaAlign = NovaAlign.Start
     ) : NovaBlock
 
@@ -180,7 +182,8 @@ sealed interface NovaInline {
     data class Image(
         val url: String,
         val alt: String? = null,
-        val width: String? = null
+        val width: String? = null,
+        val height: String? = null
     ) : NovaInline
 
     /**
@@ -194,11 +197,34 @@ sealed interface NovaInline {
 internal fun novaImageWidthDp(width: String?): Int? =
     width?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(NOVA_MAX_IMAGE_WIDTH_DP)
 
+/** The dp height an HTML `height="60"` asks for, clamped; null for no size. */
+internal fun novaImageHeightDp(height: String?): Int? =
+    height?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(NOVA_MAX_IMAGE_HEIGHT_DP)
+
 /** The fraction an `img50%(...)` asks for; null for no percentage size. */
 internal fun novaImageWidthPercent(width: String?): Float? {
     val percent = width?.takeIf { it.endsWith("%") }?.dropLast(1)?.toIntOrNull()
         ?: return null
     return percent.takeIf { it > 0 }?.coerceAtMost(100)?.div(100f)
+}
+
+/**
+ * The dp decode budget for a declared image size, as (width, height).
+ *
+ * A percentage has no column to resolve against here, so the screen is the
+ * upper bound: a `100%` banner never decodes wider than the device. A size-less
+ * image gets no budget at all and lets Coil measure the view instead.
+ */
+internal fun novaImageDecodeDp(
+    width: String?,
+    height: String?,
+    screenWidthDp: Int
+): Pair<Int?, Int?> {
+    val widthDp = (novaImageWidthDp(width)
+        ?: novaImageWidthPercent(width)?.let { (screenWidthDp * it).toInt().coerceAtLeast(1) })
+        ?.coerceAtMost(screenWidthDp)
+    val heightDp = novaImageHeightDp(height)
+    return widthDp to heightDp
 }
 
 /** What a tap on [image] opens: the author's target, or the picture itself. */

@@ -33,6 +33,21 @@ internal val ALIGN_OPEN = Regex("""^<(p|div)\b([^>]*)>(.*)$""", RegexOption.IGNO
 internal val ALIGN_ATTR = Regex("""\balign\s*=\s*["']?(left|center|right|justify)""", RegexOption.IGNORE_CASE)
 internal val STYLE_ALIGN = Regex("""\btext-align\s*:\s*(left|center|right|justify)""", RegexOption.IGNORE_CASE)
 
+/** Tags that open and close a link, counted by the block walk. */
+internal val ANCHOR_OPEN_TAG = Regex("""<a\b[^>]*>""", RegexOption.IGNORE_CASE)
+internal val ANCHOR_CLOSE_TAG = Regex("""</a\s*>""", RegexOption.IGNORE_CASE)
+
+/**
+ * AniList's literal-text wrapper. Everything between the tags is prose, even when
+ * a line of it looks like a heading, an image or an entity card.
+ */
+internal val ESCAPE_OPEN = Regex("""^<escape\b[^>]*>(.*)$""", RegexOption.IGNORE_CASE)
+internal val ESCAPE_CLOSE = Regex("""</escape\s*>""", RegexOption.IGNORE_CASE)
+
+/** `width: 220px` or `height: 60px` inside an inline style. */
+internal val STYLE_WIDTH = Regex("""(?:^|;)\s*width\s*:\s*([^;]+)""", RegexOption.IGNORE_CASE)
+internal val STYLE_HEIGHT = Regex("""(?:^|;)\s*height\s*:\s*([^;]+)""", RegexOption.IGNORE_CASE)
+
 internal val SPOILER_OPEN = Regex("""^<(div|span)\b([^>]*)>""", RegexOption.IGNORE_CASE)
 internal val CLASS_ATTR = Regex("""\bclass\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))""", RegexOption.IGNORE_CASE)
 internal val REL_ATTR = Regex("""\brel\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))""", RegexOption.IGNORE_CASE)

@@ -1,6 +1,5 @@
 package com.anisequel.ui.components.novamarkdown
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -8,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,40 +22,61 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Dimension
+import coil.size.Size
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 
 @Composable
 internal fun NovaImageBlock(image: NovaBlock.Image) {
-    NovaImageSurface(
-        url = image.url,
-        alt = image.alt,
-        targetUrl = image.targetUrl,
-        width = image.width,
-        align = image.align
-    )
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = image.align.toContentAlignment()
+    ) {
+        NovaImageContent(
+            url = image.url,
+            alt = image.alt,
+            targetUrl = image.targetUrl,
+            width = image.width,
+            height = image.height,
+            fillWidth = true
+        )
+    }
 }
 
+/**
+ * One picture inside a sentence or an icon row.
+ *
+ * It deliberately does not fill the width: a 50dp icon in a row of five has to
+ * stay 50dp and sit beside the next one, not take a column of its own. The old
+ * renderer wrapped every inline image in `fillMaxWidth`, which is why a social
+ * row stacked vertically.
+ */
 @Composable
 internal fun NovaInlinePicture(
     image: NovaInline.Image,
-    targetUrl: String?,
-    align: NovaAlign = NovaAlign.Start
+    targetUrl: String?
 ) {
-    NovaImageSurface(
+    NovaImageContent(
         url = image.url,
         alt = image.alt,
         targetUrl = targetUrl,
         width = image.width,
-        align = align
+        height = image.height,
+        fillWidth = false
     )
 }
 
@@ -72,42 +93,75 @@ internal fun NovaInlinePicture(
  * decoration is a broken link the reader cannot see.
  */
 @Composable
-private fun NovaImageSurface(
+private fun NovaImageContent(
     url: String,
     alt: String?,
     targetUrl: String?,
     width: String?,
-    align: NovaAlign
+    height: String?,
+    fillWidth: Boolean
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val interactionSource = remember { MutableInteractionSource() }
     val tapUrl = targetUrl ?: url
-    val mediaModifier = novaImageWidthModifier(width)
-        .heightIn(max = NOVA_MAX_IMAGE_HEIGHT_DP.dp)
+    // No background behind the picture. AniList's social links are transparent
+    // PNGs, and painting a container behind every image drew a dark rounded card
+    // around each icon - five boxes where the author uploaded five logos.
+    val mediaModifier = novaImageSizeModifier(width, height, fillWidth)
         .clip(MaterialTheme.shapes.medium)
-        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+
+    // A declared size is also a decode budget. Without this, five 50dp icons are
+    // decoded at whatever the source file happens to be - the social art on the
+    // profiles that exposed this bug is several times the 50x60 it is drawn at.
+    // SVGs go through the WebView below, so there is no Coil request to size.
+    val model = remember(context, url, width, height, density, screenWidthDp) {
+        if (isNovaSvgUrl(url)) return@remember url
+
+        val (decodeWidthDp, decodeHeightDp) = novaImageDecodeDp(width, height, screenWidthDp)
+        ImageRequest.Builder(context)
+            .data(url)
+            // A slow CDN should fade the artwork in rather than pop it over the
+            // placeholder; this adds no extra request.
+            .crossfade(true)
+            .apply {
+                if (decodeWidthDp != null || decodeHeightDp != null) {
+                    size(
+                        Size(
+                            decodeWidthDp.toDecodeDimension(density),
+                            decodeHeightDp.toDecodeDimension(density)
+                        )
+                    )
+                }
+            }
+            .build()
+    }
+
+    val fillsBox = fillWidth || novaImageWidthPercent(width) != null
+    val contentModifier = if (fillsBox) Modifier.fillMaxWidth() else Modifier
 
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = mediaModifier
             .bouncyPress(interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource) {
                 openExternalUrlOrCopy(context, tapUrl)
             },
-        contentAlignment = align.toContentAlignment()
+        contentAlignment = Alignment.Center
     ) {
         if (isNovaSvgUrl(url)) {
             NovaDynamicSvg(
                 url = url,
                 contentDescription = alt,
-                modifier = mediaModifier
+                modifier = contentModifier
             )
         } else {
             AsyncImage(
-                model = url,
+                model = model,
                 contentDescription = alt ?: "Markdown image",
-                modifier = mediaModifier,
+                modifier = contentModifier,
                 contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.Medium,
                 placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
                 error = rememberVectorPainter(AppVectorIcons.Warning)
             )
@@ -115,18 +169,33 @@ private fun NovaImageSurface(
     }
 }
 
+/** An undefined budget tells Coil to fit whichever dimension the view leaves free. */
+private fun Int?.toDecodeDimension(density: Density): Dimension =
+    this?.let { with(density) { it.dp.roundToPx() } }?.let(::Dimension)
+        ?: Size.ORIGINAL.width
+
 /**
- * The width `img220(...)` or `img50%(...)` asked for.
+ * The box an image occupies, before its own content is drawn.
  *
- * A plain number is dp and a percentage is a share of the column. Neither can
- * overflow: `width` reports its size through the incoming constraints, and the
- * percentage is clamped to 1. A malformed size degrades to the full-width default
- * rather than to an invisible zero.
+ * A block image defaults to the column width. An inline one defaults to the
+ * file's intrinsic size, which is what lets an icon row measure several pictures
+ * on one line; a declared width or height still wins in both cases.
  */
-private fun novaImageWidthModifier(width: String?): Modifier {
-    novaImageWidthPercent(width)?.let { return Modifier.fillMaxWidth(it) }
-    novaImageWidthDp(width)?.let { return Modifier.width(it.dp) }
-    return Modifier.fillMaxWidth()
+private fun novaImageSizeModifier(
+    width: String?,
+    height: String?,
+    fillWidth: Boolean
+): Modifier {
+    var modifier = Modifier.heightIn(max = NOVA_MAX_IMAGE_HEIGHT_DP.dp)
+    val fraction = novaImageWidthPercent(width)
+    val widthDp = novaImageWidthDp(width)
+    when {
+        fraction != null -> modifier = modifier.fillMaxWidth(fraction)
+        widthDp != null -> modifier = modifier.width(widthDp.dp)
+        fillWidth -> modifier = modifier.fillMaxWidth()
+    }
+    novaImageHeightDp(height)?.let { modifier = modifier.height(it.dp) }
+    return modifier
 }
 
 @Composable

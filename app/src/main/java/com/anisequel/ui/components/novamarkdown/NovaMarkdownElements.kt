@@ -375,7 +375,12 @@ internal fun standaloneNovaImage(trimmed: String): NovaBlock.Image? {
     }
     HTML_IMAGE_LINE.matchEntire(trimmed)?.let { match ->
         return htmlNovaImage(match.groupValues[1])?.let { image ->
-            NovaBlock.Image(image.url, image.alt, width = image.width)
+            NovaBlock.Image(
+                url = image.url,
+                alt = image.alt,
+                width = image.width,
+                height = image.height
+            )
         }
     }
     val linked = LINKED_LINE.matchEntire(trimmed)
@@ -402,8 +407,31 @@ internal fun htmlNovaImage(attrs: String): NovaInline.Image? {
     return NovaInline.Image(
         url = novaAbsoluteUrl(src),
         alt = novaHtmlAttribute(attrs, "alt")?.trim()?.takeIf { it.isNotEmpty() },
-        width = normalizeNovaImageWidth(novaHtmlAttribute(attrs, "width"))
+        width = novaImageAttributeLength(attrs, "width", STYLE_WIDTH, allowPercent = true),
+        height = novaImageAttributeLength(attrs, "height", STYLE_HEIGHT, allowPercent = false)
     )
+}
+
+/**
+ * The size an `width=`/`height=` attribute or an inline style asks for.
+ *
+ * A declared attribute that is unreadable (`width="auto"`, `width="50 %"`) is not
+ * a size, so the style still gets a say. Taking the first *raw* value instead
+ * threw the style away whenever the attribute was present but useless.
+ */
+private fun novaImageAttributeLength(
+    attrs: String,
+    attribute: String,
+    stylePattern: Regex,
+    allowPercent: Boolean
+): String? =
+    normalizeNovaImageLength(novaHtmlAttribute(attrs, attribute), allowPercent)
+        ?: normalizeNovaImageLength(novaHtmlStyleLength(attrs, stylePattern), allowPercent)
+
+/** A `width:`/`height:` value in the image's inline `style`, if it has one. */
+private fun novaHtmlStyleLength(attrs: String, pattern: Regex): String? {
+    val style = novaHtmlAttribute(attrs, "style") ?: return null
+    return pattern.find(style)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 /**
@@ -415,12 +443,30 @@ internal fun htmlNovaImage(attrs: String): NovaInline.Image? {
  * degrades to the default rather than to a blank line.
  */
 internal fun normalizeNovaImageWidth(raw: String?): String? {
-    val value = raw?.trim()?.lowercase(Locale.ROOT)?.removeSuffix("px")
+    return normalizeNovaImageLength(raw, allowPercent = true)
+}
+
+/**
+ * The size an HTML `height` or `style="height:…"` asked for, in dp.
+ *
+ * A percentage height has no column to be a percentage of in this layout, so it
+ * is refused rather than guessed at; the image keeps its own aspect ratio.
+ */
+internal fun normalizeNovaImageHeight(raw: String?): String? {
+    return normalizeNovaImageLength(raw, allowPercent = false)
+}
+
+private fun normalizeNovaImageLength(raw: String?, allowPercent: Boolean): String? {
+    val value = raw?.trim()?.lowercase(Locale.ROOT)
+        ?.substringBefore('!') // `width: 50px !important`
+        ?.trim()
+        ?.removeSuffix("px")
         ?.takeIf { it.isNotEmpty() }
         ?: return null
     if (value == "auto") return null
     val percent = value.endsWith("%")
-    val number = (if (percent) value.dropLast(1) else value).toIntOrNull() ?: return null
+    if (percent && !allowPercent) return null
+    val number = (if (percent) value.dropLast(1) else value).trim().toIntOrNull() ?: return null
     if (number <= 0) return null
     return if (percent) "$number%" else number.toString()
 }
