@@ -163,12 +163,18 @@ class MediaDetailStore(
         ): Boolean = size > MAX_ENTRIES
     }
 
-    private val friendsInFlight = mutableSetOf<MediaCoverKey>()
+    /** The generation matters when a clear is followed by a new request for this key. */
+    private val friendsInFlight = mutableMapOf<MediaCoverKey, Int>()
 
     private val _friends = MutableStateFlow<Map<MediaCoverKey, List<MediaFriend>>>(emptyMap())
 
     /** Friends' entries the screens read, keyed by media id. See [friendsCache]. */
     val friends: StateFlow<Map<MediaCoverKey, List<MediaFriend>>> = _friends.asStateFlow()
+
+    private val _friendsLoading = MutableStateFlow<Set<MediaCoverKey>>(emptySet())
+
+    /** Titles whose separate friends request is still in flight. */
+    val friendsLoading: StateFlow<Set<MediaCoverKey>> = _friendsLoading.asStateFlow()
 
     private fun publishFriends(key: MediaCoverKey, friends: List<MediaFriend>) {
         if (_friends.value[key] !== friends) {
@@ -192,8 +198,9 @@ class MediaDetailStore(
         }
         if (isDemo || key in friendsInFlight) return
 
-        friendsInFlight += key
         val startedAtGeneration = generation
+        friendsInFlight[key] = startedAtGeneration
+        _friendsLoading.value = _friendsLoading.value + key
         scope.launch {
             try {
                 repositoryResult {
@@ -209,7 +216,12 @@ class MediaDetailStore(
                 }
                 // A failed friends load draws no card: see above.
             } finally {
-                friendsInFlight -= key
+                // A cleared request can finish after a new request for the same key
+                // starts; only its own generation may clear the new loading marker.
+                if (friendsInFlight[key] == startedAtGeneration) {
+                    friendsInFlight.remove(key)
+                    _friendsLoading.value = _friendsLoading.value - key
+                }
             }
         }
     }
@@ -364,6 +376,7 @@ class MediaDetailStore(
         _loading.value = emptySet()
         friendsCache.clear()
         friendsInFlight.clear()
+        _friendsLoading.value = emptySet()
         _friends.value = emptyMap()
     }
 

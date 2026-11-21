@@ -14,6 +14,10 @@
         {
           "title": "The Info-page trailer starts reliably",
           "detail": "YouTube could open its player shell without starting the video because the embedded player lacked its required origin and referrer information. The player now declares both and can show YouTube's full-screen playback above the page."
+        },
+        {
+          "title": "Friends on a title keep their own loading state",
+          "detail": "The Friends card could disappear before its results arrived whenever the title details had already loaded. It now tracks the followed-users request independently, so both Info layouts keep the checking placeholder visible until that request finishes."
         }
       ]
     },

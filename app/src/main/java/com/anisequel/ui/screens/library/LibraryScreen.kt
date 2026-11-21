@@ -132,6 +132,7 @@ fun LibraryScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
+    val friendsLoadingIds by detailHost.friendsLoading.collectAsStateWithLifecycle()
 
     // One-tap Planning for a title the sheet shows. The host writes through the
     // same repository the rest of the page reads, and is only handed a session
@@ -440,6 +441,7 @@ fun LibraryScreen(
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
             friends = detailFriends[subject.media.mediaCoverKey].orEmpty(),
+            isFriendsLoading = subject.media.mediaCoverKey in friendsLoadingIds,
             isDetailLoading = detailLoading,
             // The sheet is the same one the dashboard opens, so it gets the same
             // access: null here still draws the whole Info page, minus the one

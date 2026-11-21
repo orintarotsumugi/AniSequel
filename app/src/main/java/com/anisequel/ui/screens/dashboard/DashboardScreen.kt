@@ -161,6 +161,7 @@ fun DashboardScreen(
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsStateWithLifecycle()
     val detailNodes by dashboardViewModel.detailNodes.collectAsStateWithLifecycle()
     val detailFriends by dashboardViewModel.friends.collectAsStateWithLifecycle()
+    val friendsLoadingIds by dashboardViewModel.friendsLoading.collectAsStateWithLifecycle()
     val hiddenSequels by dashboardViewModel.hiddenSequels.collectAsStateWithLifecycle()
     val arrivingEnabled by dashboardViewModel.arrivingEnabled.collectAsStateWithLifecycle()
     val arrivingCompact by dashboardViewModel.arrivingCompact.collectAsStateWithLifecycle()
@@ -528,6 +529,7 @@ fun DashboardScreen(
             onLoadDetail = { id, type -> dashboardViewModel.loadDetail(id, type) },
             onLoadFriends = { id, type -> dashboardViewModel.loadFriends(id, type) },
             friends = detailFriends[displayedSubject.media.mediaCoverKey].orEmpty(),
+            isFriendsLoading = displayedSubject.media.mediaCoverKey in friendsLoadingIds,
             onOpenMedia = { media -> navigatedRelation = media },
             isDetailLoading = isDetailLoading,
             canWriteToAniList = canWrite,

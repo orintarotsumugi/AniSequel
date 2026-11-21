@@ -139,6 +139,7 @@ fun StudioScreen(
     val detailNodes by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val detailFriends by detailHost.friends.collectAsStateWithLifecycle()
+    val friendsLoadingIds by detailHost.friendsLoading.collectAsStateWithLifecycle()
 
     // One-tap Planning for a studio's title. A studio page carries no session of
     // its own, so the host is gated on the editor the navigation passed - the
@@ -417,6 +418,7 @@ fun StudioScreen(
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
             friends = detailFriends[summary.mediaCoverKey].orEmpty(),
+            isFriendsLoading = summary.mediaCoverKey in friendsLoadingIds,
             isDetailLoading = summary.mediaCoverKey in loadingDetailIds,
             // Same sheet, same access: the tab follows the editor, and an
             // unauthenticated reader gets exactly the page they always got.

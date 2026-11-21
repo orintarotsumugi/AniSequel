@@ -102,6 +102,7 @@ fun NovaScheduleScreen(
     val details by detailHost.details.collectAsStateWithLifecycle()
     val loadingDetailIds by detailHost.loading.collectAsStateWithLifecycle()
     val friends by detailHost.friends.collectAsStateWithLifecycle()
+    val friendsLoadingIds by detailHost.friendsLoading.collectAsStateWithLifecycle()
     val profiles = rememberPersonProfileHost(repository)
     val planningAdd = rememberPlanningAddHost(
         repository = repository,
@@ -235,6 +236,7 @@ fun NovaScheduleScreen(
             onLoadDetail = detailHost.onLoadDetail,
             onLoadFriends = detailHost.onLoadFriends,
             friends = friends[subject.media.mediaCoverKey].orEmpty(),
+            isFriendsLoading = subject.media.mediaCoverKey in friendsLoadingIds,
             isDetailLoading = subject.media.mediaCoverKey in loadingDetailIds,
             canWriteToAniList = entryEditor != null,
             entryEditor = entryEditor,

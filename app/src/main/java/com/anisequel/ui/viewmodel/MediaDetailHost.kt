@@ -67,6 +67,9 @@ class MediaDetailHost internal constructor(
     /** Followed users' entries per title, keyed by media id. See [MediaDetailStore.friends]. */
     val friends: StateFlow<Map<MediaCoverKey, List<MediaFriend>>> get() = store.friends
 
+    /** Titles whose separate friends request is still in flight. */
+    val friendsLoading: StateFlow<Set<MediaCoverKey>> get() = store.friendsLoading
+
     /** Which media ids are still on the wire, for the sheet's spinner. */
     val loading: StateFlow<Set<MediaCoverKey>> get() = store.loading
 

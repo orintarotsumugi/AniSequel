@@ -362,6 +362,9 @@ class DashboardViewModel(
     /** Followed users' entries for the entry a sheet is showing, keyed by media id. */
     val friends: StateFlow<Map<MediaCoverKey, List<MediaFriend>>> get() = detailStore.friends
 
+    /** Titles whose separate friends request is still in flight. */
+    val friendsLoading: StateFlow<Set<MediaCoverKey>> get() = detailStore.friendsLoading
+
     /**
      * The completed count for [cachedCollection], and the collection it was
      * computed from.

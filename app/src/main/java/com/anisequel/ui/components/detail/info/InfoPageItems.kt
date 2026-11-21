@@ -70,6 +70,7 @@ internal fun LazyListScope.infoPageItems(
     sections: InfoSections,
     themeSongs: List<ThemeSong>,
     isDetailLoading: Boolean,
+    isFriendsLoading: Boolean,
     canWriteToAniList: Boolean,
     holdDurationSeconds: Int,
     swipeEnabled: Boolean,
@@ -155,13 +156,13 @@ internal fun LazyListScope.infoPageItems(
         key = "friends",
         index = 4,
         entranceKey = revealKey,
-        visible = friends.isNotEmpty() || isDetailLoading
+        visible = friends.isNotEmpty() || isFriendsLoading
     ) {
         InfoFriendsCard(
             friends = friends,
             media = media,
             modifier = it,
-            isLoading = isDetailLoading
+            isLoading = isFriendsLoading
         )
     }
 
