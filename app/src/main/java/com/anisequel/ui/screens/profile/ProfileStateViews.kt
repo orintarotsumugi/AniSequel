@@ -254,11 +254,17 @@ fun ProfileErrorView(
  * answer rather than as a wait. A spinner over the whole tab would be the other
  * wrong answer, discarding the charts that *did* arrive with the profile. This is
  * the middle: the page states clearly which part is missing and continues.
+ *
+ * [busy] is false for the other way the tally can be absent: the list was asked for
+ * and could not be read. A spinner over a failure spins for an answer that is not
+ * coming, and the Stats tab drew nothing at all there, so a chart of zeros stood in
+ * for a download that failed with no note saying so.
  */
 @Composable
 internal fun PendingDataNote(
     message: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    busy: Boolean = true
 ) {
     Row(
         modifier = modifier
@@ -271,10 +277,19 @@ internal fun PendingDataNote(
             .testTag("profile_pending_data"),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ExpressiveLoadingIndicator(
-            modifier = Modifier.size(18.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
+        if (busy) {
+            ExpressiveLoadingIndicator(
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Icon(
+                imageVector = AppVectorIcons.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = message,

@@ -5,6 +5,8 @@ import com.anisequel.ui.components.novamarkdown.NovaBlock
 import com.anisequel.ui.components.novamarkdown.NovaInline
 import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.novaPlainText
+import com.anisequel.ui.components.novamarkdown.novaYouTubeId
+import com.anisequel.ui.components.novamarkdown.novaYouTubeThumbnail
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -174,6 +176,35 @@ class NovaMarkdownMediaTest {
 
         assertEquals("https://x/a.webm", video.url)
         assertEquals(false, video.youtube)
+    }
+
+    /**
+     * The poster frame the video widget draws needs the id, and the three forms a
+     * reader pastes carry it in three different places.
+     */
+    @Test
+    fun `a youtube id is read from every address shape`() {
+        assertEquals("abc1234", novaYouTubeId("https://www.youtube.com/watch?v=abc1234"))
+        // A timestamp after the id is not part of it, and would 404 the poster.
+        assertEquals(
+            "abc1234",
+            novaYouTubeId("https://www.youtube.com/watch?v=abc1234&t=42s")
+        )
+        assertEquals("abc1234", novaYouTubeId("https://youtu.be/abc1234"))
+        assertEquals("abc1234", novaYouTubeId("https://www.youtube.com/embed/abc1234"))
+        assertEquals("abc1234", novaYouTubeId("https://www.youtube.com/shorts/abc1234"))
+        assertNull("a non-youtube clip has no poster to ask for", novaYouTubeId("https://x/a.webm"))
+    }
+
+    @Test
+    fun `the poster frame comes from the id, not the address`() {
+        val video = NovaMarkdown.parse("youtube(abc1234)").single() as NovaBlock.Video
+
+        assertEquals(
+            "https://i.ytimg.com/vi/abc1234/hqdefault.jpg",
+            novaYouTubeThumbnail(video.url)
+        )
+        assertNull(novaYouTubeThumbnail("https://x/a.webm"))
     }
 
     @Test

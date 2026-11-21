@@ -497,6 +497,59 @@ internal fun parseNovaVideo(trimmed: String): NovaBlock.Video? {
 private fun isNovaVideoUrl(url: String): Boolean =
     YOUTUBE_HOST.containsMatchIn(url) || VIDEO_EXTENSION.containsMatchIn(url)
 
+/**
+ * The wrappers a YouTube address can put in front of its id, longest first.
+ *
+ * `watch?v=` before `v=` matters: the plain one is a substring of the other, and
+ * matching it first would read the id as `atch?v=…`.
+ */
+private val NOVA_YOUTUBE_ID_WRAPPERS =
+    listOf("watch?v=", "youtu.be/", "embed/", "shorts/", "live/", "v=")
+
+/**
+ * The video id inside a YouTube address, or null when the address is not one.
+ *
+ * The embed widget needs the id twice - once for the poster frame and once for the
+ * caption - and the three forms AniList users paste (`watch?v=`, `youtu.be/`,
+ * `embed/`) each carry it in a different place. Pulled out as a pure function so the
+ * widget never parses a URL, and so the forms are pinned by a test instead of by a
+ * thumbnail that silently fails to load.
+ */
+internal fun novaYouTubeId(url: String): String? {
+    if (!YOUTUBE_HOST.containsMatchIn(url)) return null
+    val wrapper = NOVA_YOUTUBE_ID_WRAPPERS.firstOrNull { url.contains(it, ignoreCase = true) }
+        ?: return null
+    val start = url.indexOf(wrapper, ignoreCase = true) + wrapper.length
+    val id = url.substring(start)
+        .substringBefore('&')
+        .substringBefore('?')
+        .substringBefore('/')
+        .trim()
+    // Ids are `[A-Za-z0-9_-]{11}`; anything else is a timestamp, a playlist or a
+    // truncated paste, and asking YouTube for its poster would 404 into a placeholder.
+    return id.takeIf { candidate ->
+        candidate.isNotEmpty() && candidate.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+    }
+}
+
+/**
+ * The poster frame for a YouTube video, or null when there is no id to ask for.
+ *
+ * `hqdefault` rather than `maxresdefault`: the latter does not exist for every
+ * upload, and a missing poster is a widget that looks broken. It is 4:3 with black
+ * bars above and below a 16:9 picture, which the widget's `Crop` scale removes.
+ */
+internal fun novaYouTubeThumbnail(url: String): String? =
+    novaYouTubeId(url)?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
+
+/** `youtube.com` / `youtu.be`, for the caption under the poster. */
+internal fun novaVideoHost(url: String): String =
+    url.substringAfter("//", url)
+        .substringBefore('/')
+        .substringBefore('?')
+        .removePrefix("www.")
+        .ifBlank { url }
+
 private fun youtubeUrl(value: String): String = when {
     value.startsWith("http", ignoreCase = true) -> value
     value.startsWith("//") -> "https:$value"

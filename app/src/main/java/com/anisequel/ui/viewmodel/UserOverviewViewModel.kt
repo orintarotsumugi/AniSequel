@@ -320,6 +320,22 @@ class UserOverviewViewModel(
     }
 
     /**
+     * Re-asks for the manga half, but only if it has already been asked for.
+     *
+     * The profile's Refresh button re-reads the profile, the anime half of a borrowed
+     * list and every feed that has been opened; it did not touch this one, so pulling
+     * to refresh a stranger's Manga list refetched the grid and this button above it
+     * did not - the same "refresh left the manga rows stale" bug the pull gesture was
+     * given its own `forceRefresh` path for. Guarded on having fetched at all for the
+     * other direction: a page-level refresh must not spend a request on a list nobody
+     * has opened, which is the lazy-loading rule the borrowed tab is built around.
+     */
+    fun refreshMangaLibraryIfLoaded() {
+        if (_mangaLibrary.value == null) return
+        loadMangaLibrary(forceRefresh = true)
+    }
+
+    /**
      * Ask for the anime list, on a profile that did not fetch it with the overview.
      *
      * Guarded the same way [loadMangaLibrary] is, for the same reason times forty:

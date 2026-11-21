@@ -4,6 +4,8 @@ import com.anisequel.ui.screens.profile.formatJoinYear
 import com.anisequel.ui.screens.profile.formatMeanScore
 import com.anisequel.ui.screens.profile.formatRelativeSeconds
 import com.anisequel.ui.screens.profile.formatWatchTime
+import com.anisequel.domain.usecase.BucketTally
+import com.anisequel.ui.screens.profile.finishedEntriesLabel
 import com.anisequel.ui.screens.profile.formatActivityChanges
 import com.anisequel.ui.screens.profile.formatFavouriteCount
 import com.anisequel.ui.screens.profile.formatWeeks
@@ -170,6 +172,23 @@ class ProfileCountFormattingTest {
         assertEquals("2 changes", formatActivityChanges(2))
         assertEquals("2 favourites", formatFavouriteCount(2))
         assertEquals("26 weeks", formatWeeks(26))
+    }
+
+    /**
+     * "Finished 1 entries" was the subtitle on a two-year account's Watch Year chart.
+     *
+     * The episode note on the same tab already singularises ("1 entry has no episode
+     * count yet"); this one interpolated a count into a fixed plural.
+     */
+    @Test
+    fun `the watch year subtitle singularises one finished entry`() {
+        fun bucket(count: Int) = BucketTally(label = "2025", count = count, share = 1f)
+        assertEquals("Finished 1 entry", "Finished ${finishedEntriesLabel(listOf(bucket(1)))}")
+        assertEquals(
+            "Finished 258 entries",
+            "Finished ${finishedEntriesLabel(listOf(bucket(200), bucket(58)))}"
+        )
+        assertEquals("Finished 0 entries", "Finished ${finishedEntriesLabel(emptyList())}")
     }
 
     /**

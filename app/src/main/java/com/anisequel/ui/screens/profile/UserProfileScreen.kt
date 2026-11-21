@@ -433,6 +433,13 @@ fun UserProfileScreen(
                                 // out of the one control that claims to refresh
                                 // the whole page.
                                 socialViewModel.refreshIfStarted()
+                                // The borrowed list's manga half is a separate
+                                // download, and the tab's own pull-to-refresh asks
+                                // for it - this button, drawn above the same grid,
+                                // did not, so refreshing a manga list from the bar
+                                // left the rows it was drawn over at the version
+                                // the reader was trying to replace.
+                                overviewViewModel.refreshMangaLibraryIfLoaded()
                             },
                             modifier = Modifier
                                 .testTag("profile_refresh_button")

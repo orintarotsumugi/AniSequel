@@ -25,12 +25,26 @@ on:
       - main
       - master
   workflow_dispatch:
+    inputs:
+      # Off by default and off for every other event: `--profile` adds report
+      # writing to every Gradle invocation, which is the wrong default for a build
+      # that runs on each push. Turn it on for one manual run when a run is slow and
+      # the reason is not obvious from the step timings - the reports it writes are
+      # per-phase and per-task, so they answer "was that R8, KSP or the test fetch"
+      # with a number instead of a guess.
+      profile:
+        description: 'Write Gradle build profile reports (diagnosing a slow run)'
+        type: boolean
+        default: false
 
+# Read-only by default. The two write scopes live on the one job that needs them
+# (`build-and-release`): `contents: write` to publish a release and commit the
+# manifest, and `pull-requests: write` for the "where is the APK" comment. Granting
+# them here gave the lint job - which only compiles - the right to write to the
+# repository, and a workflow-level grant is what a code-analysis gate reports as an
+# overly broad permission.
 permissions:
-  contents: write
-  # Only for the "tell reviewers where the APK is" comment below. Scoped to
-  # pull-requests so it cannot be used to touch issues or reviews.
-  pull-requests: write
+  contents: read
 
 # Two pushes landing together would both mint a release tag and race to write
 # update.json. One run per ref keeps the newest run the one that publishes.
@@ -90,7 +104,9 @@ jobs:
   #
   # Started alongside the release job, lint delays nothing: the same two
   # compilations happen on two runners instead of one, and the gate - the tests -
-  # is reached in about a minute instead of four.
+  # is reached in about a minute instead of four. For the same reason it no longer
+  # runs on pull requests at all - see the `if:` on the job - which is the one
+  # event where a reader is waiting on this run rather than on a release.
   #
   # There is no `needs:` in either direction, on purpose. Lint is not a gate
   # (`lint { abortOnError = false }` in app/build.gradle.kts), so a lint problem
@@ -100,8 +116,27 @@ jobs:
   # No keystore here, and that is a rule rather than an omission: this job
   # compiles the release variant but never packages or signs it, and a pull
   # request must not need the release key for a lint report.
+  #
+  # Not on pull requests. The branch's required checks are "Build APKs, Bug Check &
+  # Release" and "CodeFactor" - lint is not one, so skipping this job cannot leave a
+  # pull request waiting on a check that will never report.
+  #
+  # `lintRelease` is about four minutes of KSP, Kotlin, a
+  # lint model and the analysis, on a second runner, for a report that cannot fail
+  # a run - and a pull request is the one event where the reader is waiting on the
+  # answer. It still runs on every push to a protected branch, on tags, and through
+  # `workflow_dispatch` (the way to ask for it on a branch), and the release job's
+  # unit tests plus R8 stay exactly where they were: they are the gate, lint is not.
+  #
+  # A `schedule:` was considered instead of this `if:` and rejected: the run's
+  # shared concurrency group cancels in progress, so a weekly run on `main` could
+  # cancel a release that was publishing at the same minute. Lint is not worth that
+  # risk to a release, and a manual dispatch already covers "run it eventually".
   lint:
     name: Android Lint (advisory)
+    permissions:
+      contents: read
+    if: github.event_name != 'pull_request'
     # Pinned rather than `ubuntu-latest`: GitHub's `ubuntu-latest` is mid-migration
     # from 24.04 to 26.04 (October 19 - November 19, 2026), and every run on the
     # label carries a "will migrate to Ubuntu 26" notice annotation until the
@@ -171,6 +206,14 @@ jobs:
     #
     # Nothing here may hardcode a password: this file is public, so a literal
     # would hand every reader the key to sign updates.
+    #
+    # The write scopes the workflow used to hold at the top, granted to the job that
+    # uses them: publishing the release and committing `update.json` need
+    # `contents: write`, and the "tell reviewers where the APK is" comment needs
+    # `pull-requests: write`. Nothing else in this file writes anything.
+    permissions:
+      contents: write
+      pull-requests: write
     env:
       KEYSTORE_PATH: ${{ github.workspace }}/release-key.jks
 
@@ -178,7 +221,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          # Not `fetch-depth: 0`. Full history was fetched so the version could be
+          # resolved with `git describe`/`git log`, and neither is used any more: the
+          # tag comes from `gh release list` (the API) and the manifest push is a
+          # commit on top of HEAD, which a depth-1 clone can push. A full clone of
+          # this repository is tens of thousands of commits for nothing, and it is
+          # the first step of both jobs.
+          fetch-depth: 1
 
       - name: Set up Java 21 (JDK 21)
         uses: actions/setup-java@v5
@@ -466,19 +515,40 @@ jobs:
       # test starts - the download, not the suite, is what makes the unit-test
       # step the slowest in this workflow.
       #
-      # Keyed on libs.versions.toml because that is where the Robolectric version
-      # lives: a bump has to miss the exact key, or the runner would keep testing
-      # against the previous release's framework jars. The `restore-keys` prefix
-      # lets a bump reuse the old download and fetch only what is new.
+      # Keyed on the Robolectric version alone, read from the catalogue rather than
+      # hashed out of it. The key used to be `hashFiles('libs.versions.toml')`, so
+      # bumping any other dependency in that file - Compose, Moshi, a test library -
+      # missed and threw away 100 MB of framework jars the runner had just
+      # downloaded. `restore-keys` still covers a real Robolectric bump: the old
+      # entry is restored and only the new android-all jars are fetched.
+      - name: Read the Robolectric version
+        id: robolectric
+        run: |
+          # `robolectric = "4.16.1"` in the `[versions]` block. The fallback keeps the
+          # cache step working (under a shared `unknown` key) if the entry is ever
+          # renamed, rather than failing the release over a cache key.
+          VERSION=$(grep -E '^\s*robolectric\s*=' gradle/libs.versions.toml \
+            | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "Robolectric framework jars: ${VERSION:-unknown}"
+
       - name: Cache Robolectric framework jars
         uses: actions/cache@v5
         with:
           path: ~/.m2/repository/org/robolectric
-          key: robolectric-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          key: robolectric-${{ runner.os }}-${{ steps.robolectric.outputs.version }}
           restore-keys: |
             robolectric-${{ runner.os }}-
 
       - name: Unit tests
+        env:
+          # Empty unless the run was dispatched with `profile`, so the normal path is
+          # byte-for-byte what it was. See the `workflow_dispatch` input.
+          #
+          # Expanded as `${GRADLE_PROFILE:+"$GRADLE_PROFILE"}` at the call site, not
+          # as `$GRADLE_PROFILE`: an empty expansion would reach Gradle as an empty
+          # task name ("Task '' not found"), and quoting it bare would do the same.
+          GRADLE_PROFILE: ${{ inputs.profile && '--profile' || '' }}
         run: |
           # A real gate, not an advisory step.
           #
@@ -503,25 +573,30 @@ jobs:
           # second has to re-run both compilers before R8 even starts. Passing the
           # resolved version here means the build step inherits this one's
           # compiled release classes instead of rebuilding them.
-          ./gradlew test --stacktrace \
+          ./gradlew test --stacktrace ${GRADLE_PROFILE:+"$GRADLE_PROFILE"} \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}"
           echo "::endgroup::"
 
       - name: Build APK for Review or Release
         env:
-          # Pull requests already run the full unit-test suite and advisory
-          # release lint. Their downloadable APK is a review/install artifact,
-          # not a candidate for publication, so reuse the debug variant those
-          # tests compiled instead of spending another 6+ minutes in R8.
+          # Pull requests already run the full unit-test suite. Their downloadable
+          # APK is a review/install artifact, not a candidate for publication, so
+          # reuse the debug variant instead of spending another 6+ minutes in R8.
           # Main, tags and manual release runs still produce the fully shrunk,
           # signed release APK with the production keep rules.
+          #
+          # (Advisory lint used to be named here too. It no longer runs on pull
+          # requests at all - it is a second runner, not a second gate - so there is
+          # nothing on a PR that the debug variant is standing in for.)
           BUILD_VARIANT: ${{ github.event_name == 'pull_request' && 'debug' || 'release' }}
+          # Empty unless the run was dispatched with `profile`; see the input.
+          GRADLE_PROFILE: ${{ inputs.profile && '--profile' || '' }}
         run: |
           ./gradlew "assemble${BUILD_VARIANT^}" \
             -PanisequelVersionCode="${{ github.run_number }}" \
             -PanisequelVersionName="${{ steps.version.outputs.version_name }}" \
-            --stacktrace
+            ${GRADLE_PROFILE:+"$GRADLE_PROFILE"} --stacktrace
 
       - name: Prepare APK Artifact
         env:
@@ -614,14 +689,30 @@ jobs:
       #
       # It did exactly that on 2026-11-11: the run this file is fixing sat in this
       # step for five minutes with no artifact uploaded, was cancelled there, and
-      # left the job "in progress" for good. The step now gives up after ten
+      # left the job "in progress" for good. The step now gives up after five
       # minutes - far above the few seconds a 3.7 MB APK needs - and a failed
       # upload leaves the run green, because a preview artifact is not a gate.
       # The "Tell reviewers where the APK is" step below already warns when the
       # artifact it wants to link is missing.
+
+      # Only for a run dispatched with `profile`. The report is the point of that
+      # run and it lives inside `build/`, which nothing else uploads.
+      - name: Upload the Gradle profile reports
+        if: inputs.profile
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: gradle-profile
+          path: app/build/reports/profile
+          retention-days: 7
+
       - name: Upload Build Artifacts to Workflow Run
         uses: actions/upload-artifact@v7
-        timeout-minutes: 10
+        # Five minutes, not ten: a 3.7 MB APK needs seconds, and this step is the one
+        # that stalled for five and was then cancelled on 2026-11-11. It stays
+        # non-fatal either way - see the note above - so a shorter bound is the
+        # difference between losing five minutes and ten on a service stall.
+        timeout-minutes: 5
         continue-on-error: true
         with:
           name: anisequel-apks

@@ -72,6 +72,17 @@ fun ProfileStatsTab(
      */
     section: StatsSection = StatsSection.OVERVIEW,
     onSelectSection: (StatsSection) -> Unit = {},
+    /**
+     * Why the media list could not be read, or null when it was.
+     *
+     * Four of this tab's charts are tallied from the list rather than from AniList's
+     * aggregates, and a list that failed to arrive left them empty with no note at
+     * all: the page said "Nothing recorded yet" under a genre chart for an account
+     * with nine hundred entries. The Library tab has carried this reason since it was
+     * the only surface that read the list (see [UserOverviewUiState.Success.libraryError]);
+     * the tab with the most to lose from it was the one not asking.
+     */
+    libraryError: String? = null,
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the screen so this tab's scroll position outlives a tab switch.
@@ -97,6 +108,21 @@ fun ProfileStatsTab(
         if (state.isLibraryLoading) {
             item(key = "pending_data") {
                 PendingDataNote("Still counting this list - the entry tallies are on their way")
+            }
+        } else if (libraryError != null) {
+            // A failure is the other way these charts are empty, and it is not a wait:
+            // the note says which charts are affected so the ones that came from
+            // AniList's own aggregates are not read as wrong.
+            item(key = "failed_data") {
+                // The reason arrives with or without a closing full stop depending on
+                // which layer wrote it, so the sentence is built from a trimmed copy
+                // rather than ending up with ".." or with two sentences run together -
+                // the Library tab's version of this note has the same job.
+                PendingDataNote(
+                    message = "Couldn't count this list - ${libraryError.trimEnd('.')}. " +
+                        "The charts that come from AniList's own totals are complete.",
+                    busy = false
+                )
             }
         }
 
@@ -192,7 +218,7 @@ private fun LazyListScope.overviewCharts(state: UserOverviewUiState.Success) {
                 icon = AppVectorIcons.StatWatchYear,
                 rows = state.entryInsights.watchYears,
                 labelWidth = 48.dp,
-                subtitle = "Finished ${state.entryInsights.watchYears.sumOf { it.count }} entries",
+                subtitle = "Finished ${finishedEntriesLabel(state.entryInsights.watchYears)}",
                 barColor = MaterialTheme.colorScheme.primary,
                 accentSlot = 5
             )
@@ -434,3 +460,16 @@ private fun episodeBucketSubtitle(insights: ListEntryInsights): String? {
 }
 
 private fun countryTotal(insights: ListEntryInsights): Int = insights.countries.sumOf { it.count }
+
+/**
+ * "1 entry" / "258 entries", for the Watch Year chart's subtitle.
+ *
+ * The subtitle read "Finished 1 entries" on an account that had finished one title in
+ * its first year, which is the same singular the episode note ten lines above already
+ * gets right - a count interpolated into a fixed plural is a sentence that only reads
+ * correctly for the accounts nobody looks at.
+ */
+internal fun finishedEntriesLabel(watchYears: List<BucketTally>): String {
+    val count = watchYears.sumOf { it.count }
+    return if (count == 1) "1 entry" else "$count entries"
+}

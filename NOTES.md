@@ -234,6 +234,29 @@ The wavy progress card and the trailer card (drawn from YouTube's deterministic
 thumbnail) are the other new surfaces; the synopsis, Categories, cast, relations
 and the rest are the same cards, in the reference order.
 
+**The trailer plays in the app, and the score is a wavy ring.** The card used to
+hand the video to whatever browser the device had; it now opens a full-window
+player (`NovaTrailerViewer.kt`), with "Open on YouTube" under the frame as the
+escape hatch for a region-locked or refused embed. AniList gives an id, not a
+stream, so the player is YouTube's embed in a `WebView` — the one view in the app
+that runs with JavaScript on, because the player *is* a web app and without
+scripting the embed is a black rectangle. What keeps that contained: the page is a
+fixed wrapper built by `novaTrailerEmbedHtml` from a **validated** id (YouTube's
+alphabet only, so a payload cannot become markup), the only hosts it may load are
+YouTube's (`isNovaTrailerHost`, dot-anchored so `youtube.com.example.net` does not
+pass), and every other navigation is cancelled into the shared external opener.
+Both guards are pinned by `NovaTrailerViewerTest`; what a `WebView` does cannot be
+asserted, so what it is *given* is.
+
+The score in the summary strip is drawn inside a closed version of the same wave —
+`NovaWavyRing`, built on `WaveGeometry.ringRadius`, so the page's two wavy marks
+are one family rather than two squiggles that happen to be near each other. It is
+the one number on the strip that is already a share of a whole (76 of 100), which
+is why it gets the shape and the other three stay plain. Its **loading** state is
+the same ring with no fraction: the track stays and a short accent arc travels
+around it, which is also what the trailer player shows while the embed paints — the
+"circle loading" mark, in the two places on this page that wait for something.
+
 There is no Episodes or Comments destination. The reference clients have both
 because they play video or own a comment store; AniSequel has neither, and an
 empty capsule destination is the dead control §9 keeps out. The existing
@@ -846,6 +869,34 @@ transparent, JavaScript-disabled WebView with file access, navigation and
 network mixing refused; the view is disabled so the Compose card still owns the
 tap and the list still owns the scroll. Everything else stays native. A failed
 fetch falls back to Coil, which still carries `SvgDecoder` for flat SVG.
+
+**A live card is rendered once and then it is a picture** (`NovaSvgRaster.kt`).
+Chromium was the right engine and the wrong thing to keep in a `LazyColumn`: each
+view is a renderer with its own surface, it repaints on every frame of an
+animated card, and the list disposes and rebuilds it whenever the bio leaves the
+viewport — so scrolling past three stat cards and back paid for three page loads,
+in the middle of a fling, and a profile with a decorated bio scrolled like mud.
+The card is now captured to a bitmap after the page's first committed frame, the
+`AndroidView` is released (`stopLoading` then `destroy`), and from then on the
+card is an `Image`. Two things make that safe: the capture switches the WebView to
+the *software* layer type first, because a hardware-accelerated Chromium draws
+into its own surface and `draw` into a software `Canvas` then comes back empty;
+and the result is sampled for ink before it is used, so a card that did not paint
+keeps its WebView instead of being replaced by a blank. Three attempts over about
+a quarter of a second cover late fonts. The trades are deliberate: an animated
+banner becomes the frame it animated from, and a card drawn at a new column width
+(a rotation, a fold, a split screen) is captured again — `novaSvgRasterKey`
+carries the slot size for that reason, since keyed on the URL alone a rotation
+would stretch the old capture.
+
+The two caches behind it are byte budgets, not entry counts (`NovaByteCache.kt`).
+Twelve retained documents at the 2 MiB fetch ceiling was 48 MiB of UTF-16 heap for
+a bio nobody was looking at, and the raster cache is the same question with
+different numbers (8 MiB of markup, 32 MiB of bitmaps). The newest entry is never
+evicted for exceeding the budget alone — throwing away what was just paid for
+would make that card re-render on every pass — and identical cards share one
+in-flight request rather than downloading the same banner twice, concurrently,
+while the reader waits for both.
 
 **One provider, every markdown surface.** A cover card is only half a card
 without its poster, and the poster is a *request*: the document is parsed, the

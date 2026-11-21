@@ -370,7 +370,6 @@ private fun PosterArtwork(
                 }
             )
             .clip(artworkShape)
-            .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHigh)
             .then(
                 if (style.bordered) {
                     Modifier.border(
@@ -383,6 +382,18 @@ private fun PosterArtwork(
                 }
             )
     ) {
+        // Behind the artwork, not instead of it: the tile is the first frame a cold
+        // start has (memory cache is empty, so every cover is a disk read or a
+        // round trip away), and it stays visible if the request never resolves. The
+        // `AsyncImage` below covers it as soon as a bitmap exists, and Coil's
+        // crossfade dissolves one into the other - see [PosterPlaceholder] for the
+        // three things this replaced.
+        PosterPlaceholder(
+            title = title,
+            tint = coverColor,
+            modifier = Modifier.matchParentSize()
+        )
+
         if (imageUrl != null) {
             val url = imageUrl
             val context = LocalContext.current

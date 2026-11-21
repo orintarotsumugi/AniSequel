@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.library
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +45,7 @@ import com.anisequel.domain.card.CardDesign
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.cards.LocalCardDesign
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.cardCoverAspect
 import com.anisequel.ui.components.cards.cardPosterUrl
@@ -413,8 +412,16 @@ private fun NovaPoster(
                 .fillMaxWidth()
                 .aspectRatio(cardCoverAspect(if (large) 0.74f else 0.68f, design))
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
-                .background(coverTint ?: Color.Transparent)
         ) {
+            // The grid is what a cold start opens on, and `Color.Transparent` meant a
+            // poster with no dominant colour in its data had nothing at all behind it
+            // until its cover decoded. The title's initials give every cell content on
+            // the first frame; see [PosterPlaceholder].
+            PosterPlaceholder(
+                title = media.displayName,
+                tint = coverTint,
+                modifier = Modifier.matchParentSize()
+            )
             AsyncImage(
                 model = cardPosterUrl(media),
                 contentDescription = media.displayName,
@@ -567,8 +574,12 @@ private fun NovaLibraryRow(
                     .width(48.dp)
                     .height(68.dp)
                     .clip(RoundedCornerShape(11.dp))
-                    .background(coverTint ?: Color.Transparent)
             ) {
+                PosterPlaceholder(
+                    title = media.displayName,
+                    tint = coverTint,
+                    modifier = Modifier.matchParentSize()
+                )
                 AsyncImage(
                     model = cardPosterUrl(media),
                     contentDescription = null,

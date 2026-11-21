@@ -61,6 +61,21 @@ sealed interface NovaBlock {
         override val align: NovaAlign = NovaAlign.Start
     ) : NovaBlock
 
+    /**
+     * A `-# …` line: Discord's subtext, drawn small and muted under the prose above it.
+     *
+     * Not an AniList construct - AniList has no smaller-than-body text outside a
+     * table - but it is the one piece of Discord's chat markup people retype on a
+     * profile ("-# last updated 2.5.1"), and rendering it as the literal "-#" was
+     * the only other answer. Its own block rather than a paragraph flag because the
+     * style is the whole of what the line is, and a paragraph that has to ask
+     * whether it is subtext is a paragraph with two renderers inside it.
+     */
+    data class Subtext(
+        val inlines: List<NovaInline>,
+        override val align: NovaAlign = NovaAlign.Start
+    ) : NovaBlock
+
     /** A `>` run or an HTML `<blockquote>`, kept as blocks so nesting survives. */
     data class Quote(
         val blocks: List<NovaBlock>,
@@ -362,6 +377,7 @@ internal fun List<NovaBlock>.containsNovaImage(): Boolean = any { block ->
         is NovaBlock.Image -> true
         is NovaBlock.Paragraph -> block.inlines.containsNovaImage()
         is NovaBlock.Heading -> block.inlines.containsNovaImage()
+        is NovaBlock.Subtext -> block.inlines.containsNovaImage()
         is NovaBlock.Quote -> block.blocks.containsNovaImage()
         is NovaBlock.Spoiler -> block.blocks.containsNovaImage()
         is NovaBlock.BulletList -> block.items.any { it.blocks.containsNovaImage() }
@@ -413,6 +429,7 @@ private fun <K> novaPreviewKeysIn(
                 is NovaBlock.BulletList -> block.items.forEach { walkBlocks(it.blocks) }
                 is NovaBlock.Paragraph -> walkInline(block.inlines)
                 is NovaBlock.Heading -> walkInline(block.inlines)
+                is NovaBlock.Subtext -> walkInline(block.inlines)
                 is NovaBlock.Table -> {
                     block.headers.forEach { walkInline(it.inlines) }
                     block.rows.forEach { row -> row.forEach { walkInline(it.inlines) } }

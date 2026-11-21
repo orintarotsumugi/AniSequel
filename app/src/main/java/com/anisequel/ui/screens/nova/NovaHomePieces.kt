@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.MissedSequel
@@ -144,8 +145,16 @@ private fun NovaContinueCard(
                 .fillMaxWidth()
                 .height(158.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(coverTint ?: Color.Transparent)
         ) {
+            // `coverTint ?: Color.Transparent` was a hole on a cold start: the rail is
+            // the first thing Home draws, its covers are a disk read (or a round trip)
+            // away, and a title whose cover carries no dominant colour had nothing
+            // behind it at all. The initials land on the first frame instead.
+            PosterPlaceholder(
+                title = media.displayName,
+                tint = coverTint,
+                modifier = Modifier.matchParentSize()
+            )
             AsyncImage(
                 model = cardPosterUrl(media),
                 // The caption below names the card; a description on the artwork
@@ -226,8 +235,12 @@ fun NovaSequelRow(
                     .width(62.dp)
                     .height(92.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent)
             ) {
+                PosterPlaceholder(
+                    title = sequel.sequelTitle,
+                    tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                    modifier = Modifier.matchParentSize()
+                )
                 AsyncImage(
                     model = sequel.sequelCoverUrl,
                     contentDescription = sequel.sequelTitle,
@@ -347,8 +360,12 @@ fun NovaSequelCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(176.dp)
-                    .background(coverTint ?: Color.Transparent)
             ) {
+                PosterPlaceholder(
+                    title = sequel.sequelTitle,
+                    tint = coverTint,
+                    modifier = Modifier.matchParentSize()
+                )
                 AsyncImage(
                     model = sequel.sequelCoverUrl,
                     contentDescription = sequel.sequelTitle,

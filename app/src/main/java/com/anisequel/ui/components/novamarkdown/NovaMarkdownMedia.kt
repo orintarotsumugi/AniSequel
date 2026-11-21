@@ -1,17 +1,21 @@
 package com.anisequel.ui.components.novamarkdown
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -22,12 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -198,53 +204,151 @@ private fun novaImageSizeModifier(
     return modifier
 }
 
+/**
+ * The video embed: a poster frame with a play badge, not a line of text about a video.
+ *
+ * ## Why this is a card and not the row it was
+ *
+ * `youtube(id)` and `webm(url)` used to draw a small outlined row - a play glyph, the
+ * words "Watch on YouTube" and the URL - for what is the most visual thing a bio can
+ * contain. A reader scrolling a profile saw a link where the author had posted a
+ * video, and the poster frame was never shown at all.
+ *
+ * Dantotsu's AniMarkdown draws this as a 16:9 `.yt-embed` (its WebView widget: the
+ * `hqdefault` frame, a red play badge, `object-fit: cover`) and that shape is the part
+ * worth having here: the frame is the video's own artwork, so the card is recognisable
+ * before it is read. The interactive part of Dantotsu's widget - swapping an `<iframe>`
+ * in on tap - has no counterpart in a Compose bio that opens links, so a tap opens the
+ * video the way every other embed in this renderer does.
+ *
+ * A `webm`/`mp4` clip has no poster frame to ask a service for, so it gets the same
+ * card without the artwork: a dark 16:9 plate, the same badge, and the clip's own file
+ * name under it.
+ */
 @Composable
 internal fun NovaVideo(video: NovaBlock.Video) {
     val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
+    val thumbnail = novaYouTubeThumbnail(video.url)
+    val caption = if (video.youtube) "Watch on YouTube" else "Watch this clip"
+    val detail = if (video.youtube) {
+        novaVideoHost(video.url)
+    } else {
+        video.url.substringAfterLast('/').substringBefore('?').ifBlank { video.url }
+    }
+
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = CardDefaults.outlinedCardBorder(),
         modifier = Modifier
             .fillMaxWidth()
+            // The clip is for the press indication, not for the card: `clickable` is on
+            // this node, outside the `Surface`, so its ripple would paint over square
+            // corners - the shape the card is not.
+            .clip(MaterialTheme.shapes.medium)
             .bouncyPress(interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource) {
+            .clickable(
+                interactionSource = interactionSource,
+                // The whole card is one target, and a screen reader has to be told
+                // what it does: the play badge and the caption are drawn, not spoken.
+                onClickLabel = "Open the video"
+            ) {
                 openExternalUrlOrCopy(context, video.url)
             }
+            .testTag("nova_video_embed")
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = AppVectorIcons.Play,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = if (video.youtube) "Watch on YouTube" else "Watch media clip",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = video.url,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(MEDIA_EMBED_ASPECT)
+                    .background(
+                        if (thumbnail != null) Color.Black
+                        else MaterialTheme.colorScheme.surfaceContainerHighest
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (thumbnail != null) {
+                    AsyncImage(
+                        model = remember(context, thumbnail) {
+                            ImageRequest.Builder(context)
+                                .data(thumbnail)
+                                // A poster is a placeholder for a link, not artwork the
+                                // reader is looking at; a slow CDN should not pop it in.
+                                .crossfade(true)
+                                .build()
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        // `Crop` is what makes `hqdefault` usable: the frame is 4:3 with
+                        // black bars above and below the picture, and the bars are what
+                        // the card is not allowed to show.
+                        contentScale = ContentScale.Crop,
+                        filterQuality = FilterQuality.Medium
+                    )
+                }
+
+                // No second glyph on a poster-less plate: the badge already says
+                // "video", and a file-type icon behind it drew two shapes in the same
+                // centre. The clip's file name is in the caption under the plate.
+                MediaEmbedPlayBadge()
+            }
+
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = caption,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = detail,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Icon(
+                    imageVector = AppVectorIcons.OpenInNew,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
                 )
             }
-            Icon(
-                imageVector = AppVectorIcons.OpenInNew,
-                contentDescription = "Open",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp)
-            )
         }
+    }
+}
+
+/** A 16:9 plate for a video embed, the shape every player and Dantotsu's widget use. */
+private const val MEDIA_EMBED_ASPECT = 16f / 9f
+
+/**
+ * The play badge over a poster: a red rounded plate with a white triangle.
+ *
+ * Red because that is the cue that makes the surface read as a video rather than as a
+ * picture with a link under it, and drawn as its own composable so the poster and the
+ * poster-less clip card wear the identical badge.
+ */
+@Composable
+private fun MediaEmbedPlayBadge() {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xD9F22B2B))
+            .size(width = 56.dp, height = 38.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.Play,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(22.dp)
+        )
     }
 }

@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.posterColor
@@ -74,11 +75,14 @@ internal fun NovaSequelBanner(
         tonalElevation = true
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent)
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Same rule as the plain home card: an unknown dominant colour used to
+                // leave nothing behind the artwork - see [PosterPlaceholder].
+                PosterPlaceholder(
+                    title = sequel.sequelTitle,
+                    tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                    modifier = Modifier.matchParentSize()
+                )
                 AsyncImage(
                     model = sequel.sequelCoverUrl,
                     contentDescription = sequel.sequelTitle,
@@ -186,15 +190,23 @@ internal fun NovaSequelShelfCard(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = sequel.sequelCoverUrl,
-                contentDescription = sequel.sequelTitle,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(width = 82.dp, height = 110.dp)
                     .clip(RoundedCornerShape(13.dp))
-                    .background(sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent)
-            )
+            ) {
+                PosterPlaceholder(
+                    title = sequel.sequelTitle,
+                    tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                    modifier = Modifier.matchParentSize()
+                )
+                AsyncImage(
+                    model = sequel.sequelCoverUrl,
+                    contentDescription = sequel.sequelTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
@@ -281,16 +293,24 @@ internal fun NovaSequelTicket(
         tonalElevation = true
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(132.dp)) {
-            AsyncImage(
-                model = sequel.sequelCoverUrl,
-                contentDescription = sequel.sequelTitle,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
                     .size(width = 76.dp, height = 108.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(sequel.sequelMedia.posterColor.toCoverColorOrNull() ?: Color.Transparent)
-            )
+            ) {
+                PosterPlaceholder(
+                    title = sequel.sequelTitle,
+                    tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                    modifier = Modifier.matchParentSize()
+                )
+                AsyncImage(
+                    model = sequel.sequelCoverUrl,
+                    contentDescription = sequel.sequelTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)

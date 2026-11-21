@@ -19,6 +19,19 @@ internal val HORIZONTAL_RULE =
     Regex("""^ {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$""")
 internal val FENCE = Regex("""^ {0,3}(`{3,})(.*)$""")
 internal val BULLET_ITEM = Regex("""^(\s*)[-*+][ \t]+(.*)$""")
+
+/**
+ * Discord's subtext: `-# written small`. Checked before [BULLET_ITEM], which cannot
+ * match it anyway (`-#` has no separating space) - the order is recorded because the
+ * two look alike and the next person adding a `-` form has to know which wins.
+ */
+internal val SUBTEXT_ITEM = Regex("""^ {0,3}-#[ \t]+(.+)$""")
+
+/**
+ * Discord's quote-the-rest form: `>>> ` opens a blockquote that runs to the end of
+ * the message, newlines and blank lines included.
+ */
+internal val MULTILINE_QUOTE = Regex("""^ {0,3}>>>(?:[ \t]+(.*))?$""")
 internal val ORDERED_ITEM = Regex("""^(\s*)(\d{1,9})[.)][ \t]+(.*)$""")
 internal val TASK_ITEM = Regex("""^\[([ xX])\][ \t]+(.*)$""")
 internal val SEPARATOR_CELL = Regex(""":?-{3,}:?""")

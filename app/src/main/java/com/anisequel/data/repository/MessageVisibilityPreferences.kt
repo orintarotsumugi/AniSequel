@@ -63,9 +63,6 @@ data class MessageVisibility(
         val createdAt = message.createdAt ?: return false
         return createdAt.toLong() > lastReceivedSeenAt
     }
-
-    /** How many rows the page can bring back. */
-    val hiddenCount: Int get() = hiddenReceived.size + hiddenSent.size
 }
 
 /**

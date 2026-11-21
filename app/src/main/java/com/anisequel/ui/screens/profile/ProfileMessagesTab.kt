@@ -44,6 +44,7 @@ import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.viewmodel.MessageFilter
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.hasHiddenMessages
+import com.anisequel.ui.viewmodel.hiddenMessageCount
 import com.anisequel.ui.viewmodel.isNewMessage
 import com.anisequel.ui.viewmodel.visibleError
 import com.anisequel.ui.viewmodel.visibleHasMore
@@ -162,6 +163,10 @@ fun ProfileMessagesTab(
     val error = visibleError(state, messages)
     val sourceError = visibleSourceError(state, messages)
     val loadMoreError = visibleLoadMoreError(state, messages)
+    // Both from the same scoped count: the pill exists only when the visible filter has
+    // a dismissed row behind it, and its number is that filter's, not the two sides
+    // added together - see [hiddenMessageCount].
+    val hiddenCount = hiddenMessageCount(state)
     val hasHidden = hasHiddenMessages(state)
 
     // The same six-rows-from-the-end trigger the activity feed uses: far enough
@@ -197,7 +202,7 @@ fun ProfileMessagesTab(
             selected = state.filter,
             onSelect = onSelectFilter,
             hasHidden = hasHidden,
-            hiddenCount = state.visibility.hiddenCount,
+            hiddenCount = hiddenCount,
             onShowHidden = onShowHidden,
             flagNew = state.visibility.flagNew,
             onFlagNewChange = onFlagNewChange,

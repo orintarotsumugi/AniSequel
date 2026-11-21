@@ -7,6 +7,7 @@ import com.anisequel.data.repository.MessageVisibility
 import com.anisequel.ui.viewmodel.MessageFilter
 import com.anisequel.ui.viewmodel.UserMessagesViewModel
 import com.anisequel.ui.viewmodel.hasHiddenMessages
+import com.anisequel.ui.viewmodel.hiddenMessageCount
 import com.anisequel.ui.viewmodel.isNewMessage
 import com.anisequel.ui.viewmodel.visibleMessages
 import org.junit.Assert.assertEquals
@@ -156,6 +157,54 @@ class MessageVisibilityTest {
         )
         // The same rule the card asks, through the derivation that reads the state.
         assertFalse(isNewMessage(state(visibility = visibility), message(1, sent = false, createdAt = 900)))
+    }
+
+    /**
+     * The pill answers for the chip that is showing, not for the whole store.
+     *
+     * "Hidden (3)" used to be the two sides added together, so on Sent with three
+     * dismissed rows in Received the control offered to bring back rows the reader
+     * was not looking at - and on a filter with nothing hidden it appeared at all.
+     */
+    @Test
+    fun `the hidden count belongs to the visible filter`() {
+        val received = listOf(message(1, sent = false), message(2, sent = false))
+        val sent = listOf(message(3, sent = true))
+        val visibility = MessageVisibility(hiddenReceived = setOf(1, 2))
+
+        val onSent = state(
+            filter = MessageFilter.SENT,
+            received = received,
+            sent = sent,
+            visibility = visibility
+        )
+        assertEquals(0, hiddenMessageCount(onSent))
+        assertFalse(hasHiddenMessages(onSent))
+
+        val onReceived = state(
+            filter = MessageFilter.RECEIVED,
+            received = received,
+            sent = sent,
+            visibility = visibility
+        )
+        assertEquals(2, hiddenMessageCount(onReceived))
+        assertTrue(hasHiddenMessages(onReceived))
+
+        // All merges the two sides, so it counts both - and only both: the row that
+        // was never hidden is not in the number either.
+        val onAll = state(received = received, sent = sent, visibility = visibility)
+        assertEquals(2, hiddenMessageCount(onAll))
+    }
+
+    @Test
+    fun `a hidden id that is not in the loaded page is not counted`() {
+        // Hiding survives a restart; the rows behind it do not. A stored id with no row
+        // in hand must not put a count on a pill with nothing behind it.
+        val stored = state(
+            received = listOf(message(1, sent = false)),
+            visibility = MessageVisibility(hiddenReceived = setOf(7, 1))
+        )
+        assertEquals(1, hiddenMessageCount(stored))
     }
 
     @Test

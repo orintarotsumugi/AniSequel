@@ -75,7 +75,10 @@ fun metaCornerFor(style: MediaCardStyle): PosterCorner =
         // pill cannot move to bottom-start in that case: it would sit on the title,
         // which is a second collision of the same kind this function exists to
         // prevent. The opposite end of the top edge is free in every style whose
-        // score is top-start (MODERN), because no style puts anything at top-end.
+        // score is top-start (MODERN), because no style puts anything at top-end -
+        // and a surface that wants a second badge of its own there has to share this
+        // corner rather than draw on it: the Library's favourite mark does, see
+        // `LibraryPoster`, which is what the "free" here means.
         scoreCornerOf(style) == PosterCorner.TOP_START &&
             style.titlePlacement == CardTitlePlacement.OVERLAY_BOTTOM -> PosterCorner.TOP_END
         scoreCornerOf(style) == PosterCorner.TOP_START -> PosterCorner.BOTTOM_START

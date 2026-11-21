@@ -52,6 +52,26 @@ class ContentLimitsTest {
         // and the send button both read.
         assertEquals(ContentLimits.REPLY_MAX, ContentLimits.clipReply(atCeiling + "xxx").length)
     }
+
+    /**
+     * The clip cuts on a character boundary, not on a UTF-16 unit.
+     *
+     * An emoji is two `Char`s, so a draft whose 8,000th unit is the first half of one
+     * used to come back with a lone high surrogate at the end - text the field cannot
+     * draw and AniList cannot read, in place of the character the reader typed.
+     */
+    @Test
+    fun `clipping a draft never splits a character in two`() {
+        // 7,999 single-unit characters, then an emoji straddling the ceiling.
+        val draft = "x".repeat(ContentLimits.REPLY_MAX - 1) + "\uD83D\uDE00"
+        val clipped = ContentLimits.clipReply(draft)
+        assertEquals(ContentLimits.REPLY_MAX - 1, clipped.length)
+        assertFalse(
+            "the clip left half an emoji at the end of the draft",
+            clipped.last().isHighSurrogate()
+        )
+        assertEquals("x".repeat(ContentLimits.REPLY_MAX - 1), clipped)
+    }
 }
 
 class CommentDraftEditsTest {

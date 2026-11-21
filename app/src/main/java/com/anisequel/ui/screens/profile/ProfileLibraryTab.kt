@@ -68,6 +68,7 @@ import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.ui.components.cards.PosterSkeletonMosaic
 import com.anisequel.domain.card.CardTitlePlacement
+import com.anisequel.domain.card.PosterCorner
 import com.anisequel.domain.card.metaCornerFor
 import com.anisequel.ui.components.cards.toAlignment
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -928,6 +929,7 @@ fun ProfileLibraryTab(
                     ) { entry ->
                         LibraryPoster(
                             entry = entry,
+                            owner = listOwner,
                             isFavourite = entry.media.namespaceKey in favouriteIds,
                             // Shelf and Cover wall are caption-free browsing modes; Shelf
                             // packs five columns, so a title under each cover is cramped and
@@ -1019,7 +1021,11 @@ private fun LibraryControls(
                     },
                     selected = selected,
                     onClick = { onType(option) },
-                    minTouchTargetHeight = 40.dp,
+                    // 44dp, the floor the rest of this app's chips and icon buttons
+                    // use: the filter row under it already had it, and these two rows
+                    // were left at 40 - the type chip a reader hits to load a whole
+                    // manga list is the last control that should need aiming.
+                    minTouchTargetHeight = 44.dp,
                     modifier = Modifier.testTag("library_type_${option.name.lowercase(java.util.Locale.ROOT)}")
                 )
             }
@@ -1096,7 +1102,8 @@ private fun LibraryControls(
                                 }
                                 onSortChange(next.first, next.second)
                             },
-                            minTouchTargetHeight = 40.dp,
+                            // 44dp for the same reason the type chip above says.
+                            minTouchTargetHeight = 44.dp,
                             modifier = Modifier.testTag("library_sort_${option.name.lowercase(java.util.Locale.ROOT)}")
                         )
                     }
@@ -1172,11 +1179,24 @@ private fun LibrarySearchField(
  *
  * The progress pill moves corner when the style puts the rating where it used to
  * sit - see [metaCornerFor]. Two capsules stacked in one corner is not a layout, and
- * the one that disappears is the number the reader was scanning for.
+ * the one that disappears is the number the reader was scanning for. The favourite
+ * mark is the second badge with that problem: it lives in the top-end corner, which is
+ * exactly where two styles put the pill, so the two share that corner as one row there
+ * rather than drawing over each other.
  */
 @Composable
 private fun LibraryPoster(
     entry: MediaListEntryItem,
+    /**
+     * Whose rating the poster prints.
+     *
+     * Passed in rather than assumed - see [libraryRating]. It used to be hardcoded to
+     * [ListOwner.THEIRS] here, so the same grid drew the list owner's score on this tab
+     * (correct) and on the reader's own Library page (where the settings say to show
+     * the community average, and the card the reader taps into shows that instead). Two
+     * surfaces disagreeing about one number is the failure [ListOwner] exists to stop.
+     */
+    owner: ListOwner,
     isFavourite: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1197,7 +1217,7 @@ private fun LibraryPoster(
     // the same poster said two different things depending on whose page it was on; the
     // shared helper now makes both answer to the reader's switches, and an unrated entry
     // still falls back to the average so a poster never loses its only number.
-    val score = libraryRating(entry, ListOwner.THEIRS)
+    val score = libraryRating(entry, owner)
 
     Column(
         modifier = modifier
@@ -1216,44 +1236,48 @@ private fun LibraryPoster(
             titleVisible = showTitle,
             modifier = Modifier.fillMaxWidth(),
             overlay = {
-                libraryProgressLabel(entry)?.let { label ->
+                val progress: String? = libraryProgressLabel(entry)
+                val metaCorner = metaCornerFor(style)
+                // The pill and the heart are both this surface's own marks, and a style
+                // can park the pill in the top-end corner (see [metaCornerFor]: MODERN and
+                // STAMP both do, because their rating owns the top-start one). The heart
+                // was drawn at top-end unconditionally, so on those two styles it sat on
+                // top of the progress number - two overlays in one corner, which is the
+                // collision `metaCornerFor` exists to prevent, reintroduced by the badge
+                // that did not go through it. They share the corner as one row instead:
+                // the pill keeps the number it was drawn for and the heart moves beside it.
+                val heartSharesCorner = isFavourite && progress != null &&
+                    metaCorner == PosterCorner.TOP_END
+                if (heartSharesCorner) {
                     Row(
                         modifier = Modifier
-                            .align(metaCornerFor(style).toAlignment())
-                            .padding(5.dp)
-                            .clip(ExpressiveShapes.pill)
-                            // Opaque enough to read a number over a pale cover, and
-                            // translucent enough that the artwork still shows through.
-                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
-                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                            .align(metaCorner.toAlignment())
+                            .padding(5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = AppVectorIcons.Play,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(9.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
-                            maxLines = 1
-                        )
+                        LibraryFavouriteMark()
+                        LibraryProgressPill(progress, isManga = entry.media.isManga)
                     }
-                }
-
-                if (isFavourite) {
-                    Icon(
-                        imageVector = AppVectorIcons.FavouriteAnime,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(5.dp)
-                            .size(16.dp)
-                    )
+                } else {
+                    progress?.let { label ->
+                        Box(
+                            modifier = Modifier
+                                .align(metaCorner.toAlignment())
+                                .padding(5.dp)
+                        ) {
+                            LibraryProgressPill(label, isManga = entry.media.isManga)
+                        }
+                    }
+                    if (isFavourite) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(5.dp)
+                        ) {
+                            LibraryFavouriteMark()
+                        }
+                    }
                 }
             }
         )
@@ -1281,6 +1305,52 @@ private fun LibraryPoster(
             }
         }
     }
+}
+
+/**
+ * The watched/chapter count on a poster: the one number a Library grid draws per row.
+ *
+ * Extracted so the favourite mark beside it (see [LibraryPoster]) can be laid out in the
+ * same corner without a second copy of this capsule.
+ */
+@Composable
+private fun LibraryProgressPill(label: String, isManga: Boolean) {
+    Row(
+        modifier = Modifier
+            .clip(ExpressiveShapes.pill)
+            // Opaque enough to read a number over a pale cover, and
+            // translucent enough that the artwork still shows through.
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            // A chapter count does not get a play triangle: see
+            // [com.anisequel.ui.components.AppVectorIcons.ChapterProgress].
+            imageVector = if (isManga) AppVectorIcons.ChapterProgress else AppVectorIcons.Play,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(9.dp)
+        )
+        Spacer(modifier = Modifier.width(3.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            maxLines = 1
+        )
+    }
+}
+
+/** The pinned-favourite mark. See [LibraryProgressPill] for why it is its own composable. */
+@Composable
+private fun LibraryFavouriteMark() {
+    Icon(
+        imageVector = AppVectorIcons.FavouriteAnime,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.tertiary,
+        modifier = Modifier.size(16.dp)
+    )
 }
 
 /**

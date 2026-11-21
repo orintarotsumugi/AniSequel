@@ -145,6 +145,16 @@ object AppVectorIcons {
     // accident when a third page wants a lawn.
     val Seasonal = AppExtraVectors.SeasonalSky
     val Play = Icons.Default.PlayArrow
+
+    /**
+     * The mark beside a *chapter* count, where [Play] sits beside an episode count.
+     *
+     * A progress badge is one capsule with one small glyph, and the glyph was a play
+     * triangle on every poster - including the manga grid, where the number next to it
+     * reads "Ch 42/50". The same book the manga chips already use says what the count
+     * is without reading the label, which is the whole job of a glyph that small.
+     */
+    val ChapterProgress = Icons.AutoMirrored.Filled.MenuBook
     val Trailer = AppCustomVectors.TrailerPlay
     val Info = Icons.Default.Info
     val Schedule = Icons.Default.Schedule
@@ -286,7 +296,6 @@ object AppVectorIcons {
     val TextItalic = AppCustomVectors.TextItalic
     val TextSpoiler = AppCustomVectors.TextSpoiler
     val AttachImage = AppCustomVectors.AttachImage
-    val TextUnderline = AppExtraVectors.TextUnderline
     val TextStrikethrough = AppExtraVectors.TextStrikethrough
     val TextHeader = AppExtraVectors.TextHeader
     val TextQuote = AppExtraVectors.TextQuote

@@ -415,45 +415,6 @@ object AppExtraVectors {
             }
         }.build()
     }
-    /**
-     * Underline, for the comment composer's format bar.
-     *
-     * Drawn as the letter rather than the Material glyph: the bar already carries
-     * hand-built Bold, Italic and Spoiler, and an imported shape sits at a
-     * different weight and corner radius than its neighbours.
-     */
-    val TextUnderline: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "TextUnderline",
-            defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f
-        ).apply {
-            path(
-                stroke = SolidColor(Color.White),
-                strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round
-            ) {
-                moveTo(7f, 4f)
-                lineTo(7f, 13f)
-                curveTo(7f, 16f, 9.5f, 18f, 12f, 18f)
-                curveTo(14.5f, 18f, 17f, 16f, 17f, 13f)
-                lineTo(17f, 4f)
-                
-            }
-            path(
-                stroke = SolidColor(Color.White),
-                strokeLineWidth = 1.8f,
-                strokeLineCap = StrokeCap.Round,
-                strokeLineJoin = StrokeJoin.Round
-            ) {
-                moveTo(6f, 21f)
-                lineTo(18f, 21f)
-                
-            }
-        }.build()
-    }
-
     /** Strikethrough: an S with the rule through it. */
     val TextStrikethrough: ImageVector by lazy {
         ImageVector.Builder(

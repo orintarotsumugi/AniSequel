@@ -47,6 +47,21 @@ internal fun visibleMessages(state: UserMessagesViewModel.UiState): List<Message
     }.filterNot { state.visibility.isHidden(it, state.viewerId) }
 
 /**
+ * How many dismissed rows the visible filter could bring back.
+ *
+ * Counted over the rows the filter *draws from*, not over both stored sets. The pill
+ * used to read `visibility.hiddenCount`, which is the two sides added together and
+ * says nothing about the chip that is showing: on Sent with three dismissed rows in
+ * Received it offered "Hidden (3)" over a list with no third row to reveal, and
+ * tapping it put back rows the reader was not looking at. The restore itself is
+ * global - [com.anisequel.data.repository.MessageVisibilityPreferences.showAll] clears
+ * both sides - but this control sits in the filter's header and has to answer for that
+ * filter first.
+ */
+internal fun hiddenMessageCount(state: UserMessagesViewModel.UiState): Int =
+    visibleHiddenRows(state).count { state.visibility.isHidden(it, state.viewerId) }
+
+/**
  * True when at least one row the current filter would show has been dismissed.
  *
  * Drives the "Show hidden" pill: a dismissal with no way back is the kind of
@@ -54,7 +69,17 @@ internal fun visibleMessages(state: UserMessagesViewModel.UiState): List<Message
  * is something behind it.
  */
 internal fun hasHiddenMessages(state: UserMessagesViewModel.UiState): Boolean =
-    state.visibility.hiddenCount > 0
+    // `any` rather than a count: the pill's presence is asked once per recomposition of
+    // a header that changes nothing else, and it stops at the first dismissed row.
+    visibleHiddenRows(state).any { state.visibility.isHidden(it, state.viewerId) }
+
+/** The rows of whichever sources [UserMessagesViewModel.UiState.filter] draws from. */
+private fun visibleHiddenRows(state: UserMessagesViewModel.UiState): List<MessageNode> =
+    when (state.filter) {
+        MessageFilter.ALL -> state.received.messages + state.sent.messages
+        MessageFilter.RECEIVED -> state.received.messages
+        MessageFilter.SENT -> state.sent.messages
+    }
 
 /**
  * The badge on a row: this arrived after the reader last read the inbox.
