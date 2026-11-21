@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.5.2",
+      "entries": [
+        {
+          "title": "SVG cards load when you reach them",
+          "detail": "A long bio used to start every remote SVG together, delaying visible cards and fetching artwork you might never reach. SVGs now load as they approach the screen, duplicate requests share their result, and failed captures fall back to image rendering instead of keeping an uncapturable WebView alive while you scroll."
+        },
+        {
+          "title": "Settings colours and search destinations agree",
+          "detail": "Full-screen mode now opens from its actual Device Manager location in Settings search. Secondary Settings actions use the app's primary-tonal colours, invalid colour previews use theme surfaces, and widget highlight/accent colours no longer vary with the phone manufacturer's theme."
+        }
+      ]
+    },
+    {
       "version": "2.5.1",
       "entries": [
         {

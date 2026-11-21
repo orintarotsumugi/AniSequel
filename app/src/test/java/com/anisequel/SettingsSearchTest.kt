@@ -80,6 +80,9 @@ class SettingsSearchTest {
             "fullscreen should find Full-screen mode through the compact pass",
             SettingsSearch.search("fullscreen").any { it.title == "Full-screen mode" }
         )
+        val display = SettingsSearch.search("fullscreen").first { it.title == "Full-screen mode" }
+        assertEquals(SettingsPage.DEVICE, display.page)
+        assertEquals(null, display.interfaceSection)
         assertTrue(
             "applock should find App lock through the compact pass",
             SettingsSearch.search("applock").any { it.title == "App lock" }

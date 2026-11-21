@@ -3503,6 +3503,34 @@ release variant before R8 could start. Both invocations now receive the resolved
 version. R8 itself remains a single pass; optimized resource shrinking is already
 AGP 9's default with `isShrinkResources = true`.
 
+### Remote SVGs start at the viewport and stop being browsers
+
+A bio can contain many SVG cards below the fold. Fetching all of them when the
+Markdown tree composed delayed the first visible image and spent requests on cards
+the reader might never reach. SVGs now wait for their slot to enter the window,
+and same-URL fetches publish into the markup cache before waking other callers, so
+two cards cannot slip through the in-flight/cache hand-off and duplicate the request.
+
+A WebView that still cannot produce pixels after the bounded capture retries used
+to stay alive and redraw during every fling. It now falls back to Coil's SVG image
+path, and a size change keys a new capture session so a failed small-size attempt
+does not strand a resized card in a live WebView. Sanitization also removes complete
+`foreignObject` subtrees and unquoted or whitespace-padded `javascript:` URLs; merely
+removing the opening `foreignObject` tag left its HTML payload in a document the
+renderer would still receive. SVG media URLs whose extension is hidden behind a
+format query continue through this renderer rather than Android's static image path.
+
+### Settings destinations and widget colour are explicit
+
+The Full-screen search result remained under Interface after the control moved to
+Device Manager, so search landed on a page that did not contain the setting. Its
+index now carries the actual destination. Secondary Settings buttons use the
+primary tonal roles like the rest of the brand hierarchy, and invalid stored colour
+strings fall back to the current theme surface rather than platform gray. Widgets
+are RemoteViews and cannot see Compose's Material roles; their platform accent and
+control-highlight attributes are now explicitly tied to AniList blue instead of
+inheriting an arbitrary OEM `DeviceDefault` palette.
+
 ### R8 was the build, and the icons were R8
 
 The 2.3.2 release run measured `minifyReleaseWithR8` at **11m10s** of a 15m21s

@@ -148,8 +148,8 @@ fun SettingsButton(
             interactionSource = interactionSource,
             shape = shape,
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 disabledContainerColor = disabledContainer,
                 disabledContentColor = disabledContent
             ),
