@@ -18,6 +18,14 @@
         {
           "title": "Friends on a title keep their own loading state",
           "detail": "The Friends card could disappear before its results arrived whenever the title details had already loaded. It now tracks the followed-users request independently, so both Info layouts keep the checking placeholder visible until that request finishes."
+        },
+        {
+          "title": "Unrated titles stop reporting a score of zero",
+          "detail": "AniList answers zero for a title nobody has scored, and the hero chip and poster badges printed that as 0% - a community verdict that did not exist. Titles without a score now show no score at all, matching the details grid and the Nova summary strip."
+        },
+        {
+          "title": "The Info page settles instead of jumping",
+          "detail": "Sections that arrive with the title details - categories, links, cast, relations, crew and rankings - used to appear in one frame and shove everything below them up the page. They now take their place on the app's shared list spring, and a Friends card that turns out empty leaves without a snap."
         }
       ]
     },

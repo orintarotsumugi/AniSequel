@@ -175,7 +175,17 @@ val MediaNode.episodesLabel: String get() = if (isManga) {
 }
 val MediaNode.chaptersLabel: String?
     get() = chapters?.takeIf { it > 0 }?.let { if (it == 1) "1 ch" else "$it chs" }
-val MediaNode.scoreLabel: String get() = averageScore?.let { "$it%" } ?: "N/A"
+/**
+ * AniList's community score, or `"N/A"` when the title has none.
+ *
+ * A `0` from AniList means "nobody has scored this", not "scored zero", and this
+ * helper used to print it as `"0%"` - a claim about a rating nobody gave. Every
+ * other score read in the app (`NovaStatsCard`, the dashboard's sequel ranking, the
+ * score drawer) already suppressed the zero, so a card that went through this one
+ * disagreed with the page behind it.
+ */
+val MediaNode.scoreLabel: String get() =
+    averageScore?.takeIf { it > 0 }?.let { "$it%" } ?: "N/A"
 val MediaNode.meanScoreLabel: String? get() = meanScore?.let { "$it%" }
 val MediaNode.releaseLabel: String get() = startDate?.formatted ?: "TBA"
 

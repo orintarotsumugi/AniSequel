@@ -434,9 +434,10 @@ private fun NovaTrailerPlayer(
                         view: WebView?,
                         request: WebResourceRequest?
                     ): Boolean = handle(playerNav = request?.url?.toString())
-
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean =
-                        handle(playerNav = url)
+                    // The deprecated `(WebView, String)` overload is gone rather
+                    // than suppressed: the platform stopped calling it in API 24
+                    // and `minSdk` is 31, so its `handle(playerNav = url)` was a
+                    // second entry point to the same rule that could never fire.
 
                     private fun handle(playerNav: String?): Boolean {
                         // `true` for everything: this view is a player, not a

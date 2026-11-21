@@ -16,8 +16,10 @@ import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.metaLabel
 import com.anisequel.data.model.progressCountLabel
+import com.anisequel.data.model.scoreLabel
 import com.anisequel.data.model.streamingLinks
 import com.anisequel.data.model.watchFraction
+import com.anisequel.ui.components.cards.scoreBadgeLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -579,13 +581,42 @@ class MediaNodeDisplayTest {
         url: String? = "https://crunchyroll.com/test"
     ): MediaExternalLink = MediaExternalLink(url = url, site = site, type = type)
 
+    // ---- score suppression -----------------------------------------------------------
+
+    /**
+     * AniList reports an unrated title as `averageScore = 0`, and both the hero chip
+     * and the poster badge printed that as `"0%"` - a community verdict of zero on a
+     * title nobody had scored, which is exactly an announced show's first month.
+     *
+     * Pinned on the two functions the surfaces call rather than on the composables:
+     * the bug is a string, and Compose UI tests are not in the unit-test source set.
+     */
+    @Test
+    fun `an unrated title has no score label`() {
+        assertEquals("N/A", node(score = 0).scoreLabel)
+        assertEquals("N/A", node(score = null).scoreLabel)
+    }
+
+    @Test
+    fun `a rated title prints its score`() {
+        assertEquals("76%", node(score = 76).scoreLabel)
+    }
+
+    @Test
+    fun `the poster score badge draws nothing for an unrated title`() {
+        assertNull(scoreBadgeLabel(0))
+        assertNull(scoreBadgeLabel(-1))
+        assertEquals("76%", scoreBadgeLabel(76))
+    }
+
     private fun node(
         title: MediaTitle? = null,
         episodes: Int? = null,
         watched: Int? = null,
         rankings: List<MediaRanking> = emptyList(),
         synonyms: List<String> = emptyList(),
-        country: String? = null
+        country: String? = null,
+        score: Int? = null
     ): MediaNode = MediaNode(
         id = 1,
         title = title,
@@ -593,7 +624,8 @@ class MediaNodeDisplayTest {
         mediaListEntry = watched?.let { SimpleMediaListEntry(progress = it) },
         rankings = rankings,
         synonyms = synonyms,
-        countryOfOrigin = country
+        countryOfOrigin = country,
+        averageScore = score
     )
 
     /**

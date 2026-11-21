@@ -379,8 +379,11 @@ private fun NovaSvgWebView(
                         view: WebView?,
                         request: WebResourceRequest?
                     ): Boolean = true
-
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean = true
+                    // The deprecated `shouldOverrideUrlLoading(WebView, String)`
+                    // override is deliberately absent, not forgotten: the platform
+                    // stopped calling it in API 24, and this app's floor is 31, so
+                    // the copy that used to sit here was a branch that could never
+                    // run - it only produced an OVERRIDE_DEPRECATION warning.
                 }
                 tag = url
                 loadDataWithBaseURL("https://anilist.co/", html, "text/html", "UTF-8", null)

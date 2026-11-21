@@ -2,6 +2,7 @@ package com.anisequel.ui.components.detail.info
 
 import android.content.Context
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import com.anisequel.ui.components.detail.AnimeDetailSubject
 import com.anisequel.ui.components.detail.AnimeRankingsSection
 import com.anisequel.ui.components.detail.DetailActionRow
 import com.anisequel.ui.components.detail.toParentSummary
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.QuickAddStatus
 
 /**
@@ -295,7 +297,7 @@ internal fun LazyListScope.cardItem(
 ) {
     if (!visible) return
     item(key = key, contentType = "info_card") {
-        content(Modifier.infoSection(index, entranceKey))
+        content(sectionPlacement().infoSection(index, entranceKey))
     }
 }
 
@@ -318,9 +320,39 @@ internal fun LazyListScope.rowItem(
 ) {
     if (!visible) return
     item(key = key, contentType = "info_row") {
-        content(Modifier.sectionReveal(index, entranceKey))
+        content(sectionPlacement().sectionReveal(index, entranceKey))
     }
 }
+
+/**
+ * The gap a section leaves, closed by an animation instead of a jump.
+ *
+ * Six of this page's sections are drawn by the *detail* fetch, not by the summary
+ * node the sheet opens with - categories, external links, the cast, the relations,
+ * the crew, the rankings - plus the Friends card, which its own request adds and
+ * removes. Every one of them appearing used to move every section below it up or
+ * down by a card's height in a single frame: the reader was reading a line and the
+ * line was somewhere else on the next frame.
+ *
+ * `animateItem`'s placement spring is what turns that into the page closing a gap.
+ * It is the same token the library, the dashboard and the schedule use, so a card
+ * arriving here moves the way a row arriving there does.
+ *
+ * ## Why the entrance fade is *not* this
+ *
+ * `fadeInSpec` is deliberately null. [sectionReveal] already fades and rises every
+ * section, keyed per title and staggered by position; enabling `animateItem`'s own
+ * fade as well would multiply the two alphas and make a newly arrived section
+ * arrive at half speed, while the sections that were already on screen before the
+ * detail landed would get the same treatment twice over. The exit is kept, because
+ * a section on its way *out* has no `sectionReveal` left to run - the item is gone
+ * from the list by then.
+ */
+private fun LazyItemScope.sectionPlacement(): Modifier = Modifier.animateItem(
+    fadeInSpec = null,
+    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+)
 
 /**
  * The page's inset and its place in the entrance stagger, in one call.

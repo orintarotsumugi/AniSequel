@@ -691,7 +691,13 @@ private fun HeroChips(
         }
         // The score is the number most people open a title to check. `averageScore`
         // is AniList's 0-100 mean, already a percentage, so it is not rescaled.
-        media.averageScore?.let { score ->
+        //
+        // `takeIf { it > 0 }` because AniList reports an unrated title as 0, and a
+        // "0%" chip with a star beside it reads as a community verdict of zero on a
+        // show nobody has scored - an announced title's most likely case. The
+        // details grid and the Nova strip already suppress the zero; this was the
+        // one surface on the page that did not.
+        media.averageScore?.takeIf { it > 0 }?.let { score ->
             HeroChip(icon = AppVectorIcons.Star, label = "$score%")
         }
         // Gated on a real status. `statusLabel` answers "Unknown" for a null,
