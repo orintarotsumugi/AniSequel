@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.novamarkdown
 
+import android.animation.ValueAnimator
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.view.View
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -64,16 +66,24 @@ import java.util.concurrent.TimeUnit
  * rendering engine for the one content type that needs it, without turning a
  * theme-aware, accessible bio into an opaque web page.
  *
- * ## Why it is a WebView for one frame and a bitmap after that
+ * ## Why a WebView for some cards and a bitmap for the rest
  *
  * Chromium is the right engine and the wrong thing to keep in a `LazyColumn`: each
  * view is a renderer with its own surface, it repaints on every frame of an
  * animated card, and the list destroys and rebuilds it whenever the bio leaves the
  * viewport - so scrolling past three stat cards and back paid for three page loads,
- * on the main thread, in the middle of a fling. The card is drawn once, captured to
- * a bitmap ([captureNovaSvg]), and released; from then on it is an `Image`, which
- * costs a blit instead of a page. A still frame is the trade: an animated banner
- * stops animating, and a bio with six cards stops stuttering.
+ * on the main thread, in the middle of a fling. A static card is therefore drawn
+ * once, captured to a bitmap ([captureNovaSvg]), and released; from then on it is
+ * an `Image`, which costs a blit instead of a page.
+ *
+ * That capture is only honest for a picture that *is* one picture. These cards very
+ * often animate themselves in - a bar growing from zero, a panel fading up, a strip
+ * scrolling its text - and the frame the capture lands on is whatever the animation
+ * was doing a quarter of a second in, which reads as a broken card. So a document
+ * that animates ([novaSvgIsAnimated]) keeps a real renderer while it is on screen
+ * and gives it up when it scrolls away; a static one keeps the bitmap. The same
+ * fallback serves a reader who has switched the system's animations off: nothing is
+ * moving for them, so the still is the whole picture ([novaSvgCanBeCaptured]).
  *
  * ## What is not negotiable
  *
@@ -132,7 +142,15 @@ private val SVG_HEIGHT = Regex("""\bheight\s*=\s*["']?([0-9.]+)""", RegexOption.
 
 internal data class NovaSvgAsset(
     val markup: String,
-    val aspectRatio: Float
+    val aspectRatio: Float,
+    /**
+     * Whether the document draws more than one picture over time.
+     *
+     * Carried on the asset rather than recomputed where it is used, because the
+     * decision it feeds - capture this card, or keep a renderer for it - is made on
+     * every recomposition of a scrolling list, and it is a scan of the whole markup.
+     */
+    val animated: Boolean
 )
 
 private sealed interface NovaSvgState {
@@ -200,15 +218,10 @@ internal fun NovaDynamicSvg(
         } else {
             modifier.semantics { this.contentDescription = contentDescription }
         }).onGloballyPositioned { coordinates ->
-            val bounds = coordinates.boundsInWindow()
-            val width = rootView.width.toFloat()
-            val height = rootView.height.toFloat()
             // Long bios compose their markdown blocks together. Fetching every
             // remote card at once delayed the first visible one and made a profile
             // start many decorative requests it might never scroll down to.
-            visible = coordinates.isAttached && width > 0f && height > 0f &&
-                bounds.right > 0f && bounds.bottom > 0f &&
-                bounds.left < width && bounds.top < height
+            visible = coordinates.isNovaSvgOnScreen(rootView)
         },
         contentAlignment = Alignment.Center
     ) {
@@ -244,14 +257,30 @@ internal fun NovaDynamicSvg(
 }
 
 /**
- * The card itself: a cached raster if there is one, a WebView until there is.
+ * The card itself: a live renderer if the card moves, a cached raster otherwise.
+ *
+ * The choice is [novaSvgCanBeCaptured]'s and is made on every pass, because it
+ * depends on the system's animation setting as well as on the document - a reader
+ * who turns animations off gets the still of a card that was live a moment ago.
+ */
+@Composable
+private fun NovaSvgArtwork(url: String, asset: NovaSvgAsset) {
+    if (novaSvgCanBeCaptured(asset, ValueAnimator.areAnimatorsEnabled())) {
+        NovaSvgStillArtwork(url = url, asset = asset)
+    } else {
+        NovaSvgLiveArtwork(url = url, asset = asset)
+    }
+}
+
+/**
+ * The card as one picture: a cached raster if there is one, a WebView until there is.
  *
  * The slot is measured before the cache is consulted, because the raster is only
  * valid for the width it was captured at - a rotation lands here with a different
  * `slot` and a miss, which is what puts a WebView back on screen exactly once.
  */
 @Composable
-private fun NovaSvgArtwork(url: String, asset: NovaSvgAsset) {
+private fun NovaSvgStillArtwork(url: String, asset: NovaSvgAsset) {
     var slot by remember(url) { mutableStateOf(IntSize.Zero) }
     var captured by remember(url) { mutableStateOf<Pair<IntSize, Bitmap>?>(null) }
     var failedCaptureSize by remember(url) { mutableStateOf<IntSize?>(null) }
@@ -308,6 +337,60 @@ private fun NovaSvgArtwork(url: String, asset: NovaSvgAsset) {
     }
 }
 
+/**
+ * The card while it animates: a real renderer, mounted only while it is on screen.
+ *
+ * Two costs come back with it, and both are bounded rather than paid everywhere:
+ * only documents that actually animate take this path, and the `WebView` exists
+ * only while the card is inside the window. Scrolling it away disposes the view -
+ * `AndroidView`'s `onRelease` destroys the renderer - and scrolling back loads it
+ * again, which restarts the animation instead of resuming it. That is the honest
+ * half of the trade: a restarted loop is invisible next to a card that froze on its
+ * own first frame, and the alternative is a renderer per card in a list that may
+ * hold thirty.
+ */
+@Composable
+private fun NovaSvgLiveArtwork(url: String, asset: NovaSvgAsset) {
+    var onScreen by remember(url) { mutableStateOf(false) }
+    val rootView = LocalView.current.rootView
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(asset.aspectRatio)
+            .onGloballyPositioned { coordinates ->
+                onScreen = coordinates.isNovaSvgOnScreen(rootView)
+            }
+    ) {
+        if (onScreen) {
+            key(url) {
+                // No capture callbacks: this card is never replaced by a frame.
+                NovaSvgWebView(
+                    asset = asset,
+                    url = url,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Whether a card overlaps the window at all.
+ *
+ * `isAttached` matters as much as the bounds: a layout in a disposed composition
+ * still reports the coordinates it last had, and a card that has left the tree must
+ * not keep a renderer alive on the strength of a stale rectangle.
+ */
+private fun LayoutCoordinates.isNovaSvgOnScreen(rootView: View): Boolean {
+    val width = rootView.width.toFloat()
+    val height = rootView.height.toFloat()
+    if (!isAttached || width <= 0f || height <= 0f) return false
+    val bounds = boundsInWindow()
+    return bounds.right > 0f && bounds.bottom > 0f &&
+        bounds.left < width && bounds.top < height
+}
+
 @Composable
 private fun NovaSvgRasterImage(bitmap: Bitmap) {
     // Wrapped once per bitmap rather than per frame: `asImageBitmap` allocates, and
@@ -327,11 +410,16 @@ private fun NovaSvgWebView(
     asset: NovaSvgAsset,
     url: String,
     modifier: Modifier,
-    onCaptured: (bitmap: Bitmap, width: Int, height: Int) -> Unit,
-    onCaptureFailed: () -> Unit
+    /**
+     * Request the card be captured and released. Null for a card that animates: its
+     * whole point is the frames after this one, so a capture would be the bug.
+     */
+    onCaptured: ((bitmap: Bitmap, width: Int, height: Int) -> Unit)? = null,
+    onCaptureFailed: (() -> Unit)? = null
 ) {
     val html = remember(asset) { novaSvgHtml(asset.markup) }
     val captured = rememberUpdatedState(onCaptured)
+    val failed = rememberUpdatedState(onCaptureFailed)
     // Keyed on the URL: a session that has spent its capture attempts on one card
     // must not be inherited by the next one, or that card would never be captured.
     val session = remember(url) { NovaSvgCaptureSession() }
@@ -365,13 +453,16 @@ private fun NovaSvgWebView(
                     override fun onPageFinished(view: WebView, finishedUrl: String?) {
                         val card = view
                         // The capture hands back the pixels and the caller swaps
-                        // this view for them, which is what releases Chromium.
+                        // this view for them, which is what releases Chromium. A
+                        // card that was never asked to be captured - an animated
+                        // one - simply keeps rendering.
+                        val onCaptured = captured.value ?: return
                         session.schedule(
                             view = card,
                             onCaptured = { bitmap ->
-                                captured.value(bitmap, card.width, card.height)
+                                onCaptured(bitmap, card.width, card.height)
                             },
-                            onExhausted = { onCaptureFailed() }
+                            onExhausted = { failed.value?.invoke() }
                         )
                     }
 
@@ -449,7 +540,11 @@ private fun fetchNovaSvg(url: String): NovaSvgAsset? = try {
         }
         val text = buffer.readUtf8()
         val sanitized = sanitizeNovaSvg(text) ?: return null
-        NovaSvgAsset(sanitized, novaSvgAspect(sanitized))
+        NovaSvgAsset(
+            markup = sanitized,
+            aspectRatio = novaSvgAspect(sanitized),
+            animated = novaSvgIsAnimated(sanitized)
+        )
     }
 } catch (_: Exception) {
     // A blocked host, a timeout and an offline device are the same answer here:

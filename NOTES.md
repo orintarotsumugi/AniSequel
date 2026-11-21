@@ -883,11 +883,32 @@ the *software* layer type first, because a hardware-accelerated Chromium draws
 into its own surface and `draw` into a software `Canvas` then comes back empty;
 and the result is sampled for ink before it is used, so a card that did not paint
 keeps its WebView instead of being replaced by a blank. Three attempts over about
-a quarter of a second cover late fonts. The trades are deliberate: an animated
-banner becomes the frame it animated from, and a card drawn at a new column width
-(a rotation, a fold, a split screen) is captured again — `novaSvgRasterKey`
-carries the slot size for that reason, since keyed on the URL alone a rotation
-would stretch the old capture.
+a quarter of a second cover late fonts. A card drawn at a new column width (a
+rotation, a fold, a split screen) is captured again — `novaSvgRasterKey` carries
+the slot size for that reason, since keyed on the URL alone a rotation would
+stretch the old capture.
+
+**A card that animates is not captured at all** (`NovaSvgAnimation.kt`). The
+capture runs a fraction of a second after `onPageFinished`, and these cards
+routinely animate themselves in — a bar growing from zero, a panel fading up, a
+strip scrolling its text — so the frame it landed on was whatever the animation
+was doing at that instant, frequently an empty or half-drawn card shown as a
+broken image for as long as the bio is open. `novaSvgIsAnimated` reads the
+sanitised document for the two ways an SVG moves without script: SMIL
+(`<animate>`, `<animateTransform>`, `<animateMotion>`, `<animateColor>`, `<set>`)
+and CSS (`@keyframes`, an `animation`/`-webkit-animation` declaration), the latter
+only inside a `<style>` block or a `style="..."` attribute — a caption that reads
+"animation: the art of moving things" is still one picture. CSS *transitions* are
+not matched: they need hover or focus, which a disabled WebView in a scrolling
+list never gets. An animated card keeps a real renderer, and that renderer exists
+only while the card overlaps the window, so scrolling away disposes it and
+scrolling back restarts the animation rather than resuming it — the honest half
+of the trade, since a restarted loop is invisible next to a card frozen on its own
+first frame. `novaSvgCanBeCaptured` is the single decision: capture when the card
+is static *or* when the device has stopped animating things
+(`ValueAnimator.areAnimatorsEnabled`, the same check the app's own motion already
+obeys), because a reader who switched motion off did not ask for a remote banner
+to ignore them.
 
 The two caches behind it are byte budgets, not entry counts (`NovaByteCache.kt`).
 Twelve retained documents at the 2 MiB fetch ceiling was 48 MiB of UTF-16 heap for

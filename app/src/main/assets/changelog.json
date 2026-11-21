@@ -46,6 +46,10 @@
         {
           "title": "Display size explains the right direction",
           "detail": "Both Display size explanations said a higher dpi fits more on the screen. Density is pixels per dp, so a higher number draws everything larger and fits less - the old sentence sent a reader who wanted a bigger app the wrong way up the slider. The copy and the Small preset's description now match what the setting does."
+        },
+        {
+          "title": "Animated SVG cards in a bio move again",
+          "detail": "A profile's live cards are drawn once and kept as a picture so a long bio scrolls; a card that animates itself in - bars filling, panels fading up, a strip scrolling - was therefore frozen on whichever frame was captured a fraction of a second after it loaded, which often looked like an empty image. Cards that actually animate now keep a real renderer while they are on screen and give it up when they scroll away, and a reader who has switched the system's animations off still gets the still picture."
         }
       ]
     },
