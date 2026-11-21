@@ -360,7 +360,7 @@ private fun readNovaDestination(text: String, openParen: Int): Pair<String, Int>
     }
 
     if (i >= text.length || text[i] != ')') return null
-    return url.toString().trim() to (i + 1)
+    return url.toString().trim() to i + 1
 }
 
 private fun readNovaAngle(
@@ -375,7 +375,7 @@ private fun readNovaAngle(
 
     if (raw.startsWith("!--")) {
         val end = text.indexOf("-->", start + 4)
-        return null to (if (end >= 0) end + 3 else text.length)
+        return null to if (end >= 0) end + 3 else text.length
     }
 
     val autoLink = raw.trim()
@@ -395,22 +395,22 @@ private fun readNovaAngle(
         } else {
             NovaInline.Link(url, listOf(NovaInline.Text(autoLink)))
         }
-        return token to (close + 1)
+        return token to close + 1
     }
 
-    if (raw.startsWith("/")) return null to (close + 1)
+    if (raw.startsWith("/")) return null to close + 1
 
     val nameMatch = Regex("""^([A-Za-z][A-Za-z0-9]*)\b(.*)$""", RegexOption.DOT_MATCHES_ALL)
-        .matchEntire(raw) ?: return null to (close + 1)
+        .matchEntire(raw) ?: return null to close + 1
     val name = nameMatch.groupValues[1].lowercase(Locale.ROOT)
     val attrs = nameMatch.groupValues[2]
 
     return when (name) {
-        "br" -> NovaInline.Text("\n") to (close + 1)
+        "br" -> NovaInline.Text("\n") to close + 1
 
         "img" -> {
             val image = htmlNovaImage(raw)
-            (image ?: NovaInline.Text(text.substring(start, close + 1))) to (close + 1)
+            (image ?: NovaInline.Text(text.substring(start, close + 1))) to close + 1
         }
 
         "a" -> {
@@ -438,15 +438,15 @@ private fun readNovaAngle(
                     NovaInline.Link(novaAbsoluteUrl(href), children)
                 }
             }
-            token to (end.last + 1)
+            token to end.last + 1
         }
 
         "span", "div" -> {
-            if (!isNovaSpoiler(attrs)) return null to (close + 1)
+            if (!isNovaSpoiler(attrs)) return null to close + 1
             // The cap is spent on markup as well as on the `~!` spelling; a
             // hand-edited pile of nested spans must degrade to text, not recurse.
-            if (spoilerDepth >= MAX_SPOILER_DEPTH) return null to (close + 1)
-            val end = findClosingTag(text, name, close + 1) ?: return null to (close + 1)
+            if (spoilerDepth >= MAX_SPOILER_DEPTH) return null to close + 1
+            val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
             val children = parseNovaInlinesAt(
                 text.substring(close + 1, end.first),
                 depth + 1,
@@ -456,11 +456,11 @@ private fun readNovaAngle(
                 text = children.novaPlainText(),
                 children = children,
                 label = novaSpoilerLabel(attrs)
-            ) to (end.last + 1)
+            ) to end.last + 1
         }
 
         "b", "strong", "i", "em", "u", "s", "del", "strike", "code" -> {
-            val end = findClosingTag(text, name, close + 1) ?: return null to (close + 1)
+            val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
             val children = parseNovaInlinesAt(
                 text.substring(close + 1, end.first),
                 depth + 1,
@@ -472,10 +472,10 @@ private fun readNovaAngle(
                 "u" -> NovaInline.Underline(children)
                 else -> if (name == "code") NovaInline.Mono(children) else NovaInline.Strike(children)
             }
-            token to (end.last + 1)
+            token to end.last + 1
         }
 
-        else -> null to (close + 1)
+        else -> null to close + 1
     }
 }
 
@@ -537,7 +537,7 @@ private fun readNovaEmphasis(
             2 -> NovaInline.Bold(children)
             else -> NovaInline.BoldItalic(children)
         }
-        return token to (closeAt + 1)
+        return token to closeAt + 1
     }
     return null
 }
@@ -581,5 +581,5 @@ private fun readNovaBareUrl(text: String, start: Int): Pair<NovaInline, Int>? {
         IMAGE_EXTENSION.containsMatchIn(absolute) -> NovaInline.Image(absolute)
         else -> NovaInline.Link(absolute, listOf(NovaInline.Text(url)))
     }
-    return token to (i - trailing)
+    return token to i - trailing
 }

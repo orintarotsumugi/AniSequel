@@ -157,9 +157,10 @@ internal fun NovaList(list: NovaBlock.BulletList) {
                         val paragraph = block as? NovaBlock.Paragraph
                         if (item.checked == true && blockIndex == 0 && paragraph != null) {
                             Text(
-                                text = buildNovaAnnotatedString(paragraph.inlines) {
-                                    openExternalUrlOrCopy(context, it)
-                                },
+                                text = buildNovaAnnotatedString(
+                                    paragraph.inlines,
+                                    onLinkClick = { openExternalUrlOrCopy(context, it) }
+                                ),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     textDecoration = TextDecoration.LineThrough
                                 ),
@@ -207,9 +208,10 @@ internal fun NovaTable(table: NovaBlock.Table) {
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = buildNovaAnnotatedString(cell.inlines) {
-                                openExternalUrlOrCopy(context, it)
-                            },
+                            text = buildNovaAnnotatedString(
+                                cell.inlines,
+                                onLinkClick = { openExternalUrlOrCopy(context, it) }
+                            ),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -238,9 +240,10 @@ internal fun NovaTable(table: NovaBlock.Table) {
                                 .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = buildNovaAnnotatedString(cell.inlines) {
-                                    openExternalUrlOrCopy(context, it)
-                                },
+                                text = buildNovaAnnotatedString(
+                                    cell.inlines,
+                                    onLinkClick = { openExternalUrlOrCopy(context, it) }
+                                ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = cell.align.toTextAlign()

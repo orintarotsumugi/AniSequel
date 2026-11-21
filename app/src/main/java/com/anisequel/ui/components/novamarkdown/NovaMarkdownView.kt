@@ -115,7 +115,10 @@ private fun NovaHeading(heading: NovaBlock.Heading) {
     }.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
     val context = LocalContext.current
     Text(
-        text = buildNovaAnnotatedString(heading.inlines) { openExternalUrlOrCopy(context, it) },
+        text = buildNovaAnnotatedString(
+            heading.inlines,
+            onLinkClick = { openExternalUrlOrCopy(context, it) }
+        ),
         style = style,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = heading.align.toTextAlign(),

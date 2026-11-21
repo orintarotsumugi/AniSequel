@@ -256,7 +256,7 @@ internal fun parseNovaBlocks(
         }
 
         // ---- setext heading ------------------------------------------------
-        val underlined = lines.getOrNull(i + 1)?.trim()
+        val underlined = lines.getOrNulli + 1?.trim()
         val isTitleLine = !startsNovaBlock(lines, i) && !HORIZONTAL_RULE.matches(trimmed)
         if (underlined != null && isTitleLine && SETEXT_H1.matches(underlined)) {
             out += NovaBlock.Heading(1, parseNovaInlineLine(trimmed), align)
@@ -348,7 +348,7 @@ internal fun parseNovaBlocks(
             val closeToken = if (ordered) "</ol>" else "</ul>"
             val openingHasClose = trimmed.contains(closeToken, ignoreCase = true)
             val (body, next) = if (openingHasClose) {
-                "" to (i + 1)
+                "" to i + 1
             } else {
                 collectUntilToken(lines, i + 1, closeToken)
             }
@@ -542,7 +542,7 @@ internal fun collectUntilToken(
         val at = line.indexOf(token, ignoreCase = true)
         if (at >= 0) {
             if (at > 0) body += line.substring(0, at)
-            return body.joinToString("\n") to (i + 1)
+            return body.joinToString("\n") to i + 1
         }
         body += line
         i++

@@ -84,7 +84,7 @@ internal fun readHtmlSpoiler(
             label = label,
             blocks = parseNovaBlocks(rest.substring(0, inlineClose).lines(), align, depth + 1),
             align = align
-        ) to (start + 1)
+        ) to start + 1
     }
 
     val (body, next) = collectUntilToken(lines, start + 1, close)
