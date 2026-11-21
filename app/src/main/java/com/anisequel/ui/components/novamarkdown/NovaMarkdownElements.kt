@@ -154,10 +154,7 @@ internal fun readNovaList(
     var first = true
 
     while (i < lines.size) {
-        val line = lines[i]
-        val match = (
-            if (ordered) ORDERED_ITEM.matchEntire(line) else BULLET_ITEM.matchEntire(line)
-        ) ?: break
+        val match = novaListItemMatch(lines[i], ordered) ?: break
         val indent = match.groupValues[1].length
         if (indent != baseIndent) break
 
@@ -168,46 +165,86 @@ internal fun readNovaList(
             first = false
         }
 
-        val itemLines = mutableListOf(content)
-        var j = i + 1
-        while (j < lines.size) {
-            val nextLine = lines[j]
-            if (nextLine.isBlank()) {
-                val after = lines.getOrNull(j + 1)
-                if (after != null && leadingSpaces(after) > baseIndent) {
-                    itemLines += ""
-                    j++
-                    continue
-                }
-                // A blank line between two items of the same list does not split
-                // the list in AniList's renderer.
-                if (after != null && sameListMarker(after, ordered, baseIndent)) {
-                    j++
-                }
-                break
-            }
-            val nextIndent = leadingSpaces(nextLine)
-            if (nextIndent <= baseIndent) break
-            val strip = minOf(nextIndent, baseIndent + 2)
-            itemLines += nextLine.drop(strip.coerceAtMost(nextLine.length))
-            j++
-        }
-
-        val task = TASK_ITEM.matchEntire(itemLines.first().trim())
-        val checked = task?.let { it.groupValues[1].equals("x", ignoreCase = true) }
-        val textLines = if (task != null) {
-            listOf(task.groupValues[2]) + itemLines.drop(1)
-        } else {
-            itemLines
-        }
-        items += NovaListItem(
-            blocks = parseNovaBlocks(textLines, align, depth + 1),
-            checked = checked
+        val (item, next) = readNovaListItem(
+            lines = lines,
+            contentStart = i + 1,
+            content = content,
+            ordered = ordered,
+            baseIndent = baseIndent,
+            align = align,
+            depth = depth
         )
-        i = j
+        items += item
+        i = next
     }
 
     return NovaBlock.BulletList(ordered, listStart, items, align) to i
+}
+
+private fun novaListItemMatch(line: String, ordered: Boolean): MatchResult? =
+    if (ordered) ORDERED_ITEM.matchEntire(line) else BULLET_ITEM.matchEntire(line)
+
+private fun readNovaListItem(
+    lines: List<String>,
+    contentStart: Int,
+    content: String,
+    ordered: Boolean,
+    baseIndent: Int,
+    align: NovaAlign,
+    depth: Int
+): Pair<NovaListItem, Int> {
+    val (itemLines, next) = collectNovaListItemLines(
+        lines = lines,
+        contentStart = contentStart,
+        content = content,
+        ordered = ordered,
+        baseIndent = baseIndent
+    )
+    val task = TASK_ITEM.matchEntire(itemLines.first().trim())
+    val checked = task?.let { it.groupValues[1].equals("x", ignoreCase = true) }
+    val textLines = if (task != null) {
+        listOf(task.groupValues[2]) + itemLines.drop(1)
+    } else {
+        itemLines
+    }
+    return NovaListItem(
+        blocks = parseNovaBlocks(textLines, align, depth + 1),
+        checked = checked
+    ) to next
+}
+
+private fun collectNovaListItemLines(
+    lines: List<String>,
+    contentStart: Int,
+    content: String,
+    ordered: Boolean,
+    baseIndent: Int
+): Pair<List<String>, Int> {
+    val itemLines = mutableListOf(content)
+    var j = contentStart
+    while (j < lines.size) {
+        val nextLine = lines[j]
+        if (nextLine.isBlank()) {
+            val after = lines.getOrNull(j + 1)
+            if (after != null && leadingSpaces(after) > baseIndent) {
+                itemLines += ""
+                j++
+                continue
+            }
+            // A blank line between two items of the same list does not split
+            // the list in AniList's renderer.
+            if (after != null && sameListMarker(after, ordered, baseIndent)) {
+                j++
+            }
+            break
+        }
+        val nextIndent = leadingSpaces(nextLine)
+        if (nextIndent <= baseIndent) break
+        val strip = minOf(nextIndent, baseIndent + 2)
+        itemLines += nextLine.drop(strip.coerceAtMost(nextLine.length))
+        j++
+    }
+    return itemLines to j
 }
 
 private fun leadingSpaces(line: String): Int {
@@ -459,31 +496,55 @@ internal fun novaTitleFromSlug(slug: String, type: String, id: String): String {
 internal fun novaHtmlAttribute(tag: String, name: String): String? {
     var i = 0
     while (i < tag.length) {
-        while (i < tag.length && (tag[i].isWhitespace() || tag[i] == '/')) i++
+        i = skipNovaHtmlAttributeSpace(tag, i)
         if (i >= tag.length) break
 
-        val nameStart = i
-        while (i < tag.length && tag[i] != '=' && !tag[i].isWhitespace()) i++
-        val attribute = tag.substring(nameStart, i)
-        while (i < tag.length && tag[i].isWhitespace()) i++
+        val (attribute, afterName) = readNovaHtmlAttributeName(tag, i)
+        i = afterName
+        i = skipNovaHtmlWhitespace(tag, i)
         if (i >= tag.length || tag[i] != '=') continue
 
         i++
-        while (i < tag.length && tag[i].isWhitespace()) i++
-        val value = if (i < tag.length && (tag[i] == '"' || tag[i] == '\'')) {
-            val quote = tag[i]
-            i++
-            val valueStart = i
-            while (i < tag.length && tag[i] != quote) i++
-            tag.substring(valueStart, i).also { if (i < tag.length) i++ }
-        } else {
-            val valueStart = i
-            while (i < tag.length && !tag[i].isWhitespace() && tag[i] != '>') i++
-            tag.substring(valueStart, i)
-        }
+        i = skipNovaHtmlWhitespace(tag, i)
+        val (value, next) = readNovaHtmlAttributeValue(tag, i)
+        i = next
         if (attribute.equals(name, ignoreCase = true)) return value
     }
     return null
+}
+
+private fun skipNovaHtmlAttributeSpace(tag: String, start: Int): Int {
+    var i = start
+    while (i < tag.length && (tag[i].isWhitespace() || tag[i] == '/')) i++
+    return i
+}
+
+private fun skipNovaHtmlWhitespace(tag: String, start: Int): Int {
+    var i = start
+    while (i < tag.length && tag[i].isWhitespace()) i++
+    return i
+}
+
+private fun readNovaHtmlAttributeName(tag: String, start: Int): Pair<String, Int> {
+    var i = start
+    while (i < tag.length && tag[i] != '=' && !tag[i].isWhitespace()) i++
+    return tag.substring(start, i) to i
+}
+
+private fun readNovaHtmlAttributeValue(tag: String, start: Int): Pair<String, Int> {
+    var i = start
+    val value = if (i < tag.length && (tag[i] == '"' || tag[i] == '\'')) {
+        val quote = tag[i]
+        i++
+        val valueStart = i
+        while (i < tag.length && tag[i] != quote) i++
+        tag.substring(valueStart, i).also { if (i < tag.length) i++ }
+    } else {
+        val valueStart = i
+        while (i < tag.length && !tag[i].isWhitespace() && tag[i] != '>') i++
+        tag.substring(valueStart, i)
+    }
+    return value to i
 }
 
 internal fun findClosingTag(source: String, tag: String, from: Int): IntRange? {

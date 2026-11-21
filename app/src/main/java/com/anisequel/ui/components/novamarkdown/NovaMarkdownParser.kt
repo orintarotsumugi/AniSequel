@@ -133,23 +133,38 @@ private fun startsNovaBlock(lines: List<String>, index: Int): Boolean {
     val raw = lines[index]
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return true
-    if (FENCE.matches(trimmed) || ATX_HEADING.matches(trimmed)) return true
-    if (HORIZONTAL_RULE.matches(trimmed) || HTML_HR.matches(trimmed)) return true
-    if (trimmed.startsWith(">")) return true
-    if (BULLET_ITEM.matches(raw) || ORDERED_ITEM.matches(raw)) return true
-    if (trimmed.equals(TILDE_CENTER, true) || trimmed.equals("~~~center", true)) return true
-    if (SINGLE_TILDE_CENTER.matches(trimmed) || CENTER_OPEN.matches(trimmed)) return true
-    if (ALIGN_OPEN.matches(trimmed)) return true
-    if (HTML_QUOTE.matches(trimmed) || HTML_PRE.matches(trimmed) || HTML_LIST.matches(trimmed)) return true
-    if (HTML_IMAGE_LINE.matches(trimmed)) return true
-    if (isLegacySpoilerStart(trimmed)) return true
-    if (looksLikeHtmlSpoiler(trimmed)) return true
-    if (standaloneNovaImage(trimmed) != null) return true
-    if (parseNovaVideo(trimmed) != null) return true
-    if (looksLikeAniListEntity(trimmed)) return true
-    if (looksLikeNovaTable(lines, index)) return true
-    return false
+    return startsNovaTextBlock(raw, trimmed) ||
+        startsNovaHtmlBlock(trimmed) ||
+        startsNovaMediaBlock(lines, index, trimmed)
 }
+
+private fun startsNovaTextBlock(raw: String, trimmed: String): Boolean =
+    FENCE.matches(trimmed) ||
+        ATX_HEADING.matches(trimmed) ||
+        HORIZONTAL_RULE.matches(trimmed) ||
+        HTML_HR.matches(trimmed) ||
+        trimmed.startsWith(">") ||
+        BULLET_ITEM.matches(raw) ||
+        ORDERED_ITEM.matches(raw) ||
+        trimmed.equals(TILDE_CENTER, true) ||
+        trimmed.equals("~~~center", true) ||
+        SINGLE_TILDE_CENTER.matches(trimmed) ||
+        CENTER_OPEN.matches(trimmed) ||
+        ALIGN_OPEN.matches(trimmed)
+
+private fun startsNovaHtmlBlock(trimmed: String): Boolean =
+    HTML_QUOTE.matches(trimmed) ||
+        HTML_PRE.matches(trimmed) ||
+        HTML_LIST.matches(trimmed) ||
+        HTML_IMAGE_LINE.matches(trimmed) ||
+        isLegacySpoilerStart(trimmed) ||
+        looksLikeHtmlSpoiler(trimmed)
+
+private fun startsNovaMediaBlock(lines: List<String>, index: Int, trimmed: String): Boolean =
+    standaloneNovaImage(trimmed) != null ||
+        parseNovaVideo(trimmed) != null ||
+        looksLikeAniListEntity(trimmed) ||
+        looksLikeNovaTable(lines, index)
 
 private fun looksLikeHtmlSpoiler(trimmed: String): Boolean {
     val open = SPOILER_OPEN.find(trimmed) ?: return false
@@ -186,9 +201,7 @@ internal fun parseNovaBlocks(
     var i = 0
 
     while (i < lines.size) {
-        val rawLine = lines[i]
-        val line = rawLine.trimEnd()
-        val trimmed = line.trim()
+        val trimmed = lines[i].trimEnd().trim()
 
         if (trimmed.isEmpty()) {
             i++
@@ -203,270 +216,12 @@ internal fun parseNovaBlocks(
             continue
         }
 
-        // ---- ~ ~ ~ centring -------------------------------------------------
-        if (trimmed.equals(TILDE_CENTER, true) || trimmed.equals("~~~center", true)) {
-            val (body, next) = collectUntilToken(lines, i + 1, TILDE_CENTER)
-            out += parseAligned(body, NovaAlign.Center, depth + 1)
-            i = next
-            continue
-        }
-
-        val singleTilde = SINGLE_TILDE_CENTER.matchEntire(trimmed)
-        if (singleTilde != null) {
-            out += parseAligned(singleTilde.groupValues[1].trim(), NovaAlign.Center, depth + 1)
-            i++
-            continue
-        }
-
-        // ---- <center> ------------------------------------------------------
-        val centerOpen = CENTER_OPEN.matchEntire(trimmed)
-        if (centerOpen != null) {
-            val first = centerOpen.groupValues[1]
-            val inlineClose = first.indexOf(CENTER_CLOSE, ignoreCase = true)
-            if (inlineClose >= 0) {
-                out += parseAligned(first.substring(0, inlineClose), NovaAlign.Center, depth + 1)
-                val after = first.substring(inlineClose + CENTER_CLOSE.length).trim()
-                if (after.isNotEmpty()) {
-                    out += parseAligned(after, NovaAlign.Center, depth + 1)
-                }
-                i++
-            } else {
-                val (body, next) = collectUntilToken(lines, i + 1, CENTER_CLOSE)
-                val content = listOf(first).filter { it.isNotBlank() } + body.lines()
-                out += parseAligned(content.joinToString("\n"), NovaAlign.Center, depth + 1)
-                i = next
-            }
-            continue
-        }
-
-        // ---- fenced code ---------------------------------------------------
-        val fence = FENCE.matchEntire(line)
-        if (fence != null) {
-            val marker = fence.groupValues[1]
-            val language = fence.groupValues[2].trim().takeIf { it.isNotEmpty() }
-            val code = mutableListOf<String>()
-            var j = i + 1
-            while (j < lines.size && !lines[j].trimStart().startsWith(marker)) {
-                code += lines[j]
-                j++
-            }
-            out += NovaBlock.Code(language, code.joinToString("\n"), align)
-            i = if (j < lines.size) j + 1 else j
-            continue
-        }
-
-        // ---- setext heading ------------------------------------------------
-        val underlined = lines.getOrNull(i + 1)?.trim()
-        val isTitleLine = !startsNovaBlock(lines, i) && !HORIZONTAL_RULE.matches(trimmed)
-        if (underlined != null && isTitleLine && SETEXT_H1.matches(underlined)) {
-            out += NovaBlock.Heading(1, parseNovaInlineLine(trimmed), align)
-            i += 2
-            continue
-        }
-        if (underlined != null && isTitleLine && SETEXT_H2.matches(underlined)) {
-            out += NovaBlock.Heading(2, parseNovaInlineLine(trimmed), align)
-            i += 2
-            continue
-        }
-
-        // ---- ATX heading ---------------------------------------------------
-        val atx = ATX_HEADING.matchEntire(trimmed)
-        if (atx != null) {
-            val level = atx.groupValues[1].length.coerceAtMost(6)
-            out += NovaBlock.Heading(level, parseNovaInlineLine(atx.groupValues[2]), align)
-            i++
-            continue
-        }
-
-        // ---- rules ---------------------------------------------------------
-        if (HORIZONTAL_RULE.matches(trimmed) || HTML_HR.matches(trimmed)) {
-            out += NovaBlock.Rule
-            i++
-            continue
-        }
-
-        // ---- HTML spoilers -------------------------------------------------
-        val htmlSpoiler = readHtmlSpoiler(lines, i, align, depth)
-        if (htmlSpoiler != null) {
-            out += htmlSpoiler.first
-            i = htmlSpoiler.second
-            continue
-        }
-
-        // ---- ~! legacy spoiler ---------------------------------------------
-        if (isLegacySpoilerStart(trimmed)) {
-            val legacy = readLegacySpoiler(lines, i, align, depth)
-            out += legacy.first
-            i = legacy.second
-            continue
-        }
-
-        // ---- <blockquote> --------------------------------------------------
-        val htmlQuote = HTML_QUOTE.matchEntire(trimmed)
-        if (htmlQuote != null) {
-            val first = htmlQuote.groupValues[1]
-            if (first.contains("</blockquote", ignoreCase = true)) {
-                val inner = first.substringBefore("</blockquote", "")
-                out += NovaBlock.Quote(parseNovaBlocks(inner.lines(), align, depth + 1), align)
-                i++
-            } else {
-                val (body, next) = collectUntilToken(lines, i + 1, "</blockquote>")
-                val content = listOf(first).filter { it.isNotBlank() } + body.lines()
-                out += NovaBlock.Quote(
-                    parseNovaBlocks(content.joinToString("\n").lines(), align, depth + 1),
-                    align
-                )
-                i = next
-            }
-            continue
-        }
-
-        // ---- <pre> ---------------------------------------------------------
-        val htmlPre = HTML_PRE.matchEntire(trimmed)
-        if (htmlPre != null) {
-            val first = htmlPre.groupValues[1]
-            if (first.contains("</pre", ignoreCase = true)) {
-                out += NovaBlock.Code(
-                    null,
-                    HTML_TAG.replace(first.substringBefore("</pre"), ""),
-                    align
-                )
-                i++
-            } else {
-                val (body, next) = collectUntilToken(lines, i + 1, "</pre>")
-                val content = (listOf(first) + body.lines()).joinToString("\n")
-                out += NovaBlock.Code(null, HTML_TAG.replace(content, ""), align)
-                i = next
-            }
-            continue
-        }
-
-        // ---- HTML lists ----------------------------------------------------
-        val htmlList = HTML_LIST.matchEntire(trimmed)
-        if (htmlList != null) {
-            val ordered = htmlList.groupValues[1].equals("ol", ignoreCase = true)
-            val closeToken = if (ordered) "</ol>" else "</ul>"
-            val openingHasClose = trimmed.contains(closeToken, ignoreCase = true)
-            val (body, next) = if (openingHasClose) {
-                "" to i + 1
-            } else {
-                collectUntilToken(lines, i + 1, closeToken)
-            }
-            val source = (listOf(trimmed) + body.lines()).joinToString("\n")
-            val items = HTML_LI.findAll(source).map { item ->
-                NovaListItem(
-                    listOf(NovaBlock.Paragraph(parseNovaInlineLine(item.groupValues[1].trim())))
-                )
-            }.toList()
-            out += NovaBlock.BulletList(ordered, 1, items, align)
-            i = next
-            continue
-        }
-
-        // ---- <div>/<p> containers ------------------------------------------
-        val aligned = ALIGN_OPEN.matchEntire(trimmed)
-        if (aligned != null) {
-            val tag = aligned.groupValues[1].lowercase(Locale.ROOT)
-            val attrs = aligned.groupValues[2]
-            val innerAlign = novaAlignFrom(attrs) ?: align
-            val first = aligned.groupValues[3]
-            val close = "</$tag>"
-            val inlineClose = first.indexOf(close, ignoreCase = true)
-            if (inlineClose >= 0) {
-                out += parseAligned(first.substring(0, inlineClose), innerAlign, depth + 1)
-                i++
-            } else {
-                val (body, next) = collectUntilToken(lines, i + 1, close)
-                val content = listOf(first).filter { it.isNotBlank() } + body.lines()
-                out += parseAligned(content.joinToString("\n"), innerAlign, depth + 1)
-                i = next
-            }
-            continue
-        }
-
-        // A stray close is a wrapper's remainder, not a sentence.
-        if (trimmed.startsWith("</") && trimmed.endsWith(">")) {
-            i++
-            continue
-        }
-
-        // ---- > quotes ------------------------------------------------------
-        if (trimmed.startsWith(">")) {
-            val quoteLines = mutableListOf<String>()
-            var j = i
-            while (j < lines.size && lines[j].trimStart().startsWith(">")) {
-                quoteLines += lines[j].trimStart().removePrefix(">").removePrefix(" ")
-                j++
-            }
-            out += NovaBlock.Quote(parseNovaBlocks(quoteLines, align, depth + 1), align)
-            i = j
-            continue
-        }
-
-        // ---- lists ---------------------------------------------------------
-        val bullet = BULLET_ITEM.matchEntire(line)
-        if (bullet != null) {
-            val (list, next) = readNovaList(
-                lines = lines,
-                start = i,
-                ordered = false,
-                baseIndent = bullet.groupValues[1].length,
-                align = align,
-                depth = depth
-            )
-            out += list
-            i = next
-            continue
-        }
-        val numbered = ORDERED_ITEM.matchEntire(line)
-        if (numbered != null) {
-            val (list, next) = readNovaList(
-                lines = lines,
-                start = i,
-                ordered = true,
-                baseIndent = numbered.groupValues[1].length,
-                align = align,
-                depth = depth
-            )
-            out += list
-            i = next
-            continue
-        }
-
-        // ---- tables --------------------------------------------------------
-        val table = parseNovaTable(lines, i) { parseNovaInlineLine(it) }
-        if (table != null) {
-            out += table.first.copy(align = align)
-            i = table.second
-            continue
-        }
-
-        // ---- whole-line embeds --------------------------------------------
-        val image = standaloneNovaImage(trimmed)
-        if (image != null) {
-            out += image.copy(align = align)
-            i++
-            continue
-        }
-
-        val video = parseNovaVideo(trimmed)
-        if (video != null) {
-            out += video.copy(align = align)
-            i++
-            continue
-        }
-
-        val bareEntity = trimmed.removeSurrounding("<", ">").trim()
-        val entity = parseNovaEntityUrl(bareEntity)
-        if (entity != null) {
-            out += NovaBlock.Preview(
-                url = novaEntityAbsoluteUrl(bareEntity),
-                type = entity.first,
-                id = entity.third,
-                title = novaTitleFromSlug(entity.second, entity.first, entity.third),
-                align = align
-            )
-            i++
+        val block = parseNovaHeadingBlock(lines, i, align, depth)
+            ?: parseNovaHtmlBlock(lines, i, align, depth)
+            ?: parseNovaStructuredBlock(lines, i, align, depth)
+        if (block != null) {
+            out += block.first
+            i = block.second
             continue
         }
 
@@ -489,6 +244,300 @@ internal fun parseNovaBlocks(
     }
 
     return out
+}
+
+/** Tilde/centre wrappers, fences, headings and rules. */
+private fun parseNovaHeadingBlock(
+    lines: List<String>,
+    start: Int,
+    align: NovaAlign,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val line = lines[start].trimEnd()
+    val trimmed = line.trim()
+
+    if (trimmed.equals(TILDE_CENTER, true) || trimmed.equals("~~~center", true)) {
+        val (body, next) = collectUntilToken(lines, start + 1, TILDE_CENTER)
+        return parseAligned(body, NovaAlign.Center, depth + 1) to next
+    }
+
+    val singleTilde = SINGLE_TILDE_CENTER.matchEntire(trimmed)
+    if (singleTilde != null) {
+        return parseAligned(
+            singleTilde.groupValues[1].trim(),
+            NovaAlign.Center,
+            depth + 1
+        ) to start + 1
+    }
+
+    val center = readNovaCenterBlock(lines, start, trimmed, depth)
+    if (center != null) return center
+    val fence = readNovaFenceBlock(lines, start, line, align)
+    if (fence != null) return fence
+    val setext = readNovaSetextBlock(lines, start, trimmed, align)
+    if (setext != null) return setext
+
+    val atx = ATX_HEADING.matchEntire(trimmed)
+    if (atx != null) {
+        val level = atx.groupValues[1].length.coerceAtMost(6)
+        return listOf(
+            NovaBlock.Heading(level, parseNovaInlineLine(atx.groupValues[2]), align)
+        ) to start + 1
+    }
+
+    if (HORIZONTAL_RULE.matches(trimmed) || HTML_HR.matches(trimmed)) {
+        return listOf(NovaBlock.Rule) to start + 1
+    }
+    return null
+}
+
+private fun readNovaCenterBlock(
+    lines: List<String>,
+    start: Int,
+    trimmed: String,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val centerOpen = CENTER_OPEN.matchEntire(trimmed) ?: return null
+    val first = centerOpen.groupValues[1]
+    val inlineClose = first.indexOf(CENTER_CLOSE, ignoreCase = true)
+    if (inlineClose >= 0) {
+        val blocks = parseAligned(
+            first.substring(0, inlineClose),
+            NovaAlign.Center,
+            depth + 1
+        ).toMutableList()
+        val after = first.substring(inlineClose + CENTER_CLOSE.length).trim()
+        if (after.isNotEmpty()) {
+            blocks += parseAligned(after, NovaAlign.Center, depth + 1)
+        }
+        return blocks to start + 1
+    }
+    val (body, next) = collectUntilToken(lines, start + 1, CENTER_CLOSE)
+    val content = listOf(first).filter { it.isNotBlank() } + body.lines()
+    return parseAligned(content.joinToString("\n"), NovaAlign.Center, depth + 1) to next
+}
+
+private fun readNovaFenceBlock(
+    lines: List<String>,
+    start: Int,
+    line: String,
+    align: NovaAlign
+): Pair<List<NovaBlock>, Int>? {
+    val fence = FENCE.matchEntire(line) ?: return null
+    val marker = fence.groupValues[1]
+    val language = fence.groupValues[2].trim().takeIf { it.isNotEmpty() }
+    val code = mutableListOf<String>()
+    var j = start + 1
+    while (j < lines.size && !lines[j].trimStart().startsWith(marker)) {
+        code += lines[j]
+        j++
+    }
+    val next = if (j < lines.size) j + 1 else j
+    return listOf(NovaBlock.Code(language, code.joinToString("\n"), align)) to next
+}
+
+private fun readNovaSetextBlock(
+    lines: List<String>,
+    start: Int,
+    trimmed: String,
+    align: NovaAlign
+): Pair<List<NovaBlock>, Int>? {
+    val underlined = lines.getOrNull(start + 1)?.trim() ?: return null
+    val isTitleLine = !startsNovaBlock(lines, start) && !HORIZONTAL_RULE.matches(trimmed)
+    if (!isTitleLine) return null
+    if (SETEXT_H1.matches(underlined)) {
+        return listOf(
+            NovaBlock.Heading(1, parseNovaInlineLine(trimmed), align)
+        ) to start + 2
+    }
+    if (SETEXT_H2.matches(underlined)) {
+        return listOf(
+            NovaBlock.Heading(2, parseNovaInlineLine(trimmed), align)
+        ) to start + 2
+    }
+    return null
+}
+
+/** HTML spoilers, block quotes, pre blocks, lists and align containers. */
+private fun parseNovaHtmlBlock(
+    lines: List<String>,
+    start: Int,
+    align: NovaAlign,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val trimmed = lines[start].trimEnd().trim()
+
+    val htmlSpoiler = readHtmlSpoiler(lines, start, align, depth)
+    if (htmlSpoiler != null) {
+        return listOf(htmlSpoiler.first) to htmlSpoiler.second
+    }
+
+    if (isLegacySpoilerStart(trimmed)) {
+        val legacy = readLegacySpoiler(lines, start, align, depth)
+        return listOf(legacy.first) to legacy.second
+    }
+
+    val htmlQuote = HTML_QUOTE.matchEntire(trimmed)
+    if (htmlQuote != null) {
+        val first = htmlQuote.groupValues[1]
+        if (first.contains("</blockquote", ignoreCase = true)) {
+            val inner = first.substringBefore("</blockquote", "")
+            return listOf(
+                NovaBlock.Quote(parseNovaBlocks(inner.lines(), align, depth + 1), align)
+            ) to start + 1
+        }
+        val (body, next) = collectUntilToken(lines, start + 1, "</blockquote>")
+        val content = listOf(first).filter { it.isNotBlank() } + body.lines()
+        return listOf(
+            NovaBlock.Quote(
+                parseNovaBlocks(content.joinToString("\n").lines(), align, depth + 1),
+                align
+            )
+        ) to next
+    }
+
+    val htmlPre = HTML_PRE.matchEntire(trimmed)
+    if (htmlPre != null) {
+        val first = htmlPre.groupValues[1]
+        if (first.contains("</pre", ignoreCase = true)) {
+            return listOf(
+                NovaBlock.Code(
+                    null,
+                    HTML_TAG.replace(first.substringBefore("</pre"), ""),
+                    align
+                )
+            ) to start + 1
+        }
+        val (body, next) = collectUntilToken(lines, start + 1, "</pre>")
+        val content = (listOf(first) + body.lines()).joinToString("\n")
+        return listOf(
+            NovaBlock.Code(null, HTML_TAG.replace(content, ""), align)
+        ) to next
+    }
+
+    val htmlList = HTML_LIST.matchEntire(trimmed)
+    if (htmlList != null) {
+        val ordered = htmlList.groupValues[1].equals("ol", ignoreCase = true)
+        val closeToken = if (ordered) "</ol>" else "</ul>"
+        val openingHasClose = trimmed.contains(closeToken, ignoreCase = true)
+        val (body, next) = if (openingHasClose) {
+            "" to start + 1
+        } else {
+            collectUntilToken(lines, start + 1, closeToken)
+        }
+        val source = (listOf(trimmed) + body.lines()).joinToString("\n")
+        val items = HTML_LI.findAll(source).map { item ->
+            NovaListItem(
+                listOf(NovaBlock.Paragraph(parseNovaInlineLine(item.groupValues[1].trim())))
+            )
+        }.toList()
+        return listOf(NovaBlock.BulletList(ordered, 1, items, align)) to next
+    }
+
+    val aligned = ALIGN_OPEN.matchEntire(trimmed)
+    if (aligned != null) {
+        val tag = aligned.groupValues[1].lowercase(Locale.ROOT)
+        val attrs = aligned.groupValues[2]
+        val innerAlign = novaAlignFrom(attrs) ?: align
+        val first = aligned.groupValues[3]
+        val close = "</$tag>"
+        val inlineClose = first.indexOf(close, ignoreCase = true)
+        if (inlineClose >= 0) {
+            return parseAligned(
+                first.substring(0, inlineClose),
+                innerAlign,
+                depth + 1
+            ) to start + 1
+        }
+        val (body, next) = collectUntilToken(lines, start + 1, close)
+        val content = listOf(first).filter { it.isNotBlank() } + body.lines()
+        return parseAligned(content.joinToString("\n"), innerAlign, depth + 1) to next
+    }
+
+    // A stray close is a wrapper's remainder, not a sentence.
+    if (trimmed.startsWith("</") && trimmed.endsWith(">")) {
+        return emptyList<NovaBlock>() to start + 1
+    }
+    return null
+}
+
+/** Quotes, real lists, tables, media and entity cards. */
+private fun parseNovaStructuredBlock(
+    lines: List<String>,
+    start: Int,
+    align: NovaAlign,
+    depth: Int
+): Pair<List<NovaBlock>, Int>? {
+    val line = lines[start].trimEnd()
+    val trimmed = line.trim()
+
+    if (trimmed.startsWith(">")) {
+        val quoteLines = mutableListOf<String>()
+        var j = start
+        while (j < lines.size && lines[j].trimStart().startsWith(">")) {
+            quoteLines += lines[j].trimStart().removePrefix(">").removePrefix(" ")
+            j++
+        }
+        return listOf(
+            NovaBlock.Quote(parseNovaBlocks(quoteLines, align, depth + 1), align)
+        ) to j
+    }
+
+    val bullet = BULLET_ITEM.matchEntire(line)
+    if (bullet != null) {
+        val (list, next) = readNovaList(
+            lines = lines,
+            start = start,
+            ordered = false,
+            baseIndent = bullet.groupValues[1].length,
+            align = align,
+            depth = depth
+        )
+        return listOf(list) to next
+    }
+
+    val numbered = ORDERED_ITEM.matchEntire(line)
+    if (numbered != null) {
+        val (list, next) = readNovaList(
+            lines = lines,
+            start = start,
+            ordered = true,
+            baseIndent = numbered.groupValues[1].length,
+            align = align,
+            depth = depth
+        )
+        return listOf(list) to next
+    }
+
+    val table = parseNovaTable(lines, start) { parseNovaInlineLine(it) }
+    if (table != null) {
+        return listOf(table.first.copy(align = align)) to table.second
+    }
+
+    val image = standaloneNovaImage(trimmed)
+    if (image != null) {
+        return listOf(image.copy(align = align)) to start + 1
+    }
+
+    val video = parseNovaVideo(trimmed)
+    if (video != null) {
+        return listOf(video.copy(align = align)) to start + 1
+    }
+
+    val bareEntity = trimmed.removeSurrounding("<", ">").trim()
+    val entity = parseNovaEntityUrl(bareEntity)
+    if (entity != null) {
+        return listOf(
+            NovaBlock.Preview(
+                url = novaEntityAbsoluteUrl(bareEntity),
+                type = entity.first,
+                id = entity.third,
+                title = novaTitleFromSlug(entity.second, entity.first, entity.third),
+                align = align
+            )
+        ) to start + 1
+    }
+    return null
 }
 
 /** Parses [source] as a centred/styled sub-document. */

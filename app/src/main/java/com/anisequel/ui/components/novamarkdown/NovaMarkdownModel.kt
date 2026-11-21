@@ -3,6 +3,7 @@ package com.anisequel.ui.components.novamarkdown
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCoverKey
 import java.util.Locale
+import kotlin.jvm.JvmName
 
 /**
  * The largest an inline or block image may be drawn, in dp.
@@ -324,6 +325,7 @@ internal fun splitNovaMediaLinks(
 }
 
 /** Whether these tokens carry an image a paragraph can draw. */
+@JvmName("containsNovaImageInlines")
 internal fun List<NovaInline>.containsNovaImage(): Boolean = any { token ->
     token is NovaInline.Image || token.nestedInlines().containsNovaImage()
 }

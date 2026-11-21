@@ -50,137 +50,12 @@ private fun parseNovaInlinesAt(
             continue
         }
 
-        if (char == '`') {
-            val runEnd = i
-            var ticks = 0
-            while (runEnd + ticks < text.length && text[runEnd + ticks] == '`') ticks++
-            val close = text.indexOf("`".repeat(ticks), i + ticks)
-            if (close > i + ticks) {
-                flushPlain()
-                tokens += NovaInline.Code(text.substring(i + ticks, close))
-                i = close + ticks
-                continue
-            }
-            plain.append(char)
-            i++
+        val token = readNovaInlineToken(text, i, depth, spoilerDepth)
+        if (token != null) {
+            flushPlain()
+            token.first?.let(tokens::add)
+            i = token.second
             continue
-        }
-
-        if (char == '!' && i + 1 < text.length && text[i + 1] == '[') {
-            val image = readNovaInlineImage(text, i)
-            if (image != null) {
-                flushPlain()
-                tokens += image.first
-                i = image.second
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '[') {
-            val link = readNovaInlineLink(text, i, depth, spoilerDepth)
-            if (link != null) {
-                flushPlain()
-                tokens += link.first
-                i = link.second
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '<') {
-            val angle = readNovaAngle(text, i, depth, spoilerDepth)
-            if (angle != null) {
-                flushPlain()
-                angle.first?.let(tokens::add)
-                i = angle.second
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '~' && i + 1 < text.length && text[i + 1] == '~') {
-            val close = text.indexOf("~~", i + 2)
-            if (close > i + 2) {
-                flushPlain()
-                tokens += NovaInline.Strike(
-                    parseNovaInlinesAt(text.substring(i + 2, close), depth + 1, spoilerDepth)
-                )
-                i = close + 2
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '~' && i + 1 < text.length && text[i + 1] == '!' &&
-            spoilerDepth < MAX_SPOILER_DEPTH
-        ) {
-            val close = text.indexOf("!~", i + 2)
-            if (close > i + 2) {
-                flushPlain()
-                val source = text.substring(i + 2, close)
-                val children = parseNovaInlinesAt(source, depth + 1, spoilerDepth + 1)
-                tokens += NovaInline.Spoiler(
-                    text = children.novaPlainText(),
-                    children = children
-                )
-                i = close + 2
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '@' && (i == 0 || !text[i - 1].isLetterOrDigit())) {
-            var end = i + 1
-            while (end < text.length && (text[end].isLetterOrDigit() || text[end] == '_' || text[end] == '-')) {
-                end++
-            }
-            if (end > i + 1) {
-                flushPlain()
-                tokens += NovaInline.Mention(text.substring(i + 1, end))
-                i = end
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        if (char == '*' || char == '_') {
-            val emphasis = readNovaEmphasis(text, i, depth, spoilerDepth)
-            if (emphasis != null) {
-                flushPlain()
-                tokens += emphasis.first
-                i = emphasis.second
-                continue
-            }
-            plain.append(char)
-            i++
-            continue
-        }
-
-        val startsBareUrl = char == 'h' &&
-            (text.startsWith("https://", i, true) || text.startsWith("http://", i, true)) ||
-            char == 'a' && text.startsWith("anilist.co/", i, true) ||
-            char == 'w' && text.startsWith("www.anilist.co/", i, true)
-        if (startsBareUrl && (i == 0 || !text[i - 1].isLetterOrDigit())) {
-            val bare = readNovaBareUrl(text, i)
-            if (bare != null) {
-                flushPlain()
-                tokens += bare.first
-                i = bare.second
-                continue
-            }
         }
 
         plain.append(char)
@@ -189,6 +64,115 @@ private fun parseNovaInlinesAt(
 
     flushPlain()
     return mergeNovaText(tokens)
+}
+
+private fun readNovaInlineToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline?, Int>? =
+    readNovaMarkupToken(text, start, depth, spoilerDepth)
+        ?: readNovaTextToken(text, start, depth, spoilerDepth)
+
+private fun readNovaMarkupToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline?, Int>? {
+    val char = text[start]
+    if (char == '`') return readNovaCodeToken(text, start)
+    if (char == '!' && start + 1 < text.length && text[start + 1] == '[') {
+        return readNovaInlineImage(text, start)
+    }
+    if (char == '[') return readNovaInlineLink(text, start, depth, spoilerDepth)
+    if (char == '<') return readNovaAngle(text, start, depth, spoilerDepth)
+    if (char == '~' && start + 1 < text.length && text[start + 1] == '~') {
+        return readNovaStrikeToken(text, start, depth, spoilerDepth)
+    }
+    if (char == '~' && start + 1 < text.length && text[start + 1] == '!' &&
+        spoilerDepth < MAX_SPOILER_DEPTH
+    ) {
+        return readNovaInlineSpoilerToken(text, start, depth, spoilerDepth)
+    }
+    return null
+}
+
+private fun readNovaTextToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline?, Int>? {
+    val char = text[start]
+    if (char == '@' && (start == 0 || !text[start - 1].isLetterOrDigit())) {
+        return readNovaMentionToken(text, start)
+    }
+    if (char == '*' || char == '_') {
+        return readNovaEmphasis(text, start, depth, spoilerDepth)
+    }
+    if (startsNovaBareUrl(text, start)) {
+        return readNovaBareUrl(text, start)
+    }
+    return null
+}
+
+private fun readNovaCodeToken(text: String, start: Int): Pair<NovaInline, Int>? {
+    var ticks = 0
+    while (start + ticks < text.length && text[start + ticks] == '`') ticks++
+    val close = text.indexOf("`".repeat(ticks), start + ticks)
+    if (close <= start + ticks) return null
+    return NovaInline.Code(text.substring(start + ticks, close)) to close + ticks
+}
+
+private fun readNovaStrikeToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline, Int>? {
+    val close = text.indexOf("~~", start + 2)
+    if (close <= start + 2) return null
+    return NovaInline.Strike(
+        parseNovaInlinesAt(text.substring(start + 2, close), depth + 1, spoilerDepth)
+    ) to close + 2
+}
+
+private fun readNovaInlineSpoilerToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline, Int>? {
+    val close = text.indexOf("!~", start + 2)
+    if (close <= start + 2) return null
+    val source = text.substring(start + 2, close)
+    val children = parseNovaInlinesAt(source, depth + 1, spoilerDepth + 1)
+    return NovaInline.Spoiler(
+        text = children.novaPlainText(),
+        children = children
+    ) to close + 2
+}
+
+private fun readNovaMentionToken(text: String, start: Int): Pair<NovaInline, Int>? {
+    var end = start + 1
+    while (end < text.length &&
+        (text[end].isLetterOrDigit() || text[end] == '_' || text[end] == '-')
+    ) {
+        end++
+    }
+    if (end <= start + 1) return null
+    return NovaInline.Mention(text.substring(start + 1, end)) to end
+}
+
+private fun startsNovaBareUrl(text: String, start: Int): Boolean {
+    if (start > 0 && text[start - 1].isLetterOrDigit()) return false
+    val char = text[start]
+    return char == 'h' &&
+        (text.startsWith("https://", start, true) || text.startsWith("http://", start, true)) ||
+        char == 'a' && text.startsWith("anilist.co/", start, true) ||
+        char == 'w' && text.startsWith("www.anilist.co/", start, true)
 }
 
 private fun mergeNovaText(tokens: List<NovaInline>): List<NovaInline> {
@@ -293,74 +277,95 @@ private fun readNovaInlineLink(
  * that really does contain a space.
  */
 private fun readNovaDestination(text: String, openParen: Int): Pair<String, Int>? {
-    var i = openParen + 1
-    while (i < text.length && text[i].isWhitespace()) i++
+    var i = skipNovaWhitespace(text, openParen + 1)
     if (i >= text.length) return null
 
+    val (url, afterUrl) = if (text[i] == '<') {
+        readNovaAngleDestination(text, i) ?: return null
+    } else {
+        readNovaBareDestination(text, i)
+    }
+    i = skipNovaWhitespace(text, afterUrl)
+    i = skipNovaDestinationTitle(text, i) ?: return null
+    i = skipNovaWhitespace(text, i)
+
+    if (i >= text.length || text[i] != ')') return null
+    return url.trim() to i + 1
+}
+
+private fun skipNovaWhitespace(text: String, start: Int): Int {
+    var i = start
+    while (i < text.length && text[i].isWhitespace()) i++
+    return i
+}
+
+private fun readNovaAngleDestination(text: String, start: Int): Pair<String, Int>? {
+    var i = start + 1
     val url = StringBuilder()
-    if (text[i] == '<') {
-        i++
-        while (i < text.length && text[i] != '>') {
-            if (text[i] == '\\' && i + 1 < text.length) {
-                url.append(text[i + 1])
-                i += 2
-            } else {
-                url.append(text[i])
+    while (i < text.length && text[i] != '>') {
+        if (text[i] == '\\' && i + 1 < text.length) {
+            url.append(text[i + 1])
+            i += 2
+        } else {
+            url.append(text[i])
+            i++
+        }
+    }
+    if (i >= text.length) return null
+    return url.toString() to i + 1
+}
+
+private fun readNovaBareDestination(text: String, start: Int): Pair<String, Int> {
+    var i = start
+    var depth = 0
+    val url = StringBuilder()
+    while (i < text.length) {
+        val char = text[i]
+        when {
+            char == '\\' -> {
+                if (i + 1 < text.length) {
+                    url.append(text[i + 1])
+                    i += 2
+                } else {
+                    i++
+                }
+            }
+
+            char == '(' -> {
+                depth++
+                url.append(char)
+                i++
+            }
+
+            char == ')' -> {
+                if (depth == 0) break
+                depth--
+                url.append(char)
+                i++
+            }
+
+            char.isWhitespace() && depth == 0 -> break
+            else -> {
+                url.append(char)
                 i++
             }
         }
-        if (i >= text.length) return null
-        i++
-    } else {
-        var depth = 0
-        while (i < text.length) {
-            when (val char = text[i]) {
-                '\\' -> {
-                    if (i + 1 < text.length) {
-                        url.append(text[i + 1])
-                        i += 2
-                    } else {
-                        i++
-                    }
-                }
-
-                '(' -> {
-                    depth++
-                    url.append(char)
-                    i++
-                }
-
-                ')' -> {
-                    if (depth == 0) break
-                    depth--
-                    url.append(char)
-                    i++
-                }
-
-                else -> {
-                    if (char.isWhitespace() && depth == 0) break
-                    url.append(char)
-                    i++
-                }
-            }
-        }
     }
+    return url.toString() to i
+}
 
-    while (i < text.length && text[i].isWhitespace()) i++
-    if (i < text.length && (text[i] == '"' || text[i] == '\'' || text[i] == '(')) {
-        val quote = if (text[i] == '(') ')' else text[i]
+/** Consumes an optional `"title"`, `'title'` or `(title)` and returns its end. */
+private fun skipNovaDestinationTitle(text: String, start: Int): Int? {
+    var i = start
+    if (i >= text.length || (text[i] != '"' && text[i] != '\'' && text[i] != '(')) return i
+    val quote = if (text[i] == '(') ')' else text[i]
+    i++
+    while (i < text.length && text[i] != quote) {
+        if (text[i] == '\\' && i + 1 < text.length) i++
         i++
-        while (i < text.length && text[i] != quote) {
-            if (text[i] == '\\' && i + 1 < text.length) i++
-            i++
-        }
-        if (i >= text.length) return null
-        i++
-        while (i < text.length && text[i].isWhitespace()) i++
     }
-
-    if (i >= text.length || text[i] != ')') return null
-    return url.toString().trim() to i + 1
+    if (i >= text.length) return null
+    return i + 1
 }
 
 private fun readNovaAngle(
@@ -375,29 +380,12 @@ private fun readNovaAngle(
 
     if (raw.startsWith("!--")) {
         val end = text.indexOf("-->", start + 4)
-        return null to if (end >= 0) end + 3 else text.length
+        val next = if (end >= 0) end + 3 else text.length
+        return null to next
     }
 
-    val autoLink = raw.trim()
-    val autoLinkIsHttp = autoLink.startsWith("http://", true) || autoLink.startsWith("https://", true)
-    val autoLinkIsBare = autoLink.startsWith("anilist.co/", true) ||
-        autoLink.startsWith("www.anilist.co/", true)
-    if (autoLinkIsHttp || autoLinkIsBare) {
-        val url = if (autoLinkIsHttp) novaAbsoluteUrl(autoLink) else "https://$autoLink"
-        val entity = parseNovaEntityUrl(url)
-        val token: NovaInline = if (entity != null) {
-            NovaInline.MediaLink(
-                label = novaTitleFromSlug(entity.second, entity.first, entity.third),
-                url = url,
-                type = entity.first,
-                id = entity.third
-            )
-        } else {
-            NovaInline.Link(url, listOf(NovaInline.Text(autoLink)))
-        }
-        return token to close + 1
-    }
-
+    val autoLink = readNovaAngleAutolink(raw)
+    if (autoLink != null) return autoLink to close + 1
     if (raw.startsWith("/")) return null to close + 1
 
     val nameMatch = Regex("""^([A-Za-z][A-Za-z0-9]*)\b(.*)$""", RegexOption.DOT_MATCHES_ALL)
@@ -407,76 +395,132 @@ private fun readNovaAngle(
 
     return when (name) {
         "br" -> NovaInline.Text("\n") to close + 1
-
-        "img" -> {
-            val image = htmlNovaImage(raw)
-            (image ?: NovaInline.Text(text.substring(start, close + 1))) to close + 1
-        }
-
-        "a" -> {
-            val end = findClosingTag(text, "a", close + 1) ?: return null
-            val children = parseNovaInlinesAt(
-                text.substring(close + 1, end.first),
-                depth + 1,
-                spoilerDepth
-            )
-            val href = novaHtmlAttribute(attrs, "href")?.trim()
-            val token: NovaInline = if (href.isNullOrBlank()) {
-                // `<a>text</a>` with no href is AniList's coloured text, not a
-                // link. Drawing it as a link would make tapping it do nothing.
-                NovaInline.Accent(children)
-            } else {
-                val entity = parseNovaEntityUrl(href)
-                if (entity != null) {
-                    NovaInline.MediaLink(
-                        label = children.novaPlainText().trim(),
-                        url = novaEntityAbsoluteUrl(href),
-                        type = entity.first,
-                        id = entity.third
-                    )
-                } else {
-                    NovaInline.Link(novaAbsoluteUrl(href), children)
-                }
-            }
-            token to end.last + 1
-        }
-
-        "span", "div" -> {
-            if (!isNovaSpoiler(attrs)) return null to close + 1
-            // The cap is spent on markup as well as on the `~!` spelling; a
-            // hand-edited pile of nested spans must degrade to text, not recurse.
-            if (spoilerDepth >= MAX_SPOILER_DEPTH) return null to close + 1
-            val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
-            val children = parseNovaInlinesAt(
-                text.substring(close + 1, end.first),
-                depth + 1,
-                spoilerDepth + 1
-            )
-            NovaInline.Spoiler(
-                text = children.novaPlainText(),
-                children = children,
-                label = novaSpoilerLabel(attrs)
-            ) to end.last + 1
-        }
-
-        "b", "strong", "i", "em", "u", "s", "del", "strike", "code" -> {
-            val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
-            val children = parseNovaInlinesAt(
-                text.substring(close + 1, end.first),
-                depth + 1,
-                spoilerDepth
-            )
-            val token: NovaInline = when (name) {
-                "b", "strong" -> NovaInline.Bold(children)
-                "i", "em" -> NovaInline.Italic(children)
-                "u" -> NovaInline.Underline(children)
-                else -> if (name == "code") NovaInline.Mono(children) else NovaInline.Strike(children)
-            }
-            token to end.last + 1
-        }
-
+        "img" -> readNovaAngleImage(text, start, close, raw)
+        "a" -> readNovaAngleAnchor(text, close, attrs, depth, spoilerDepth)
+        "span", "div" -> readNovaAngleSpoiler(
+            text,
+            close,
+            name,
+            attrs,
+            depth,
+            spoilerDepth
+        )
+        "b", "strong", "i", "em", "u", "s", "del", "strike", "code" ->
+            readNovaAngleFormatting(text, close, name, depth, spoilerDepth)
         else -> null to close + 1
     }
+}
+
+private fun readNovaAngleAutolink(raw: String): NovaInline? {
+    val autoLink = raw.trim()
+    val isHttp = autoLink.startsWith("http://", true) ||
+        autoLink.startsWith("https://", true)
+    val isBare = autoLink.startsWith("anilist.co/", true) ||
+        autoLink.startsWith("www.anilist.co/", true)
+    if (!isHttp && !isBare) return null
+
+    val url = if (isHttp) novaAbsoluteUrl(autoLink) else "https://$autoLink"
+    val entity = parseNovaEntityUrl(url)
+    return if (entity != null) {
+        NovaInline.MediaLink(
+            label = novaTitleFromSlug(entity.second, entity.first, entity.third),
+            url = url,
+            type = entity.first,
+            id = entity.third
+        )
+    } else {
+        NovaInline.Link(url, listOf(NovaInline.Text(autoLink)))
+    }
+}
+
+private fun readNovaAngleImage(
+    text: String,
+    start: Int,
+    close: Int,
+    raw: String
+): Pair<NovaInline, Int> {
+    val image = htmlNovaImage(raw)
+    return (image ?: NovaInline.Text(text.substring(start, close + 1))) to close + 1
+}
+
+private fun readNovaAngleAnchor(
+    text: String,
+    close: Int,
+    attrs: String,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline, Int>? {
+    val end = findClosingTag(text, "a", close + 1) ?: return null
+    val children = parseNovaInlinesAt(
+        text.substring(close + 1, end.first),
+        depth + 1,
+        spoilerDepth
+    )
+    val href = novaHtmlAttribute(attrs, "href")?.trim()
+    val token: NovaInline = if (href.isNullOrBlank()) {
+        // `<a>text</a>` with no href is AniList's coloured text, not a link.
+        // Drawing it as a link would make tapping it do nothing.
+        NovaInline.Accent(children)
+    } else {
+        val entity = parseNovaEntityUrl(href)
+        if (entity != null) {
+            NovaInline.MediaLink(
+                label = children.novaPlainText().trim(),
+                url = novaEntityAbsoluteUrl(href),
+                type = entity.first,
+                id = entity.third
+            )
+        } else {
+            NovaInline.Link(novaAbsoluteUrl(href), children)
+        }
+    }
+    return token to end.last + 1
+}
+
+private fun readNovaAngleSpoiler(
+    text: String,
+    close: Int,
+    name: String,
+    attrs: String,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline?, Int> {
+    if (!isNovaSpoiler(attrs) || spoilerDepth >= MAX_SPOILER_DEPTH) {
+        return null to close + 1
+    }
+    val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
+    val children = parseNovaInlinesAt(
+        text.substring(close + 1, end.first),
+        depth + 1,
+        spoilerDepth + 1
+    )
+    return NovaInline.Spoiler(
+        text = children.novaPlainText(),
+        children = children,
+        label = novaSpoilerLabel(attrs)
+    ) to end.last + 1
+}
+
+private fun readNovaAngleFormatting(
+    text: String,
+    close: Int,
+    name: String,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline?, Int> {
+    val end = findClosingTag(text, name, close + 1) ?: return null to close + 1
+    val children = parseNovaInlinesAt(
+        text.substring(close + 1, end.first),
+        depth + 1,
+        spoilerDepth
+    )
+    val token: NovaInline = when (name) {
+        "b", "strong" -> NovaInline.Bold(children)
+        "i", "em" -> NovaInline.Italic(children)
+        "u" -> NovaInline.Underline(children)
+        else -> if (name == "code") NovaInline.Mono(children) else NovaInline.Strike(children)
+    }
+    return token to end.last + 1
 }
 
 private fun readNovaEmphasis(
@@ -500,6 +544,25 @@ private fun readNovaEmphasis(
     if (marker == '_' && start > 0 && text[start - 1].isLetterOrDigit()) return null
     if (start + size >= text.length) return null
 
+    val closeAt = findNovaEmphasisClose(text, start, marker, size) ?: return null
+    val content = text.substring(start + size, closeAt)
+    if (content.isEmpty()) return null
+
+    val children = parseNovaInlinesAt(content, depth + 1, spoilerDepth)
+    val token = when (size) {
+        1 -> NovaInline.Italic(children)
+        2 -> NovaInline.Bold(children)
+        else -> NovaInline.BoldItalic(children)
+    }
+    return token to closeAt + 1
+}
+
+private fun findNovaEmphasisClose(
+    text: String,
+    start: Int,
+    marker: Char,
+    size: Int
+): Int? {
     var search = start + size
     while (search < text.length) {
         val close = text.indexOf(marker, search)
@@ -528,40 +591,14 @@ private fun readNovaEmphasis(
 
         val closeAt = if (size == 1) close + closeRun - 1 else close
         if (closeAt <= start + size) return null
-
-        val content = text.substring(start + size, closeAt)
-        if (content.isEmpty()) return null
-        val children = parseNovaInlinesAt(content, depth + 1, spoilerDepth)
-        val token = when (size) {
-            1 -> NovaInline.Italic(children)
-            2 -> NovaInline.Bold(children)
-            else -> NovaInline.BoldItalic(children)
-        }
-        return token to closeAt + 1
+        return closeAt
     }
     return null
 }
 
 private fun readNovaBareUrl(text: String, start: Int): Pair<NovaInline, Int>? {
-    var i = start
-    var depth = 0
-    while (i < text.length) {
-        val char = text[i]
-        if (char.isWhitespace() || char == '<' || char == '>' || char == '"') break
-        if (char == '(') depth++
-        if (char == ')') {
-            if (depth == 0) break
-            depth--
-        }
-        i++
-    }
-
-    var url = text.substring(start, i)
-    var trailing = 0
-    while (url.isNotEmpty() && url.last() in ".,;:!?") {
-        url = url.dropLast(1)
-        trailing++
-    }
+    val end = readNovaBareUrlEnd(text, start)
+    val (url, trailing) = trimNovaBareUrl(text, start, end)
     if (url.isEmpty()) return null
 
     val absolute = if (url.startsWith("http://", true) || url.startsWith("https://", true)) {
@@ -581,5 +618,31 @@ private fun readNovaBareUrl(text: String, start: Int): Pair<NovaInline, Int>? {
         IMAGE_EXTENSION.containsMatchIn(absolute) -> NovaInline.Image(absolute)
         else -> NovaInline.Link(absolute, listOf(NovaInline.Text(url)))
     }
-    return token to i - trailing
+    return token to end - trailing
+}
+
+private fun readNovaBareUrlEnd(text: String, start: Int): Int {
+    var i = start
+    var depth = 0
+    while (i < text.length) {
+        val char = text[i]
+        if (char.isWhitespace() || char == '<' || char == '>' || char == '"') break
+        if (char == '(') depth++
+        if (char == ')') {
+            if (depth == 0) break
+            depth--
+        }
+        i++
+    }
+    return i
+}
+
+private fun trimNovaBareUrl(text: String, start: Int, end: Int): Pair<String, Int> {
+    var url = text.substring(start, end)
+    var trailing = 0
+    while (url.isNotEmpty() && url.last() in ".,;:!?") {
+        url = url.dropLast(1)
+        trailing++
+    }
+    return url to trailing
 }
