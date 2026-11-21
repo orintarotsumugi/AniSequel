@@ -1,6 +1,5 @@
 package com.anisequel.ui.components.novamarkdown
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -106,9 +105,11 @@ private fun NovaImageContent(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val interactionSource = remember { MutableInteractionSource() }
     val tapUrl = targetUrl ?: url
+    // No background behind the picture. AniList's social links are transparent
+    // PNGs, and painting a container behind every image drew a dark rounded card
+    // around each icon - five boxes where the author uploaded five logos.
     val mediaModifier = novaImageSizeModifier(width, height, fillWidth)
         .clip(MaterialTheme.shapes.medium)
-        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
 
     // A declared size is also a decode budget. Without this, five 50dp icons are
     // decoded at whatever the source file happens to be - the social art on the

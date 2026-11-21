@@ -259,8 +259,35 @@ private fun List<NovaInline>.toNovaSegments(): List<NovaSegment> {
 
     walk(this, null)
     flush()
-    return segments
+    return segments.compactNovaPictureGaps()
 }
+
+/**
+ * Drops whitespace-only runs between pictures.
+ *
+ * AniList separates a social row with regular spaces and invisible direction
+ * marks. As their own `Text` items those gaps can wrap before an icon and push
+ * the next picture onto a fresh line even though the pictures themselves would
+ * fit. The row's own 6dp arrangement already spaces the icons, so the gap run is
+ * not content; removing it lets the flow measure the pictures, not the padding.
+ */
+private fun List<NovaSegment>.compactNovaPictureGaps(): List<NovaSegment> {
+    val first = indexOfFirst { it is NovaSegment.Picture }
+    val last = indexOfLast { it is NovaSegment.Picture }
+    if (first < 0 || last <= first) return this
+    return filterIndexed { index, segment ->
+        index !in (first + 1)..<last || !segment.isNovaPictureGap()
+    }
+}
+
+private fun NovaSegment.isNovaPictureGap(): Boolean =
+    this is NovaSegment.Run && tokens.all { token ->
+        token is NovaInline.Text && token.text.isNotEmpty() && token.text.all { char ->
+            char.isWhitespace() ||
+                char == '\u200e' || char == '\u200f' ||
+                char == '\u200b' || char == '\ufeff'
+        }
+    }
 
 internal fun NovaAlign.toTextAlign(): TextAlign = when (this) {
     NovaAlign.Start -> TextAlign.Start

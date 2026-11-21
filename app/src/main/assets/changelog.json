@@ -24,6 +24,14 @@
           "detail": "A declared image size is also passed to Coil as its decode size, so 50x60 icons are not decoded at full source resolution; inline artwork also gets a sharper medium-quality filter."
         },
         {
+          "title": "Icons sit on the bio, not a card",
+          "detail": "Transparent social logos no longer get a rounded grey box behind them. Images are drawn directly, so icon rows look like the artwork the author uploaded instead of five dark tiles."
+        },
+        {
+          "title": "A social row stays a row",
+          "detail": "Whitespace-only gaps between pictures are dropped before layout. AniList's invisible direction marks and wide spaces can no longer push each social icon onto its own line; the row wraps on the pictures' actual widths."
+        },
+        {
           "title": "Tidier layout in long bios",
           "detail": "Images in a paragraph are laid out by the row instead of a stack, reducing layout work for icon strips and mixed text-and-image bios."
         }
