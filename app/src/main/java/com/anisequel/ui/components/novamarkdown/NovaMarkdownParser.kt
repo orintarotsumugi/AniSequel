@@ -21,6 +21,14 @@ import java.util.Locale
  *  - `__text__` is bold (not underlined), and `<u>` is not allowed on the site;
  *  - AniList entity links become preview cards.
  *
+ * Five forms are here because people write Discord in their bios, not because
+ * AniList has them: `||spoiler||`, `-# subtext`, `>>> ` (quote to the end), and the
+ * `youtube` embed's poster frame. They are read only where AniList has no meaning of
+ * its own to protect - `__text__` stays bold, because that is what the site renders
+ * and what its own editor inserts, and Dantotsu's editor offering `<u></u>` for
+ * underline is exactly the trap this dialect note exists to avoid: the site strips
+ * the tag, so the comment posts the markup.
+ *
  * ## Why the parser is hand-written
  *
  * Every regex-first implementation of this dialect hits the same two walls: a
@@ -168,6 +176,7 @@ private fun startsNovaTextBlock(raw: String, trimmed: String): Boolean =
         HORIZONTAL_RULE.matches(trimmed) ||
         HTML_HR.matches(trimmed) ||
         trimmed.startsWith(">") ||
+        SUBTEXT_ITEM.matches(trimmed) ||
         BULLET_ITEM.matches(raw) ||
         ORDERED_ITEM.matches(raw) ||
         trimmed.equals(TILDE_CENTER, true) ||
@@ -579,6 +588,27 @@ private fun parseNovaStructuredBlock(
     val line = lines[start].trimEnd()
     val trimmed = line.trim()
 
+    // Discord's `>>> ` quotes the rest of the message, not the rest of the line: the
+    // run is unmarked, and there is no closing token to look for, so the block is
+    // everything from here to the end of the document. It is checked before the
+    // `>` branch below, which would otherwise read it as a one-line quote of ">> ".
+    val multilineQuote = MULTILINE_QUOTE.matchEntire(trimmed)
+    if (multilineQuote != null) {
+        val body = mutableListOf<String>()
+        multilineQuote.groupValues[1].takeIf { it.isNotBlank() }?.let(body::add)
+        body += lines.subList(start + 1, lines.size)
+        return listOf(
+            NovaBlock.Quote(parseNovaBlocks(body, align, depth + 1), align)
+        ) to lines.size
+    }
+
+    val subtext = SUBTEXT_ITEM.matchEntire(trimmed)
+    if (subtext != null) {
+        return listOf(
+            NovaBlock.Subtext(parseNovaInlineLine(subtext.groupValues[1]), align)
+        ) to start + 1
+    }
+
     if (trimmed.startsWith(">")) {
         val quoteLines = mutableListOf<String>()
         var j = start
@@ -655,6 +685,7 @@ private fun parseAligned(source: String, align: NovaAlign, depth: Int): List<Nov
 private fun NovaBlock.novaAligned(align: NovaAlign): NovaBlock = when (this) {
     is NovaBlock.Heading -> copy(align = align)
     is NovaBlock.Paragraph -> copy(align = align)
+    is NovaBlock.Subtext -> copy(align = align)
     is NovaBlock.Quote -> copy(align = align)
     is NovaBlock.Code -> copy(align = align)
     is NovaBlock.BulletList -> copy(align = align)

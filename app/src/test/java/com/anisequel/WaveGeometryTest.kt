@@ -13,6 +13,8 @@ import org.junit.Test
  * numbers the drawing reads, and every way this control can look wrong on screen is a
  * way one of them can be wrong in this file.
  */
+private const val TWO_PI = (2.0 * PI).toFloat()
+
 class WaveGeometryTest {
 
     private val maxAmplitude = 12f
@@ -113,4 +115,65 @@ class WaveGeometryTest {
         assertEquals(upright, -inverted, 1e-4f)
         assertTrue("the sample has to be off the centre line for this to mean anything", upright != 0f)
     }
+
+    // region the wavy ring
+
+    @Test
+    fun `the ring's radius stays within its wobble`() {
+        val base = 40f
+        val wobble = 0.08f
+        var angle = 0f
+        while (angle <= 6.3f) {
+            val radius = WaveGeometry.ringRadius(base, wobble, lobes = 7, angle = angle)
+            assertTrue(
+                "a lobe that reaches past the slot clips its own stroke at $angle",
+                radius <= base * (1f + wobble) + 1e-4f
+            )
+            assertTrue(radius >= base * (1f - wobble) - 1e-4f)
+            angle += 0.05f
+        }
+    }
+
+    @Test
+    fun `no wobble is a circle`() {
+        var angle = 0f
+        while (angle <= 6.3f) {
+            assertEquals(40f, WaveGeometry.ringRadius(40f, 0f, lobes = 7, angle = angle), 1e-5f)
+            angle += 0.2f
+        }
+    }
+
+    /** Seven lobes means seven crests around one turn, which is what makes it a wave. */
+    @Test
+    fun `the ring crests once per lobe`() {
+        val lobes = 5
+        var crests = 0
+        var previous = WaveGeometry.ringRadius(10f, 0.1f, lobes, angle = 0f)
+        var rising = false
+        var angle = 0.01f
+        while (angle <= TWO_PI + 0.01f) {
+            val radius = WaveGeometry.ringRadius(10f, 0.1f, lobes, angle)
+            if (radius > previous && !rising) rising = true
+            if (radius < previous && rising) {
+                rising = false
+                crests++
+            }
+            previous = radius
+            angle += 0.005f
+        }
+        assertEquals(lobes, crests)
+    }
+
+    @Test
+    fun `a full share closes the ring, and an empty one draws none of it`() {
+        assertEquals(0f, WaveGeometry.ringSweepDegrees(0f), 1e-4f)
+        assertEquals(180f, WaveGeometry.ringSweepDegrees(0.5f), 1e-4f)
+        assertEquals(360f, WaveGeometry.ringSweepDegrees(1f), 1e-4f)
+        // A score above 100 or a progress below zero is a bad payload, not a reason
+        // to draw a ring that overlaps itself or runs backwards.
+        assertEquals(360f, WaveGeometry.ringSweepDegrees(1.4f), 1e-4f)
+        assertEquals(0f, WaveGeometry.ringSweepDegrees(-0.2f), 1e-4f)
+    }
+
+    // endregion
 }

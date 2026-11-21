@@ -275,6 +275,101 @@ class NovaMarkdownParserTest {
         assertEquals("secret", spoiler.children.novaPlainText())
     }
 
+    /**
+     * Discord's spoiler, because that is what people type.
+     *
+     * AniList's own form is `~!…!~` and only its editor inserts it; a `||secret||`
+     * written from muscle memory used to reach the reader as literal pipes around the
+     * thing it was meant to hide.
+     */
+    @Test
+    fun `a discord spoiler hides its text like the anilist one`() {
+        val spoiler = NovaMarkdown.parseInlines("before ||secret|| after")
+            .filterIsInstance<NovaInline.Spoiler>()
+            .single()
+
+        assertEquals("secret", spoiler.text)
+        assertEquals("secret", spoiler.children.novaPlainText())
+    }
+
+    @Test
+    fun `a discord spoiler can hold emphasis and a single pipe stays text`() {
+        val spoiler = NovaMarkdown.parseInlines("||**secret**||")
+            .filterIsInstance<NovaInline.Spoiler>()
+            .single()
+
+        assertEquals("secret", spoiler.text)
+        assertTrue(spoiler.children.single() is NovaInline.Bold)
+
+        // One pipe is the character the author typed: `a | b` is not a spoiler, and
+        // `||||` has nothing to hide.
+        assertEquals("a | b", NovaMarkdown.parseInlines("a | b").novaPlainText())
+        assertEquals("||||", NovaMarkdown.parseInlines("||||").novaPlainText())
+    }
+
+    /**
+     * Discord's subtext line: `-# written small`.
+     *
+     * AniList has no smaller-than-body text outside a table, so the only other render
+     * for this line was the literal "-#" in front of the sentence.
+     */
+    @Test
+    fun `a discord subtext line is its own block`() {
+        val blocks = NovaMarkdown.parse("A paragraph\n-# updated 2.5.1")
+
+        assertEquals(2, blocks.size)
+        val subtext = blocks.last() as NovaBlock.Subtext
+        assertEquals("updated 2.5.1", subtext.inlines.novaPlainText())
+    }
+
+    @Test
+    fun `a subtext line keeps its links and its indentation is not a list`() {
+        val subtext = NovaMarkdown.parse("-# [source](https://example.com)")
+            .single() as NovaBlock.Subtext
+
+        assertEquals("source", subtext.inlines.novaPlainText())
+        assertTrue(subtext.inlines.single() is NovaInline.Link)
+
+        // `- item` is still a bullet: the `#` is what makes the difference, and a
+        // parser that read both as subtext would lose every list in every bio.
+        assertTrue(NovaMarkdown.parse("- item").single() is NovaBlock.BulletList)
+    }
+
+    /**
+     * Discord's `>>> `: a quote that runs to the end of the message.
+     *
+     * The unmarked continuation is the point - a `>` on every line is the AniList form
+     * and already worked - so the blank line and the second paragraph have to end up
+     * inside the quote rather than after it.
+     */
+    @Test
+    fun `a triple angle quote swallows the rest of the document`() {
+        val blocks = NovaMarkdown.parse(">>> first line\n\nsecond paragraph")
+        val quote = blocks.single() as NovaBlock.Quote
+
+        assertEquals(2, quote.blocks.size)
+        assertEquals(
+            "first line",
+            (quote.blocks[0] as NovaBlock.Paragraph).inlines.novaPlainText()
+        )
+        assertEquals(
+            "second paragraph",
+            (quote.blocks[1] as NovaBlock.Paragraph).inlines.novaPlainText()
+        )
+    }
+
+    @Test
+    fun `a single angle quote still stops at its own last line`() {
+        val blocks = NovaMarkdown.parse("> quoted\nafter the quote")
+
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is NovaBlock.Quote)
+        assertEquals(
+            "after the quote",
+            (blocks[1] as NovaBlock.Paragraph).inlines.novaPlainText()
+        )
+    }
+
     @Test
     fun `a one-line html spoiler stays inline`() {
         val spoiler = NovaMarkdown

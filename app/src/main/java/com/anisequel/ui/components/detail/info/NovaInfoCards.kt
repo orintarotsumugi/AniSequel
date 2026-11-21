@@ -3,36 +3,29 @@ package com.anisequel.ui.components.detail.info
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,38 +42,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
-import com.anisequel.data.model.MediaScoreAmount
 import com.anisequel.data.model.airingCountdown
 import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.compactCount
-import com.anisequel.data.model.displayName
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
-import com.anisequel.data.model.rankingList
-import com.anisequel.data.model.trailerYoutubeUrl
 import com.anisequel.data.model.watchFraction
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.rememberShimmerPhase
-import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.openExternalUrlOrCopy
 import java.util.Locale
 
 /**
@@ -94,7 +75,20 @@ import java.util.Locale
  */
 
 /** One number in [NovaStatsCard], with the label the reference prints under it. */
-private data class NovaStat(val label: String, val value: String)
+private data class NovaStat(
+    val label: String,
+    val value: String,
+    /**
+     * The share of a ring this number is, when it is one.
+     *
+     * Only the score has a whole to be a share of - 76 of 100 - which is what makes
+     * it the one number on the strip that earns a ring rather than a plain figure.
+     * Null for the rest, and the null is load-bearing: a ring drawn around
+     * "58K popularity" at some made-up fraction would be a picture of a measurement
+     * nobody took.
+     */
+    val fraction: Float? = null
+)
 
 /**
  * The four-up number strip under the hero.
@@ -145,7 +139,8 @@ internal fun NovaStatsCard(
                 add(
                     NovaStat(
                         label = "Score",
-                        value = String.format(Locale.US, "%.1f", score / 10f)
+                        value = String.format(Locale.US, "%.1f", score / 10f),
+                        fraction = (score / 100f).coerceIn(0f, 1f)
                     )
                 )
             }
@@ -228,6 +223,7 @@ internal fun NovaStatsCard(
                         stats.forEach { stat ->
                             NovaStatCell(
                                 stat = stat,
+                                entranceKey = media.type to media.id,
                                 onClick = { selectedStat = stat.label }
                             )
                         }
@@ -316,345 +312,6 @@ internal fun NovaStatsCard(
     }
 }
 
-@Composable
-private fun NovaStatDetails(media: MediaNode, selectedLabel: String) {
-    // Derived once per stats payload rather than once per pass. The drawer is a
-    // scrolling `Column`, so opening it, dragging the sheet or a countdown above it
-    // re-running would otherwise re-filter, re-sort and re-sum four lists on every
-    // recomposition - for data that cannot have changed.
-    val stats = media.stats
-    val scoreRows = remember(stats) {
-        stats?.scoreDistribution.orEmpty()
-            .filter { (it.score ?: 0) > 0 && (it.amount ?: 0) > 0 }
-            .sortedBy { it.score }
-    }
-    val statusRows = remember(stats) {
-        stats?.statusDistribution.orEmpty()
-            .filter { !it.status.isNullOrBlank() && (it.amount ?: 0) > 0 }
-            .sortedByDescending { it.amount }
-    }
-    val totalRatings = remember(scoreRows) { scoreRows.sumOf { it.amount ?: 0 } }
-    val maxScoreCount = remember(scoreRows) { scoreRows.maxOfOrNull { it.amount ?: 0 } ?: 0 }
-    val totalStatuses = remember(statusRows) { statusRows.sumOf { it.amount ?: 0 } }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                selectedStatTitle(selectedLabel),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                media.displayName,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        when (selectedLabel) {
-            "Score" -> NovaScoreDetails(
-                media = media,
-                scoreRows = scoreRows,
-                totalRatings = totalRatings,
-                maxScoreCount = maxScoreCount
-            )
-            "Popularity" -> NovaPopularityDetails(media)
-            "Favourites" -> NovaFavouritesDetails(media)
-            else -> NovaLengthDetails(media)
-        }
-
-        if (statusRows.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "List status breakdown",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        compactCount(totalStatuses),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                statusRows.forEachIndexed { index, row ->
-                    val amount = row.amount ?: 0
-                    DistributionBarRow(
-                        // Enum labels are protocol text. Folding them with the
-                        // device locale turned `HIATUS` into `Hıatus` on a
-                        // Turkish device, which is visible in the statistics card.
-                        label = row.status.orEmpty().replace('_', ' ').lowercase(Locale.ROOT)
-                            .replaceFirstChar { it.uppercase(Locale.ROOT) },
-                        value = compactCount(amount),
-                        fraction = if (totalStatuses > 0) amount.toFloat() / totalStatuses else 0f,
-                        accent = chartAccent(index)
-                    )
-                }
-            }
-        }
-
-        media.description?.takeIf { it.isNotBlank() }?.let { synopsis ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Synopsis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Surface(
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        synopsis.replace(Regex("<[^>]*>"), "").replace("&mdash;", "—").replace("&quot;", "\""),
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        lineHeight = MaterialTheme.typography.bodyMedium.lineHeight
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(28.dp))
-    }
-}
-
-
-@Composable
-private fun NovaScoreDetails(
-    media: MediaNode,
-    scoreRows: List<MediaScoreAmount>,
-    totalRatings: Int,
-    maxScoreCount: Int
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(AppVectorIcons.Star, contentDescription = null, modifier = Modifier.size(30.dp))
-            Column {
-                Text(
-                    media.averageScore?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f", it / 10f) } ?: "—",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text("Average score · out of 10", style = MaterialTheme.typography.labelLarge)
-                if (totalRatings > 0) Text("${compactCount(totalRatings)} ratings", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-    Text("Score distribution", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    if (scoreRows.isEmpty()) {
-        EmptyStatMessage("AniList has not supplied a score distribution for this title.")
-    } else {
-        scoreRows.forEach { row ->
-            val amount = row.amount ?: 0
-            DistributionBarRow(
-                label = String.format(Locale.US, "%.1f", (row.score ?: 0) / 10f),
-                value = compactCount(amount),
-                fraction = if (maxScoreCount > 0) amount.toFloat() / maxScoreCount else 0f,
-                accent = MaterialTheme.colorScheme.primary
-            )
-        }
-    }
-}
-
-@Composable
-private fun NovaPopularityDetails(media: MediaNode) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("POPULARITY", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Text(
-                media.popularity?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text("AniList popularity count", style = MaterialTheme.typography.bodySmall)
-        }
-    }
-    Text("Catalogue rankings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-    if (media.rankingList.isEmpty()) {
-        EmptyStatMessage("No catalogue ranking is available for this title.")
-    } else {
-        media.rankingList.forEach { ranking ->
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        ranking.rank?.let { "#$it" } ?: "—",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(ranking.context ?: "Catalogue ranking", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NovaFavouritesDetails(media: MediaNode) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Icon(AppVectorIcons.ActivityLiked, contentDescription = null, modifier = Modifier.size(30.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    media.favourites?.takeIf { it > 0 }?.let(::compactCount) ?: "—",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text("AniList favourites", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-    }
-    EmptyStatMessage(
-        "This is the total number of AniList favourites. AniList does not provide a public list of every account that favourited this title."
-    )
-}
-
-@Composable
-private fun NovaLengthDetails(media: MediaNode) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(if (media.isManga) "CHAPTERS" else "EPISODE LENGTH", style = MaterialTheme.typography.labelMedium)
-            Text(
-                if (media.isManga) media.chapters?.takeIf { it > 0 }?.toString() ?: "—"
-                else media.duration?.let { "$it min" } ?: "—",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                if (media.isManga) "Published chapters" else "Average runtime per episode",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
-}
-
-@Composable
-private fun DistributionBarRow(
-    label: String,
-    value: String,
-    fraction: Float,
-    accent: Color
-) {
-    // The State object, not the delegated value. The fill is drawn below, so a
-    // frame of the spring invalidates this row's draw pass and nothing else. The
-    // row used to read the value in composition and paint it with
-    // `fillMaxWidth(fraction)`, which recomposed, re-measured and re-laid-out
-    // every bar in the drawer on every frame of every spring - a statistics
-    // sheet animating up to a dozen bars at once is exactly where that shows.
-    val animatedFraction = animateFloatAsState(
-        targetValue = fraction.coerceIn(0f, 1f),
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "nova_stat_distribution_bar"
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                value,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(9.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        val filled = size.width * animatedFraction.value
-                        if (filled > 0f) {
-                            drawRect(color = accent, size = Size(filled, size.height))
-                        }
-                    }
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyStatMessage(message: String) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            message,
-            modifier = Modifier.padding(14.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-private fun chartAccent(index: Int): Color = when (index % 5) {
-    0 -> Color(0xFF6D9FDE)
-    1 -> Color(0xFF64A88A)
-    2 -> Color(0xFFD99B59)
-    3 -> Color(0xFFB48AD8)
-    else -> Color(0xFFD47C86)
-}
-
-private fun selectedStatTitle(label: String): String = when (label) {
-    "Duration" -> "Episode details"
-    "Chapters" -> "Reading details"
-    else -> label
-}
 
 /**
  * The watched share as the page's own wave.
@@ -731,140 +388,27 @@ internal fun NovaProgressCard(
     }
 }
 
+/** How tall the value slot is in every cell, ringed or not. */
+private val STAT_VALUE_SLOT = 46.dp
+
 /**
- * The official trailer, as a card a reader can recognise before tapping.
+ * One number of the strip: its value over its label, tappable for the drawer.
  *
- * The trailer used to be a list row in the Extras card. That is honest - it opens
- * the video externally - but it is also the one piece of *artwork* on the page
- * that the app has a thumbnail for and never drew: AniList carries the YouTube id,
- * and YouTube publishes a deterministic thumbnail for it. The card uses that
- * picture as its surface, so the trailer reads as a destination rather than as
- * another settings row at the bottom of the page.
+ * ## Why the value slot has a fixed height
  *
- * The tap goes through the shared external opener, so a device with no browser
- * leaves the URL on the clipboard instead of appearing to ignore the tap.
+ * The score is drawn inside [NovaWavyRing] and the other three are plain figures, so
+ * the cells have different natural heights. Left to themselves the labels would sit
+ * at four different heights on the one row a reader scans across, which reads as
+ * four unrelated numbers rather than as one strip. The slot is therefore reserved for
+ * every cell - the ring fits it exactly, and a plain figure is centred in it - so the
+ * four labels share a baseline whether or not their number carries a ring.
  */
 @Composable
-internal fun NovaTrailerCard(
-    media: MediaNode,
-    modifier: Modifier = Modifier
+private fun RowScope.NovaStatCell(
+    stat: NovaStat,
+    entranceKey: Any?,
+    onClick: () -> Unit
 ) {
-    val url = media.trailerYoutubeUrl ?: return
-    val videoId = media.trailer?.id?.takeIf { it.isNotBlank() } ?: return
-    val thumbnail = remember(videoId) { "https://img.youtube.com/vi/$videoId/hqdefault.jpg" }
-    val context = LocalContext.current
-    val shape = MaterialTheme.shapes.large
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val playScale by animateFloatAsState(
-        targetValue = if (pressed) 0.92f else 1f,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "nova_trailer_play_scale"
-    )
-    val playContainer by animateColorAsState(
-        targetValue = if (pressed) Color.Black.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.52f),
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "nova_trailer_play_container"
-    )
-    val scrimBottom by animateColorAsState(
-        targetValue = if (pressed) Color.Black.copy(alpha = 0.82f) else Color.Black.copy(alpha = 0.76f),
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "nova_trailer_scrim"
-    )
-
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        ),
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                role = Role.Button,
-                onClickLabel = "Watch the official trailer"
-            ) { openExternalUrlOrCopy(context, url) }
-            .testTag("nova_info_trailer_card")
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-        ) {
-            AsyncImage(
-                model = thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .unseamedCover()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.05f),
-                            0.55f to Color.Black.copy(alpha = 0.22f),
-                            1f to scrimBottom
-                        )
-                    )
-            )
-            Surface(
-                shape = CircleShape,
-                color = playContainer,
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(54.dp)
-                    .graphicsLayer {
-                        scaleX = playScale
-                        scaleY = playScale
-                    }
-                    .testTag("nova_info_trailer_play")
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppVectorIcons.Play,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier
-                            .padding(start = 3.dp)
-                            .size(26.dp)
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = "Official trailer",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = media.displayName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.82f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-/** One number of the strip: its value over its label, tappable for the drawer. */
-@Composable
-private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
@@ -884,22 +428,28 @@ private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        AnimatedContent(
-            targetState = stat.value,
-            transitionSpec = {
-                fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
-                    fadeOut(animationSpec = ExpressiveMotion.FastEffects) using null
-            },
-            label = "nova_stat_value_${stat.label}"
-        ) { value ->
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        Box(
+            modifier = Modifier.height(STAT_VALUE_SLOT),
+            contentAlignment = Alignment.Center
+        ) {
+            val fraction = stat.fraction
+            if (fraction != null) {
+                NovaWavyRing(
+                    progress = fraction,
+                    entranceKey = entranceKey,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.22f),
+                    strokeWidth = 2.5.dp,
+                    modifier = Modifier.size(STAT_VALUE_SLOT)
+                ) {
+                    // `titleSmall` inside the ring rather than `titleLarge` beside
+                    // it: three characters in a 46dp ring at titleLarge touch the
+                    // stroke on both sides.
+                    NovaStatValue(stat = stat, style = MaterialTheme.typography.titleSmall)
+                }
+            } else {
+                NovaStatValue(stat = stat, style = MaterialTheme.typography.titleLarge)
+            }
         }
         Text(
             text = stat.label,
@@ -908,6 +458,42 @@ private fun RowScope.NovaStatCell(stat: NovaStat, onClick: () -> Unit) {
             // into "Populari...".
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The number itself, rolling to a new value rather than fading.
+ *
+ * A fade was the whole transition, and on this strip it read as a flicker: two
+ * numbers of different widths cross-faded in place, so the row twitched sideways
+ * while it changed. The slide is the one [com.anisequel.ui.components.expressive.AnimatedCounterText]
+ * uses for the same job - up and out, in from below, on the shared offset token - so
+ * the strip and the counters elsewhere in the app move the same way, and under
+ * `INSTANT` they both simply become the new number.
+ */
+@Composable
+private fun NovaStatValue(
+    stat: NovaStat,
+    style: androidx.compose.ui.text.TextStyle
+) {
+    AnimatedContent(
+        targetState = stat.value,
+        transitionSpec = {
+            (slideInVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { it / 3 } +
+                fadeIn(animationSpec = ExpressiveMotion.FastEffects)) togetherWith
+                (slideOutVertically(animationSpec = ExpressiveMotion.FastSpatialOffset) { -it / 3 } +
+                    fadeOut(animationSpec = ExpressiveMotion.FastEffects)) using null
+        },
+        label = "nova_stat_value_${stat.label}"
+    ) { value ->
+        Text(
+            text = value,
+            style = style,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -944,14 +530,36 @@ private fun NovaStatsPlaceholder(media: MediaNode) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                ShimmerBox(
-                    modifier = Modifier
-                        .width(46.dp)
-                        .height(22.dp),
-                    shape = MaterialTheme.shapes.extraSmall,
-                    phase = phase
-                )
-                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier.height(STAT_VALUE_SLOT),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // The score's cell is a *measurement* that has not been taken
+                    // yet, so it waits as the page's loading mark - the wavy ring,
+                    // turning - rather than as a shimmer bar standing in for a
+                    // number. The other three have no ring to fill, so they keep the
+                    // shimmer, which is the strip saying "these are coming" instead
+                    // of three spinners turning beside one.
+                    if (label == "Score") {
+                        NovaWavyRing(
+                            progress = null,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                alpha = 0.22f
+                            ),
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(STAT_VALUE_SLOT)
+                        )
+                    } else {
+                        ShimmerBox(
+                            modifier = Modifier
+                                .width(46.dp)
+                                .height(22.dp),
+                            shape = MaterialTheme.shapes.extraSmall,
+                            phase = phase
+                        )
+                    }
+                }
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,

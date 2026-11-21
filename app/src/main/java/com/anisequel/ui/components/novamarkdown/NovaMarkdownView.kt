@@ -95,6 +95,7 @@ internal fun NovaBlockContent(block: NovaBlock) {
     when (block) {
         is NovaBlock.Heading -> NovaHeading(block)
         is NovaBlock.Paragraph -> NovaParagraph(block)
+        is NovaBlock.Subtext -> NovaSubtext(block)
         is NovaBlock.Quote -> NovaQuote(block)
         is NovaBlock.Code -> NovaCode(block)
         is NovaBlock.BulletList -> NovaList(block)
@@ -124,6 +125,29 @@ private fun NovaHeading(heading: NovaBlock.Heading) {
         style = style,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = heading.align.toTextAlign(),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+/**
+ * Discord's subtext: body copy one step down, in the muted colour.
+ *
+ * The style is the whole block, so there is nothing to decide here beyond the
+ * alignment it inherited and the links inside it. `labelLarge` rather than a custom
+ * size keeps it on the app's type scale - the point is "quieter than the paragraph
+ * above it", not a font nobody else uses.
+ */
+@Composable
+private fun NovaSubtext(subtext: NovaBlock.Subtext) {
+    val context = LocalContext.current
+    Text(
+        text = buildNovaAnnotatedString(
+            subtext.inlines,
+            onLinkClick = { openExternalUrlOrCopy(context, it) }
+        ),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = subtext.align.toTextAlign(),
         modifier = Modifier.fillMaxWidth()
     )
 }

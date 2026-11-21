@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ArrivingEntry
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import com.anisequel.ui.components.cards.SequelStatusChip
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
@@ -97,15 +98,17 @@ fun ArrivingCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
-                .background(placeholderTint ?: MaterialTheme.colorScheme.surfaceContainerHigh),
+                .aspectRatio(1f),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = AppVectorIcons.Movie,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                modifier = Modifier.size(32.dp)
+            // Every card in this row used to draw the same `Movie` glyph on a flat
+            // tint while its cover loaded - a row of twelve identical tiles on a cold
+            // start. The title's own initials say which card is which before the
+            // artwork lands, and the cover draws over them.
+            PosterPlaceholder(
+                title = entry.title,
+                tint = placeholderTint,
+                modifier = Modifier.matchParentSize()
             )
 
             if (entry.coverUrl != null) {

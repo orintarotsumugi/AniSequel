@@ -512,6 +512,10 @@ internal fun ProfileTabsContent(
                     2 -> ProfileStatsTab(
                         state = state,
                         contentPadding = padding,
+                        // The reason the list-tallied charts are empty, when it is a
+                        // failure rather than a wait. `isLibraryLoading` already lives
+                        // on the state this tab is handed; the error did not.
+                        libraryError = state.libraryError,
                         section = statsSection,
                         onSelectSection = { statsSection = it },
                         listState = when (statsSection) {

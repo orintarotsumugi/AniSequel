@@ -96,6 +96,11 @@ private fun readNovaMarkupToken(
     ) {
         return readNovaInlineSpoilerToken(text, start, depth, spoilerDepth)
     }
+    if (char == '|' && start + 1 < text.length && text[start + 1] == '|' &&
+        spoilerDepth < MAX_SPOILER_DEPTH
+    ) {
+        return readNovaDiscordSpoilerToken(text, start, depth, spoilerDepth)
+    }
     return null
 }
 
@@ -148,6 +153,38 @@ private fun readNovaInlineSpoilerToken(
     val close = text.indexOf("!~", start + 2)
     if (close <= start + 2) return null
     val source = text.substring(start + 2, close)
+    val children = parseNovaInlinesAt(source, depth + 1, spoilerDepth + 1)
+    return NovaInline.Spoiler(
+        text = children.novaPlainText(),
+        children = children
+    ) to close + 2
+}
+
+/**
+ * Discord's `||spoiler||`, the second way this app's readers write a lid.
+ *
+ * AniList spells it `~!…!~` and only its own editor inserts that; a person who
+ * spends their day in Discord types the pipes, and the line then rendered as literal
+ * `||` around the text it was meant to hide - which is worse than either outcome,
+ * because the spoiler stays readable on a profile. It produces the same
+ * [NovaInline.Spoiler] the AniList form does, so everything downstream (the tap to
+ * reveal, the obscured run's width, the media-link lift refusing to reach inside)
+ * already works.
+ *
+ * The closing pair must not be empty, and `|` on its own is untouched: a table row
+ * never reaches this scanner (its cells are split first), and a single pipe in prose
+ * stays the character the author typed.
+ */
+private fun readNovaDiscordSpoilerToken(
+    text: String,
+    start: Int,
+    depth: Int,
+    spoilerDepth: Int
+): Pair<NovaInline, Int>? {
+    val close = text.indexOf("||", start + 2)
+    if (close <= start + 2) return null
+    val source = text.substring(start + 2, close)
+    if (source.isBlank()) return null
     val children = parseNovaInlinesAt(source, depth + 1, spoilerDepth + 1)
     return NovaInline.Spoiler(
         text = children.novaPlainText(),

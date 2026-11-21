@@ -218,13 +218,13 @@ internal fun ComposerBottomBar(
                     enabled = !isBusy,
                     onClick = { onEdit(wrap(draft, "*")) }
                 )
-                FormatAction(
-                    icon = AppVectorIcons.TextUnderline,
-                    label = "Underline",
-                    tag = "comment_format_underline",
-                    enabled = !isBusy,
-                    onClick = { onEdit(wrap(draft, "<u>", "</u>")) }
-                )
+                // No Underline. The bar drew one and it wrote `<u>…</u>`, which is not
+                // markup AniList renders: `__text__` is bold there and `<u>` is stripped
+                // on the way in (see NovaMarkdownParser's list of site differences), so
+                // the button posted the tag as literal text - `<u>like this</u>` around a
+                // comment that was meant to be underlined. A control that writes text the
+                // site shows verbatim is worse than an absent one, and there is no third
+                // answer: the site has no underline to reach.
                 FormatAction(
                     icon = AppVectorIcons.TextStrikethrough,
                     label = "Strikethrough",

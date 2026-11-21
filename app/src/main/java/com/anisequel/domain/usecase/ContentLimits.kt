@@ -82,8 +82,7 @@ object ContentLimits {
      * text can never disagree: a field that accepts 8,001 characters and fails on
      * send is a comment the reader wrote and cannot post.
      */
-    fun clipReply(text: String): String =
-        if (text.length <= REPLY_MAX) text else text.take(REPLY_MAX)
+    fun clipReply(text: String): String = clipToCeiling(text, REPLY_MAX)
 
     /** Why [checkStatus] refused a text activity's draft, or [StatusVerdict.Valid]. */
     enum class StatusVerdict {
@@ -118,6 +117,26 @@ object ContentLimits {
     }
 
     /** A text-activity draft clipped to [STATUS_MAX]. See [clipReply]. */
-    fun clipStatus(text: String): String =
-        if (text.length <= STATUS_MAX) text else text.take(STATUS_MAX)
+    fun clipStatus(text: String): String = clipToCeiling(text, STATUS_MAX)
+
+    /**
+     * [text] cut to at most [ceiling] `Char`s without splitting a character.
+     *
+     * `take(n)` counts UTF-16 units, and one emoji or one outside-the-BMP character is
+     * two of them. Cutting at an odd offset therefore left a lone high surrogate at the
+     * end of the draft, which is not text: it renders as the replacement glyph in the
+     * field, travels to AniList as a broken escape, and the reader watches the tail of
+     * their last character turn into a dark diamond. The clip only has to lose at most
+     * one code point to avoid it, and the counter in the composer measures the same
+     * string this returns, so the two still agree.
+     */
+    private fun clipToCeiling(text: String, ceiling: Int): String {
+        if (text.length <= ceiling) return text
+        val end = if (text[ceiling - 1].isHighSurrogate() && text[ceiling].isLowSurrogate()) {
+            ceiling - 1
+        } else {
+            ceiling
+        }
+        return text.take(end)
+    }
 }

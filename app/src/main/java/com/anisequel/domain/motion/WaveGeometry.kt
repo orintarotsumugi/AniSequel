@@ -44,5 +44,38 @@ object WaveGeometry {
      */
     fun phase(cycleFraction: Float): Float = TWO_PI * cycleFraction
 
+    /**
+     * The radius of a wavy ring's outline at [angle] radians.
+     *
+     * The ring on the score cell is the same mark as the bar, closed: a circle whose
+     * radius breathes by [wobble] of itself [lobes] times around the turn, so the
+     * outline is a rounded squiggle rather than a perfect circle. Same reason as
+     * [offset] for living here - the drawing is not assertable, and every way this
+     * can look wrong (a ring that clips its own stroke, one that reads as a star
+     * instead of a wave, a wobble deep enough to lose the circle) is a mistake in
+     * these numbers.
+     *
+     * [wobble] is a *fraction of the radius*, so the ring's thickness in screen
+     * terms follows the cell size instead of being a second number to keep in step.
+     */
+    fun ringRadius(
+        baseRadius: Float,
+        wobble: Float,
+        lobes: Int,
+        angle: Float,
+        phase: Float = 0f
+    ): Float = baseRadius * (1f + wobble * sin(lobes * angle + phase))
+
+    /**
+     * How much of a full turn a determinate ring covers for [progress].
+     *
+     * Degrees rather than radians because `Path.arcTo`-style callers think in
+     * degrees, and because a sweep is wanted as a share of the turn - at 0 the ring
+     * is the track only, and at 1 it closes on itself.
+     */
+    fun ringSweepDegrees(progress: Float): Float = FULL_TURN_DEGREES * progress.coerceIn(0f, 1f)
+
     private const val TWO_PI = (2.0 * PI).toFloat()
+
+    private const val FULL_TURN_DEGREES = 360f
 }
