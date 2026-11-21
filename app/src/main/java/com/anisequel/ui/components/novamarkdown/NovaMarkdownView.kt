@@ -2,6 +2,8 @@ package com.anisequel.ui.components.novamarkdown
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -126,6 +128,7 @@ private fun NovaHeading(heading: NovaBlock.Heading) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NovaParagraph(paragraph: NovaBlock.Paragraph) {
     val scope = LocalNovaRenderScope.current
@@ -138,10 +141,19 @@ private fun NovaParagraph(paragraph: NovaBlock.Paragraph) {
     // line to clip), and falls back to the single Text, where the image becomes
     // its alt text link. That is the one case the collapse rule deliberately
     // avoids: a bio with an image anywhere is never collapsed.
+    //
+    // FlowRow, not Column: a row of social icons is several pictures beside each
+    // other, and a GIF between two words is not a new paragraph. The old Column
+    // is what drew every icon on its own line, one under the next.
     if (paragraph.inlines.containsNovaImage() && scope.maxLines == Int.MAX_VALUE) {
-        Column(
+        val arrangement = when (paragraph.align) {
+            NovaAlign.Center -> Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)
+            NovaAlign.End -> Arrangement.spacedBy(6.dp, Alignment.End)
+            else -> Arrangement.spacedBy(6.dp)
+        }
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = paragraph.align.toHorizontalAlignment(),
+            horizontalArrangement = arrangement,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             paragraph.inlines.toNovaSegments().forEach { segment ->
@@ -155,15 +167,13 @@ private fun NovaParagraph(paragraph: NovaBlock.Paragraph) {
                             ),
                             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = textAlign,
-                            modifier = Modifier.fillMaxWidth()
+                            textAlign = textAlign
                         )
                     }
 
                     is NovaSegment.Picture -> NovaInlinePicture(
                         segment.image,
-                        segment.targetUrl,
-                        paragraph.align
+                        segment.targetUrl
                     )
                 }
             }
@@ -257,12 +267,6 @@ internal fun NovaAlign.toTextAlign(): TextAlign = when (this) {
     NovaAlign.Center -> TextAlign.Center
     NovaAlign.End -> TextAlign.End
     NovaAlign.Justify -> TextAlign.Justify
-}
-
-internal fun NovaAlign.toHorizontalAlignment(): Alignment.Horizontal = when (this) {
-    NovaAlign.Center -> Alignment.CenterHorizontally
-    NovaAlign.End -> Alignment.End
-    else -> Alignment.Start
 }
 
 internal fun NovaAlign.toContentAlignment(): Alignment = when (this) {

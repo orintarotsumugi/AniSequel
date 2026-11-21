@@ -375,7 +375,12 @@ internal fun standaloneNovaImage(trimmed: String): NovaBlock.Image? {
     }
     HTML_IMAGE_LINE.matchEntire(trimmed)?.let { match ->
         return htmlNovaImage(match.groupValues[1])?.let { image ->
-            NovaBlock.Image(image.url, image.alt, width = image.width)
+            NovaBlock.Image(
+                url = image.url,
+                alt = image.alt,
+                width = image.width,
+                height = image.height
+            )
         }
     }
     val linked = LINKED_LINE.matchEntire(trimmed)
@@ -402,8 +407,19 @@ internal fun htmlNovaImage(attrs: String): NovaInline.Image? {
     return NovaInline.Image(
         url = novaAbsoluteUrl(src),
         alt = novaHtmlAttribute(attrs, "alt")?.trim()?.takeIf { it.isNotEmpty() },
-        width = normalizeNovaImageWidth(novaHtmlAttribute(attrs, "width"))
+        width = normalizeNovaImageWidth(
+            novaHtmlAttribute(attrs, "width") ?: novaHtmlStyleLength(attrs, STYLE_WIDTH)
+        ),
+        height = normalizeNovaImageHeight(
+            novaHtmlAttribute(attrs, "height") ?: novaHtmlStyleLength(attrs, STYLE_HEIGHT)
+        )
     )
+}
+
+/** A `width:`/`height:` value in the image's inline `style`, if it has one. */
+private fun novaHtmlStyleLength(attrs: String, pattern: Regex): String? {
+    val style = novaHtmlAttribute(attrs, "style") ?: return null
+    return pattern.find(style)?.groupValues?.get(1)?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 /**
@@ -415,11 +431,26 @@ internal fun htmlNovaImage(attrs: String): NovaInline.Image? {
  * degrades to the default rather than to a blank line.
  */
 internal fun normalizeNovaImageWidth(raw: String?): String? {
+    return normalizeNovaImageLength(raw, allowPercent = true)
+}
+
+/**
+ * The size an HTML `height` or `style="height:…"` asked for, in dp.
+ *
+ * A percentage height has no column to be a percentage of in this layout, so it
+ * is refused rather than guessed at; the image keeps its own aspect ratio.
+ */
+internal fun normalizeNovaImageHeight(raw: String?): String? {
+    return normalizeNovaImageLength(raw, allowPercent = false)
+}
+
+private fun normalizeNovaImageLength(raw: String?, allowPercent: Boolean): String? {
     val value = raw?.trim()?.lowercase(Locale.ROOT)?.removeSuffix("px")
         ?.takeIf { it.isNotEmpty() }
         ?: return null
     if (value == "auto") return null
     val percent = value.endsWith("%")
+    if (percent && !allowPercent) return null
     val number = (if (percent) value.dropLast(1) else value).toIntOrNull() ?: return null
     if (number <= 0) return null
     return if (percent) "$number%" else number.toString()

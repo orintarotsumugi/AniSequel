@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "2.5.0",
+      "entries": [
+        {
+          "title": "Inline images stay inline",
+          "detail": "A row of social icons now flows across the card instead of stacking one per line. Linked images, GIFs between words and image groups use the width they are given, so the row wraps only when the screen is actually full."
+        },
+        {
+          "title": "Height and style sizing",
+          "detail": "HTML `height` and `width`/`height` inside an inline style are honoured alongside `width`, including `px` values. Percent widths still mean a share of the card, and oversized values stay inside the profile instead of overflowing it."
+        },
+        {
+          "title": "Multi-line links render as links",
+          "detail": "An `<a>` that opens on one line, contains an image on the next and closes later is parsed as one link instead of leaving literal `<a href=...>` text at the bottom of the bio."
+        },
+        {
+          "title": "Escaped AniList text stays text",
+          "detail": "`<escape>` content is shown as written. A title and its AniList URL no longer turn into a preview card while leaving an empty `()` behind."
+        },
+        {
+          "title": "Smaller decodes for small images",
+          "detail": "A declared image size is also passed to Coil as its decode size, so 50x60 icons are not decoded at full source resolution; inline artwork also gets a sharper medium-quality filter."
+        },
+        {
+          "title": "Tidier layout in long bios",
+          "detail": "Images in a paragraph are laid out by the row instead of a stack, reducing layout work for icon strips and mixed text-and-image bios."
+        }
+      ]
+    },
+    {
       "version": "2.4.9",
       "entries": [
         {

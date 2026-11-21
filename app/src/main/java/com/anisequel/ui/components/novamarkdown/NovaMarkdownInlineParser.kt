@@ -396,7 +396,15 @@ private fun readNovaAngle(
     return when (name) {
         "br" -> NovaInline.Text("\n") to close + 1
         "img" -> readNovaAngleImage(text, start, close, raw)
+        // `<escape>…</escape>` is AniList's literal wrapper: the text inside is
+        // shown as written, so a URL in it is not turned into a card and any
+        // markup in it is not interpreted.
+        "escape" -> readNovaAngleEscape(text, close)
+        // An opening anchor with no closing tag is malformed, not visible prose.
+        // Consuming the tag keeps the raw `<a href=…>` out of the bio; the block
+        // walk above usually keeps the matching close in the same paragraph.
         "a" -> readNovaAngleAnchor(text, close, attrs, depth, spoilerDepth)
+            ?: (null to close + 1)
         "span", "div" -> readNovaAngleSpoiler(
             text,
             close,
@@ -441,6 +449,14 @@ private fun readNovaAngleImage(
 ): Pair<NovaInline, Int> {
     val image = htmlNovaImage(raw)
     return (image ?: NovaInline.Text(text.substring(start, close + 1))) to close + 1
+}
+
+private fun readNovaAngleEscape(text: String, close: Int): Pair<NovaInline?, Int> {
+    val end = text.indexOf("</escape", close + 1, ignoreCase = true)
+    if (end < 0) return null to close + 1
+    val tagEnd = text.indexOf('>', end)
+    val next = if (tagEnd >= 0) tagEnd + 1 else end + "</escape>".length
+    return NovaInline.Text(text.substring(close + 1, end)) to next
 }
 
 private fun readNovaAngleAnchor(

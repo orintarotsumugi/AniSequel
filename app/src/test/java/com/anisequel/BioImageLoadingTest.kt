@@ -6,6 +6,7 @@ import com.anisequel.ui.components.novamarkdown.NovaInline
 import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.containsNovaImage
 import com.anisequel.ui.components.novamarkdown.nestedInlines
+import com.anisequel.ui.components.novamarkdown.normalizeNovaImageHeight
 import com.anisequel.ui.components.novamarkdown.normalizeNovaImageWidth
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -120,6 +121,26 @@ class BioImageLoadingTest {
     }
 
     @Test
+    fun `an HTML image keeps the height the API wrote`() {
+        val image = NovaMarkdown.parse(
+            "<img width='50px' height='60px' src='https://x/icon.png'>"
+        ).single() as NovaBlock.Image
+
+        assertEquals("50", image.width)
+        assertEquals("60", image.height)
+    }
+
+    @Test
+    fun `an image style supplies both dimensions`() {
+        val image = NovaMarkdown.parse(
+            "<img src='https://x/icon.png' style='width: 50px; height: 60px'>"
+        ).single() as NovaBlock.Image
+
+        assertEquals("50", image.width)
+        assertEquals("60", image.height)
+    }
+
+    @Test
     fun `a width inside the image URL is not the image's size`() {
         // Query strings carry `width=` too, and an attribute search that takes the
         // first match in the tag reads the CDN's parameter as the author's size.
@@ -145,6 +166,10 @@ class BioImageLoadingTest {
         assertEquals("220", normalizeNovaImageWidth(" 220 "))
         assertEquals("220", normalizeNovaImageWidth("220PX"))
         assertEquals("50%", normalizeNovaImageWidth("50%"))
+
+        assertEquals("60", normalizeNovaImageHeight("60px"))
+        assertNull("a percentage height has no column to resolve against", normalizeNovaImageHeight("50%"))
+        assertNull(normalizeNovaImageHeight("0"))
     }
 
     // endregion
@@ -237,7 +262,7 @@ class BioImageLoadingTest {
                 // A block image is normalised into the inline shape here, so one list
                 // holds both kinds and the sizes can be compared across them.
                 is NovaBlock.Image ->
-                    out += NovaInline.Image(node.url, node.alt, node.width)
+                    out += NovaInline.Image(node.url, node.alt, node.width, node.height)
 
                 is NovaBlock.Paragraph -> out += node.inlines.images()
                 is NovaBlock.Heading -> out += node.inlines.images()

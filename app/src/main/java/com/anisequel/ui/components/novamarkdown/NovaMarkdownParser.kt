@@ -138,6 +138,17 @@ private fun startsNovaBlock(lines: List<String>, index: Int): Boolean {
         startsNovaMediaBlock(lines, index, trimmed)
 }
 
+/**
+ * Net anchors opened by one line.
+ *
+ * AniList authors routinely put an opening `<a>` on its own line, the image on
+ * the next and `</a>` after that. The block walk below would otherwise end the
+ * paragraph at the standalone image, leaving the opening tag as literal text -
+ * which is exactly the `<a href=…>` a bio reader sees at the bottom of a profile.
+ */
+private fun novaAnchorDelta(line: String): Int =
+    ANCHOR_OPEN_TAG.findAll(line).count() - ANCHOR_CLOSE_TAG.findAll(line).count()
+
 private fun startsNovaTextBlock(raw: String, trimmed: String): Boolean =
     FENCE.matches(trimmed) ||
         ATX_HEADING.matches(trimmed) ||
@@ -226,9 +237,16 @@ internal fun parseNovaBlocks(
         }
 
         // ---- paragraph -----------------------------------------------------
+        // A paragraph normally stops at the next block. While an anchor is open
+        // it keeps consuming those starts, because an image or a `<br>` between
+        // `<a>` and `</a>` belongs to the link, not to the document around it.
         val paragraphLines = mutableListOf<String>()
-        while (i < lines.size && !startsNovaBlock(lines, i)) {
-            paragraphLines += lines[i].trim()
+        var openAnchors = 0
+        while (i < lines.size) {
+            if (openAnchors == 0 && startsNovaBlock(lines, i)) break
+            val line = lines[i].trim()
+            paragraphLines += line
+            openAnchors = (openAnchors + novaAnchorDelta(line)).coerceAtLeast(0)
             i++
         }
 

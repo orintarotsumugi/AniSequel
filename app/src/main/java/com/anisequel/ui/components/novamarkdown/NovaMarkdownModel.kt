@@ -95,8 +95,10 @@ sealed interface NovaBlock {
         val url: String,
         val alt: String? = null,
         val targetUrl: String? = null,
-        /** `220` is pixels, `50%` is a share of the column, null is full width. */
+        /** `220` is pixels, `50%` is a share of the column, null is the image's own size. */
         val width: String? = null,
+        /** `60` is pixels; null keeps the file's own aspect ratio. */
+        val height: String? = null,
         override val align: NovaAlign = NovaAlign.Start
     ) : NovaBlock
 
@@ -180,7 +182,8 @@ sealed interface NovaInline {
     data class Image(
         val url: String,
         val alt: String? = null,
-        val width: String? = null
+        val width: String? = null,
+        val height: String? = null
     ) : NovaInline
 
     /**
@@ -193,6 +196,10 @@ sealed interface NovaInline {
 /** The dp width an `img220(...)` asks for, clamped; null for no absolute size. */
 internal fun novaImageWidthDp(width: String?): Int? =
     width?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(NOVA_MAX_IMAGE_WIDTH_DP)
+
+/** The dp height an HTML `height="60"` asks for, clamped; null for no size. */
+internal fun novaImageHeightDp(height: String?): Int? =
+    height?.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(NOVA_MAX_IMAGE_HEIGHT_DP)
 
 /** The fraction an `img50%(...)` asks for; null for no percentage size. */
 internal fun novaImageWidthPercent(width: String?): Float? {

@@ -296,6 +296,23 @@ class NovaMarkdownParserTest {
     }
 
     @Test
+    fun `an escape wrapper keeps its AniList address literal`() {
+        val blocks = NovaMarkdown.parse(
+            "<escape>\"A title\" (https://anilist.co/anime/1)</escape>"
+        )
+        val paragraph = blocks.single() as NovaBlock.Paragraph
+
+        // `<escape>` means "show this as written". Lifting the URL into a card
+        // left the surrounding parentheses behind as an empty `()` above it.
+        assertEquals(1, blocks.size)
+        assertTrue(paragraph.inlines.none { it is NovaInline.MediaLink })
+        assertEquals(
+            "\"A title\" (https://anilist.co/anime/1)",
+            paragraph.inlines.novaPlainText()
+        )
+    }
+
+    @Test
     fun `an anchor without href is accent text, not a dead link`() {
         val accent = NovaMarkdown.parseInlines("<a>coloured</a>").single() as NovaInline.Accent
 
