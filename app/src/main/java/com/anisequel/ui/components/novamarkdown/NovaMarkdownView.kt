@@ -17,12 +17,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.anisequel.data.model.EntityPreview
 import com.anisequel.data.model.EntityPreviewKey
 import com.anisequel.data.model.MediaCover
 import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.theme.withLeadingFactor
 
 /**
  * Everything a nested renderer needs from the document it belongs to.
@@ -189,7 +189,7 @@ private fun NovaParagraph(paragraph: NovaBlock.Paragraph) {
                                 onLinkClick = { openExternalUrlOrCopy(context, it) },
                                 italic = italic
                             ),
-                            style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                            style = MaterialTheme.typography.bodyMedium.withLeadingFactor(SYNOPSIS_LEADING_FACTOR),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = textAlign
                         )
@@ -211,7 +211,7 @@ private fun NovaParagraph(paragraph: NovaBlock.Paragraph) {
             onLinkClick = { openExternalUrlOrCopy(context, it) },
             italic = italic
         ),
-        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+        style = MaterialTheme.typography.bodyMedium.withLeadingFactor(SYNOPSIS_LEADING_FACTOR),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = textAlign,
         maxLines = scope.maxLines,
@@ -325,3 +325,14 @@ internal fun NovaAlign.toContentAlignment(): Alignment = when (this) {
     NovaAlign.End -> Alignment.CenterEnd
     else -> Alignment.CenterStart
 }
+
+/**
+ * Synopsis and comment body leading, as a share of `bodyMedium`'s own line height.
+ *
+ * The paragraphs are set a touch looser than the style ships with - 22sp against the
+ * default 21sp - because a wall of description needs the extra air. It is a factor
+ * rather than the `22.sp` literal it used to be: the literal held the default
+ * size's leading while the reader's Text size setting grew the glyphs, so at 175%
+ * a 24.5sp line was drawn on a 22sp line and the paragraphs overlapped.
+ */
+private const val SYNOPSIS_LEADING_FACTOR = 22f / 21f

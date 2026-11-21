@@ -38,6 +38,14 @@
         {
           "title": "Dates follow the app's language",
           "detail": "The activity calendar's day labels, a studio's favourites count and the schedule's airing labels read the device language once and kept it, so switching the app language left those three in the old one. They now read the language the current screen is drawn in."
+        },
+        {
+          "title": "Larger text no longer overlaps itself",
+          "detail": "A title's synopsis and every comment body, the tier list captions, the segmented bars under Settings and both title-page heroes kept their line spacing at the default size while the letters grew with Text size, so at the larger stops the lines ran into each other. Line spacing and letter tracking now grow with the type, and a character card on the Info page grows with its text instead of cutting the actor's name off."
+        },
+        {
+          "title": "Display size explains the right direction",
+          "detail": "Both Display size explanations said a higher dpi fits more on the screen. Density is pixels per dp, so a higher number draws everything larger and fits less - the old sentence sent a reader who wanted a bigger app the wrong way up the slider. The copy and the Small preset's description now match what the setting does."
         }
       ]
     },

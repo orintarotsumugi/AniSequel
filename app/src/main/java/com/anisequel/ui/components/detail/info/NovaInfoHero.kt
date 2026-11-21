@@ -71,7 +71,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
@@ -100,6 +99,7 @@ import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LocalAppDarkTheme
 import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.asHeroTitle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import kotlinx.coroutines.delay
 
@@ -506,10 +506,7 @@ private fun HeroLockup(
                 ) {
                     Text(
                         text = media.displayName,
-                        style = MaterialTheme.typography.headlineSmall.copy(
-                            lineHeight = 30.sp,
-                            letterSpacing = (-0.4).sp
-                        ),
+                        style = MaterialTheme.typography.headlineSmall.asHeroTitle(),
                         color = titleInk,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 3,

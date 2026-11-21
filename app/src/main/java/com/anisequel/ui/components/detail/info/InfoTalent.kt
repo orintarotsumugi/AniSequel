@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -144,9 +145,16 @@ private fun CharacterCard(
         // bottom edge was a staircase. 128dp is the tallest ordinary card - two
         // name lines, the alias, role, facts and the actor line - and the empty
         // space a shorter card has now is what gives every card the same grid.
+        //
+        // `heightIn(min = ...)`, not a fixed `height`: the five lines inside are
+        // sized in sp, which Settings > Type & reading scales, while 128dp does not
+        // move with it. At 175% the actor line was drawn past the bottom edge and
+        // clipped - the one card on the page where a larger reading size lost text
+        // instead of growing a card. Every card still starts at 128dp, so the grid
+        // the paragraph above describes is intact.
         modifier = Modifier
             .width(288.dp)
-            .height(128.dp)
+            .heightIn(min = 128.dp)
             // Opens the character's own page *inside the app*, the way a studio credit
             // opens a studio page. It handed off to the browser before, which was the
             // one thing on this page that did: the reader left the app to read three

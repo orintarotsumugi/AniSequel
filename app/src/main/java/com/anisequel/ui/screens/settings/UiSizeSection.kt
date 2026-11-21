@@ -153,13 +153,16 @@ internal fun UiSizeSectionCard(interfacePreferences: InterfacePreferences) {
         )
         CollapsibleText(
             // Said plainly because it is the surprising part: this is not the
-            // phone's panel, and it applies to this very page.
+            // phone's panel, and it applies to this very page. The direction used to
+            // be backwards here too - "a higher number fits more on the page" is the
+            // opposite of what a density of px-per-dp does, and it sent readers the
+            // wrong way up the slider.
             text = "Every length in the app is a dp, and a dp is only as big as the " +
-                "density says: a higher number fits more on the page, a lower one draws " +
-                "text, cards and gaps larger. The value applies to the whole app - this " +
-                "page included, the moment you let go - and does not depend on what the " +
-                "phone's own panel reports. ${DisplayDpi.DEFAULT_DPI} dpi is the shipped " +
-                "default.",
+                "density says: a higher number draws text, cards and gaps larger and " +
+                "fits less on the page, a lower one makes everything finer and fits " +
+                "more. The value applies to the whole app - this page included, the " +
+                "moment you let go - and does not depend on what the phone's own panel " +
+                "reports. ${DisplayDpi.DEFAULT_DPI} dpi is the shipped default.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

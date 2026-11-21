@@ -119,7 +119,11 @@ enum class UiSize(
     COMPACT(
         displayName = "Small",
         dpi = 400,
-        blurb = "More on screen: the same layout at a finer density."
+        // 400 dpi is *below* the 447 default, and a lower density is what makes
+        // everything finer: fewer pixels per dp means each dp covers less of the
+        // panel, so more dp - more of the layout - fits. The blurb said "at a finer
+        // density", which reads as if the number were the higher one.
+        blurb = "More on screen: the same layout, drawn smaller."
     ),
     DEFAULT(
         displayName = "Default",
