@@ -92,6 +92,13 @@ fun ProfileHomeTab(
         state.favouriteCharacters.isNotEmpty() ||
         state.favouriteStaff.isNotEmpty() ||
         state.favouriteStudios.isNotEmpty()
+    // Hiding every favourite section is a statement about the page, not an
+    // absence in the account: the empty card belongs to a page that still has
+    // favourite sections to show, or it replaces those sections with a claim
+    // the reader cannot see and did not ask for.
+    val showsFavouriteSections = layout.visibleSections.any {
+        it != com.anisequel.domain.profile.ProfileSection.ABOUT
+    }
 
     LazyColumn(
         modifier = modifier
@@ -167,7 +174,7 @@ fun ProfileHomeTab(
             }
         }
 
-        if (!hasAnyFavourites) {
+        if (!hasAnyFavourites && showsFavouriteSections) {
             item(key = "empty_favourites") {
                 EmptyFavourites(
                     message = "No favourites pinned yet",

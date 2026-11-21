@@ -169,7 +169,7 @@ fun ProfileActivityTab(
 
     // Six rows from the end is far enough that the fetch has usually landed before
     // the user gets there, and near enough that a short list does not spin.
-    val shouldPage by remember {
+    val shouldPage by remember(listState) {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val total = listState.layoutInfo.totalItemsCount
@@ -214,7 +214,7 @@ fun ProfileActivityTab(
                     ProfileSectionHeader(
                         title = "Activity History",
                         icon = AppVectorIcons.Calendar,
-                        trailing = "${source.calendar.totalChanges} changes"
+                        trailing = formatActivityChanges(source.calendar.totalChanges)
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     ActivityCalendarCard(calendar = source.calendar)

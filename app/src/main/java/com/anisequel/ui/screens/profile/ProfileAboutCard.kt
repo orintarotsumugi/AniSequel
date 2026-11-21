@@ -129,7 +129,10 @@ fun AboutCard(
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
     val nodes = remember(about) { NovaMarkdown.parse(about) }
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    // Keyed to the bio: the card keeps its composition slot when the screen
+    // swaps one profile's overview for another's, so an unkeyed flag opened the
+    // next person's bio already expanded (and remembered that across rotation).
+    var expanded by rememberSaveable(about) { mutableStateOf(false) }
     val isCollapsed = isBioCollapsible(about, nodes) && !expanded
 
     Card(

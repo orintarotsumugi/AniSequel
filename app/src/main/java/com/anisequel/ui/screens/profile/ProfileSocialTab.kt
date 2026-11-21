@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -151,12 +152,17 @@ fun ProfileSocialTab(
         if (sortByName) matches.sortedBy { it.name.lowercase(Locale.ROOT) } else matches
     }
 
+    // The grid keeps its three columns on a phone and stops growing into a
+    // wall of faces on a tablet. Centred rather than left-aligned, unlike the
+    // old full-width grid, so it lines up with the header and the other tabs.
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     LazyVerticalGrid(
         // `Fixed` rather than `Adaptive`: the grid must not reflow when the
         // window changes, because the user's scroll position would no longer be
         // the person they were looking at.
         columns = GridCells.Fixed(3),
-        modifier = modifier
+        modifier = Modifier
+            .widthIn(max = ProfileMaxContentWidth)
             .fillMaxSize()
             .testTag("profile_social_tab"),
         state = gridState,
@@ -200,7 +206,7 @@ fun ProfileSocialTab(
             }
         }
 
-        if (rawPeople.isNotEmpty()) {
+        if (rawPeople.isNotEmpty() || searchQuery.isNotBlank()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier
@@ -213,8 +219,10 @@ fun ProfileSocialTab(
                     // The search field only earns its row once the list is longer
                     // than a screen, but the sort switch is useful at any size -
                     // so it holds the row on its own for short lists rather than
-                    // appearing and disappearing with the count.
-                    if (rawPeople.size > 5) {
+                    // appearing and disappearing with the count. An active query
+                    // keeps it up even if the list shrank under it: otherwise the
+                    // reader is left looking at "No matches" with no box to clear.
+                    if (rawPeople.size > 5 || searchQuery.isNotBlank()) {
                         SocialSearchBar(
                             query = searchQuery,
                             onQueryChange = { searchQuery = it },
@@ -266,6 +274,7 @@ fun ProfileSocialTab(
             onLoad = onLoad,
             onOpenUser = onOpenUser
         )
+    }
     }
 }
 

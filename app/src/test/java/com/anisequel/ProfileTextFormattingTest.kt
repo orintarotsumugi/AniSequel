@@ -6,6 +6,9 @@ import com.anisequel.ui.screens.profile.formatRelativeSeconds
 import com.anisequel.ui.screens.profile.formatWatchTime
 import com.anisequel.ui.screens.profile.formatActivityChanges
 import com.anisequel.ui.screens.profile.formatFavouriteCount
+import com.anisequel.ui.screens.profile.formatWeeks
+import com.anisequel.ui.screens.profile.scoreBarFraction
+import com.anisequel.ui.screens.profile.socialCountLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -158,6 +161,7 @@ class ProfileCountFormattingTest {
     fun `singular activity and favourite counts use singular nouns`() {
         assertEquals("1 change", formatActivityChanges(1))
         assertEquals("1 favourite", formatFavouriteCount(1))
+        assertEquals("1 week", formatWeeks(1))
     }
 
     @Test
@@ -165,5 +169,44 @@ class ProfileCountFormattingTest {
         assertEquals("No changes", formatActivityChanges(0))
         assertEquals("2 changes", formatActivityChanges(2))
         assertEquals("2 favourites", formatFavouriteCount(2))
+        assertEquals("26 weeks", formatWeeks(26))
+    }
+
+    /**
+     * A full first page is all this tab can prove, not the account's total.
+     * A page of 50 used to print as an exact "Followers (50)" for both a new
+     * account and one with thousands.
+     */
+    @Test
+    fun `a full social page is reported as a lower bound`() {
+        assertEquals("Followers (12)", socialCountLabel("Followers", 12))
+        assertEquals("Followers (50+)", socialCountLabel("Followers", 50))
+        assertEquals("Following", socialCountLabel("Following", null))
+    }
+}
+
+/**
+ * The score chart's ramp uses the scale the account actually uses.
+ *
+ * A ten-point profile's "8" is 80% of its scale. Dividing every label by 100
+ * put it at 8%, so the whole chart stayed warning-red.
+ */
+class ProfileScoreScaleTest {
+
+    @Test
+    fun `a ten point score is read against ten`() {
+        assertEquals(0.8f, scoreBarFraction("8", maxScore = 10), 0.0001f)
+        assertEquals(1f, scoreBarFraction("10", maxScore = 10), 0.0001f)
+    }
+
+    @Test
+    fun `a hundred point score is read against one hundred`() {
+        assertEquals(0.82f, scoreBarFraction("82", maxScore = 100), 0.0001f)
+    }
+
+    @Test
+    fun `a missing or empty scale cannot divide by zero`() {
+        assertEquals(0f, scoreBarFraction("95", maxScore = 0), 0.0001f)
+        assertEquals(0f, scoreBarFraction("not a score", maxScore = 10), 0.0001f)
     }
 }

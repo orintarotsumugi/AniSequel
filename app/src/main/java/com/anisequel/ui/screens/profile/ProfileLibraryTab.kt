@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -507,6 +508,15 @@ fun ProfileLibraryTab(
     mangaError: String? = null,
     onLoadManga: () -> Unit,
     /**
+     * Re-asks for the manga half when the reader pulls to refresh.
+     *
+     * [onLoadManga] is guarded because the type chip calls it on every switch;
+     * a refresh needs the fetch even when rows are already in memory, or the
+     * manga grid stays at the version the reader pulled to replace. Defaults to
+     * the guarded call so a caller that does not refresh manga keeps working.
+     */
+    onRefreshManga: () -> Unit = onLoadManga,
+    /**
      * The grid's own padding, computed by the caller.
      *
      * Not defaulted and not built here: the bottom has to clear the app's main
@@ -630,6 +640,16 @@ fun ProfileLibraryTab(
             sortAscending
         )
     }
+    // The retry has to ask for the half that failed. Calling only the anime
+    // refresh on a manga failure left the empty state's new button unable to
+    // change what it was looking at.
+    val retryScopedFailure = scopedFailureRetry(
+        type = type,
+        scopedError = scopedError,
+        awaitingAnime = awaitingAnime,
+        onRefresh = onRefresh,
+        onRefreshManga = onRefreshManga
+    )
     // The Interface page's Library view applies here too. It used to be read only
     // by the new look, so choosing "List" or "Shelf" changed the preview and
     // nothing on the page a Classic reader actually browses. The grouping is the
@@ -694,7 +714,7 @@ fun ProfileLibraryTab(
     // own fill so the two cannot disagree about the available height.
     PullToRefreshBox(
         isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
+        onRefresh = { refreshVisibleHalves(type, onRefresh, onRefreshManga) },
         modifier = modifier.fillMaxSize()
     ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -773,7 +793,7 @@ fun ProfileLibraryTab(
         // "Nothing in this list yet" and chips reading (0), which is the app
         // asserting the one thing it has the least evidence for. The counts below
         // are still zeroes for the same reason and are not faked here.
-        if (scopedError != null && !awaitingAnime) {
+        if (shouldShowLibraryError(scopedError, awaitingAnime, visible.isNotEmpty())) {
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_error", contentType = "state") {
                 PendingDataNote(
                     "Couldn't load this list - $scopedError. Your bio, " +
@@ -796,6 +816,7 @@ fun ProfileLibraryTab(
                     } else {
                         null
                     },
+                    onRetry = retryScopedFailure,
                     query = query,
                     // A status or favourites chip narrows the list even when the
                     // search box is empty, so the empty state has to say that
@@ -1262,6 +1283,57 @@ private fun LibraryPoster(
     }
 }
 
+/**
+ * Pull-to-refresh refreshes the half the current type is showing. Anime always
+ * had this path; a manga pull used to return from the guarded loader and leave
+ * the grid it was pulled to replace unchanged.
+ */
+private fun refreshVisibleHalves(
+    type: LibraryType,
+    onRefresh: () -> Unit,
+    onRefreshManga: () -> Unit
+) {
+    onRefresh()
+    if (type == LibraryType.MANGA || type == LibraryType.ALL) onRefreshManga()
+}
+
+/**
+ * True when the scoped failure belongs in the list as a notice.
+ *
+ * An empty failed grid draws its own failure card; showing this note there as
+ * well was the same reason twice, and the card is the one with the retry.
+ */
+private fun shouldShowLibraryError(
+    scopedError: String?,
+    awaitingAnime: Boolean,
+    hasRows: Boolean
+): Boolean = scopedError != null && !awaitingAnime && hasRows
+
+/**
+ * The callback an empty failed grid should offer, or null when it has nothing
+ * to retry. The half selected by [type] decides which fetch is asked for again;
+ * the combined view asks for both because either half may be the missing one.
+ */
+private fun scopedFailureRetry(
+    type: LibraryType,
+    scopedError: String?,
+    awaitingAnime: Boolean,
+    onRefresh: () -> Unit,
+    onRefreshManga: () -> Unit
+): (() -> Unit)? {
+    if (scopedError == null || awaitingAnime) return null
+    return when (type) {
+        LibraryType.MANGA -> onRefreshManga
+        LibraryType.ALL -> {
+            {
+                onRefresh()
+                onRefreshManga()
+            }
+        }
+        LibraryType.ANIME -> onRefresh
+    }
+}
+
 @Composable
 private fun LibraryEmpty(
     isLoading: Boolean,
@@ -1270,6 +1342,8 @@ private fun LibraryEmpty(
     query: String,
     /** Why the list could not be read, or null when it was. Never both empty and failed. */
     failedMessage: String? = null,
+    /** Retries the list that failed, or null when there is nothing to retry. */
+    onRetry: (() -> Unit)? = null,
     /** True when a status/favourite chip is excluding entries as well as (or instead of) text. */
     isFiltered: Boolean = false
 ) {
@@ -1339,5 +1413,16 @@ private fun LibraryEmpty(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        // A failed empty grid used to have no control on it: the only refresh
+        // was a gesture over a page that had nothing to pull, and the top bar
+        // belongs to the whole profile. This retries the half that failed.
+        if (failed) {
+            onRetry?.let { retry ->
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = retry) {
+                    Text("Try again")
+                }
+            }
+        }
     }
 }

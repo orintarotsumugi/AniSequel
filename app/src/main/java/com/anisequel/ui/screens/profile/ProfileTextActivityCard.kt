@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -110,7 +111,10 @@ internal fun ActivityAuthorRow(
                     if (onOpenAuthor != null) {
                         Modifier
                             .clip(MaterialTheme.shapes.small)
-                            .clickable(onClick = onOpenAuthor)
+                            .clickable(
+                                onClickLabel = "Open ${userName ?: "author"}'s profile",
+                                onClick = onOpenAuthor
+                            )
                     } else {
                         Modifier
                     }
@@ -155,7 +159,7 @@ internal fun ActivityAuthorRow(
             Spacer(modifier = Modifier.width(4.dp))
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .clickable(onClick = onMessageAuthor)
                     .testTag("activity_message_author"),
@@ -211,6 +215,7 @@ internal fun ActivityTextCard(
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
             .clickable(
                 interactionSource = interactionSource,
+                onClickLabel = "Open comments",
                 onClick = onComments
             )
             .testTag("activity_text_card"),
@@ -255,6 +260,7 @@ internal fun ActivityTextCard(
                         .padding(top = 6.dp)
                         .clip(MaterialTheme.shapes.small)
                         .clickable { expanded = !expanded }
+                        .defaultMinSize(minHeight = 48.dp)
                         .padding(horizontal = 4.dp, vertical = 6.dp)
                         .testTag("activity_read_more")
                 )

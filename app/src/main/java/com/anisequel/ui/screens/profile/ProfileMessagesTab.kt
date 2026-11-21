@@ -190,7 +190,8 @@ fun ProfileMessagesTab(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .testTag("profile_messages_tab")
+            .testTag("profile_messages_tab"),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         MessageFilterRow(
             selected = state.filter,
@@ -309,31 +310,30 @@ private fun MessageFilterRow(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        Row(
+        // Three equal-weight chips clipped their labels at a large font scale.
+        // A flow keeps each chip at its natural width and wraps the row instead.
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             FilterChip(
                 label = "All",
                 selected = selected == MessageFilter.ALL,
                 onClick = { onSelect(MessageFilter.ALL) },
-                testTag = "message_filter_all",
-                modifier = Modifier.weight(1f)
+                testTag = "message_filter_all"
             )
             FilterChip(
                 label = "Received",
                 selected = selected == MessageFilter.RECEIVED,
                 onClick = { onSelect(MessageFilter.RECEIVED) },
-                testTag = "message_filter_received",
-                modifier = Modifier.weight(1f)
+                testTag = "message_filter_received"
             )
             FilterChip(
                 label = "Sent",
                 selected = selected == MessageFilter.SENT,
                 onClick = { onSelect(MessageFilter.SENT) },
-                testTag = "message_filter_sent",
-                modifier = Modifier.weight(1f)
+                testTag = "message_filter_sent"
             )
         }
 
@@ -452,10 +452,9 @@ private fun FilterChip(
         label = label,
         selected = selected,
         onClick = onClick,
-        // 44dp, matching the segment row above: these three are the only way to
-        // narrow the inbox, and a chip at its natural height would be the
-        // smallest target on the page.
-        minTouchTargetHeight = 44.dp,
+        // 48dp: these three are the only way to narrow the inbox, and a chip at
+        // its natural height would be the smallest target on the page.
+        minTouchTargetHeight = 48.dp,
         modifier = modifier.testTag(testTag)
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -331,6 +332,8 @@ private fun MessageExpandToggle(
             .padding(top = 6.dp)
             .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onToggle)
+            // Text height alone left this under the 48dp touch minimum.
+            .defaultMinSize(minHeight = 48.dp)
             .padding(horizontal = 4.dp, vertical = 6.dp)
             .testTag("message_read_more")
     )

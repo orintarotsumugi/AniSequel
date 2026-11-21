@@ -278,6 +278,15 @@ internal fun ProfileTabsContent(
     state: UserOverviewUiState.Success,
     selectedTab: Int,
     /**
+     * Stable key for this profile's saved tab internals.
+     *
+     * The selected tab is keyed by the screen, but the saveable state holder
+     * below is one registry for the whole navigation entry. Keying its providers
+     * only by the tab index therefore shared a Social search, an Activity
+     * segment and a calendar selection between different people.
+     */
+    profileKey: String = "",
+    /**
      * The capsule's tap, owned by the screen above.
      *
      * [ProfileTabsContent] draws the capsule but does not keep the selection: the
@@ -368,7 +377,9 @@ internal fun ProfileTabsContent(
     // screen's own state because nothing outside the Stats tab reads it, and
     // `rememberSaveable` is what keeps it across a rotation - a reader who opened
     // Tags on a tablet and turned it should not be handed Overview back.
-    var statsSection by rememberSaveable { mutableStateOf(StatsSection.OVERVIEW) }
+    var statsSection by rememberSaveable(profileKey) {
+        mutableStateOf(StatsSection.OVERVIEW)
+    }
 
     // Per-tab saveable state, so what a tab remembers inside itself survives the
     // `AnimatedContent` disposing it. The hoisted scroll states above are one half
@@ -465,7 +476,7 @@ internal fun ProfileTabsContent(
             label = "profile_tab_transition",
             modifier = Modifier.fillMaxSize()
         ) { tabIndex ->
-            tabStateHolder.SaveableStateProvider(tabIndex) {
+            tabStateHolder.SaveableStateProvider("$profileKey:$tabIndex") {
                 val padding = PaddingValues(top = 0.dp)
                 when (tabIndex) {
                     1 -> ProfileActivityPage(

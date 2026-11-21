@@ -388,6 +388,9 @@ fun LibraryScreen(
                             libraryError = state.libraryError,
                             mangaError = mangaError,
                             onLoadManga = { overviewViewModel.loadMangaLibrary() },
+                            onRefreshManga = {
+                                overviewViewModel.loadMangaLibrary(forceRefresh = true)
+                            },
                             // This page's whole bottom clearance, including the
                             // system navigation inset; see [mainBarClearance].
                             contentPadding = PaddingValues(top = 8.dp, bottom = mainBarClearance()),

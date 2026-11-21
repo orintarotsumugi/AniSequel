@@ -169,7 +169,11 @@ private fun FavouriteMediaCard(
         modifier = Modifier
             .width(128.dp)
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                onClickLabel = "Open ${media.title?.displayTitle.orEmpty()}",
+                onClick = onClick
+            )
             .padding(bottom = 6.dp)
             .testTag("favourite_media_card")
     ) {
@@ -459,7 +463,11 @@ private fun FavouritePerson(
         modifier = Modifier
             .width(84.dp)
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
-            .clickable(interactionSource = interactionSource, onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                onClickLabel = "Open $name",
+                onClick = onClick
+            )
             .padding(bottom = 6.dp)
             .testTag("favourite_person_${name.hashCode()}"),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -569,7 +577,10 @@ fun FavouriteStudioRow(
                     .background(MaterialTheme.colorScheme.secondaryContainer)
                     .then(
                         if (id != null) {
-                            Modifier.clickable { onOpenStudio(id, label) }
+                            Modifier.clickable(
+                                onClickLabel = "Open ${label ?: "studio"}",
+                                onClick = { onOpenStudio(id, label) }
+                            )
                         } else {
                             Modifier
                         }

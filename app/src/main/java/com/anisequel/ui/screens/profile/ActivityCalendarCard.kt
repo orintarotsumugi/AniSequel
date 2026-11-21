@@ -138,9 +138,10 @@ fun ActivityCalendarCard(
                     // the number beside it is the week's total, and a summary
                     // that kept the old count would disagree with the bars.
                     text = if (showWeek) {
-                        "$weekChanges changes this week"
+                        "${formatActivityChanges(weekChanges)} this week"
                     } else {
-                        "${calendar.totalChanges} changes in ${calendar.weeksShown} weeks"
+                        "${formatActivityChanges(calendar.totalChanges)} in " +
+                            formatWeeks(calendar.weeksShown)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -424,8 +425,8 @@ private fun ActivityCellsCanvas(
                 }
             }
             .semantics {
-                contentDescription = "${calendar.totalChanges} changes in " +
-                    "${calendar.weeksShown} weeks. Tap a day to see its count."
+                contentDescription = "${formatActivityChanges(calendar.totalChanges)} in " +
+                    "${formatWeeks(calendar.weeksShown)}. Tap a day to see its count."
             }
     ) {
         val cellSizePx = CellSize.toPx()
@@ -506,6 +507,8 @@ internal fun formatActivityChanges(count: Int): String = when (count) {
     1 -> "1 change"
     else -> "$count changes"
 }
+
+internal fun formatWeeks(count: Int): String = if (count == 1) "1 week" else "$count weeks"
 
 /**
  * The heat ramp, in one place.
