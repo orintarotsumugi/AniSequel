@@ -26,7 +26,7 @@
         },
         {
           "title": "The account is a card, and the connection check is on it",
-          "detail": "The account row and a separate Connection check row were the same subject, and the check was the only row on the shelf that did not open a page. They are one card at the top: who you are signed in as, what the session is, and a status pill that runs the same check the row used to. Every row on the shelf now opens a page, and the connection state is visible without asking for it."
+          "detail": "The account row and a separate Connection check row were the same subject, and the check was the only row on the shelf that did not open a page. They are one card at the top: your avatar, who you are signed in as, how many titles the list actually holds, and a status pill that runs the same check the row used to. Every row on the shelf now opens a page, and neither the connection state nor the list behind the app needs to be asked for."
         },
         {
           "title": "Type and display size are one page",
@@ -43,6 +43,10 @@
         {
           "title": "Settings search can land on a shelf part",
           "detail": "A result for a part of a page opens that part instead of the page's top, for every shelf including the ones added in this pass. The parts are indexed from the same enum the shelf draws its rows from, so renaming a row cannot leave a result behind that opens a page and leaves you to find it."
+        },
+        {
+          "title": "Device Manager stops drawing two placeholder cards",
+          "detail": "Opening Device Manager before its saved settings answered drew two \"reading your saved settings\" cards and then replaced both with the real ones - a jump under the thumb, on the one page where every other page had already settled on a default. The cards are drawn immediately now. The app-lock switch keeps its short reading line on purpose: drawing the switch off for a frame before a stored \"on\" arrives would be a security claim the app has not read yet."
         },
         {
           "title": "About now says who made it",

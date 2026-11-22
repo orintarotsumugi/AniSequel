@@ -590,6 +590,48 @@ internal object SettingsSearch {
             )
         )
 
+        // Three controls that are buttons rather than settings, and that a reader
+        // looks for by name: "reset" and "preview" are things they want to *do*.
+        // None of them carries a section, because none of them lives inside a part -
+        // each sits on the page's own shelf, so opening the shelf puts the reader
+        // next to the button instead of one level past it.
+        add(
+            searchResult(
+                id = "reset_appearance",
+                page = SettingsPage.APPEARANCE,
+                title = "Reset appearance",
+                subtitle = "Undo the colours and artwork choices you have changed",
+                eyebrow = "Appearance",
+                icon = AppVectorIcons.Refresh,
+                keywords = "reset restore default appearance theme undo start over",
+                priority = 10
+            )
+        )
+        add(
+            searchResult(
+                id = "reset_card_design",
+                page = SettingsPage.UI,
+                title = "Reset card design",
+                subtitle = "Frame, type sizes and poster source, back to the default",
+                eyebrow = "Interface · Cards",
+                icon = AppVectorIcons.Refresh,
+                keywords = "reset restore default card design shape text poster undo",
+                priority = 10
+            )
+        )
+        add(
+            searchResult(
+                id = "joke_preview",
+                page = SettingsPage.JOKES,
+                title = "Preview a joke",
+                subtitle = "See the toast with your own name, edge and line style",
+                eyebrow = "Jokes",
+                icon = AppVectorIcons.AnimeSparkle,
+                keywords = "preview test try sample joke toast ani chan edge dwell",
+                priority = 10
+            )
+        )
+
         add(
             searchResult(
                 id = "ani_chan",

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import coil.compose.AsyncImage
 
 /**
  * The pieces the Settings hub is built from.
@@ -430,10 +433,21 @@ private fun SettingsHubEntryRow(
  * A hero surface rather than a stronger row because it is the one thing on this
  * screen whose answer changes what every page below it is looking at - a real
  * AniList list or the built-in demo - and it is glanced at, not read.
+ *
+ * ## Why the tile is the reader's own avatar
+ *
+ * It was the first letter of the name, which is what a card draws when it has
+ * nothing better. The app already has the avatar - the profile tab, the account
+ * page and every comment draw it - so the one surface whose whole job is "who is
+ * signed in" was the one place a signed-in reader was shown a letter. The letter
+ * stays underneath as the fallback, so a demo session, an avatar that fails to
+ * load and a screenshot with no network all still draw something.
  */
 @Composable
 internal fun SettingsAccountCard(
     name: String?,
+    /** The reader's AniList avatar, or null for a demo session. */
+    avatarUrl: String?,
     subtitle: String,
     connectionLabel: String,
     /** True reachable, false unreachable, null not yet checked. */
@@ -504,6 +518,18 @@ internal fun SettingsAccountCard(
                             contentDescription = null,
                             tint = scheme.onPrimaryContainer,
                             modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    // Over the fallback rather than instead of it: a failed load
+                    // draws nothing, so the letter shows through and the tile is
+                    // never an empty square. Decorative, because the name beside it
+                    // is the answer a screen reader needs.
+                    if (avatarUrl != null) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }

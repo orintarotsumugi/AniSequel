@@ -3745,6 +3745,30 @@ such a fact at rest; it is empty by default, because a part whose state is a
 *setting* already says so in its subtitle and a value there would be a second,
 hand-maintained copy of the same sentence.
 
+### The account card is the one place that says "this is you"
+
+Two details were missing from it and both were already in the app: the reader's
+avatar (`viewer.avatar`, drawn by the profile tab, the account page and every
+comment) and the two list counts the dashboard has already loaded. The card drew
+the first letter of the name instead, on the one surface whose whole job is "who
+is signed in", and described the page it opens rather than the list it is about.
+The letter stays *underneath* the avatar, so a demo session, an honest load
+failure and a screenshot with no network still draw something, and the counts
+draw nothing until they arrive - a zero would be a claim about the reader's list
+that nobody has read yet.
+
+### A default is not a placeholder
+
+Device Manager was the last page that drew its own loading state: two
+"Reading your saved … settings" cards while the preferences answered, replaced by
+the real cards a frame later. That is a layout jump on the way in, and it is also
+a screen whose copy says it has nothing to show - on a page whose own sibling
+(`SeasonalSettingsTab`, where the card came from) ships a default. Every settings
+page now draws with defaults and corrects itself; the one deliberate exception is
+the app-lock switch, whose "reading" line sits *inside* an existing card and stays
+because drawing the switch off for a frame before a stored "on" arrives is a
+security claim the app has not read yet.
+
 ### What deliberately did not change
 
 *Seasonal effects* stays one scroll. Its sliders and its live sky preview are one

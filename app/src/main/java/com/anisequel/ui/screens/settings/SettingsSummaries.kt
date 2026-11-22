@@ -61,12 +61,7 @@ internal data class SettingsSummaries(
     val device: String? = null,
     /** The installed build, so a bug report can start here. */
     val about: String? = null
-) {
-    companion object {
-        /** Before the first emissions land: no row claims an answer. */
-        val Pending = SettingsSummaries()
-    }
-}
+)
 
 /**
  * Reads the summaries from the preference instances the Settings graph already

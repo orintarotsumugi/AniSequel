@@ -404,6 +404,8 @@ fun SettingsScreen(
                     if (destination == null) {
                         SettingsRoot(
                             viewer = viewer,
+                            watchedCount = totalWatchedCount,
+                            missedCount = totalMissedCount,
                             summaries = summaries,
                             connectionLabel = connectionLabel,
                             connectionHealthy = if (apiUi.isChecking) null else apiUi.reachability.health(),
@@ -534,6 +536,9 @@ fun SettingsScreen(
 @Composable
 private fun SettingsRoot(
     viewer: ViewerProfile?,
+    /** The dashboard's already-loaded counts, for the account card's second line. */
+    watchedCount: Int?,
+    missedCount: Int?,
     summaries: SettingsSummaries,
     connectionLabel: String,
     connectionHealthy: Boolean?,
@@ -592,11 +597,10 @@ private fun SettingsRoot(
                     // a second control (the connection check).
                     SettingsAccountCard(
                         name = viewer?.name,
-                        subtitle = if (viewer != null) {
-                            "Your list, session and sign-in"
-                        } else {
-                            "Browsing the demo list - connect AniList to see your own"
-                        },
+                        // `large` first: the tile is 52dp, and AniList's medium
+                        // avatar is the one sized for a 36dp row.
+                        avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
+                        subtitle = accountSubtitle(viewer, watchedCount, missedCount),
                         connectionLabel = connectionLabel,
                         connectionHealthy = connectionHealthy,
                         onOpenAccount = onOpenAccount,
@@ -718,6 +722,28 @@ private fun SettingsPage.entry(
     onClick = { onOpen(this) },
     value = value
 )
+
+/**
+ * The account card's second line.
+ *
+ * "Your list, session and sign-in" described the *page* the card opens, which the
+ * chevron already promises. The counts describe the list the card is about, and
+ * they are the numbers the dashboard has already loaded - a reader who came to
+ * Settings to check "is this my account" gets an answer with evidence. Both are
+ * absent until the list's first load answers, and an absent count draws no claim
+ * rather than a zero.
+ */
+private fun accountSubtitle(viewer: ViewerProfile?, watched: Int?, missed: Int?): String {
+    if (viewer == null) return "Browsing the demo list - connect AniList to see your own"
+    val watchedLine = watched?.let { count ->
+        if (count == 1) "1 title in your list" else "$count titles in your list"
+    }
+    val missedLine = missed?.takeIf { it > 0 }?.let { count ->
+        if (count == 1) "1 sequel waiting" else "$count sequels waiting"
+    }
+    return listOfNotNull(watchedLine, missedLine).joinToString(" · ")
+        .ifEmpty { "Your list, session and sign-in" }
+}
 
 /**
  * Resolves a search result's section name against the enum that owns it.
