@@ -371,7 +371,14 @@ class SettingsLayoutTest {
         val components = source(settings + "SettingsComponents.kt")
         assertTrue("section cards should use the expressive shape scale", components.contains("ExpressiveShapes.extraLarge"))
         assertTrue("section icon tiles should use Material expressive silhouettes", components.contains("settingsDecorativeShape(title)"))
-        assertTrue("switch rows should animate their selected surface", components.contains("animateColorAsState("))
+        // The switch row's selected surface is animated through one progress with
+        // both endpoints read fresh from the scheme - not `animateColorAsState`, which
+        // re-targets on every frame of a theme change because the scheme itself is
+        // animated. Same requirement, stronger mechanism.
+        assertTrue(
+            "switch rows should animate their selected surface",
+            components.contains("rememberStateColor(")
+        )
         assertTrue("switch rows should use the expressive spatial size token", components.contains("ExpressiveMotion.FastSpatialSize"))
         assertTrue("checked rows should have a visible tonal state", components.contains("background(rowContainer)"))
         val hub = source(settings + "SettingsHub.kt")

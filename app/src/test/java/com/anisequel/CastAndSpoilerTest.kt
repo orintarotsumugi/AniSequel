@@ -181,11 +181,16 @@ class CastAndSpoilerTest {
                 "plus a Hide button",
             source.contains("internal fun NovaSpoiler(")
         )
+        // The bound is generous because the chip's own explanation sits between the
+        // two lines, and that explanation is worth more than a tight regex: the
+        // first version of this assertion allowed 1200 characters and started
+        // failing when four comments about *why* the chip is centred were added.
+        // What the bound has to exclude is another composable, not prose.
         assertTrue(
             "and the chip is drawn before the revealed surface, so it sits on the " +
                 "block's top edge:\n$source",
             Regex(
-                """testTag\("nova_markdown_spoiler_chip"\)[\s\S]{0,1200}?if \(revealed\) \{\s*\n\s*Surface\("""
+                """testTag\("nova_markdown_spoiler_chip"\)[\s\S]{0,2400}?if \(revealed\) \{\s*\n\s*Surface\("""
             ).containsMatchIn(source)
         )
     }
