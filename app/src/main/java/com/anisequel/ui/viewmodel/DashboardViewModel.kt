@@ -221,12 +221,36 @@ class DashboardViewModel(
     private var foregroundJoin: Job? = null
 
     /**
-     * The app has come to the foreground.
+     * The dashboard's page came on screen: arm the timer, check nothing.
      *
-     * Called on every resume and on every return to this destination, which is
-     * the fix for handing back a list that went stale the moment it was fetched:
-     * Android resumes a process rather than restarting it, so reopening AniSequel
-     * used to answer from the same in-memory cache until the hour elapsed.
+     * This runs on every return to the page, and coming back to a page is not the
+     * app coming back - the interval decides the list is old, not the tap. Asking
+     * here is what made a Settings round trip re-download the whole collection on
+     * "Always", where every interval, including zero, is due. The timer's first
+     * wait is "how long until this list is due", so a list that really has aged
+     * out still refreshes at once. [onForegrounded] is the other half.
+     */
+    fun onShown() {
+        if (isDemo) return
+        freshnessWatch.start(checkDue = false)
+    }
+
+    /** The dashboard's page left the composition; stop spending requests on it. */
+    fun onHidden() = onBackgrounded()
+
+    /**
+     * The app has come to the foreground: check the list and arm the timer.
+     *
+     * Called from a `LaunchedEffect` keyed on the app's own foreground flag - read
+     * at the root and handed down - rather than from a resume effect on this
+     * destination, because a `NavBackStackEntry` reports `ON_RESUME` on every
+     * return to its page. It was, and that is the bug: the check ran after every
+     * visit to Settings, the Library or a title page.
+     *
+     * This is the fix for handing back a list that went stale the moment it was
+     * fetched: Android resumes a process rather than restarting it, so reopening
+     * AniSequel used to answer from the same in-memory cache until the hour
+     * elapsed.
      *
      * A load already in flight is *deferred to*, not skipped. On a cold start
      * this runs moments after `init` started `loadData`, and Android delivers

@@ -156,7 +156,11 @@ internal fun PolaroidStylePreview(entry: MediaListEntryItem?, modifier: Modifier
             Text(
                 text = "12 episodes",
                 style = miniCaptionStyle(),
-                color = Color(0xFF23211F).copy(alpha = 0.5f),
+                // The mock on this page is a printed card - fixed paper and fixed
+                // ink on purpose - but the ink was still being faded to 0.5, which
+                // is 3.1:1 on #F7F3EA. 0.68 is 5.3:1: the same printed look, and
+                // the episode count is actually readable at the size this is drawn.
+                color = Color(0xFF23211F).copy(alpha = 0.68f),
                 maxLines = 1
             )
         }

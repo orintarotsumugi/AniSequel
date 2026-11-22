@@ -46,6 +46,7 @@ import com.anisequel.domain.ui.InfoPageStyle
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.AniSequelTheme
 
 /**
  * Previews for the two layout choices on the Interface page.
@@ -310,9 +311,13 @@ private fun MiniBottomBar(modifier: Modifier = Modifier) {
                     .clip(CircleShape)
                     .background(
                         if (index == 0) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            MaterialTheme.colorScheme.primary
                         } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                            // These dots are a *page indicator* in a preview - a
+                            // control, not decoration. 0.38 of `onSurfaceVariant` is
+                            // 1.7:1 on a light card, so the "you are on page 1 of 4"
+                            // information was the least visible thing in the sample.
+                            AniSequelTheme.emphasis.skeleton
                         }
                     )
             )
@@ -706,7 +711,7 @@ private fun ClassicInfoMini() {
                         .height(4.dp)
                         .fillMaxWidth(if (index == 1) 0.5f else 0.68f)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                        .background(AniSequelTheme.emphasis.skeleton)
                 )
             }
         }
@@ -817,7 +822,7 @@ private fun NovaInfoMini() {
                     .height(4.dp)
                     .fillMaxWidth(0.55f)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    .background(AniSequelTheme.emphasis.skeleton)
             )
         }
         Box(

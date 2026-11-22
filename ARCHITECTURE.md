@@ -38,7 +38,7 @@ preference instances the pages write through (`SettingsSummaries`).
   - *Interface:* navigation, Home and Library layouts, the card and its three parts, gestures and motion. One shelf level; the card preview lives on it.
   - *Type & display:* fonts, saved typefaces, text size and title behaviour, then automatic-or-manual display density. One destination so "make it bigger" has one entrance.
 - **What it shows**
-  - *Library & dashboard:* the two navigation bars with a live bar preview, the remembered library view, and refresh cadence plus arriving rows.
+  - *Library & dashboard:* the live bar preview, then **Navigation** as its one sub-page (both bars and the Search page). The remembered library view and the refresh/arriving cards are drawn on the page itself - they are two cards each, and a sub-page for them cost a tap and a Back for the setting people open Settings to change.
   - *Jokes:* the real toast pill on the shelf, then identity, line style, timing, placement, moments, topics and saved lines.
   - *Seasonal effects:* particle style, density, size, speed and performance limits. Deliberately one scroll - its sliders and its live preview are one control.
 - **Device & app**
@@ -414,10 +414,23 @@ decisions hold it together:
   arriving" and every count on the screen are derived from the list.
 
 #### Foreground Staleness Observer (`ListFreshnessWatch.kt`)
-`ListFreshnessWatch` works with `LifecycleResumeEffect` in `DashboardScreen`:
-- Evaluates staleness on every `ON_RESUME` event.
-- If the current time exceeds `lastLoadedTimestamp + intervalMillis`, it triggers a silent background refresh.
-- Enforces a **5-minute retry floor** after network failures to prevent rapid retry loops.
+`ListFreshnessWatch` is driven by two triggers that are deliberately not the same
+event:
+- **The app coming back** — `AppNavigation` (above the `NavHost`, so the lifecycle
+owner is the Activity) reads `rememberIsResumed()` and calls
+`DashboardViewModel.onForegrounded()`, which evaluates staleness once and arms the
+timer. If `lastLoadedTimestamp + intervalMillis` has passed, it triggers a silent
+background refresh.
+- **The page coming back** — `DashboardScreen` calls `onShown()` from a
+`DisposableEffect`, which only arms the timer. A `NavBackStackEntry` resumes every
+time the reader returns to its page, so a check placed on it also ran on every
+Settings round trip; on the `Always` interval, where a zero-length window is due
+the instant it is measured, each of those re-downloaded the whole collection.
+  The timer's first wait is "how long until this list is due", so a list that has
+  genuinely aged out still refreshes at once.
+- Enforces a **5-minute retry floor** after network failures to prevent rapid retry
+  loops, applied only to a wait that follows an attempt - a list that is merely
+  overdue has failed nothing.
 
 ---
 

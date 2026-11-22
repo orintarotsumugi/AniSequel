@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,7 +34,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.FilterCriteria
 import com.anisequel.data.model.MediaNode
@@ -122,6 +122,14 @@ fun DashboardScreen(
     onOpenOther: () -> Unit = {},
     /** Opens the Library, optionally on a named type. See [NovaHomeScreen]. */
     onOpenLibrary: (String?) -> Unit = {},
+    /**
+     * Whether the app is in the foreground, read at the app's root.
+     *
+     * No default: a caller that forgot it would pass `true` forever, and a
+     * constant `true` fires its effect once per composition - which is the
+     * page-resume bug this parameter exists to fix. Every route states its answer.
+     */
+    appResumed: Boolean,
     modifier: Modifier = Modifier
 ) {
     val uiState by dashboardViewModel.uiState.collectAsStateWithLifecycle()
@@ -171,23 +179,34 @@ fun DashboardScreen(
     // Undo. It lives on the event now: one slot could not tell two quick hides apart,
     // so the first message's Undo could restore the second entry.
 
-    // Re-checks freshness every time the app comes back to the foreground.
+    // This page is up, so the freshness timer may run. Only that much: the check
+    // that decides the list is old enough to re-buy is the *app* coming back, not
+    // this page coming back - see the effect below, which is keyed on the app's own
+    // foreground flag from the root rather than on this destination's lifecycle.
     //
-    // `LifecycleResumeEffect` is the documented way to react to ON_RESUME from a
-    // composable, and it is tied to the Activity rather than to this
-    // destination - which is what makes it the right signal. The bug was not
-    // inside the dashboard, it was that Android *resumes* a process rather than
-    // restarting it, so closing and reopening AniSequel used to answer from the
-    // same cached list until an hour had passed. Nothing in the composition was
-    // ever told the app had come back.
+    // It used to be here, as a `LifecycleResumeEffect` on `dashboardViewModel`.
+    // That effect reports ON_RESUME of this destination's `NavBackStackEntry`, and
+    // an entry resumes every time the reader returns to it - so opening Settings
+    // and tapping Back ran the whole freshness check, and on "Always" that check
+    // is always due: a Settings round trip re-downloaded the collection. The two
+    // events only looked like one because both arrive as ON_RESUME.
     //
-    // Stopped on pause rather than left running: a timer that keeps re-fetching
-    // a list nobody is looking at spends AniList's ~30 requests a minute for
-    // nobody. The ViewModel owns the decision, and it survives this composable
-    // being disposed on the way to Settings.
-    LifecycleResumeEffect(dashboardViewModel) {
-        dashboardViewModel.onForegrounded()
-        onPauseOrDispose { dashboardViewModel.onBackgrounded() }
+    // `DisposableEffect` rather than a resume effect, so being *paused* is not
+    // mistaken for being *gone*: an app that pauses here is still on this page
+    // when it comes back, and the app-level resume then checks the list as it
+    // always did. Disposal is the honest signal that the reader went elsewhere.
+    DisposableEffect(dashboardViewModel) {
+        dashboardViewModel.onShown()
+        onDispose { dashboardViewModel.onHidden() }
+    }
+
+    // And this page is *up* while the app is in the foreground: the only moment a
+    // list is worth re-buying. Keyed on [appResumed], so it runs when the app
+    // resumes and on the first frame of a launch - never on a page change, which
+    // is the difference between this and a resume effect on the destination's own
+    // lifecycle.
+    LaunchedEffect(dashboardViewModel, appResumed) {
+        if (appResumed) dashboardViewModel.onForegrounded() else dashboardViewModel.onBackgrounded()
     }
 
     LaunchedEffect(Unit) {

@@ -511,7 +511,8 @@ private val HELPERS = listOf(
         handle = "itsmechinmoy",
         avatarUrl = "https://avatars.githubusercontent.com/u/167056923?s=256",
         profileUrl = "https://github.com/itsmechinmoy",
-        note = "Made Dantotsu, and helped a lot with this app and its suggestions.",
+        note = "Maintaining Dantotsu from Rebelonion, and a lot of help with this " +
+            "app and its suggestions.",
         apps = listOf(
             CreditLink(
                 label = "Dantotsu",

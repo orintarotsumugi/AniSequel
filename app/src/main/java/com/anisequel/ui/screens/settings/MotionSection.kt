@@ -2,9 +2,7 @@ package com.anisequel.ui.screens.settings
 
 import android.animation.ValueAnimator
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,25 +38,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.icons.motionGlyph
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.expressiveShape
+import com.anisequel.ui.components.icons.motionGlyph
 import com.anisequel.ui.components.rememberIsResumed
+import com.anisequel.ui.theme.AniSequelTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -140,15 +133,23 @@ internal fun MotionSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MotionStyle.entries.forEach { style ->
-                MotionChip(
+                SettingsChoiceChip(
                     label = style.displayName,
-                    icon = motionGlyph(style),
                     selected = style == settings.motionStyle,
+                    glyph = {
+                        Icon(
+                            imageVector = motionGlyph(style),
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
                     onClick = {
                         if (style != settings.motionStyle) {
                             scope.launch { themePreferences.setMotionStyle(style) }
                         }
-                    }
+                    },
+                    testTag = "motion_style_${style.storageValue}",
+                    onClickLabel = "Use the ${style.displayName} motion style"
                 )
             }
         }
@@ -188,85 +189,6 @@ internal fun MotionSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-@Composable
-private fun MotionChip(
-    label: String,
-    icon: ImageVector,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainer
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "motion_chip_container"
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "motion_chip_content"
-    )
-    // The glyph is the only part of the chip that is a picture of the choice, so
-    // it is the part that reacts to being chosen: it springs up to full size while
-    // the unselected marks sit slightly back. Read inside `graphicsLayer` below, so
-    // the spring is a draw-phase invalidation and not a recomposition of the chip.
-    val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.82f,
-        animationSpec = ExpressiveMotion.SelectionScale,
-        label = "motion_chip_icon_scale"
-    )
-
-    Row(
-        modifier = Modifier
-            .bouncyPress(pressedScale = 0.94f)
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            // 48dp rather than the 38dp the padding alone gives: five chips in a
-            // wrapping row are the page's whole motion decision, so they are a
-            // primary target and not a tag cluster.
-            .defaultMinSize(minHeight = 48.dp)
-            .clickable(
-                onClickLabel = "Use the $label motion style",
-                role = Role.RadioButton,
-                onClick = onClick
-            )
-            .semantics {
-                this.selected = selected
-                role = Role.RadioButton
-            }
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-            .testTag("motion_style_${label.lowercase(java.util.Locale.ROOT)}"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer {
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = content,
-            maxLines = 1
-        )
     }
 }
 
@@ -312,8 +234,12 @@ internal fun MotionSample(style: MotionStyle) {
 
     val stageBase = MaterialTheme.colorScheme.surfaceContainerHigh
     val stageLit = MaterialTheme.colorScheme.secondaryContainer
-    val railColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.26f)
-    val markerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+    // The rail and its markers are the *measurement* in this demo: 0.26 and 0.58 of
+    // `onSurfaceVariant` measured 1.4:1 and 2.3:1 on a light card, so the two things
+    // a reader is meant to compare against each other were both nearly invisible.
+    // The derived rungs are 2:1 and 3.5:1 - still quiet, and ordered.
+    val railColor = AniSequelTheme.emphasis.divider
+    val markerColor = AniSequelTheme.emphasis.muted
     val dotColor = MaterialTheme.colorScheme.primary
     val nearGhost = MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
     val farGhost = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)

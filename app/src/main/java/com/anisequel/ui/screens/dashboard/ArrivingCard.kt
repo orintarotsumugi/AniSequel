@@ -39,6 +39,7 @@ import com.anisequel.ui.components.cards.SequelStatusChip
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.AniSequelTheme
 
 /**
  * Standard card for an airing or announced anime in "Currently arriving".
@@ -244,7 +245,10 @@ private fun CompactArrivingRow(
             Icon(
                 imageVector = AppVectorIcons.Movie,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                // 0.55 of `onSurfaceVariant` is 2.2:1 on a light chip - under the
+                // 3:1 a glyph owes - so the fallback artwork for an arriving title
+                // was the least visible thing on the row.
+                tint = AniSequelTheme.emphasis.muted,
                 modifier = Modifier.size(20.dp)
             )
         }

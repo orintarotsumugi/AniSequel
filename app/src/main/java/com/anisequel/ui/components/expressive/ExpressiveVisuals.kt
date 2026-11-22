@@ -46,6 +46,7 @@ import androidx.graphics.shapes.Morph
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.rememberIsResumed
+import com.anisequel.ui.theme.AniSequelTheme
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -115,7 +116,9 @@ fun ExpressiveArtworkPlaceholder(modifier: Modifier = Modifier) {
         Icon(
             imageVector = AppVectorIcons.Movie,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+            // A 26dp glyph at 0.45 of `onSurfaceVariant` is 1.9:1 - a placeholder
+            // you cannot see is not a placeholder. `muted` clears 3.5:1.
+            tint = AniSequelTheme.emphasis.muted,
             modifier = Modifier.size(26.dp)
         )
     }

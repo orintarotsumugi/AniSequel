@@ -191,6 +191,30 @@ class CastAndSpoilerTest {
     }
 
     /**
+     * The chip sits in the middle of its own line.
+     *
+     * It was drawn against the left edge of a full-width column, where it read as
+     * the start of the paragraph it actually hides - the one shape a reader's eye
+     * is trained to read through rather than to press. Centring it is what makes
+     * it a button: the renderer never centres prose, so the shape alone says
+     * "control".
+     */
+    @Test
+    fun `the spoiler chip is centred over the block it hides`() {
+        val chip = spoilerSource()
+            .substringAfter("internal fun NovaSpoiler(")
+            .substringBefore("\n\n/**")
+
+        assertTrue(
+            "the chip is back against the left edge of the column, where it reads " +
+                "as the start of a paragraph:\n$chip",
+            Regex(
+                """Row\(\s*modifier = Modifier\.fillMaxWidth\(\),\s*horizontalArrangement = Arrangement\.Center\s*\)"""
+            ).containsMatchIn(chip)
+        )
+    }
+
+    /**
      * The state has to be in the words.
      *
      * The previous header's only "you can close this" cue was an unlabelled `Done`

@@ -648,7 +648,6 @@ private fun SettingsRoot(
                         // heading over a group that holds a single row.
                         SettingsSectionLabel("Look & layout")
                         SettingsHubGroup(
-                            tone = SettingsGroupTone.LOOK,
                             entries = listOf(
                                 SettingsPage.APPEARANCE.entry(
                                     "settings_row_appearance",
@@ -671,7 +670,6 @@ private fun SettingsRoot(
 
                         SettingsSectionLabel("What it shows")
                         SettingsHubGroup(
-                            tone = SettingsGroupTone.CONTENT,
                             entries = listOf(
                                 SettingsPage.LIBRARY.entry(
                                     "settings_row_library",
@@ -694,7 +692,6 @@ private fun SettingsRoot(
 
                         SettingsSectionLabel("Device & app")
                         SettingsHubGroup(
-                            tone = SettingsGroupTone.DEVICE,
                             entries = listOf(
                                 SettingsPage.DEVICE.entry(
                                     "settings_row_device",

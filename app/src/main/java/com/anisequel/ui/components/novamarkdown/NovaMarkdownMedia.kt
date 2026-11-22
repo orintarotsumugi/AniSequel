@@ -3,10 +3,10 @@ package com.anisequel.ui.components.novamarkdown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import coil.size.Dimension
 import coil.size.Size
@@ -162,16 +163,74 @@ private fun NovaImageContent(
                 modifier = contentModifier
             )
         } else {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = model,
                 contentDescription = alt ?: "Markdown image",
                 modifier = contentModifier,
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.Medium,
-                placeholder = rememberVectorPainter(AppVectorIcons.AnimeSparkle),
-                error = rememberVectorPainter(AppVectorIcons.Warning)
+                // A picture that has not arrived, and one that never will, are
+                // drawn small. `placeholder`/`error` painters were stretched to
+                // the box by `contentScale = Fit`, so a wide block image that
+                // failed drew a full-bleed warning triangle the size of the
+                // artwork it was standing in for - and a bio's whole page became
+                // a warning sign because one GIF was missing.
+                loading = { NovaImagePending(modifier = Modifier.size(28.dp)) },
+                error = { NovaImageUnavailable() }
             )
         }
+    }
+}
+
+/**
+ * Something small where the picture will be, while it is on its way.
+ *
+ * A spinner rather than a copy of the artwork's box: the box is already reserved
+ * by [novaImageSizeModifier], so this only has to say "not yet" in a size that
+ * does not become the page's most prominent thing when a network is slow.
+ */
+@Composable
+private fun NovaImagePending(modifier: Modifier = Modifier) {
+    CircularProgressIndicator(
+        modifier = modifier,
+        strokeWidth = 2.dp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    )
+}
+
+/**
+ * The honest state for an image that will not load: a sentence, not a triangle.
+ *
+ * It is deliberately the size of a line of text. The block's box already reserved
+ * the artwork's dimensions, so an error that filled it drew the biggest thing on
+ * the page over the smallest amount of information - a warning sign about a
+ * missing decoration. The tap still opens the picture's own URL, which is the one
+ * thing a reader can still do with it.
+ */
+@Composable
+private fun NovaImageUnavailable(modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .testTag("nova_markdown_image_unavailable")
+    ) {
+        Icon(
+            imageVector = AppVectorIcons.Warning,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = "Couldn't load this image",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

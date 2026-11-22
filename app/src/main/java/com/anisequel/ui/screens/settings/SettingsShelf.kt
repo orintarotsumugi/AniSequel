@@ -169,14 +169,12 @@ internal fun <T> SettingsShelf(
 internal fun <T> SettingsShelfGroup(
     label: String,
     sections: List<T>,
-    tone: SettingsGroupTone,
     onOpen: (T) -> Unit,
     values: Map<T, String> = emptyMap()
 ) where T : Enum<T>, T : SettingsShelfSection {
     SettingsSectionLabel(text = label, compact = true)
     SettingsHubGroup(
-        entries = sections.map { section -> section.shelfEntry(onOpen, values[section]) },
-        tone = tone
+        entries = sections.map { section -> section.shelfEntry(onOpen, values[section]) }
     )
 }
 

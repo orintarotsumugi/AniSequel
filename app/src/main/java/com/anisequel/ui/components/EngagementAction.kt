@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.theme.AniSequelTheme
 
 /**
  * A like, a comment count, a reply count: an icon and a number, as one control.
@@ -77,7 +78,10 @@ fun EngagementAction(
     // `FastEffectsInt` are the house tokens for exactly this pair; the count uses
     // the effects spring so a like never ticks past the number and back.
     val appearance by animateColorAsState(
-        targetValue = if (enabled) tint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        // `onSurfaceVariant` at 0.5 is 2.2:1 on a light surface, and a like
+        // button that is disabled by a network error is precisely the control that
+        // still has to be readable. `disabled` is the scheme's 3:1 tone.
+        targetValue = if (enabled) tint else AniSequelTheme.emphasis.disabled,
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "engagement_tint"
     )

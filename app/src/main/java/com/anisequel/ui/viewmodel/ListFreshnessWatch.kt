@@ -133,8 +133,15 @@ class ListFreshnessWatch(
      * Restarts cleanly, so resuming twice cannot leave two loops running - two
      * would double every fetch and quietly spend the request budget the cache
      * exists to protect.
+     *
+     * [checkDue] is false for the page coming back rather than the app coming
+     * back. See [com.anisequel.ui.viewmodel.DashboardViewModel.onShown]: a reader
+     * who opened Settings and tapped Back has not made the list stale, and on
+     * "Always" - where every interval including zero is overdue - the check made
+     * that round trip re-buy the whole collection. A list that is genuinely
+     * overdue still fires at once, because the loop's first wait is zero.
      */
-    fun start() {
+    fun start(checkDue: Boolean = true) {
         stop()
         job = scope.launch {
             val loadedAt = lastLoadedAtMillis
@@ -143,7 +150,7 @@ class ListFreshnessWatch(
             // nothing loaded, the age reads as ~56 years and every interval
             // including "Always" is overdue, which would fire a second fetch on
             // top of the one `init` already has in flight.
-            if (loadedAt != 0L && isRefreshDue(nowMillis(), loadedAt, interval())) {
+            if (checkDue && loadedAt != 0L && isRefreshDue(nowMillis(), loadedAt, interval())) {
                 fire(gesture = false)
             }
 
@@ -152,13 +159,22 @@ class ListFreshnessWatch(
                 val wait = if (loaded == 0L) {
                     NOT_LOADED_POLL_MILLIS
                 } else {
-                    // null means this interval is decided entirely by the resume
-                    // check above - "Always" would re-fetch continuously on a
+                    // null means this interval is decided entirely by the app's
+                    // own resume check - "Always" would re-fetch continuously on a
                     // loop, and "Manual" must not re-fetch at all.
                     millisUntilRefreshDue(nowMillis(), loaded, interval()) ?: break
                 }
 
-                delay(maxOf(wait, MIN_RETRY_GAP_MILLIS))
+                // The floor is a retry backoff, not part of the schedule: it binds
+                // only when an attempt has already been made against the load this
+                // wait was computed from, which after a success is never. Waiting it
+                // out unconditionally delayed a list that was simply overdue by five
+                // minutes - invisible when `start` also checked (the overdue case
+                // fired there), but the whole of the behaviour once the page coming
+                // back stops checking: the reader returns to a stale list and watches
+                // it sit there.
+                val attemptedSinceLoad = lastAttemptAtMillis > loaded
+                delay(if (attemptedSinceLoad) maxOf(wait, MIN_RETRY_GAP_MILLIS) else wait)
 
                 // Fire unless a newer load replaced the one this wait was
                 // computed against. `onRefresh` is fire-and-forget, so when the

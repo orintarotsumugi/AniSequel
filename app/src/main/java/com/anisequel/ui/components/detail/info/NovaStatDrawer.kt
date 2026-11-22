@@ -20,26 +20,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.anisequel.data.model.MediaNode
-import com.anisequel.data.model.compactCount
-import com.anisequel.data.model.isManga
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.remember
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaScoreAmount
+import com.anisequel.data.model.compactCount
+import com.anisequel.data.model.displayName
+import com.anisequel.data.model.isManga
 import com.anisequel.data.model.rankingList
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.data.model.MediaScoreAmount
-import com.anisequel.data.model.displayName
+import com.anisequel.ui.theme.AniSequelTheme
 import java.util.Locale
 
 /**
@@ -382,12 +383,27 @@ private fun EmptyStatMessage(message: String) {
     }
 }
 
-private fun chartAccent(index: Int): Color = when (index % 5) {
-    0 -> Color(0xFF6D9FDE)
-    1 -> Color(0xFF64A88A)
-    2 -> Color(0xFFD99B59)
-    3 -> Color(0xFFB48AD8)
-    else -> Color(0xFFD47C86)
+/**
+ * The bar for one status row: a series colour from the scheme, not a pastel.
+ *
+ * These were five fixed hex values - a blue, a green, an amber, a violet and a
+ * rose - picked on the dark theme and never re-checked. On the light theme's
+ * `surfaceContainerHighest` they measure 2.16, 2.20, 1.88, 2.18 and 2.35:1: every
+ * one under the 3:1 a graphical object owes, and the amber under 2:1, so the
+ * longest bar in the card was the faintest. They were also the same five colours
+ * in both themes, which is the giveaway that they were never derived from
+ * anything.
+ *
+ * [com.anisequel.ui.theme.EmphasisColors.charts] is the same idea done from the
+ * scheme: primary, secondary, tertiary and error, each strengthened until it
+ * clears 3:1 against the worst surface the app draws on, so a palette change
+ * carries the chart with it.
+ */
+@Composable
+private fun chartAccent(index: Int): Color {
+    val charts = AniSequelTheme.emphasis.charts
+    if (charts.isEmpty()) return MaterialTheme.colorScheme.primary
+    return charts[index % charts.size]
 }
 
 private fun selectedStatTitle(label: String): String = when (label) {

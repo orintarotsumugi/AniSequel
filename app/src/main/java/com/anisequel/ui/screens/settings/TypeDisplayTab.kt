@@ -93,7 +93,6 @@ internal fun TypeDisplayTab(
                 SettingsShelfGroup(
                     label = "Type & scale",
                     sections = TypeSection.entries,
-                    tone = SettingsGroupTone.LOOK,
                     onOpen = onOpen
                 )
                 Spacer(modifier = Modifier.height(24.dp))

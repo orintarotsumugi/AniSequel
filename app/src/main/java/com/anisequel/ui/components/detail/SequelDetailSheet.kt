@@ -82,6 +82,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
 import com.anisequel.ui.components.rememberIsResumed
+import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
@@ -773,7 +774,9 @@ fun SequelDetailSheet(
                                 modifier = Modifier
                                     .width(36.dp)
                                     .height(4.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                // The grab handle is the only affordance saying the
+                                // sheet can be dragged: at 1.9:1 it was a smudge.
+                                color = AniSequelTheme.emphasis.muted,
                                 shape = RoundedCornerShape(50)
                             ) {}
                         }

@@ -1563,9 +1563,24 @@ Two mechanisms now share one setting, in **Settings → Edit**:
 | `AniListRepositoryImpl` | reuses a completed list response for that long, then re-fetches |
 | `ListFreshnessWatch` | decides *when* to ask, owned by `DashboardViewModel` |
 
-The watch is driven by `LifecycleResumeEffect` in `DashboardScreen`, so it acts
-on every `ON_RESUME` and on every return to the destination, and it runs a timer
-only while the app is actually in the foreground. Two deliberate consequences:
+The watch has two triggers, and they are deliberately not the same one.
+
+| | |
+| --- | --- |
+| **The app coming back** | `AppNavigation` reads `rememberIsResumed()` — the Activity's lifecycle, above the `NavHost` — and calls `onForegrounded()`, which runs the staleness check. |
+| **The page coming back** | `DashboardScreen` calls `onShown()` from a `DisposableEffect`, which arms the timer and checks nothing. |
+
+The split is the fix for a Settings round trip re-downloading the collection.
+Both events arrive as `ON_RESUME`, but a `NavBackStackEntry` resumes every time
+the reader returns to its page, so a check on the destination also ran after
+every visit to Settings, the Library or a title page. On `Always` — a zero-length
+window that is overdue the instant it is measured — that is a full re-download of
+the app's most expensive query for a list the reader had not touched.
+
+So the interval, not the tap, decides the list is old: `onShown` only starts the
+loop, whose first wait is "how long until this list is due" (zero for one that
+has aged out, which is why an overdue list still refreshes at once). Two
+deliberate consequences:
 
 - **A setting changed in Settings takes effect immediately.** Both the repository
   and the watch read the interval per lookup rather than capturing it, so
@@ -1573,13 +1588,18 @@ only while the app is actually in the foreground. Two deliberate consequences:
 - **The timer is foreground-only, and there is no WorkManager job.** WorkManager
   cannot run periodic work more often than every 15 minutes, is deliberately
   inexact under doze, and would spend AniList's request budget refreshing a list
-  nobody is looking at.
+  nobody is looking at. `onForegrounded` is additionally skipped while the
+  dashboard is not on screen, so an app resumed onto the Library does not start a
+  timer for a page nobody is reading.
 
 `Always` and `Manual` schedule no timer at all — `Always` has a zero window, so a
 loop would re-fetch continuously rather than on resume, and `Manual` must not
-re-fetch without the gesture. Both are decided entirely by the resume check.
+re-fetch without the gesture. Both are decided entirely by the app-level check.
 After a *failed* automatic fetch the loop waits a five-minute floor before asking
-again, so one dropped request cannot become a tight retry loop.
+again, so one dropped request cannot become a tight retry loop — the floor binds
+only when an attempt has already been made against the load being waited on,
+because a list that is merely overdue has failed nothing and waiting five minutes
+to notice is how the page coming back would have felt stuck.
 
 ---
 
@@ -3731,6 +3751,136 @@ which one made the app bigger, and the Type page carried a card whose only job w
 a button to the Display size page - the app's own navigation admitting the
 ambiguity. They are one destination with two parts now (font and text size; the
 automatic-or-manual density), so "make it bigger" has one place to start.
+
+### An alpha is not a contrast unit
+
+The UI had one way of drawing something quieter than `onSurfaceVariant`: hand the
+role an alpha. Disabled chip label 0.62, disabled like button 0.50, progress track
+and sheet grab handle 0.45, disabled format button and skeleton line 0.38, page
+indicator 0.38, motion rail 0.26. Each one was measured against whatever sat
+behind it, so each one was a different colour on a card than on the page.
+
+In the light theme they all failed at once, because the light scheme's secondary
+text is `#51637A` - a mid grey-blue with only the contrast it needs and no
+headroom to give away. Measured on a light card: 0.62 → **2.48:1**, 0.50 →
+**2.17:1**, 0.45 → **1.87:1**, 0.38 → **1.69:1**, 0.30 → **1.50:1**, 0.26 →
+**1.44:1**. So the disabled label was the least legible text on the page it was
+meant to explain, the progress track was invisible, and a skeleton was a sweep of
+nothing. A card's 1dp border at `outlineVariant.copy(alpha = 0.38f)` drew at
+1.2:1 while light `surfaceContainerLow` sits 1.03:1 from the page behind it - a
+card with no edge at all, which is why the light theme looked like text floating
+in space.
+
+The fix is `domain/color/EmphasisPalette`: seven roles (**secondary**, **muted**,
+**disabled**, **divider**, **boundary**, **track**, **skeleton**) plus four chart
+series, each derived from the scheme as the *quietest* tone that still clears a
+named floor against `surfaceContainerHighest` - the furthest the surface ramp
+moves from `onSurface` in both modes. The floors are a ladder (4.5 / 3.5 / 3.0 /
+3.0 / 3.0 / 2.2 / 2.0), so "quieter" is a measured step rather than an invented
+one. `Contrast` holds the WCAG maths and the two moves: `dimmedTo` blends toward
+the background no further than the floor allows, `strengthenedTo` blends toward a
+stronger anchor when the declared role already fails on the surface it is drawn
+on.
+
+Two details worth keeping. **The divider needed a stronger anchor than the
+outline**: `outline` is itself ~1.4:1 from the worst surface, so the first version
+blended toward it, never reached 2:1, and returned the anchor - the same 1.2:1 as
+the alpha it replaced. And **the chart series had to come from the scheme**:
+`NovaStatDrawer` drew five fixed pastels in both themes, and all five measure
+1.88–2.35:1 on the light card, with the amber - the longest bar in the card -
+under 2:1.
+
+`EmphasisColors` converts the palette for Compose and `AniSequelTheme.emphasis`
+exposes it, exactly as `AniSequelTheme.statusColors` already does. It is derived
+from the **animated** scheme and keyed on it, so a theme change carries the
+captions, tracks and hairlines with it. `EmphasisColourTest` holds every role to
+its floor for the brand schemes and for generated palettes across seeds.
+
+### A colour animation must not chase the theme
+
+A control that eases between two scheme roles - a chip between its selected and
+unselected pair, a connection capsule between its verdicts - used to call
+`animateColorAsState(targetValue = MaterialTheme.colorScheme.X)`. That is correct
+until the theme itself animates, which this app's does: `rememberAnimatedColorScheme`
+eases all 36 roles, so `colorScheme.primaryContainer` is a different value on
+every frame of a theme change. The control's own spring then re-targeted 36 times
+a frame: it arrived a beat after the page it lives in, and on a bouncy token it
+overshot a colour the page had already left.
+
+`rememberStateColor` animates the *decision* instead - one 0..1 progress, with
+both endpoints read from the live scheme each frame - so a theme change moves the
+endpoints and not the target. `rememberVerdictColor` does the same for a
+three-state capsule: two scalars and a resolved endpoint pair, so every frame of
+the transition is a blend of two *designed* pairs in the same proportion. That is
+also why it fixes a contrast dip rather than just a lag: a container and its
+content on independent springs spend the middle of the change as a pair the scheme
+never designed.
+
+The related bug is the one the app had already fixed twice and then repeated a
+third time: `SectionCard`'s tile eased toward a *constant* scheme role, so it was
+animating a value that never changed - and double-animating the theme change.
+
+### A chip is one thing, drawn one way
+
+Settings had grown five hand-rolled selected/unselected capsules: the Jokes
+page's `JokeChoiceChip`, the refresh intervals, the motion styles, the seasonal
+effects and the seasonal quality. They had drifted in every dimension a reader can
+see - three padding pairs (14/9, 16/10, 18/11), two colour families, one with a
+48dp minimum height and four without, two firing a haptic and one not, and two
+different selection feedbacks (a border-width step, a settle scale, or neither).
+That is what "every chip should look alike" means when it is read as a bug report:
+not a preference about colour, but five answers to one question.
+
+They are one composable now, `SettingsChoiceChip`. It keeps the four details that
+were each learned from a failure: one `MutableInteractionSource` shared by
+`bouncyPress` and `clickable` (a second pointer loop leaves a chip squashed for
+the whole drag), `ExpressiveShapes.pill` rather than a stretched `RoundedPolygon`
+(see `ExpressiveShapesTest`), every animated value read in `graphicsLayer` (a row
+of chips settling at once is one draw-phase invalidation each, not a relayout per
+frame per chip), and **selected beats disabled** ("Mixed" is the active quick-pick
+and is deliberately not clickable; enabled-first drew the most informative pill in
+the disabled grey).
+
+The same pass removed the shelf's colour-per-group: `LOOK`/`CONTENT`/`DEVICE` gave
+each shelf a tonal family, so a blue Interface tile sat three shelves from a pink
+Library one saying a fact nobody asked for - which heading the row was filed
+under, already said by the heading above the card. The tile says one thing now,
+in one colour: *this row opens a page*. The silhouette still comes from the row's
+position, which is the one axis on which variety costs nothing.
+
+### A warning sign is the wrong shape for a missing picture
+
+A bio image that failed to load was drawn by Coil's `error` painter: a warning
+triangle, stretched by `contentScale = Fit` to the box the artwork had reserved.
+On a block image that box is the column width, so one dead GIF in a profile put a
+full-bleed warning triangle on the page - the biggest thing on the screen, over
+the smallest amount of information, and it said "warning" about a decoration.
+
+A failure is now a line of text the size of a line of text ("Couldn't load this
+image"), and a picture that is still coming is a small indicator rather than a
+sparkle stretched to the same box. The block's dimensions are still reserved - the
+layout does not jump when the answer arrives - but nothing that failed ever draws
+at the size of what it replaced.
+
+### A spoiler is a button in the middle of its own line
+
+The chip was drawn against the left edge of a full-width column, which in a bio or
+a comment reads as the *start of a paragraph*: the eye lands on it, decides it is
+prose, and skips the hidden block. Centring it is what makes it a button, and the
+renderer never uses a centred line for text, so the shape alone identifies it. The
+chevron next to it turns in the draw phase and the word beside it already says the
+action, so neither is the only signal.
+
+### Two cards are not a page
+
+Library & dashboard was split into three rows - Navigation, Library view, Refresh
+& arriving - to keep the shelf tidy. That traded the reader's trip for the file's
+shape: "how often does the list refresh" is one of the most common reasons to open
+Settings at all, and it became a row, then a page, then a Back. A split earns its
+extra tap only when the halves are long enough that scrolling past one is the cost;
+two cards each is not. So the two cards are on the page again, and only Navigation
+- three bar cards behind a live preview, and the half a reader arrives at with a
+question about a missing tab - keeps one.
 
 ### A fact belongs on the row, not on a card about the row
 

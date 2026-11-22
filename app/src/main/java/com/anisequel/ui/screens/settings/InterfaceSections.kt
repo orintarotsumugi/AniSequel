@@ -412,7 +412,6 @@ internal fun CardDesignGroup(
         barTabs = barTabs
     )
     SettingsHubGroup(
-        tone = SettingsGroupTone.LOOK,
         entries = listOf(
             InterfaceSection.CARD_SHAPE.shelfEntry(onOpen),
             InterfaceSection.CARD_TEXT.shelfEntry(onOpen),

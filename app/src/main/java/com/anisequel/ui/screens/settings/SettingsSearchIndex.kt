@@ -417,10 +417,12 @@ internal object SettingsSearch {
             )
         )
 
+        // No `sectionName`: these two cards are on the page itself now, so the
+        // result opens the page and lands on the card instead of drilling into a
+        // sub-page that no longer exists.
         add(
             searchResult(
                 id = "list_refresh",
-                sectionName = LibrarySection.REFRESH.name,
                 page = SettingsPage.LIBRARY,
                 title = "List refresh",
                 subtitle = "How often the saved list asks AniList again",
@@ -428,6 +430,19 @@ internal object SettingsSearch {
                 icon = AppVectorIcons.Refresh,
                 keywords = "refresh interval sync update cache list stale age always " +
                     "fifteen thirty minutes hourly manual only data requests",
+                priority = 25
+            )
+        )
+        add(
+            searchResult(
+                id = "library_view",
+                page = SettingsPage.LIBRARY,
+                title = "Library view",
+                subtitle = "What the Library reopens with, and forgetting it",
+                eyebrow = "Library & dashboard",
+                icon = AppVectorIcons.List,
+                keywords = "library view remembered filter sort forget reset reopens " +
+                    "browse",
                 priority = 25
             )
         )
@@ -447,7 +462,6 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "arriving_rows",
-                sectionName = LibrarySection.REFRESH.name,
                 page = SettingsPage.LIBRARY,
                 title = "Arriving rows",
                 subtitle = "How the sequel feed is presented",

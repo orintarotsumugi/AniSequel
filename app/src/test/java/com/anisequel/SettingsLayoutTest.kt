@@ -1,6 +1,7 @@
 package com.anisequel
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -375,16 +376,107 @@ class SettingsLayoutTest {
         assertTrue("checked rows should have a visible tonal state", components.contains("background(rowContainer)"))
         val hub = source(settings + "SettingsHub.kt")
         assertTrue("hub groups should use expressive large surfaces", hub.contains("ExpressiveShapes.extraLarge"))
-        // The tile's colour is the *group's*, and its silhouette is its position in
-        // the group. Both used to be `title.hashCode()`, which meant renaming a row
-        // repainted it and two rows could collide by luck.
+        // The tile wears one colour and one silhouette rule: colour is the app's,
+        // silhouette is the row's position. The shelf used to run a colour per
+        // group (LOOK/CONTENT/DEVICE), so a blue Interface tile sat three shelves
+        // from a pink Library one for no reason a reader could use - the heading
+        // above the card already says which group a row is in.
         assertTrue(
-            "hub entries no longer take their colour from the group they belong to",
-            hub.contains("settingsGroupPalette(tone, index)")
+            "hub entries no longer draw their tile in the app's one settings colour",
+            hub.contains("settingsTilePalette()")
+        )
+        assertFalse(
+            "a tile's colour is taken from its group again, which is what made the " +
+                "shelf read as a colour chart",
+            hub.contains("settingsGroupPalette(") || components.contains("SettingsGroupTone")
         )
         assertTrue(
             "hub entries no longer take their silhouette from their position",
             hub.contains("settingsTileShape(index)")
+        )
+    }
+
+    /**
+     * Every settings page draws the same chip.
+     *
+     * Five pages had each grown their own selected/unselected pill, and they had
+     * drifted in every dimension a reader can see: three padding pairs, two colour
+     * families, one 48dp minimum height and four without, two firing a haptic and
+     * one not, and two different selection feedbacks. A settings page is a page of
+     * chips, so "what does a chip look like" must have exactly one answer.
+     *
+     * The per-page copies are named here rather than counted, because the failure
+     * this guards is not "one too many" - it is somebody adding a sixth for the
+     * next page, which is how the first five happened.
+     */
+    @Test
+    fun `settings pages share one choice chip`() {
+        val directory = File(findProjectRoot(), "app/src/main/java/com/anisequel/ui/screens/settings")
+        val files = directory.listFiles { file -> file.extension == "kt" }
+            .orEmpty()
+            .associateWith { withoutComments(it.readText()) }
+            .toList()
+
+        // `withoutComments`, and a real path: the shared chip's own comment names
+        // every copy it replaced, so a name search over the raw text matches the
+        // explanation of the bug instead of the bug.
+        val declared = files.filter { (_, text) -> text.contains("internal fun SettingsChoiceChip(") }
+        assertEquals(
+            "the shared chip is declared nowhere or more than once: $declared",
+            1,
+            declared.size
+        )
+
+        listOf(
+            "JokeChoiceChip",
+            "RefreshIntervalChip",
+            "MotionChip",
+            "SeasonalEffectChip",
+            "SeasonalPill"
+        ).forEach { name ->
+            val copies = files.filter { (_, text) -> text.contains("private fun $name(") }
+                .map { (file, _) -> file.name }
+            assertTrue(
+                "a second chip called $name is back in $copies - a settings page " +
+                    "must not answer \"what does a chip look like\" on its own",
+                copies.isEmpty()
+            )
+        }
+    }
+
+    /**
+     * The library view and the refresh/arriving cards are on their page.
+     *
+     * They were split into sub-pages to keep the shelf tidy, which made one of the
+     * most common reasons to open Settings - "how often does the list refresh" -
+     * a row, a page and a Back. Only Navigation is still a page.
+     */
+    @Test
+    fun `library view and refresh are drawn on the page, not behind a row`() {
+        val library = source(settings + "LibrarySettingsTab.kt")
+
+        assertTrue(
+            "the Library & dashboard page no longer opens with the bar it previews",
+            library.contains("BottomBarSample(")
+        )
+        assertTrue(
+            "the page no longer takes a `hub` block, so this check is looking at nothing",
+            library.contains("hub = { onOpen ->")
+        )
+        val hub = library.substringAfter("hub = { onOpen ->").substringBefore("body = { section ->")
+        listOf("LibraryViewCard(", "ListRefreshCard(", "ArrivingSectionCard(").forEach { card ->
+            assertTrue(
+                "$card is behind a sub-page again, so changing it costs a tap and a Back",
+                hub.contains(card)
+            )
+        }
+        assertFalse(
+            "Library view is a sub-page again",
+            library.contains("LibrarySection.VIEW")
+        )
+        assertFalse(
+            "Refresh & arriving is a sub-page again",
+            library.contains("LibrarySection.REFRESH")
         )
     }
 
@@ -488,9 +580,14 @@ class SettingsLayoutTest {
 
     @Test
     fun `library and joke settings put primary choices before refinements`() {
+        // The navigation half leads the Library page as a *row* now, because it is the
+        // only part of that page still behind one: the bar, the saved-list view and
+        // the refresh interval are drawn on the page itself. The intent is unchanged -
+        // the reader meets "where do my tabs go" before the refinements below it - so
+        // the assertion moved up a level rather than being dropped.
         val library = source(settings + "LibrarySettingsTab.kt")
         assertTrue("navigation choices should lead the Library page",
-            library.indexOf("TopBarSectionCard(mainTabPreferences)") < library.indexOf("LibraryViewCard(libraryPreferences)"))
+            library.indexOf("SettingsHubGroup(") < library.indexOf("LibraryViewCard(libraryPreferences)"))
         assertTrue("saved-list view should precede refresh interval",
             library.indexOf("LibraryViewCard(libraryPreferences)") < library.indexOf("ListRefreshCard(refreshIntervalPreferences)"))
         val jokes = source(settings + "JokeSettingsTab.kt")
