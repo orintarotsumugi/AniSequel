@@ -150,7 +150,7 @@ fun SectionCard(
  */
 @Composable
 internal fun settingsTileShape(index: Int): Shape =
-    when ((index.coerceAtLeast(0)) % 4) {
+    when (index.coerceAtLeast(0) % 4) {
         0 -> expressiveShape(ExpressiveShapes.cookie)
         1 -> expressiveShape(ExpressiveShapes.burst)
         2 -> expressiveShape(ExpressiveShapes.diamond)
@@ -201,7 +201,7 @@ internal fun settingsGroupPalette(
         SettingsGroupTone.DEVICE -> scheme.secondaryContainer to scheme.onSecondaryContainer
         // Search results have no group, so they keep the variety a group would
         // otherwise supply - by position, which is stable, not by title hash.
-        SettingsGroupTone.NEUTRAL -> when ((index.coerceAtLeast(0)) % 3) {
+        SettingsGroupTone.NEUTRAL -> when (index.coerceAtLeast(0) % 3) {
             0 -> scheme.secondaryContainer to scheme.onSecondaryContainer
             1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
             else -> scheme.primaryContainer to scheme.onPrimaryContainer
