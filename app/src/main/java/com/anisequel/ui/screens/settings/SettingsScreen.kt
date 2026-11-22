@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -550,6 +551,20 @@ private fun SettingsRoot(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit
 ) {
+    // The one scroll both modes share. Hoisted out of the `verticalScroll` call so
+    // the mode swap below can put the reader back at the top of it: a reader who
+    // scrolled to the bottom of the shelf and then typed got results drawn at that
+    // offset, which on a short result list means the first answers are above the
+    // viewport they were typed into.
+    val hubScroll = rememberScrollState()
+    val searching = searchQuery.isNotBlank()
+    LaunchedEffect(searching) {
+        // Animated, not `scrollTo`: the list is moving out of the way of the field
+        // the reader is typing in, and a spring reads as the shelf getting out of
+        // the way rather than as a jump.
+        if (hubScroll.value != 0) hubScroll.animateScrollTo(0)
+    }
+
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -575,7 +590,7 @@ private fun SettingsRoot(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(hubScroll),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Column(
@@ -583,109 +598,131 @@ private fun SettingsRoot(
                     .widthIn(max = MaxSettingsContentWidth)
                     .fillMaxWidth()
             ) {
-                if (searchQuery.isNotBlank()) {
-                    SettingsSearchResults(
-                        query = searchQuery,
-                        onQueryChange = onSearchQueryChange,
-                        onOpen = onOpenSearchResult,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    // The account leads. It is the one answer that changes what every
-                    // row below it is looking at - a real AniList list or the built-in
-                    // demo - and it is now a card rather than a row, because it carries
-                    // a second control (the connection check).
-                    SettingsAccountCard(
-                        name = viewer?.name,
-                        // `large` first: the tile is 52dp, and AniList's medium
-                        // avatar is the one sized for a 36dp row.
-                        avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
-                        subtitle = accountSubtitle(viewer, watchedCount, missedCount),
-                        connectionLabel = connectionLabel,
-                        connectionHealthy = connectionHealthy,
-                        onOpenAccount = onOpenAccount,
-                        onCheckConnection = onCheckConnection,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
-
-                    // One group per question, one tonal family per group, and no
-                    // heading over a group that holds a single row.
-                    SettingsSectionLabel("Look & layout")
-                    SettingsHubGroup(
-                        tone = SettingsGroupTone.LOOK,
-                        entries = listOf(
-                            SettingsPage.APPEARANCE.entry(
-                                "settings_row_appearance",
-                                onOpen,
-                                value = summaries.appearance
-                            ),
-                            SettingsPage.UI.entry(
-                                "settings_row_ui",
-                                onOpen,
-                                value = summaries.interfaceStyle
-                            ),
-                            SettingsPage.TYPE_AND_DISPLAY.entry(
-                                "settings_row_typedisplay",
-                                onOpen,
-                                value = summaries.type
-                            )
-                        ),
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-
-                    SettingsSectionLabel("What it shows")
-                    SettingsHubGroup(
-                        tone = SettingsGroupTone.CONTENT,
-                        entries = listOf(
-                            SettingsPage.LIBRARY.entry(
-                                "settings_row_library",
-                                onOpen,
-                                value = summaries.library
-                            ),
-                            SettingsPage.JOKES.entry(
-                                "settings_row_jokes",
-                                onOpen,
-                                value = summaries.jokes
-                            ),
-                            SettingsPage.SEASONAL.entry(
-                                "settings_row_seasonal",
-                                onOpen,
-                                value = summaries.seasonal
-                            )
-                        ),
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-
-                    SettingsSectionLabel("Device & app")
-                    SettingsHubGroup(
-                        tone = SettingsGroupTone.DEVICE,
-                        entries = listOf(
-                            SettingsPage.DEVICE.entry(
-                                "settings_row_device",
-                                onOpen,
-                                value = summaries.device
-                            ),
-                            // No value: this app keeps no *last checked* answer, and a
-                            // row that said "Up to date" without having asked would be
-                            // the one lie on a screen of facts.
-                            SettingsPage.UPDATES.entry(
-                                "settings_row_updates",
-                                onOpen
-                            ),
-                            SettingsPage.ABOUT.entry(
-                                "settings_row_about",
-                                onOpen,
-                                value = summaries.about
-                            )
-                        ),
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
-
-                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                        SettingsVersionFooter(
-                            versionName = BuildConfig.VERSION_NAME,
-                            versionCode = BuildConfig.VERSION_CODE
+                // One crossfade for the whole mode change: typing a query lifts the
+                // shelf out and fades the answers in, rather than replacing nine rows
+                // with a result list between two frames. `using(null)` disables the
+                // size transform for the reason `settingsLevelTransition` records -
+                // the two modes are different heights and animating that height
+                // fought the scroll it sits in.
+                AnimatedContent(
+                    targetState = searching,
+                    transitionSpec = {
+                        (
+                            fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                                scaleIn(
+                                    initialScale = 0.98f,
+                                    animationSpec = ExpressiveMotion.FastSpatial
+                                )
+                            ).togetherWith(
+                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                        ).using(null)
+                    },
+                    label = "settings_search_mode"
+                ) { isSearching ->
+                    if (isSearching) {
+                        SettingsSearchResults(
+                            query = searchQuery,
+                            onQueryChange = onSearchQueryChange,
+                            onOpen = onOpenSearchResult,
+                            modifier = Modifier.fillMaxWidth()
                         )
+                    } else {
+                        // The account leads. It is the one answer that changes what every
+                        // row below it is looking at - a real AniList list or the built-in
+                        // demo - and it is now a card rather than a row, because it carries
+                        // a second control (the connection check).
+                        SettingsAccountCard(
+                            name = viewer?.name,
+                            // `large` first: the tile is 52dp, and AniList's medium
+                            // avatar is the one sized for a 36dp row.
+                            avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
+                            subtitle = accountSubtitle(viewer, watchedCount, missedCount),
+                            connectionLabel = connectionLabel,
+                            connectionHealthy = connectionHealthy,
+                            onOpenAccount = onOpenAccount,
+                            onCheckConnection = onCheckConnection,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
+
+                        // One group per question, one tonal family per group, and no
+                        // heading over a group that holds a single row.
+                        SettingsSectionLabel("Look & layout")
+                        SettingsHubGroup(
+                            tone = SettingsGroupTone.LOOK,
+                            entries = listOf(
+                                SettingsPage.APPEARANCE.entry(
+                                    "settings_row_appearance",
+                                    onOpen,
+                                    value = summaries.appearance
+                                ),
+                                SettingsPage.UI.entry(
+                                    "settings_row_ui",
+                                    onOpen,
+                                    value = summaries.interfaceStyle
+                                ),
+                                SettingsPage.TYPE_AND_DISPLAY.entry(
+                                    "settings_row_typedisplay",
+                                    onOpen,
+                                    value = summaries.type
+                                )
+                            ),
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+
+                        SettingsSectionLabel("What it shows")
+                        SettingsHubGroup(
+                            tone = SettingsGroupTone.CONTENT,
+                            entries = listOf(
+                                SettingsPage.LIBRARY.entry(
+                                    "settings_row_library",
+                                    onOpen,
+                                    value = summaries.library
+                                ),
+                                SettingsPage.JOKES.entry(
+                                    "settings_row_jokes",
+                                    onOpen,
+                                    value = summaries.jokes
+                                ),
+                                SettingsPage.SEASONAL.entry(
+                                    "settings_row_seasonal",
+                                    onOpen,
+                                    value = summaries.seasonal
+                                )
+                            ),
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+
+                        SettingsSectionLabel("Device & app")
+                        SettingsHubGroup(
+                            tone = SettingsGroupTone.DEVICE,
+                            entries = listOf(
+                                SettingsPage.DEVICE.entry(
+                                    "settings_row_device",
+                                    onOpen,
+                                    value = summaries.device
+                                ),
+                                // No value: this app keeps no *last checked* answer, and a
+                                // row that said "Up to date" without having asked would be
+                                // the one lie on a screen of facts.
+                                SettingsPage.UPDATES.entry(
+                                    "settings_row_updates",
+                                    onOpen
+                                ),
+                                SettingsPage.ABOUT.entry(
+                                    "settings_row_about",
+                                    onOpen,
+                                    value = summaries.about
+                                )
+                            ),
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+
+                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                            SettingsVersionFooter(
+                                versionName = BuildConfig.VERSION_NAME,
+                                versionCode = BuildConfig.VERSION_CODE
+                            )
+                        }
                     }
                 }
             }

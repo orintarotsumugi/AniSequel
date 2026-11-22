@@ -210,6 +210,10 @@ private fun BottomBarSample(tabs: List<MainTab>) {
             destinations = mainTabDestinations(tabs = tabs, profileAvatarUrl = null),
             selectedIndex = selected,
             onSelect = {},
+            // The real bar, drawn without the hold: the gesture lifts the bar and
+            // previews a tab it will never switch to here, which is a picture that
+            // answers a finger it cannot serve.
+            gesturesEnabled = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("library_bar_sample")

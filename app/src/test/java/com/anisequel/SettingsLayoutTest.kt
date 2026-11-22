@@ -41,6 +41,7 @@ class SettingsLayoutTest {
     }
 
     private val settings = "app/src/main/java/com/anisequel/ui/screens/settings/"
+    private val components = "app/src/main/java/com/anisequel/ui/components/"
 
     private fun withoutComments(src: String): String = Regex("""/[*][\s\S]*?[*]/""")
         .replace(src) { "" }
@@ -205,6 +206,76 @@ class SettingsLayoutTest {
         assertTrue(
             "the card group lost the preview that is the answer to a style choice",
             iface.contains("CardDesignPreview(")
+        )
+    }
+
+    /**
+     * A preview of something that *acts* is drawn with the acting off.
+     *
+     * Both previews in Settings are the real components - that is what makes them
+     * worth drawing - and both were drawn with their live behaviour intact. The
+     * joke pill rippled under a thumb and dismissed nothing, announced itself to a
+     * screen reader as an arriving joke and carried the real toast's test tag (two
+     * nodes, whenever a joke landed while Settings was open over it); the
+     * navigation-bar sample ran the real hold-and-swipe, so the bar lifted,
+     * previewed a tab and switched to nothing, because its `onSelect` is a no-op.
+     *
+     * The fix is a switch on the component rather than a second copy of it here, so
+     * this pins both halves: the components have the switch, and the samples ask for
+     * the quiet mode.
+     */
+    @Test
+    fun `previews are drawn without the behaviour they cannot serve`() {
+        val jokes = source(settings + "JokeSettingsTab.kt")
+        assertTrue(
+            "the toast sample is drawn live again: it will ripple, dismiss nothing " +
+                "and announce itself to a screen reader",
+            jokes.contains("interactive = false")
+        )
+        assertTrue(
+            "the toast sample wears the real toast's tag again, so a UI check for " +
+                "the toast finds two nodes while Settings is open over it",
+            jokes.contains("testTag = \"joke_pill_sample_pill\"")
+        )
+        val library = source(settings + "LibrarySettingsTab.kt")
+        assertTrue(
+            "the bar sample runs the real hold-and-swipe again, so it lifts under " +
+                "the finger and switches to nothing",
+            library.contains("gesturesEnabled = false")
+        )
+        val pill = source(components + "JokeToastPill.kt")
+        assertTrue(
+            "the toast has no quiet mode for a preview to ask for",
+            pill.contains("interactive: Boolean = true")
+        )
+        val bar = source(components + "expressive/ExpressiveNavigationBar.kt")
+        assertTrue(
+            "the navigation bar has no quiet mode for a preview to ask for",
+            bar.contains("gesturesEnabled: Boolean = true")
+        )
+    }
+
+    /**
+     * Typing in the search field puts the answers where the reader is looking.
+     *
+     * The list is one scroll shared by both modes, so the offset outlived the shelf
+     * it was scrolled through: a reader who scrolled to the bottom and then typed
+     * got the first results drawn above the viewport. The fix is a hoisted scroll
+     * state and a spring back to the top when the mode changes, which is also the
+     * animation the shelf leaves on.
+     */
+    @Test
+    fun `typing in search returns the list to the top`() {
+        val screen = source(settings + "SettingsScreen.kt")
+        assertTrue(
+            "the hub's scroll state is created inside `verticalScroll` again, so " +
+                "nothing can return it to the top when the mode changes",
+            screen.contains("val hubScroll = rememberScrollState()")
+        )
+        assertTrue(
+            "the mode change no longer scrolls the list back to the top, so results " +
+                "can be drawn above the viewport they were typed into",
+            screen.contains("hubScroll.animateScrollTo(0)")
         )
     }
 

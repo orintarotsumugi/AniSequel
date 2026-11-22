@@ -55,6 +55,44 @@ class CreditsLinksTest {
         }
     }
 
+    /**
+     * Every name on the page wears the face that goes with it.
+     *
+     * The profile pictures are GitHub's own, pinned as the resolved CDN URLs
+     * (`github.com/<user>.png?size=256` answers 302 to these) rather than fetched
+     * from the GitHub API: a request and a rate limit per render is not a trade a
+     * page of four names needs. What the test pins is that each person has one and
+     * that it is the *same person* as the profile link beside it - a swapped avatar
+     * is a credit that thanks the wrong developer, and nothing about it looks wrong
+     * on screen.
+     */
+    @Test
+    fun `every credit has the face that goes with the profile`() {
+        val creditSource = credits
+        listOf(
+            "https://avatars.githubusercontent.com/u/139042138?s=256",
+            "https://avatars.githubusercontent.com/u/167056923?s=256",
+            "https://avatars.githubusercontent.com/u/99584765?s=256",
+            "https://avatars.githubusercontent.com/u/108048963?s=256"
+        ).forEach { url ->
+            assertTrue(
+                "the credits page no longer shows $url, so a name on it has gone " +
+                    "back to being a letter",
+                creditSource.contains("\"$url\"")
+            )
+        }
+        assertTrue(
+            "the avatars are not drawn as images at all",
+            creditSource.contains("AsyncImage(")
+        )
+        // The letter stays under the photo, so a failed load draws a person rather
+        // than a hole - which is the one state a screenshot of this page never shows.
+        assertTrue(
+            "the fallback letter is gone, so a failed avatar load leaves a blank tile",
+            creditSource.contains("name.take(1).uppercase()")
+        )
+    }
+
     @Test
     fun `a credit chip opens through the app's one opener`() {
         val creditSource = credits

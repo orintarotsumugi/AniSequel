@@ -1,5 +1,11 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +53,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import coil.compose.AsyncImage
@@ -401,16 +409,38 @@ private fun SettingsHubEntryRow(
             // to say itself. `labelMedium` in the primary role rather than a pill:
             // a coloured capsule on every row would turn the shelf into a control
             // panel of badges, and the value is information, not an action.
-            Text(
-                text = entry.value,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // The value is the one thing on the row that changes while the page
+            // behind it does not, so it is the one thing worth animating: a write
+            // from the page below lands as a tick rather than as a silent swap the
+            // reader may have missed. Both springs are `Fast*` because this fires
+            // when a preference lands, not because the reader opened something.
+            AnimatedContent(
+                targetState = entry.value,
+                transitionSpec = {
+                    (
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                            scaleIn(
+                                initialScale = 0.92f,
+                                animationSpec = ExpressiveMotion.FastSpatial
+                            )
+                        ).togetherWith(
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                    ).using(null)
+                },
+                label = "settings_row_value",
                 modifier = Modifier.widthIn(max = 104.dp)
-            )
+            ) { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -460,16 +490,28 @@ internal fun SettingsAccountCard(
     val haptics = LocalHapticFeedback.current
     val cardInteraction = remember { MutableInteractionSource() }
     val chipInteraction = remember { MutableInteractionSource() }
-    val chipContainer = when (connectionHealthy) {
-        true -> scheme.secondaryContainer
-        false -> scheme.errorContainer
-        null -> scheme.surfaceContainerHigh
-    }
-    val chipContent = when (connectionHealthy) {
-        true -> scheme.onSecondaryContainer
-        false -> scheme.onErrorContainer
-        null -> scheme.onSurfaceVariant
-    }
+    // Animated, because the verdict changes while the reader is looking at the
+    // chip - the check it just ran comes back and the capsule changes family. A cut
+    // between an error container and a secondary one reads as a different chip
+    // appearing; a colour spring reads as the answer arriving.
+    val chipContainer by animateColorAsState(
+        targetValue = when (connectionHealthy) {
+            true -> scheme.secondaryContainer
+            false -> scheme.errorContainer
+            null -> scheme.surfaceContainerHigh
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "settings_account_chip_container"
+    )
+    val chipContent by animateColorAsState(
+        targetValue = when (connectionHealthy) {
+            true -> scheme.onSecondaryContainer
+            false -> scheme.onErrorContainer
+            null -> scheme.onSurfaceVariant
+        },
+        animationSpec = ExpressiveMotion.FastColorEffects,
+        label = "settings_account_chip_content"
+    )
 
     Surface(
         shape = ExpressiveShapes.extraLarge,

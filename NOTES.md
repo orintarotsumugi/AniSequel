@@ -3769,6 +3769,66 @@ the app-lock switch, whose "reading" line sits *inside* an existing card and sta
 because drawing the switch off for a frame before a stored "on" arrives is a
 security claim the app has not read yet.
 
+### Motion belongs to the value that changed
+
+The animation pass that became 2.5.4 was not "add more springs". It is four
+places where something *changes* and the change was invisible, plus the one place
+where the screen was animating the wrong thing:
+
+- **A row's value** is an `AnimatedContent` keyed on the value string, so a write
+  from the page below lands as a tick. The target changes when a preference is
+  written and at no other time - which is exactly the property the dashboard
+  counter was missing when it animated toward a value that moved every frame.
+- **The account chip's colours** morph toward one of three constant families
+  (`FastColorEffects`), because the verdict arrives while the reader is looking at
+  the chip and a cut between an error container and a secondary one reads as a
+  different chip appearing.
+- **The shelf and the search results** crossfade with `using(null)`, the same
+  idiom `settingsLevelTransition` uses: the two modes are different heights and a
+  size transform under a scroll container fights the scroll.
+- **The list springs back to the top** when the mode changes. That one is a bug
+  the animation exposed: the offset outlives the content it was scrolled through,
+  so a reader who had scrolled down and then typed got their answers drawn above
+  the viewport they typed into.
+
+### A preview is drawn, not driven
+
+Both previews in Settings are the real components - that is what makes them worth
+drawing - and both were drawn with their live behaviour intact:
+
+- The joke pill is a tappable `Surface` with `liveRegion = Polite` and the
+  `joke_toast` tag. As a sample it rippled under a thumb and dismissed nothing,
+  announced itself to a screen reader as an arriving joke, and gave the screen two
+  nodes with the real toast's tag whenever a joke landed while Settings was open
+  over it. `JokeToastPill` now takes `interactive` and `testTag`, and one
+  `ToastSurface` helper draws the two cases so the elevation, border and colours
+  cannot drift apart between them.
+- The library's navigation-bar sample ran the real hold-and-swipe: the bar lifted,
+  previewed the tab under the finger and then switched to nothing, because its
+  `onSelect` is a no-op. `ExpressiveNavigationBar` takes `gesturesEnabled`, and the
+  sample passes false.
+
+The rule this leaves behind: a preview of a component that *acts* needs the acting
+off, and the way to get it is a parameter on the component rather than a second
+copy of it in Settings.
+
+### Credits: faces, handles, one address each
+
+The Credits page drew a letter where a person should be. Every credit now carries
+the GitHub avatar, resolved from `https://github.com/<user>.png?size=256` (a 302 to
+`avatars.githubusercontent.com/u/<id>?s=256`) and pinned as data rather than fetched
+from the GitHub API: one request and one rate limit per render, for the least
+time-sensitive thing in the app, is not a trade worth making. The initial stays
+underneath the image, so a failed load, a cold cache and a screenshot with no
+network all draw a person rather than a hole, and Coil's app-wide 180ms crossfade
+is the only motion involved - four faces sliding or scaling on one page would be
+four things moving for a screen people are reading.
+
+The link grew with the face: each helper's whole top row opens their profile (the
+most likely tap was previously the smallest target on the card), the handle is
+printed under the name, and the app they wrote stays a chip because it is a second
+destination. The developer's profile is a full-width button, not one more chip.
+
 ### What deliberately did not change
 
 *Seasonal effects* stays one scroll. Its sliders and its live sky preview are one

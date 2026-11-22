@@ -65,6 +65,15 @@ private data class JokeToastPalette(
  *
  * [dwell] is passed only so the draw's semantics can describe the arm; the timing
  * itself belongs to the schedule that owns the wait.
+ *
+ * ## [interactive] and [testTag]
+ *
+ * Settings draws this exact composable as a sample, and a sample is not a control.
+ * Two things went wrong when it was drawn with the live defaults: the pill is a
+ * tappable surface, so the sample rippled under a thumb and dismissed nothing, and
+ * it carried both `liveRegion = Polite` (a screen reader announcing a preview as
+ * though a joke had arrived) and the real `joke_toast` tag - which means a UI check
+ * looking for the toast, while Settings was open over it, found two nodes.
  */
 @Composable
 internal fun JokeToastPill(
@@ -80,7 +89,11 @@ internal fun JokeToastPill(
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** False draws the pill as a surface: no tap, no ripple, no live region. */
+    interactive: Boolean = true,
+    /** Where the pill is found; the Settings sample passes its own name. */
+    testTag: String = "joke_toast"
 ) {
     val palette = jokeToastPalette(golden)
     AnimatedVisibility(
@@ -116,37 +129,24 @@ internal fun JokeToastPill(
             label = "joke_toast_scale"
         ) { state -> toastScale(state) }
 
-        Surface(
-            // Tapping dismisses it early. No scrim and no modal: it is a remark,
-            // not a decision, and the page underneath must stay usable.
-            onClick = onDismiss,
-            shape = MaterialTheme.shapes.large,
-            color = palette.container,
-            contentColor = palette.content,
-            // Higher than the 3dp it shipped with. The toast lands over a
-            // scrolling list of poster artwork, and a `secondaryContainer` pill
-            // with a faint tint on it is not reliably separable from a busy
-            // picture underneath.
-            tonalElevation = 6.dp,
-            // A hairline edge so the pill reads as a surface over artwork rather
-            // than a patch of the poster done in a different colour.
-            border = BorderStroke(
-                width = 1.dp,
-                color = palette.border
-            ),
+        ToastSurface(
+            palette = palette,
+            interactive = interactive,
+            onDismiss = onDismiss,
             modifier = Modifier
-                .testTag("joke_toast")
+                .testTag(testTag)
                 .widthIn(max = 420.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     transformOrigin = toastTransformOrigin(fromBottom)
-                }
-                // A surface that appears by itself, with no tap and no focus
-                // change to announce it, is invisible to a screen reader. Polite
-                // rather than Assertive: a joke is not allowed to interrupt a
-                // sentence the reader is already hearing.
-                .semantics { liveRegion = LiveRegionMode.Polite }
+                },
+            // A surface that appears by itself, with no tap and no focus change to
+            // announce it, is invisible to a screen reader. Polite rather than
+            // Assertive: a joke is not allowed to interrupt a sentence the reader is
+            // already hearing. Only the live toast says so - the Settings sample is
+            // not an arrival.
+            announce = interactive
         ) {
             JokeToastBody(
                 joke = joke,
@@ -162,6 +162,68 @@ internal fun JokeToastPill(
                 onToggleFavourite = onToggleFavourite,
                 staysUntilDismissed = dwell.staysUntilDismissed
             )
+        }
+    }
+}
+
+/**
+ * The pill's surface, tappable or drawn.
+ *
+ * One composable rather than two `Surface` bodies: the only difference between the
+ * live toast and the Settings sample is whether it can be tapped, and a second copy
+ * of the elevation, the border and the colour pair is a copy that drifts the first
+ * time either is retuned.
+ */
+@Composable
+private fun ToastSurface(
+    palette: JokeToastPalette,
+    interactive: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier,
+    /** True only for the live toast: a sample is not an arrival. */
+    announce: Boolean,
+    content: @Composable () -> Unit
+) {
+    // A surface that appears by itself, with no tap and no focus change to announce
+    // it, is invisible to a screen reader. Polite rather than Assertive: a joke is
+    // not allowed to interrupt a sentence the reader is already hearing.
+    val resolvedModifier = if (announce) {
+        modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    } else {
+        modifier
+    }
+    // Higher than the 3dp it shipped with. The toast lands over a scrolling list of
+    // poster artwork, and a `secondaryContainer` pill with a faint tint on it is not
+    // reliably separable from a busy picture underneath.
+    val elevation = 6.dp
+    // A hairline edge so the pill reads as a surface over artwork rather than a patch
+    // of the poster done in a different colour.
+    val edge = BorderStroke(width = 1.dp, color = palette.border)
+
+    if (interactive) {
+        // Tapping dismisses it early. No scrim and no modal: it is a remark, not a
+        // decision, and the page underneath must stay usable.
+        Surface(
+            onClick = onDismiss,
+            shape = MaterialTheme.shapes.large,
+            color = palette.container,
+            contentColor = palette.content,
+            tonalElevation = elevation,
+            border = edge,
+            modifier = resolvedModifier
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = palette.container,
+            contentColor = palette.content,
+            tonalElevation = elevation,
+            border = edge,
+            modifier = resolvedModifier
+        ) {
+            content()
         }
     }
 }

@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "2.5.4",
+      "entries": [
+        {
+          "title": "Settings answers with motion",
+          "detail": "A row's value ticks into place when it changes instead of swapping between two frames, the account card's connection chip springs between its colour families as the answer arrives, and typing in the search field lifts the shelf out and fades the answers in - then springs the list back to the top, where before a reader who had scrolled down got results drawn above the viewport they typed into. Everything uses the app's existing spring tokens, so a build set to Instant settings still moves instantly."
+        },
+        {
+          "title": "Previews stop pretending to be controls",
+          "detail": "Both previews in Settings are the real components rather than drawings of them, and both were drawn with the live behaviour intact: the joke toast sample rippled under a thumb and dismissed nothing, announced itself to a screen reader as an arriving joke, and carried the same test tag as the real toast. The library's navigation-bar sample ran the real hold-and-swipe, so it lifted under the finger, previewed a tab and switched to nothing. Both are drawn as pictures now - the toast without its tap, ripple, live region or tag, and the bar without the gesture - while still being the same composables the app uses."
+        },
+        {
+          "title": "Credits wears the faces it thanks",
+          "detail": "The Credits page drew a letter where a person should be. Everyone on it now has their GitHub profile picture - the developer's on the flower tile, each helper's in a circle under their name - with the letter still underneath while the photo loads and if it never does. Each helper is a whole tappable row that opens their profile, with github.com printed under their name and the app they wrote as a chip beneath it, and the developer's profile is a full-width button rather than one more chip."
+        }
+      ]
+    },
+    {
       "version": "2.5.3",
       "entries": [
         {
@@ -18,8 +35,7 @@
         {
           "title": "A title page's blurred backdrop is decoded at the blur's resolution",
           "detail": "The artwork behind the Info page was decoded at the panel's own resolution - about 10 MB on a 1080p phone, twice while the cover crossfaded to the banner - for a picture drawn under an 18dp blur and a legibility scrim. It decodes at half that width on Soft and a third on Heavy: four and nine times less bitmap to allocate, decode and upload, and it competes far less with the poster cache on the list behind it. Crisp, which is the setting that means a sharp picture, keeps the full decode, and the hero is untouched."
-        }
-      ,
+        },
         {
           "title": "Settings is three groups of three, and every row says what it is set to",
           "detail": "The shelf had eleven rows under five headings, two of which headed exactly one row, and it answered nothing: \"is OLED on?\", \"how often does the list refresh?\" and \"is the app lock set?\" each cost a page visit and a Back. It is three groups now - what it looks like, what it shows, what it runs on - and every row carries its current value on the right. The header and the search field no longer scroll away, so the one control that reaches every setting is available from any position in the list."

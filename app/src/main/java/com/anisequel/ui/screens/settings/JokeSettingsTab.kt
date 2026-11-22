@@ -310,7 +310,12 @@ private fun JokePillSample(settings: JokeSettings) {
                 isFavourite = false,
                 onToggleFavourite = {},
                 onDismiss = {},
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                // A sample, not the toast: no tap, no ripple, no live region, and
+                // its own tag so a UI check for the live `joke_toast` cannot find two
+                // nodes while Settings is open over one.
+                interactive = false,
+                testTag = "joke_pill_sample_pill"
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
