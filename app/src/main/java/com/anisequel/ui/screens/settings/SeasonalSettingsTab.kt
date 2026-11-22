@@ -1,12 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import android.animation.ValueAnimator
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -35,12 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -70,8 +60,6 @@ import com.anisequel.domain.seasonal.seasonalFrameHz
 import com.anisequel.domain.seasonal.seasonalSeasonForMonth
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberBoundSliderState
 import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.seasonal.SeasonalEffectGlyph
@@ -383,10 +371,19 @@ private fun ShapeCard(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     options.forEach { option ->
-                        SeasonalEffectChip(
-                            effect = option,
+                        SettingsChoiceChip(
+                            label = option.displayName,
                             selected = option == effect,
-                            onClick = { onEffectChange(option) }
+                            onClick = { onEffectChange(option) },
+                            testTag = "seasonal_effect_${option.storageValue}",
+                            // The sky's own drawing, so a chip cannot promise a shape
+                            // the overlay does not draw.
+                            glyph = {
+                                SeasonalEffectGlyph(
+                                    effect = option,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         )
                     }
                 }
@@ -396,76 +393,6 @@ private fun ShapeCard(
     }
 }
 
-@Composable
-private fun SeasonalEffectChip(
-    effect: SeasonalEffect,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "seasonal_chip_container"
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "seasonal_chip_content"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "seasonal_chip_border"
-    )
-
-    // The press spring and the click share one interaction source, and the ripple
-    // is off: `bouncyPress` without a source installs its own pointer loop on the
-    // element `clickable` is already driving, so a finger that lands on a chip and
-    // starts to scroll this page keeps the chip squashed for the whole drag - the
-    // reason `AttachmentEmbedRows` and the comment row's controls pass one.
-    val interactionSource = remember { MutableInteractionSource() }
-    val haptics = LocalHapticFeedback.current
-    Row(
-        modifier = Modifier
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            .border(BorderStroke(1.dp, borderColor), shape = ExpressiveShapes.pill)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onClick()
-                }
-            )
-            // 18/11, the shape of `JokeChoiceChip`: a chip is the only way to choose
-            // a shape, and the smaller of the two settings chips was the one with a
-            // drawing inside it.
-            .padding(horizontal = 18.dp, vertical = 11.dp)
-            .semantics {
-                this.selected = selected
-                role = Role.RadioButton
-            }
-            .testTag("seasonal_effect_${effect.storageValue}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp)
-    ) {
-        // The glyph is the same draw code as the overlay, so a chip can never
-        // promise a snowflake the sky does not draw. It is a vector path, never an
-        // emoji.
-        SeasonalEffectGlyph(effect = effect, modifier = Modifier.size(18.dp))
-        Text(
-            text = effect.displayName,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = content
-        )
-    }
-}
 
 /**
  * Settling and wind.

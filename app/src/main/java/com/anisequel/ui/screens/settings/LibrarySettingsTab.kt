@@ -1,25 +1,17 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,16 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.ArrivingPreferences
@@ -47,8 +32,6 @@ import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
-import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.navigation.MainTab
 import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
@@ -56,13 +39,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * One part of the Library & dashboard page.
+ * The one part of the Library & dashboard page that is still a page.
  *
- * The page held six cards in one scroll: two bar cards, the Search page, the
- * remembered Library view, the refresh interval and the arriving rows. A reader
- * who came to change how often the list reloads scrolled past three cards about
- * navigation to reach it, and the page's own subtitle ("AniList refresh timing,
- * dashboard sections and navigation bar") was three subjects in a sentence.
+ * ## Why the other two came back out
+ *
+ * The page held six cards in one scroll, so it was split into three rows:
+ * Navigation, Library view and Refresh & arriving. That made the shelf tidy and
+ * the *reader's* trip worse - "how often does the list refresh" is one of the most
+ * common reasons to open Settings at all, and it became a row, then a page, then a
+ * Back. A split earns its extra tap only when the halves are long enough that
+ * scrolling past one is the cost; two cards each is not.
+ *
+ * So Library view and Refresh & arriving are cards on this page again, and only the
+ * navigation half - three bar cards behind a preview, and the part a reader arrives
+ * at with a question about a missing tab - keeps a page of its own.
  */
 internal enum class LibrarySection(
     override val title: String,
@@ -75,18 +65,6 @@ internal enum class LibrarySection(
         subtitle = "The two bars, their shortcuts and the Search page",
         icon = AppVectorIcons.Tune,
         testTag = "library_row_navigation"
-    ),
-    VIEW(
-        title = "Library view",
-        subtitle = "What the Library reopens with, and forgetting it",
-        icon = AppVectorIcons.List,
-        testTag = "library_row_view"
-    ),
-    REFRESH(
-        title = "Refresh & arriving",
-        subtitle = "How fresh the list is, and the rows for new sequels",
-        icon = AppVectorIcons.Schedule,
-        testTag = "library_row_refresh"
     )
 }
 
@@ -153,11 +131,15 @@ internal fun LibrarySettingsTab(
         modifier = modifier,
         hub = { onOpen ->
             SettingsScrollColumn {
+                // The bar first: it is what "Library & dashboard" looks like, and the
+                // row beneath it is the only thing here that is a page of its own.
                 BottomBarSample(tabs = tabs)
                 SettingsHubGroup(
-                    entries = LibrarySection.entries.map { it.shelfEntry(onOpen) },
-                    tone = SettingsGroupTone.CONTENT
+                    entries = LibrarySection.entries.map { it.shelfEntry(onOpen) }
                 )
+                LibraryViewCard(libraryPreferences)
+                ListRefreshCard(refreshIntervalPreferences)
+                ArrivingSectionCard(arrivingPreferences)
                 Spacer(modifier = Modifier.height(24.dp))
             }
         },
@@ -169,15 +151,6 @@ internal fun LibrarySettingsTab(
                     TopBarSectionCard(mainTabPreferences)
                     BottomBarSectionCard(mainTabPreferences)
                     SearchPageSectionCard(mainTabPreferences)
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-                LibrarySection.VIEW -> SettingsScrollColumn {
-                    LibraryViewCard(libraryPreferences)
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-                LibrarySection.REFRESH -> SettingsScrollColumn {
-                    ListRefreshCard(refreshIntervalPreferences)
-                    ArrivingSectionCard(arrivingPreferences)
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
@@ -210,6 +183,10 @@ private fun BottomBarSample(tabs: List<MainTab>) {
             destinations = mainTabDestinations(tabs = tabs, profileAvatarUrl = null),
             selectedIndex = selected,
             onSelect = {},
+            // The real bar, drawn without the hold: the gesture lifts the bar and
+            // previews a tab it will never switch to here, which is a picture that
+            // answers a finger it cannot serve.
+            gesturesEnabled = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("library_bar_sample")
@@ -525,10 +502,14 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
                 modifier = Modifier.testTag("refresh_interval_row")
             ) {
                 RefreshInterval.entries.forEach { option ->
-                    RefreshIntervalChip(
-                        interval = option,
+                    SettingsChoiceChip(
+                        label = option.displayName,
                         selected = option == selectedInterval,
-                        onClick = { scope.launch { refreshIntervalPreferences.setInterval(option) } }
+                        onClick = {
+                            scope.launch { refreshIntervalPreferences.setInterval(option) }
+                        },
+                        testTag = "refresh_interval_${option.storageValue}",
+                        onClickLabel = "Refresh every ${option.displayName}"
                     )
                 }
             }
@@ -630,69 +611,5 @@ private fun ArrivingSectionCard(arrivingPreferences: ArrivingPreferences) {
                 modifier = Modifier.testTag("separate_arriving_switch")
             )
         }
-    }
-}
-
-/** One refresh interval, selected or not. */
-@Composable
-private fun RefreshIntervalChip(
-    interval: RefreshInterval,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    // These were four `if (selected)` reads, which made this the one control in
-    // Settings that snapped while everything around it travelled: the container, the
-    // label and the border all swapped on the frame of the tap. The colours ride the
-    // colour-effects spring and the border width the spatial one, because a width is
-    // geometry and geometry gets the spatial curve.
-    val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "refresh_chip_container"
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "refresh_chip_content"
-    )
-    val borderWidth by animateDpAsState(
-        targetValue = if (selected) 2.dp else 1.dp,
-        animationSpec = ExpressiveMotion.FastSpatialDp,
-        label = "refresh_chip_border_width"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "refresh_chip_border_colour"
-    )
-
-    Row(
-        modifier = Modifier
-            .bouncyPress(pressedScale = 0.94f)
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            .border(
-                BorderStroke(width = borderWidth, color = borderColor),
-                shape = ExpressiveShapes.pill
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .semantics {
-                this.selected = selected
-                role = Role.RadioButton
-            }
-            .testTag("refresh_interval_${interval.storageValue}"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(
-            text = interval.displayName,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = content
-        )
     }
 }

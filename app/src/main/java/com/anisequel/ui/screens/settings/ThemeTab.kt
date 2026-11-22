@@ -325,7 +325,6 @@ private fun ThemeHub(
         Spacer(modifier = Modifier.height(16.dp))
         SettingsSectionLabel("Look", compact = true)
         SettingsHubGroup(
-            tone = SettingsGroupTone.LOOK,
             entries = listOf(
                 themeEntry(ThemeSection.ACCENT, onOpen),
                 themeEntry(ThemeSection.BACKGROUND, onOpen)
@@ -336,7 +335,6 @@ private fun ThemeHub(
         // neither is about what colour the app is, and this page is only about that.
         SettingsSectionLabel("Artwork", compact = true)
         SettingsHubGroup(
-            tone = SettingsGroupTone.LOOK,
             entries = listOf(
                 themeEntry(ThemeSection.ARTWORK, onOpen),
                 themeEntry(ThemeSection.PAGES, onOpen)

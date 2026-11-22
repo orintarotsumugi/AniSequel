@@ -181,12 +181,41 @@ class CastAndSpoilerTest {
                 "plus a Hide button",
             source.contains("internal fun NovaSpoiler(")
         )
+        // The bound is generous because the chip's own explanation sits between the
+        // two lines, and that explanation is worth more than a tight regex: the
+        // first version of this assertion allowed 1200 characters and started
+        // failing when four comments about *why* the chip is centred were added.
+        // What the bound has to exclude is another composable, not prose.
         assertTrue(
             "and the chip is drawn before the revealed surface, so it sits on the " +
                 "block's top edge:\n$source",
             Regex(
-                """testTag\("nova_markdown_spoiler_chip"\)[\s\S]{0,1200}?if \(revealed\) \{\s*\n\s*Surface\("""
+                """testTag\("nova_markdown_spoiler_chip"\)[\s\S]{0,2400}?if \(revealed\) \{\s*\n\s*Surface\("""
             ).containsMatchIn(source)
+        )
+    }
+
+    /**
+     * The chip sits in the middle of its own line.
+     *
+     * It was drawn against the left edge of a full-width column, where it read as
+     * the start of the paragraph it actually hides - the one shape a reader's eye
+     * is trained to read through rather than to press. Centring it is what makes
+     * it a button: the renderer never centres prose, so the shape alone says
+     * "control".
+     */
+    @Test
+    fun `the spoiler chip is centred over the block it hides`() {
+        val chip = spoilerSource()
+            .substringAfter("internal fun NovaSpoiler(")
+            .substringBefore("\n\n/**")
+
+        assertTrue(
+            "the chip is back against the left edge of the column, where it reads " +
+                "as the start of a paragraph:\n$chip",
+            Regex(
+                """Row\(\s*modifier = Modifier\.fillMaxWidth\(\),\s*horizontalArrangement = Arrangement\.Center\s*\)"""
+            ).containsMatchIn(chip)
         )
     }
 

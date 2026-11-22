@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +38,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -52,7 +52,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.rememberStateColor
 import com.anisequel.ui.components.expressive.expressiveShape
 import com.anisequel.ui.components.expressive.bouncyPress
 
@@ -87,28 +89,33 @@ fun SectionCard(
     content: @Composable () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val palette = settingsIconPalette(title)
+    val palette = settingsTilePalette()
     val resolvedContainer = iconContainer ?: palette.first
     val resolvedContent = iconContent ?: palette.second
     val resolvedShape = iconShape ?: settingsDecorativeShape(title)
-    val animatedContainer by animateColorAsState(
-        targetValue = resolvedContainer,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "settings_section_icon_container"
-    )
+    // Not animated, and that is the fix. Every call site passes a *scheme role*
+    // that is constant for the life of the card, so this spring was animating a
+    // value that never changed - the same bug `LoginHero` and the tier board's
+    // ghost each carried a comment about. It looks harmless and is not: the scheme
+    // is itself animated during a theme change, so this second spring eased toward
+    // a target that was still moving, and the tile arrived after the card it sits
+    // on.
     Card(
         modifier = modifier.fillMaxWidth()
             .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize),
         shape = ExpressiveShapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f))
+        // A card edge at 0.38 of `outlineVariant` is 1.2:1 on the light card, and
+        // light `surfaceContainerLow` sits 1.03:1 from the page behind it - so the
+        // border was the only thing defining the card and it could not be seen.
+        border = BorderStroke(1.dp, AniSequelTheme.emphasis.divider)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Box(
-                        modifier = Modifier.size(40.dp).clip(resolvedShape).background(animatedContainer),
+                        modifier = Modifier.size(40.dp).clip(resolvedShape).background(resolvedContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(imageVector = icon, contentDescription = null, tint = resolvedContent, modifier = Modifier.size(20.dp))
@@ -158,55 +165,30 @@ internal fun settingsTileShape(index: Int): Shape =
     }
 
 /**
- * The tonal family a shelf group is drawn in.
+ * The one tonal family every settings tile is drawn in.
  *
- * Three families for three groups, assigned once by `SettingsScreen`, so colour
- * says which shelf a row belongs to. It used to be assigned by `title.hashCode()
- * % 3`, which is why the shelf read as a colour chart with no system behind it:
- * two rows in the same card could come out in different families, and the
- * neighbour they were "grouped" with had no relation to their colour.
- */
-enum class SettingsGroupTone {
-    /** Appearance, Interface, Type & display. */
-    LOOK,
-
-    /** Library, Jokes, Seasonal. */
-    CONTENT,
-
-    /** Device, Updates, About. */
-    DEVICE,
-
-    /** Search results and one-off rows: no group to belong to. */
-    NEUTRAL
-}
-
-/**
- * The container/content pair for a group tone.
+ * ## Why there is only one
  *
- * `secondaryContainer` rather than `primary` on the quiet families for the
- * reason the section cards already record: under Material You the primary role
- * follows the wallpaper, and a saturated wallpaper-derived tile beside a wall
- * icon reads as a coloured sticker. A whole group of them reads as a colour
- * chart, which is what the previous hash-seeded palette produced by accident.
+ * There used to be four: `LOOK`/`CONTENT`/`DEVICE` gave each shelf a colour of its
+ * own, and search results took a third family from their position. On the shelf
+ * that read as a colour chart - the screenshot that started this had a blue
+ * Interface tile, a pink Library one and a grey Device Manager one, three shelves
+ * apart, saying a fact nobody asked for: which heading the row was filed under.
+ * The heading above the card already says that.
+ *
+ * So the tile says one thing now, with one colour: *this row opens a page*. The
+ * silhouette still comes from the row's position - see [settingsTileShape] - which
+ * is what keeps a group looking like a family rather than like a repeating stamp,
+ * and is the one axis on which variety costs nothing.
+ *
+ * `secondaryContainer` rather than `primary` for the reason the section cards
+ * already record: under Material You the primary role follows the wallpaper, and a
+ * saturated wallpaper-derived tile beside an ordinary glyph reads as a sticker.
  */
 @Composable
-internal fun settingsGroupPalette(
-    tone: SettingsGroupTone,
-    index: Int = 0
-): Pair<Color, Color> {
+internal fun settingsTilePalette(): Pair<Color, Color> {
     val scheme = MaterialTheme.colorScheme
-    return when (tone) {
-        SettingsGroupTone.LOOK -> scheme.primaryContainer to scheme.onPrimaryContainer
-        SettingsGroupTone.CONTENT -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-        SettingsGroupTone.DEVICE -> scheme.secondaryContainer to scheme.onSecondaryContainer
-        // Search results have no group, so they keep the variety a group would
-        // otherwise supply - by position, which is stable, not by title hash.
-        SettingsGroupTone.NEUTRAL -> when (index.coerceAtLeast(0) % 3) {
-            0 -> scheme.secondaryContainer to scheme.onSecondaryContainer
-            1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-            else -> scheme.primaryContainer to scheme.onPrimaryContainer
-        }
-    }
+    return scheme.secondaryContainer to scheme.onSecondaryContainer
 }
 
 /**
@@ -225,17 +207,6 @@ internal fun settingsDecorativeShape(seed: String): Shape =
         2 -> expressiveShape(ExpressiveShapes.diamond)
         else -> expressiveShape(ExpressiveShapes.flower)
     }
-
-/** A stable Material tonal family for a single settings section card. */
-@Composable
-internal fun settingsIconPalette(seed: String): Pair<Color, Color> {
-    val scheme = MaterialTheme.colorScheme
-    return when ((seed.hashCode() and Int.MAX_VALUE) % 3) {
-        0 -> scheme.secondaryContainer to scheme.onSecondaryContainer
-        1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-        else -> scheme.primaryContainer to scheme.onPrimaryContainer
-    }
-}
 
 /**
  * An explanatory paragraph, collapsed to a two-line preview until it is asked for.
@@ -408,9 +379,28 @@ fun SwitchRow(
     val haptics = LocalHapticFeedback.current
     val subtitleExpanded = rememberSaveable(subtitle) { mutableStateOf(false) }
     val subtitleOverflowed = remember(subtitle) { mutableStateOf(false) }
-    val rowContainer by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.28f) else Color.Transparent,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // The checked row's wash, as an opaque tone rather than a 28% tint.
+    //
+    // Two bugs in one line: `secondaryContainer` at 0.28 alpha over a card is a
+    // 1.1:1 difference - a state you have to be told about - and an alpha is
+    // measured against whatever is *behind* it, so the same switch row sat on a
+    // different colour depending on which card it was in. The endpoints below are
+    // opaque, so the row reads identically anywhere, and the neutral end is the
+    // card's own container so an unchecked row is not a slightly different shade
+    // of the surface it is drawn on.
+    //
+    // `rememberStateColor` rather than `animateColorAsState` for the reason the
+    // chip records: the scheme is itself animated during a theme change, so a
+    // colour target re-targets on every frame of one.
+    val rowContainer = rememberStateColor(
+        active = checked,
+        whenInactive = MaterialTheme.colorScheme.surfaceContainerLow,
+        whenActive = lerp(
+            MaterialTheme.colorScheme.surfaceContainerLow,
+            MaterialTheme.colorScheme.secondaryContainer,
+            0.55f
+        ),
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "settings_switch_row_container"
     )
     Column(modifier = modifier.fillMaxWidth()

@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.ui.ProgressBarStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.LocalProgressBarStyle
 import com.anisequel.ui.theme.LocalSetProgressBarStyle
 import kotlinx.coroutines.withTimeoutOrNull
@@ -73,7 +74,7 @@ fun StyledProgressBar(
     modifier: Modifier = Modifier,
     height: Dp = 40.dp,
     progressColor: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+    trackColor: Color = AniSequelTheme.emphasis.track,
     animate: Boolean = true
 ) {
     val style = LocalProgressBarStyle.current
@@ -128,7 +129,7 @@ internal fun InfoProgressBar(
     modifier: Modifier = Modifier,
     height: Dp = 40.dp,
     progressColor: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+    trackColor: Color = AniSequelTheme.emphasis.track,
     entranceKey: Any? = null,
     animate: Boolean = true
 ) {

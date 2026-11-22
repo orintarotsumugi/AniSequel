@@ -1,5 +1,10 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +52,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.rememberVerdictColor
+import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import coil.compose.AsyncImage
@@ -280,23 +289,18 @@ data class SettingsHubEntry(
 @Composable
 fun SettingsHubGroup(
     entries: List<SettingsHubEntry>,
-    modifier: Modifier = Modifier,
-    /**
-     * The tonal family every tile in this card is drawn in.
-     *
-     * Assigned per group by the shelf, so colour identifies the section a row
-     * belongs to. `NEUTRAL` is the default because a group of search results has
-     * no section to name; those rows take their variety from their position
-     * instead - see [settingsGroupPalette].
-     */
-    tone: SettingsGroupTone = SettingsGroupTone.NEUTRAL
+    modifier: Modifier = Modifier
 ) {
     if (entries.isEmpty()) return
     Surface(
         shape = ExpressiveShapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.38f)),
+        // A card's edge, not a tint. 0.38 of `outlineVariant` is 1.2:1 on the
+        // light card - and the light theme's `surfaceContainerLow` (#FAFCFF) against
+        // the page (#F3F6FB) is 1.03:1, so the border was the *only* thing drawing
+        // the card and it was invisible. `divider` is the 2:1 tone that edge owes.
+        border = BorderStroke(1.dp, AniSequelTheme.emphasis.divider),
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
@@ -307,10 +311,10 @@ fun SettingsHubGroup(
                         // gap) so the rule reads as the boundary between two rows of
                         // *text*, not as a cut through the whole card.
                         modifier = Modifier.padding(start = 74.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                        color = AniSequelTheme.emphasis.divider
                     )
                 }
-                SettingsHubEntryRow(entry = entry, index = index, tone = tone)
+                SettingsHubEntryRow(entry = entry, index = index)
             }
         }
     }
@@ -319,15 +323,15 @@ fun SettingsHubGroup(
 @Composable
 private fun SettingsHubEntryRow(
     entry: SettingsHubEntry,
-    index: Int,
-    tone: SettingsGroupTone
+    index: Int
 ) {
     val haptics = LocalHapticFeedback.current
     // Shared with `bouncyPress` so the press comes from the row's own clickable,
     // which cancels when the gesture is claimed as a scroll. The fallback pointer
     // loop would spring every row the thumb passes while scrolling the shelf.
     val interactionSource = remember { MutableInteractionSource() }
-    val palette = settingsGroupPalette(tone, index)
+    // One colour for every tile, and the silhouette carries the row's position.
+    val palette = settingsTilePalette()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -353,9 +357,9 @@ private fun SettingsHubEntryRow(
     ) {
         // The chevron is `KeyboardArrowRight` rather than a custom vector because it
         // is the platform's own "there is another page this way", which is exactly the
-        // promise the row makes. The icon tile takes its family from the group and its
-        // silhouette from its position - see [settingsGroupPalette] and
-        // [settingsTileShape] for why neither is seeded from the title any more.
+        // promise the row makes. The icon tile takes one colour and its silhouette from
+        // its position - see [settingsTilePalette] and [settingsTileShape] for why
+        // neither is seeded from the title or from the group any more.
         Box(
             modifier = Modifier
                 .size(44.dp)
@@ -401,21 +405,46 @@ private fun SettingsHubEntryRow(
             // to say itself. `labelMedium` in the primary role rather than a pill:
             // a coloured capsule on every row would turn the shelf into a control
             // panel of badges, and the value is information, not an action.
-            Text(
-                text = entry.value,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.End,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // The value is the one thing on the row that changes while the page
+            // behind it does not, so it is the one thing worth animating: a write
+            // from the page below lands as a tick rather than as a silent swap the
+            // reader may have missed. Both springs are `Fast*` because this fires
+            // when a preference lands, not because the reader opened something.
+            AnimatedContent(
+                targetState = entry.value,
+                transitionSpec = {
+                    (
+                        fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
+                            scaleIn(
+                                initialScale = 0.92f,
+                                animationSpec = ExpressiveMotion.FastSpatial
+                            )
+                        ).togetherWith(
+                        fadeOut(animationSpec = ExpressiveMotion.FastEffects)
+                    ).using(null)
+                },
+                label = "settings_row_value",
                 modifier = Modifier.widthIn(max = 104.dp)
-            )
+            ) { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.End,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
+        // 0.7 of `onSurfaceVariant` measured 2.86:1 on a light card - under the
+        // 3:1 every non-text part of a control owes. `muted` is the tone of the
+        // scheme that clears it.
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            tint = AniSequelTheme.emphasis.muted,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -460,22 +489,37 @@ internal fun SettingsAccountCard(
     val haptics = LocalHapticFeedback.current
     val cardInteraction = remember { MutableInteractionSource() }
     val chipInteraction = remember { MutableInteractionSource() }
-    val chipContainer = when (connectionHealthy) {
-        true -> scheme.secondaryContainer
-        false -> scheme.errorContainer
-        null -> scheme.surfaceContainerHigh
-    }
-    val chipContent = when (connectionHealthy) {
-        true -> scheme.onSecondaryContainer
-        false -> scheme.onErrorContainer
-        null -> scheme.onSurfaceVariant
-    }
+    // Animated, because the verdict changes while the reader is looking at the
+    // chip - the check it just ran comes back and the capsule changes family.
+    //
+    // Two scalars and a resolved endpoint pair, not two independent colour
+    // animations: a container on one spring and its content on another spend the
+    // middle of the transition as a pair the scheme never designed, and that is
+    // exactly where contrast dips. Both roles now come from the same two
+    // progresses, so every frame is a blend of two *designed* pairs. See
+    // `rememberVerdictColor`.
+    val chipContainer = rememberVerdictColor(
+        resolved = connectionHealthy != null,
+        failed = connectionHealthy == false,
+        whenUnresolved = scheme.surfaceContainerHigh,
+        whenPassed = scheme.secondaryContainer,
+        whenFailed = scheme.errorContainer,
+        label = "settings_account_chip_container"
+    )
+    val chipContent = rememberVerdictColor(
+        resolved = connectionHealthy != null,
+        failed = connectionHealthy == false,
+        whenUnresolved = AniSequelTheme.emphasis.muted,
+        whenPassed = scheme.onSecondaryContainer,
+        whenFailed = scheme.onErrorContainer,
+        label = "settings_account_chip_content"
+    )
 
     Surface(
         shape = ExpressiveShapes.extraLarge,
         color = scheme.surfaceContainerLow,
         tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f)),
+        border = BorderStroke(1.dp, AniSequelTheme.emphasis.divider),
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
@@ -557,7 +601,9 @@ internal fun SettingsAccountCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    // Same 3:1 floor as the shelf's own chevron: the account card
+                    // is the first control on the page.
+                    tint = AniSequelTheme.emphasis.muted,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -626,7 +672,7 @@ fun SettingsVersionFooter(versionName: String, versionCode: Int) {
     Text(
         text = "AniSequel $versionName ($versionCode)",
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+        color = AniSequelTheme.emphasis.muted,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()

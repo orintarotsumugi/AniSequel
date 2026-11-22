@@ -1,6 +1,63 @@
 {
   "versions": [
     {
+      "version": "2.5.4",
+      "entries": [
+        {
+          "title": "Settings answers with motion",
+          "detail": "A row's value ticks into place when it changes instead of swapping between two frames, the account card's connection chip springs between its colour families as the answer arrives, and typing in the search field lifts the shelf out and fades the answers in - then springs the list back to the top, where before a reader who had scrolled down got results drawn above the viewport they typed into. Everything uses the app's existing spring tokens, so a build set to Instant settings still moves instantly."
+        },
+        {
+          "title": "Previews stop pretending to be controls",
+          "detail": "The Settings samples are the real components, which is what makes them worth drawing - but they were drawn live, so the joke pill rippled under a thumb and dismissed nothing, and the bar preview ran the real hold-and-swipe and lifted toward a tab it would never switch to. Both components gained a quiet mode that the samples ask for."
+        },
+        {
+          "title": "Credits wears the faces it thanks",
+          "detail": "The Credits page drew a letter where a person should be. Everyone on it now has their GitHub profile picture - the developer's on the flower tile, each helper's in a circle under their name - with the letter still underneath while the photo loads and if it never does. Each helper is a whole tappable row that opens their profile, with github.com printed under their name and the app they wrote as a chip beneath it, and the developer's profile is a full-width button rather than one more chip."
+        },
+        {
+          "title": "Opening Settings no longer re-downloads your list",
+          "detail": "Going to Settings and back re-downloaded the whole list every time on some refresh intervals. The page's return and the app's return were being treated as the same event, so coming back from a sub-page re-bought a list that was still current. Coming back now only re-arms the timer; the freshness check belongs to the app being resumed."
+        },
+        {
+          "title": "Dantotsu's credit says what he does now",
+          "detail": "The Credits page said itsmechinmoy made Dantotsu. They maintain it from Rebelonion now, and the page says so."
+        },
+        {
+          "title": "Spoilers are a button in the middle of the line",
+          "detail": "The spoiler chip was drawn against the left edge of a full-width column, so in a bio or a comment it read as the start of a paragraph rather than as a control over one and the eye skipped the hidden block. It is centred now, with a chevron that turns as the block opens, and the revealed text sits in a card that takes no taps of its own: a thumb resting on a spoiler must not hide what is being read."
+        },
+        {
+          "title": "A picture that will not load is a line, not a warning sign",
+          "detail": "A failed bio image was drawn as Coil's error painter - a warning triangle stretched to the size of the artwork it stood in for, which on a wide block image meant a full-bleed triangle about a missing decoration. A failure is now one small line saying it could not load, still with the block's own dimensions reserved so the page does not jump, and a picture still on its way draws a small indicator instead of a sparkle blown up to the same box."
+        },
+        {
+          "title": "Settings is one colour and one chip again",
+          "detail": "The shelf's icon tiles took a colour from the group they were filed under - a blue Interface, a pink Library, a grey Device Manager - which said something the heading above the card already said; every tile wears one colour now and takes only its silhouette from its position. The pages' choice pills are one component too: five hand-rolled versions had drifted to three padding pairs, two colour families, four without a 48dp target and two different selection feedbacks."
+        },
+        {
+          "title": "Library view and refresh are back on the page",
+          "detail": "Splitting Library & dashboard into Navigation, Library view and Refresh & arriving kept the shelf tidy and made the reader's trip worse: how often the list refreshes is one of the most common reasons to open Settings, and it had become a row, then a page, then a Back. The library view and the refresh/arriving cards are on the page again; only Navigation keeps a page of its own."
+        },
+        {
+          "title": "Every dimmed label is readable again",
+          "detail": "Anything quieter than the secondary text was drawn by fading it: a disabled chip at 62%, a disabled like button at 50%, a progress track at 45%, a skeleton at 30%, a motion rail at 26%. On the light theme those measured 2.5 to 1.4 to one, against the 4.5 a label needs. They are derived tones now - the quietest colour of the current palette that still clears its floor, in light, dark, an anime cover's palette or a picked background."
+        },
+        {
+          "title": "Cards have edges in the light theme",
+          "detail": "A card border was its outline at 38%, 1.2 to one, while the light theme's card fill sits 1.03 to one from the page - so a light-theme card had no visible edge. Card edges, dividers and the rule between two switch rows use a derived hairline that is drawn at the contrast a boundary owes."
+        },
+        {
+          "title": "The statistics bars are one colour family",
+          "detail": "The status bars on a title's statistics card used five fixed pastels, the same five in both themes. On a light card all five measured under 2.4 to one and the amber under 2, so the longest bar was the faintest thing in the card. They come from the palette now: four series that clear 3 to one whichever theme, cover or background is active."
+        },
+        {
+          "title": "Turning the theme no longer lags behind itself",
+          "detail": "The app eases every colour role when the palette changes, so a control easing toward one of them was chasing a target that moved every frame - a chip or a connection pill arrived a beat after its page, and an overshooting token carried it past a colour the page had left. They animate one progress now and read both colours fresh each frame, which also keeps a capsule's text and background a designed pair throughout."
+        }
+      ]
+    },
+    {
       "version": "2.5.3",
       "entries": [
         {
@@ -18,8 +75,7 @@
         {
           "title": "A title page's blurred backdrop is decoded at the blur's resolution",
           "detail": "The artwork behind the Info page was decoded at the panel's own resolution - about 10 MB on a 1080p phone, twice while the cover crossfaded to the banner - for a picture drawn under an 18dp blur and a legibility scrim. It decodes at half that width on Soft and a third on Heavy: four and nine times less bitmap to allocate, decode and upload, and it competes far less with the poster cache on the list behind it. Crisp, which is the setting that means a sharp picture, keeps the full decode, and the hero is untouched."
-        }
-      ,
+        },
         {
           "title": "Settings is three groups of three, and every row says what it is set to",
           "detail": "The shelf had eleven rows under five headings, two of which headed exactly one row, and it answered nothing: \"is OLED on?\", \"how often does the list refresh?\" and \"is the app lock set?\" each cost a page visit and a Back. It is three groups now - what it looks like, what it shows, what it runs on - and every row carries its current value on the right. The header and the search field no longer scroll away, so the one control that reaches every setting is available from any position in the list."

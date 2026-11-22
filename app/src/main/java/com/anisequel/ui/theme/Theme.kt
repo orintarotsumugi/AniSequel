@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -333,6 +334,20 @@ object AniSequelTheme {
         @Composable
         @ReadOnlyComposable
         get() = LocalStatusColors.current
+
+    /**
+     * The quieter-than-`onSurfaceVariant` roles, derived rather than dimmed.
+     *
+     * Material 3 has no slot for "the same text, one step quieter", so the app used
+     * to hand `onSurfaceVariant` an alpha - which is measured against whatever sits
+     * behind it, and which in the light theme put a disabled label at 2.7:1 and a
+     * skeleton at 1.5:1. These are the quietest tones that still clear a stated
+     * floor on the worst surface the app draws on. See [EmphasisColors].
+     */
+    val emphasis: EmphasisColors
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalEmphasisColors.current
 }
 
 private val DarkStatusColors = StatusColors(
@@ -620,6 +635,14 @@ fun AniSequelTheme(
 
     CompositionLocalProvider(
         LocalStatusColors provides if (darkTheme) DarkStatusColors else LightStatusColors,
+        // Derived from the *animated* scheme and keyed on it, so a theme change
+        // carries the captions, tracks and hairlines with it instead of leaving
+        // them on the previous palette for the length of the cross-fade. The
+        // arithmetic is a handful of blends per role; the alternative is the UI
+        // guessing with an alpha again.
+        LocalEmphasisColors provides remember(animatedColorScheme) {
+            animatedColorScheme.toEmphasisColors()
+        },
         // The *resolved* mode, not the phone's. A page that derives a colour at
         // tone 40 or 80 has to ask the same question the scheme asked, or a
         // reader who forced Light on a dark phone gets the dark tone on a light

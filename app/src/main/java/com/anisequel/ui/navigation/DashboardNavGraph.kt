@@ -38,7 +38,18 @@ fun NavGraphBuilder.dashboardDestinations(
      * screen's types just to spell one word.
      */
     onOpenLibrary: (String?) -> Unit,
-    onSignInAgain: () -> Unit
+    onSignInAgain: () -> Unit,
+    /**
+     * Whether the app itself is in the foreground.
+     *
+     * Passed rather than read here: the freshness check that re-buys the list
+     * belongs to the *app* coming back, while a page resumes every time the reader
+     * returns to it (from Settings, from a title page, from a sheet). Reading
+     * `LocalLifecycleOwner` inside a destination gets the second event, which is
+     * what made a Settings round trip re-download the collection. See
+     * [com.anisequel.ui.viewmodel.DashboardViewModel.onShown].
+     */
+    appResumed: Boolean
 ) {
     composable(AppRoutes.DASHBOARD) {
         // Null until a session exists; the route is only reachable once one
@@ -47,6 +58,7 @@ fun NavGraphBuilder.dashboardDestinations(
         mainDashboardViewModel?.let { dashboardViewModel ->
             DashboardScreen(
                 dashboardViewModel = dashboardViewModel,
+                appResumed = appResumed,
                 quickAddPreferences = quickAddPreferences,
                 // The cast and crew rows open a profile sheet in-app. Null on the
                 // demo route below, which is why this is passed rather than read
@@ -89,6 +101,7 @@ fun NavGraphBuilder.dashboardDestinations(
 
         DashboardScreen(
             dashboardViewModel = demoViewModel,
+            appResumed = appResumed,
             quickAddPreferences = quickAddPreferences,
             onSignInAgain = {
                 navController.navigate(AppRoutes.LOGIN) {
@@ -133,6 +146,7 @@ fun NavGraphBuilder.dashboardDestinations(
 
         DashboardScreen(
             dashboardViewModel = userViewModel,
+            appResumed = appResumed,
             quickAddPreferences = quickAddPreferences,
             repository = aniListRepository,
             onSignInAgain = {

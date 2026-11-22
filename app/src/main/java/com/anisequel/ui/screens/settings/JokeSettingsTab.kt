@@ -185,7 +185,6 @@ internal fun JokeSettingsTab(
                 SettingsShelfGroup(
                     label = "Her voice",
                     sections = listOf(JokeSection.PERSONA, JokeSection.TEXT_EFFECT),
-                    tone = SettingsGroupTone.CONTENT,
                     onOpen = onOpen
                 )
                 SettingsShelfGroup(
@@ -195,13 +194,11 @@ internal fun JokeSettingsTab(
                         JokeSection.PLACEMENT,
                         JokeSection.MOMENTS
                     ),
-                    tone = SettingsGroupTone.CONTENT,
                     onOpen = onOpen
                 )
                 SettingsShelfGroup(
                     label = "What she says",
                     sections = listOf(JokeSection.TONES, JokeSection.SAVED),
-                    tone = SettingsGroupTone.CONTENT,
                     onOpen = onOpen
                 )
 
@@ -310,7 +307,12 @@ private fun JokePillSample(settings: JokeSettings) {
                 isFavourite = false,
                 onToggleFavourite = {},
                 onDismiss = {},
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                // A sample, not the toast: no tap, no ripple, no live region, and
+                // its own tag so a UI check for the live `joke_toast` cannot find two
+                // nodes while Settings is open over one.
+                interactive = false,
+                testTag = "joke_pill_sample_pill"
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
@@ -415,7 +417,7 @@ private fun TextEffectCard(
             modifier = Modifier.testTag("joke_text_effect_row")
         ) {
             JokeTextEffect.entries.forEach { effect ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = effect.displayName,
                     selected = settings.textEffect == effect,
                     enabled = true,
@@ -528,7 +530,7 @@ private fun PersonaCard(
             modifier = Modifier.testTag("joke_stamp_row")
         ) {
             stampChoices.forEach { choice ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = choice,
                     selected = settings.stamp == choice,
                     enabled = true,
@@ -602,7 +604,7 @@ private fun PaceCard(
             JokeFrequency.entries
                 .filter { it != JokeFrequency.OFF }
                 .forEach { frequency ->
-                    JokeChoiceChip(
+                    SettingsChoiceChip(
                         label = frequency.displayName,
                         selected = settings.frequency == frequency,
                         enabled = settings.enabled,
@@ -621,7 +623,7 @@ private fun PaceCard(
             modifier = Modifier.testTag("joke_dwell_row")
         ) {
             JokeDwell.entries.forEach { dwell ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = dwell.displayName,
                     selected = settings.dwell == dwell,
                     enabled = settings.enabled,
@@ -660,7 +662,7 @@ private fun PlacementCard(
             modifier = Modifier.testTag("joke_position_row")
         ) {
             JokePosition.entries.forEach { position ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = position.displayName,
                     selected = settings.position == position,
                     enabled = settings.enabled,
@@ -679,7 +681,7 @@ private fun PlacementCard(
             modifier = Modifier.testTag("joke_scope_row")
         ) {
             JokeScope.entries.forEach { jokeScope ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = jokeScope.displayName,
                     selected = settings.scope == jokeScope,
                     enabled = settings.enabled,
@@ -735,7 +737,7 @@ private fun TonesCard(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.testTag("joke_tone_preset_row")
         ) {
-            JokeChoiceChip(
+            SettingsChoiceChip(
                 label = "Mixed",
                 selected = settings.isMixed,
                 enabled = settings.enabled && !settings.isMixed,

@@ -1,25 +1,17 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,14 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -45,8 +32,6 @@ import com.anisequel.domain.seasonal.SeasonalFrameRate
 import com.anisequel.domain.seasonal.SeasonalQuality
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.ExpressiveShapes
-import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.seasonal.SeasonalScreen
 import kotlin.math.roundToInt
 
@@ -144,12 +129,11 @@ internal fun DeviceCard(
                             targetScale = 0.82f
                         )
                 ) {
-                    SeasonalPill(
+                    SettingsChoiceChip(
                         label = option.displayName,
                         selected = option == rate,
-                        testTag = "seasonal_frame_rate_${option.storageValue}",
-                        colourLabel = "seasonal_frame_rate",
-                        onClick = { onRateChange(option) }
+                        onClick = { onRateChange(option) },
+                        testTag = "seasonal_frame_rate_${option.storageValue}"
                     )
                 }
             }
@@ -174,12 +158,11 @@ internal fun DeviceCard(
             modifier = Modifier.testTag("device_cache_row")
         ) {
             CoverCacheCeiling.entries.forEach { option ->
-                SeasonalPill(
+                SettingsChoiceChip(
                     label = option.displayName,
                     selected = option == ceiling,
-                    testTag = "device_cache_${option.storageValue}",
-                    colourLabel = "device_cache",
-                    onClick = { onCeilingChange(option) }
+                    onClick = { onCeilingChange(option) },
+                    testTag = "device_cache_${option.storageValue}"
                 )
             }
         }
@@ -239,100 +222,23 @@ private fun screenReport(screen: SeasonalScreen, resolvedHz: Int, tierName: Stri
 }
 
 /**
- * The settings page's one pill shape.
+ * One seasonal quality, as the app's one pill.
  *
- * Extracted because the quality pills and the frame-rate pills are the same control
- * wearing two labels, and each copy had already drifted a little in padding and
- * border. The shape chips keep their own version: they carry a drawing inside the
- * pill and are eleven dp taller, which is a different control, not a duplicate of
- * this one.
+ * It used to be `SeasonalPill`: a fifth hand-rolled selected/unselected capsule,
+ * 14/9 padding where the Jokes page used 18/11, and its own settle scale. See
+ * [SettingsChoiceChip] for why that is one composable now - a settings page is a
+ * page of chips, and they have to be the same chip.
  */
-@Composable
-internal fun SeasonalPill(
-    label: String,
-    selected: Boolean,
-    testTag: String,
-    colourLabel: String,
-    onClick: () -> Unit
-) {
-    val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "${colourLabel}_container"
-    )
-    val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "${colourLabel}_content"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "${colourLabel}_border"
-    )
-    // The chosen pill sits a hair larger than its neighbours, on the bouncy token
-    // rather than a plain one: a selection that only changes colour is invisible to a
-    // reader glancing past the row, and the overshoot is what makes it read as the
-    // page *accepting* the tap. Drawn through a graphics layer so the spring never
-    // re-measures the row - an animated value read by layout restarts layout every
-    // frame, and this row is composed of pills that animate at the same time.
-    val settleScale by animateFloatAsState(
-        targetValue = if (selected) 1.04f else 1f,
-        animationSpec = ExpressiveMotion.SuperBouncy,
-        label = "${colourLabel}_scale"
-    )
-
-    // One interaction source shared by the press spring and the click, and no
-    // ripple: `bouncyPress` without a source installs its own pointer loop on the
-    // element `clickable` already drives, so a finger that lands on a pill and
-    // starts to scroll this page keeps the pill squashed for the whole drag.
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .graphicsLayer {
-                scaleX = settleScale
-                scaleY = settleScale
-            }
-            .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
-            .clip(ExpressiveShapes.pill)
-            .background(container)
-            .border(BorderStroke(1.dp, borderColor), shape = ExpressiveShapes.pill)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .padding(horizontal = 14.dp, vertical = 9.dp)
-            .semantics {
-                this.selected = selected
-                role = Role.RadioButton
-            }
-            .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = content
-        )
-    }
-}
-
 @Composable
 internal fun SeasonalQualityChip(
     quality: SeasonalQuality,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    SeasonalPill(
+    SettingsChoiceChip(
         label = quality.displayName,
         selected = selected,
-        testTag = "seasonal_quality_${quality.storageValue}",
-        colourLabel = "seasonal_quality",
-        onClick = onClick
+        onClick = onClick,
+        testTag = "seasonal_quality_${quality.storageValue}"
     )
 }

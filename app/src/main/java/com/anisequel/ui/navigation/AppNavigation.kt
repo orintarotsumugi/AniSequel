@@ -58,6 +58,7 @@ import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.domain.ui.ProgressBarStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.components.seasonal.SeasonalParticleHost
 import com.anisequel.ui.screens.login.FirstRunSetupHost
 import com.anisequel.ui.components.seasonal.rememberSeasonalAmbientModifier
@@ -496,6 +497,18 @@ fun AppNavigation(
         derivedStateOf { (dashboardState as? DashboardUiState.Success)?.viewer }
     }
 
+    // Whether the *app* is in the foreground, read once here where the lifecycle
+    // owner is the Activity rather than a destination.
+    //
+    // It is passed down to the dashboard instead of being observed there because
+    // the two resumes are not the same event: a `NavBackStackEntry` reports
+    // `ON_RESUME` every time the reader returns to its page, so a freshness check
+    // hung on it also ran on every Settings round trip - and on "Always", where a
+    // zero-length interval is overdue the instant it is measured, each of those
+    // re-downloaded the whole collection. This composition outlives every
+    // destination, so `rememberIsResumed` flips only when the Activity does.
+    val appResumed = rememberIsResumed()
+
     // The three dashboard values the Library and Settings graphs read.
     //
     // They used to be handed the whole state instead, which put a read of it in
@@ -795,6 +808,7 @@ fun AppNavigation(
                         hiddenSequelsPreferences = hiddenSequelsPreferences,
                         refreshIntervalPreferences = refreshIntervalPreferences,
                         arrivingPreferences = arrivingPreferences,
+                        appResumed = appResumed,
                         // A list shortcut has to land on the half it named. Writing
                         // the remembered type before the tab switch is what makes
                         // "Manga List" open manga even on a first visit, when no

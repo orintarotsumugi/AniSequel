@@ -439,6 +439,77 @@ class ListFreshnessWatchTest {
     }
 
     /**
+     * The Settings round trip.
+     *
+     * `DashboardScreen` used to run the freshness check from a resume effect tied
+     * to its own `NavBackStackEntry`, and an entry resumes every time the reader
+     * comes back to it - so opening Settings and tapping Back re-ran the check.
+     * On `Always` that check is always due (a zero-length interval is overdue the
+     * instant it is measured), so every trip to Settings and back re-downloaded
+     * the whole collection: the app's most expensive query, spent on a list the
+     * reader had not changed.
+     *
+     * `start(checkDue = false)` is the page coming back, and it must arm the timer
+     * without asking the question - here proved on `Always`, the one interval where
+     * asking always answers yes.
+     */
+    @Test
+    fun `a page coming back does not re-buy a list that is still current`() = runTest {
+        var now = base
+        var refreshes = 0
+        lateinit var watch: ListFreshnessWatch
+        watch = ListFreshnessWatch(
+            scope = backgroundScope,
+            interval = { RefreshInterval.ALWAYS },
+            onRefresh = { refreshes++; watch.markLoaded(now) },
+            nowMillis = { now }
+        )
+        watch.markLoaded(now)
+
+        now = base + 1_000L
+        watch.start(checkDue = false)
+        runCurrent()
+
+        assertEquals("returning to the page must not re-fetch on Always", 0, refreshes)
+        watch.stop()
+    }
+
+    /**
+     * The other half of the same split: not checking on return is only safe if a
+     * list that really has aged out is still re-fetched, and the loop's own wait
+     * is the thing that does it.
+     *
+     * It used to be five minutes late. The retry floor was applied to every wait,
+     * not only to one that followed a failed attempt, and that went unnoticed while
+     * a list this old was caught by the resume check instead - the path this split
+     * removed.
+     */
+    @Test
+    fun `a page coming back fetches an overdue list at once`() = runTest {
+        var now = base
+        var refreshes = 0
+        lateinit var watch: ListFreshnessWatch
+        watch = ListFreshnessWatch(
+            scope = backgroundScope,
+            interval = { RefreshInterval.THIRTY_MINUTES },
+            onRefresh = { refreshes++; watch.markLoaded(now) },
+            nowMillis = { now }
+        )
+        watch.markLoaded(now)
+
+        now = base + minutes(75)
+        watch.start(checkDue = false)
+        runCurrent()
+
+        assertEquals(
+            "an overdue list must not wait out the retry floor on its way back",
+            1,
+            refreshes
+        )
+        watch.stop()
+    }
+
+    /**
      * A timed interval, deliberately: `Always` and `Manual only` both return from
      * the loop on the first pass, so a finished coroutine is the correct answer
      * there and `isWatching` would be false immediately after `start`.

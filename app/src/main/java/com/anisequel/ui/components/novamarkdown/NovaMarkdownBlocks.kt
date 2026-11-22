@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.novamarkdown
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -259,6 +261,21 @@ internal fun NovaTable(table: NovaBlock.Table) {
 /**
  * A `~!…!~` or HTML spoiler, as a chip that opens into the full block renderer.
  *
+ * ## Why the chip is centred
+ *
+ * It was drawn against the left edge of a full-width column, which in a bio or a
+ * comment reads as the *start* of a paragraph rather than as a control over one:
+ * the eye lands on it, decides it is prose, and skips the hidden block entirely.
+ * Centring it makes it a button in the middle of its own line, which is the one
+ * shape the renderer never uses for text.
+ *
+ * ## Why the chevron turns rather than swapping glyphs
+ *
+ * The action is already written in words ("Show spoiler" / "Hide spoiler"), so the
+ * chevron is a second signal for the same fact; swapping it for a different
+ * drawing mid-tap reads as a different control. It rotates in the draw phase, so
+ * the turn costs no relayout while the block below it is also animating open.
+ *
  * The chip is the only control and always says what the tap will do. The revealed
  * content is deliberately not a toggle: it is usually several lines with links
  * in them, and a thumb resting on the card must not hide what is being read.
@@ -273,63 +290,80 @@ internal fun NovaSpoiler(spoiler: NovaBlock.Spoiler) {
         "$action: ${spoiler.label}"
     }
     val interactionSource = remember { MutableInteractionSource() }
+    val contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    // The chevron's turn, read inside `graphicsLayer` below.
+    val chevron by animateFloatAsState(
+        targetValue = if (revealed) 180f else 0f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "spoiler_chevron"
+    )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
     ) {
-        Surface(
-            shape = ExpressiveShapes.pill,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(
-                    alpha = if (revealed) 0.32f else 0.16f
-                )
-            ),
-            modifier = Modifier
-                .clickable(
-                    interactionSource = interactionSource,
-                    onClick = { revealed = !revealed }
-                )
-                .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
-                .testTag("nova_markdown_spoiler_chip")
+        // Centred, because this is a button in prose and not the start of a line.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Surface(
+                shape = ExpressiveShapes.pill,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = contentColor,
+                border = BorderStroke(1.dp, contentColor.copy(alpha = if (revealed) 0.32f else 0.16f)),
                 modifier = Modifier
-                    .wrapContentWidth()
-                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        onClick = { revealed = !revealed }
+                    )
+                    .bouncyPress(pressedScale = 0.95f, interactionSource = interactionSource)
+                    .testTag("nova_markdown_spoiler_chip")
             ) {
-                Icon(
-                    imageVector = AppVectorIcons.Visibility,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-                    modifier = Modifier.size(16.dp)
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.wrapContentWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Visibility,
+                        contentDescription = null,
+                        tint = contentColor.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = AppVectorIcons.ExpandMore,
+                        contentDescription = null,
+                        tint = contentColor.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .size(18.dp)
+                            // Draw-phase: the block below is opening at the same
+                            // time, and a rotation read during layout would re-measure
+                            // the row on every frame of the turn.
+                            .graphicsLayer { rotationZ = chevron }
+                    )
+                }
             }
         }
-
         if (revealed) {
             Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, contentColor.copy(alpha = 0.14f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = 10.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
+                    modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     spoiler.blocks.forEach { NovaBlockContent(it) }

@@ -8,7 +8,9 @@ import com.anisequel.ui.components.novamarkdown.novaPlainText
 import com.anisequel.ui.components.novamarkdown.novaYouTubeId
 import com.anisequel.ui.components.novamarkdown.novaYouTubeThumbnail
 import com.anisequel.ui.components.novamarkdown.isNovaSvgUrl
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -162,6 +164,38 @@ class NovaMarkdownMediaTest {
         assertEquals(NovaAlign.Center, image.align)
     }
 
+    /**
+     * A picture that will not load is a line, not a warning sign.
+     *
+     * Coil's `error` painter was stretched by `contentScale = Fit` to the box the
+     * artwork had reserved, and a block image's box is the column width - so one
+     * dead GIF in a bio drew a full-bleed warning triangle, the biggest thing on
+     * the page, about a missing decoration. The failure state is a sentence now,
+     * and it is checked here because it is the only part of the image renderer a
+     * JVM test can see at all.
+     */
+    @Test
+    fun `a failed image says so in a line instead of a stretched painter`() {
+        val source = File(
+            findProjectRoot(),
+            "app/src/main/java/com/anisequel/ui/components/novamarkdown/NovaMarkdownMedia.kt"
+        ).readText()
+
+        assertTrue(
+            "the image is no longer drawn through SubcomposeAsyncImage, so its " +
+                "failure state is a stretched painter again",
+            source.contains("SubcomposeAsyncImage(")
+        )
+        assertTrue(
+            "nothing says what happened when an image cannot be loaded",
+            source.contains("Couldn't load this image")
+        )
+        assertFalse(
+            "an `error` painter is drawn at the artwork's own size again",
+            source.contains("error = rememberVectorPainter(")
+        )
+    }
+
     // ---- video ----------------------------------------------------------------
 
     @Test
@@ -295,5 +329,13 @@ class NovaMarkdownMediaTest {
 
         assertTrue(paragraph.inlines.any { it is NovaInline.Spoiler })
         assertTrue(paragraph.inlines.none { it is NovaInline.MediaLink })
+    }
+
+    private fun findProjectRoot(): File {
+        var candidate = File(System.getProperty("user.dir") ?: ".").absoluteFile
+        while (!File(candidate, "gradle.properties").isFile) {
+            candidate = candidate.parentFile ?: error("could not locate project root")
+        }
+        return candidate
     }
 }

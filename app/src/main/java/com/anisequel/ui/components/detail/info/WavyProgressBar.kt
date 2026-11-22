@@ -28,10 +28,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.anisequel.domain.motion.WaveGeometry
 import com.anisequel.data.repository.MotionStyle
+import com.anisequel.domain.motion.WaveGeometry
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.rememberIsResumed
+import com.anisequel.ui.theme.AniSequelTheme
 
 /**
  * The wavy determinate progress bar of the Info page's progress card.
@@ -87,7 +88,7 @@ fun WavyProgressBar(
      * faint squiggle with nothing above it and the card read as a rendering
      * failure rather than as an empty bar.
      */
-    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+    trackColor: Color = AniSequelTheme.emphasis.track,
     /**
      * Re-runs the entrance when this changes - the title's identity, in practice.
      *

@@ -166,6 +166,11 @@ treats it as advisory rather than claiming otherwise).
   The suite pins the three things that fix had to get right: an overdue list is
   re-fetched on resume, a fresh one is not (twenty resumes inside an interval cost
   zero requests), and a failed fetch cannot become a tight retry loop.
+- **`ForegroundRefreshWiringTest`** — the same watch, one layer up. The check was
+  hung on the dashboard destination's `ON_RESUME`, which fires on every return to
+  the page and not only when the app comes back, so on `Always` every Settings
+  round trip re-downloaded the whole collection. The test pins the split: the
+  Activity's resume runs the check, the page's return only arms the timer.
 - **`WidgetDeclarationTest`** — v1.0.42 shipped a widget that could not be added
   at all, from three declaration bugs no build step could see: `android:configure`
   pointing at a provider rather than an Activity, a missing `initialLayout`, and

@@ -289,7 +289,6 @@ private fun InterfaceHub(
                 InterfaceSection.SEQUELS,
                 InterfaceSection.LIBRARY
             ),
-            tone = SettingsGroupTone.LOOK,
             onOpen = onOpen
         )
 
@@ -306,7 +305,6 @@ private fun InterfaceHub(
                 InterfaceSection.MOTION,
                 InterfaceSection.GESTURES
             ),
-            tone = SettingsGroupTone.LOOK,
             onOpen = onOpen
         )
 

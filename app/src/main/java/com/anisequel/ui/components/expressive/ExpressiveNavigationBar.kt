@@ -203,7 +203,17 @@ fun ExpressiveNavigationBar(
     destinations: List<NavigationDestination>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Whether hold-and-swipe runs on this bar.
+     *
+     * False for the sample Settings draws. The gesture is not decoration: it lifts
+     * the bar, previews the tab under the finger and switches on release - so a
+     * preview with `onSelect = {}` lifted under the thumb, showed where the swipe
+     * would go, and then did nothing at all. A picture of the bar should be a
+     * picture, and the sample draws the reader's own tabs either way.
+     */
+    gesturesEnabled: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -275,18 +285,24 @@ fun ExpressiveNavigationBar(
                 // neither an item nor a gesture region, so a down that landed on it
                 // carried on through the floating bar to whatever it happened to be
                 // covering: a message card, which opened the thread.
-                .pointerInput(destinations.size) {
-                    awaitEachGesture {
-                        holdThenSwipe(
-                            startIndex = { currentIndex },
-                            lastIndex = lastIndex,
-                            stepPx = stepPx,
-                            haptic = haptic,
-                            onPreview = { previewIndex = it },
-                            onSwitch = selectTab
-                        )
+                .then(
+                    if (gesturesEnabled) {
+                        Modifier.pointerInput(destinations.size) {
+                            awaitEachGesture {
+                                holdThenSwipe(
+                                    startIndex = { currentIndex },
+                                    lastIndex = lastIndex,
+                                    stepPx = stepPx,
+                                    haptic = haptic,
+                                    onPreview = { previewIndex = it },
+                                    onSwitch = selectTab
+                                )
+                            }
+                        }
+                    } else {
+                        Modifier
                     }
-                }
+                )
                 .padding(5.dp)
                 .onSizeChanged { barWidth = it.width }
                 .graphicsLayer {

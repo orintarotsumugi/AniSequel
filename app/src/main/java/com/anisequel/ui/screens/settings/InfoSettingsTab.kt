@@ -158,7 +158,6 @@ internal fun InfoSettingsTab(
                     // row that leads to the page that explains it, not on a card of
                     // its own *and* the page.
                     values = mapOf(AboutSection.BUILD to BuildConfig.VERSION_NAME),
-                    tone = SettingsGroupTone.DEVICE,
                     onOpen = onOpen
                 )
                 // Two subjects rather than one heading over four rows:
@@ -168,13 +167,11 @@ internal fun InfoSettingsTab(
                 SettingsShelfGroup(
                     label = "Trouble & trust",
                     sections = listOf(AboutSection.DIAGNOSTICS, AboutSection.PRIVACY),
-                    tone = SettingsGroupTone.DEVICE,
                     onOpen = onOpen
                 )
                 SettingsShelfGroup(
                     label = "Help & credits",
                     sections = listOf(AboutSection.LINKS, AboutSection.CREDITS),
-                    tone = SettingsGroupTone.DEVICE,
                     onOpen = onOpen
                 )
                 Spacer(modifier = Modifier.height(24.dp))

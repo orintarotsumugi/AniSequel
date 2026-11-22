@@ -89,12 +89,11 @@ internal val jokeSectionKeywords = mapOf(
 )
 
 internal val librarySectionKeywords = mapOf(
+    // Only Navigation is a page now: the library view and the refresh/arriving
+    // cards are drawn on the page itself, so their own search results are the way
+    // to them (see `SettingsSearchIndex`) rather than a shelf part.
     LibrarySection.NAVIGATION to "top bar bottom bar tabs shortcuts trophy " +
-        "magnifier search page navigation",
-    LibrarySection.VIEW to "library view remembered filter sort forget reset " +
-        "reopens",
-    LibrarySection.REFRESH to "refresh interval arriving rows stale sync cache " +
-        "manual always dashboard"
+        "magnifier search page navigation"
 )
 
 internal val aboutSectionKeywords = mapOf(

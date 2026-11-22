@@ -424,7 +424,7 @@ private fun CommentMediaCard(context: android.content.Context) {
             modifier = Modifier.fillMaxWidth()
         ) {
             GifProvider.selectable.forEach { provider ->
-                JokeChoiceChip(
+                SettingsChoiceChip(
                     label = provider.displayName,
                     selected = settings.gifProvider == provider,
                     enabled = true,
