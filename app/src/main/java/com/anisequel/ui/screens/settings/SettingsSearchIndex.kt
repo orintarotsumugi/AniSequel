@@ -44,6 +44,16 @@ internal data class SettingsSearchResult(
     val keywords: String = "",
     val interfaceSection: InterfaceSection? = null,
     val themeSection: ThemeSection? = null,
+    /**
+     * The shelf part a result belongs to inside a page that has parts, as the
+     * section enum's name.
+     *
+     * A name rather than a typed field per page: `SettingsScreen` carries one
+     * `rememberSaveable` target and each shelf resolves the name against its own
+     * enum. The typed `interfaceSection`/`themeSection` above predate that and are
+     * kept because their two pages' handoffs are typed; every newer shelf uses this.
+     */
+    val sectionName: String? = null,
     /** A small ranking bias for the settings a reader changes most often. */
     val priority: Int = 0,
     /** True only for a result found by the typo fallback. */
@@ -166,7 +176,7 @@ internal object SettingsSearch {
                     subtitle = page.subtitle,
                     eyebrow = "Settings",
                     icon = page.icon,
-                    keywords = pageKeywords[page].orEmpty(),
+                    keywords = settingsPageKeywords[page].orEmpty(),
                     priority = 20
                 )
             )
@@ -181,7 +191,7 @@ internal object SettingsSearch {
                     subtitle = section.subtitle,
                     eyebrow = "Interface",
                     icon = section.icon,
-                    keywords = interfaceKeywords[section].orEmpty(),
+                    keywords = interfaceSectionKeywords[section].orEmpty(),
                     interfaceSection = section,
                     priority = 40
                 )
@@ -197,12 +207,57 @@ internal object SettingsSearch {
                     subtitle = section.subtitle,
                     eyebrow = "Appearance",
                     icon = section.icon,
-                    keywords = themeKeywords[section].orEmpty(),
+                    keywords = appearanceSectionKeywords[section].orEmpty(),
                     themeSection = section,
                     priority = 40
                 )
             )
         }
+
+        // The pages that became shelves in the same rework that gave this screen
+        // nine rows. Their parts are indexed from the enum itself rather than by
+        // hand: the row the shelf draws and the result the search returns are one
+        // title, so a part cannot be renamed into a dead result.
+        addAll(
+            sectionResults(
+                sections = TypeSection.entries,
+                page = SettingsPage.TYPE_AND_DISPLAY,
+                eyebrow = "Type & display",
+                keywords = typeSectionKeywords,
+                idPrefix = "type",
+                priority = 40
+            )
+        )
+        addAll(
+            sectionResults(
+                sections = JokeSection.entries,
+                page = SettingsPage.JOKES,
+                eyebrow = "Jokes",
+                keywords = jokeSectionKeywords,
+                idPrefix = "joke_part",
+                priority = 40
+            )
+        )
+        addAll(
+            sectionResults(
+                sections = LibrarySection.entries,
+                page = SettingsPage.LIBRARY,
+                eyebrow = "Library & dashboard",
+                keywords = librarySectionKeywords,
+                idPrefix = "library_part",
+                priority = 40
+            )
+        )
+        addAll(
+            sectionResults(
+                sections = AboutSection.entries,
+                page = SettingsPage.ABOUT,
+                eyebrow = "About & support",
+                keywords = aboutSectionKeywords,
+                idPrefix = "about_part",
+                priority = 40
+            )
+        )
 
         add(
             searchResult(
@@ -365,6 +420,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "list_refresh",
+                sectionName = LibrarySection.REFRESH.name,
                 page = SettingsPage.LIBRARY,
                 title = "List refresh",
                 subtitle = "How often the saved list asks AniList again",
@@ -391,6 +447,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "arriving_rows",
+                sectionName = LibrarySection.REFRESH.name,
                 page = SettingsPage.LIBRARY,
                 title = "Arriving rows",
                 subtitle = "How the sequel feed is presented",
@@ -403,6 +460,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "top_bar",
+                sectionName = LibrarySection.NAVIGATION.name,
                 page = SettingsPage.LIBRARY,
                 title = "Top bar",
                 subtitle = "Shortcuts beside Settings and Profile",
@@ -415,6 +473,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "bottom_bar",
+                sectionName = LibrarySection.NAVIGATION.name,
                 page = SettingsPage.LIBRARY,
                 title = "Bottom bar",
                 subtitle = "Which pages the bar switches between",
@@ -427,6 +486,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "search_page",
+                sectionName = LibrarySection.NAVIGATION.name,
                 page = SettingsPage.LIBRARY,
                 title = "Search page",
                 subtitle = "What the catalogue search can find",
@@ -465,10 +525,11 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "font",
-                page = SettingsPage.TYPE,
+                sectionName = TypeSection.TEXT.name,
+                page = SettingsPage.TYPE_AND_DISPLAY,
                 title = "Font",
                 subtitle = "The face every screen is drawn in",
-                eyebrow = "Type & reading",
+                eyebrow = "Type & display · Font & text",
                 icon = AppVectorIcons.TextBold,
                 keywords = "typeface google fonts download",
                 priority = 25
@@ -477,10 +538,11 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "text_size",
-                page = SettingsPage.TYPE,
+                sectionName = TypeSection.TEXT.name,
+                page = SettingsPage.TYPE_AND_DISPLAY,
                 title = "Text size",
                 subtitle = "Scales every text style in the app",
-                eyebrow = "Type & reading",
+                eyebrow = "Type & display · Font & text",
                 icon = AppVectorIcons.TextBold,
                 keywords = "font size accessibility large",
                 priority = 25
@@ -489,10 +551,11 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "display_size",
-                page = SettingsPage.DISPLAY,
+                sectionName = TypeSection.SCALE.name,
+                page = SettingsPage.TYPE_AND_DISPLAY,
                 title = "Display size",
                 subtitle = "Automatic or manual app density",
-                eyebrow = "Display size",
+                eyebrow = "Type & display · Display size",
                 icon = AppVectorIcons.Tune,
                 keywords = "dpi display density automatic manual scale ui size bigger " +
                     "smaller app zoom presets exact slider reset dpi size",
@@ -502,10 +565,11 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "dpi_mode",
-                page = SettingsPage.DISPLAY,
+                sectionName = TypeSection.SCALE.name,
+                page = SettingsPage.TYPE_AND_DISPLAY,
                 title = "Automatic density",
                 subtitle = "Follow the density your phone or tablet reports",
-                eyebrow = "Display size · Advanced",
+                eyebrow = "Type & display · Display size · Advanced",
                 icon = AppVectorIcons.DevicePhone,
                 keywords = "dpi automatic device density panel tablet foldable default " +
                     "follow phone screen wm density scale mode",
@@ -515,10 +579,11 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "long_titles",
-                page = SettingsPage.TYPE,
+                sectionName = TypeSection.TEXT.name,
+                page = SettingsPage.TYPE_AND_DISPLAY,
                 title = "Long titles",
                 subtitle = "Scroll a name that does not fit instead of cutting it",
-                eyebrow = "Type & reading",
+                eyebrow = "Type & display · Font & text",
                 icon = AppVectorIcons.TextBold,
                 keywords = "marquee scroll title ellipsis",
                 priority = 10
@@ -528,6 +593,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "ani_chan",
+                sectionName = JokeSection.PERSONA.name,
                 page = SettingsPage.JOKES,
                 title = "Ani-chan",
                 subtitle = "A line about anime, now and then",
@@ -540,6 +606,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "joke_style",
+                sectionName = JokeSection.TEXT_EFFECT.name,
                 page = SettingsPage.JOKES,
                 title = "Line style",
                 subtitle = "How a joke arrives, and a sample to judge it by",
@@ -552,6 +619,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "joke_pace",
+                sectionName = JokeSection.PACE.name,
                 page = SettingsPage.JOKES,
                 title = "Pace and dwell",
                 subtitle = "How often she speaks, and how long a line stays",
@@ -564,6 +632,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "joke_placement",
+                sectionName = JokeSection.PLACEMENT.name,
                 page = SettingsPage.JOKES,
                 title = "Where she appears",
                 subtitle = "The edge of the screen, the pages, and the arrival tick",
@@ -577,6 +646,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "joke_topics",
+                sectionName = JokeSection.TONES.name,
                 page = SettingsPage.JOKES,
                 title = "What she talks about",
                 subtitle = "Switch off the kinds of line you would rather not read",
@@ -589,6 +659,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "joke_when",
+                sectionName = JokeSection.MOMENTS.name,
                 page = SettingsPage.JOKES,
                 title = "When she appears",
                 subtitle = "The timer is the baseline; these are extra invitations",
@@ -724,6 +795,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "privacy",
+                sectionName = AboutSection.PRIVACY.name,
                 page = SettingsPage.ABOUT,
                 title = "Privacy",
                 subtitle = "What the app does and does not collect",
@@ -736,6 +808,7 @@ internal object SettingsSearch {
         add(
             searchResult(
                 id = "links",
+                sectionName = AboutSection.LINKS.name,
                 page = SettingsPage.ABOUT,
                 title = "Repository and issue tracker",
                 subtitle = "Where the source lives and where bugs go",
@@ -744,6 +817,34 @@ internal object SettingsSearch {
                 keywords = "github link issue bug report support",
                 priority = 10
             )
+        )
+    }
+
+    /**
+     * One result per shelf part, taken from the enum the shelf itself draws.
+     *
+     * The alternative - a hand-written result per part - is what the rest of this
+     * index does, and it is why renaming a row used to leave a stale answer behind.
+     * A part can only be renamed in one place now.
+     */
+    private fun <T> sectionResults(
+        sections: List<T>,
+        page: SettingsPage,
+        eyebrow: String,
+        keywords: Map<T, String>,
+        idPrefix: String,
+        priority: Int
+    ): List<SettingsSearchResult> where T : Enum<T>, T : SettingsShelfSection = sections.map { section ->
+        SettingsSearchResult(
+            id = "${idPrefix}_${section.name.lowercase(Locale.ROOT)}",
+            page = page,
+            title = section.title,
+            subtitle = section.subtitle,
+            eyebrow = eyebrow,
+            icon = section.icon,
+            keywords = keywords[section].orEmpty(),
+            sectionName = section.name,
+            priority = priority
         )
     }
 
@@ -757,7 +858,8 @@ internal object SettingsSearch {
         keywords: String,
         priority: Int,
         interfaceSection: InterfaceSection? = null,
-        themeSection: ThemeSection? = null
+        themeSection: ThemeSection? = null,
+        sectionName: String? = null
     ): SettingsSearchResult = SettingsSearchResult(
         id = id,
         page = page,
@@ -768,185 +870,8 @@ internal object SettingsSearch {
         keywords = keywords,
         interfaceSection = interfaceSection,
         themeSection = themeSection,
+        sectionName = sectionName,
         priority = priority
     )
 
-    private fun score(
-        result: SettingsSearchResult,
-        tokens: List<String>,
-        normalizedQuery: String
-    ): Int {
-        val title = normalize(result.title)
-        val subtitle = normalize(result.subtitle)
-        val keywords = normalize(result.keywords)
-        val haystack = "$title $subtitle $keywords"
-        val compactHaystack = haystack.filter { it.isLetterOrDigit() }
-        if (tokens.any { !matchesToken(it, haystack, compactHaystack) }) return 0
-
-        var score = result.priority
-        val titleWords = title.split(' ').filter { it.isNotEmpty() }
-        val compactTitle = title.filter { it.isLetterOrDigit() }
-        val compactQuery = normalizedQuery.filter { it.isLetterOrDigit() }
-        if (title == normalizedQuery || compactTitle == compactQuery) {
-            score += 1600
-        } else if (
-            title.startsWith(normalizedQuery) ||
-            (compactQuery.isNotEmpty() && compactTitle.startsWith(compactQuery))
-        ) {
-            score += 1200
-        } else if (titleWords.any { word -> word == tokens.first() }) {
-            score += 900
-        }
-        if (title.contains(normalizedQuery)) score += 600
-        if (subtitle.contains(normalizedQuery)) score += 320
-        if (keywords.contains(normalizedQuery)) score += 240
-        tokens.forEach { token ->
-            if (title.contains(token)) score += 80
-            if (subtitle.contains(token)) score += 30
-            if (keywords.contains(token)) score += 20
-        }
-        return score
-    }
-
-    private fun fuzzyScore(result: SettingsSearchResult, tokens: List<String>): Int {
-        val title = normalize(result.title)
-        val subtitle = normalize(result.subtitle)
-        val keywords = normalize(result.keywords)
-        val haystack = "$title $subtitle $keywords"
-        val compactHaystack = haystack.filter { it.isLetterOrDigit() }
-        val words = haystack.split(' ').filter { it.isNotEmpty() }
-        var mistakes = 0
-        tokens.forEach { token ->
-            if (matchesToken(token, haystack, compactHaystack)) return@forEach
-            if (token.length < 4) return 0
-            val closest = words.minOfOrNull { word -> distance(token, word) } ?: return 0
-            val allowance = if (token.length >= 7) 2 else 1
-            if (closest > allowance) return 0
-            mistakes += closest
-        }
-        return 100 - mistakes * 10 + result.priority
-    }
-
-    private fun matchesToken(
-        token: String,
-        haystack: String,
-        compactHaystack: String
-    ): Boolean {
-        if (haystack.split(' ').any { word -> word.startsWith(token) }) return true
-        // The compact pass is what lets "fullscreen" find "Full-screen"; it is
-        // restricted to tokens of four or more characters so short strings do not
-        // match across the inside of unrelated words.
-        return token.length >= 4 && compactHaystack.contains(token)
-    }
-
-    private fun tokens(query: String): List<String> =
-        normalize(query).split(' ').filter { it.isNotEmpty() }
-
-    private fun normalize(value: String): String {
-        val decomposed = Normalizer.normalize(value, Normalizer.Form.NFD)
-        return decomposed
-            .replace(COMBINING_MARKS, "")
-            .lowercase(Locale.ROOT)
-            .replace(NON_WORD, " ")
-            .trim()
-    }
-
-    private fun mergeRanges(ranges: List<IntRange>): List<IntRange> {
-        if (ranges.isEmpty()) return emptyList()
-        val sorted = ranges.sortedBy { it.first }
-        val merged = mutableListOf(sorted.first())
-        sorted.drop(1).forEach { range ->
-            val previous = merged.last()
-            if (range.first <= previous.last + 1) {
-                merged[merged.lastIndex] = previous.first..maxOf(previous.last, range.last)
-            } else {
-                merged += range
-            }
-        }
-        return merged
-    }
-
-    /** Bounded Levenshtein; only ever called on one word at a time. */
-    private fun distance(left: String, right: String): Int {
-        if (left == right) return 0
-        if (left.isEmpty()) return right.length
-        if (right.isEmpty()) return left.length
-        var previous = IntArray(right.length + 1) { it }
-        var current = IntArray(right.length + 1)
-        left.forEachIndexed { leftIndex, leftCharacter ->
-            current[0] = leftIndex + 1
-            right.forEachIndexed { rightIndex, rightCharacter ->
-                val substitution = previous[rightIndex] +
-                    if (leftCharacter == rightCharacter) 0 else 1
-                current[rightIndex + 1] = minOf(
-                    current[rightIndex] + 1,
-                    previous[rightIndex + 1] + 1,
-                    substitution
-                )
-            }
-            val swap = previous
-            previous = current
-            current = swap
-        }
-        return previous[right.length]
-    }
-
-    private data class Scored(val result: SettingsSearchResult, val score: Int)
-
-    private val COMBINING_MARKS = Regex("\\p{M}+")
-    private val NON_WORD = Regex("[^a-z0-9]+")
-
-    private val pageKeywords = mapOf(
-        SettingsPage.APPEARANCE to "theme appearance colour color dark light oled accent " +
-            "background wallpaper dynamic material you backdrop banner cover retain anime tint",
-        SettingsPage.UI to "interface layout cards motion gestures navigation bar " +
-            "poster design shelf bar lift info page",
-        SettingsPage.TYPE to "font text size reading accessibility scale title scroll " +
-            "display size density pointer",
-        SettingsPage.DISPLAY to "dpi density display size automatic manual scale ui " +
-            "zoom bigger smaller device panel presets exact",
-        SettingsPage.JOKES to "ani chan jokes pill humour humor top bottom edge " +
-            "everywhere scope position placement",
-        SettingsPage.SEASONAL to "snow petals leaves seasonal sky animation " +
-            "density speed quality particles",
-        SettingsPage.LIBRARY to "dashboard refresh arriving list grid search bar " +
-            "interval staleness sync cache manual always",
-        SettingsPage.DEVICE to "device phone performance cache lock full screen " +
-            "frame rate diagnostics dpi",
-        SettingsPage.ACCOUNT to "anilist account sign in login oauth client id " +
-            "profile viewer list counts",
-        SettingsPage.UPDATES to "updates version changelog release notes download " +
-            "what's new apk manifest",
-        SettingsPage.ABOUT to "about support privacy links build diagnostics " +
-            "repository issue tracker"
-    )
-
-    private val interfaceKeywords = mapOf(
-        InterfaceSection.LAYOUT to "info page title page classic nova bar lift continue rail " +
-            "layout home bottom navigation float",
-        InterfaceSection.SEQUELS to "home sequel feed rows cards banners continue watching " +
-            "shelf tickets polaroids poster style preview",
-        InterfaceSection.LIBRARY to "library view grid shelf covers list grouped table " +
-            "columns captions browsing",
-        InterfaceSection.CARDS to "card design shape text poster art " +
-            "preview style",
-        InterfaceSection.CARD_SHAPE to "card shape corner ratio frame radius border",
-        InterfaceSection.CARD_TEXT to "card name score title size bold rating caption",
-        InterfaceSection.CARD_POSTER to "poster art source betterposters overlays " +
-            "unique seasons rating genre trend",
-        InterfaceSection.MOTION to "animation motion display system bars " +
-            "fullscreen immersive edge swipe",
-        InterfaceSection.GESTURES to "quick add hold swipe confirm planning button"
-    )
-
-    private val themeKeywords = mapOf(
-        ThemeSection.BACKGROUND to "oled black canvas background blur " +
-            "true black glow home wallpaper",
-        ThemeSection.ACCENT to "accent colour color palette wallpaper dynamic " +
-            "material you hue custom hex",
-        ThemeSection.ARTWORK to "anime poster colour color dynamic theme cover " +
-            "retain tint revert duration kept accent",
-        ThemeSection.PAGES to "anime pages backdrop blur tint detail sheet " +
-            "banner cover off key visual"
-    )
 }

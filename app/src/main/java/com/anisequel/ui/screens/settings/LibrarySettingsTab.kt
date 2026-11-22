@@ -17,17 +17,20 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -43,10 +46,49 @@ import com.anisequel.data.repository.RefreshInterval
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.navigation.MainTab
+import com.anisequel.ui.navigation.enabledMainTabs
+import com.anisequel.ui.navigation.mainTabDestinations
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+
+/**
+ * One part of the Library & dashboard page.
+ *
+ * The page held six cards in one scroll: two bar cards, the Search page, the
+ * remembered Library view, the refresh interval and the arriving rows. A reader
+ * who came to change how often the list reloads scrolled past three cards about
+ * navigation to reach it, and the page's own subtitle ("AniList refresh timing,
+ * dashboard sections and navigation bar") was three subjects in a sentence.
+ */
+internal enum class LibrarySection(
+    override val title: String,
+    override val subtitle: String,
+    override val icon: ImageVector,
+    override val testTag: String
+) : SettingsShelfSection {
+    NAVIGATION(
+        title = "Navigation",
+        subtitle = "The two bars, their shortcuts and the Search page",
+        icon = AppVectorIcons.Tune,
+        testTag = "library_row_navigation"
+    ),
+    VIEW(
+        title = "Library view",
+        subtitle = "What the Library reopens with, and forgetting it",
+        icon = AppVectorIcons.List,
+        testTag = "library_row_view"
+    ),
+    REFRESH(
+        title = "Refresh & arriving",
+        subtitle = "How fresh the list is, and the rows for new sequels",
+        icon = AppVectorIcons.Schedule,
+        testTag = "library_row_refresh"
+    )
+}
 
 /**
  * How the saved list is read, how the dashboard presents it, and which pages are
@@ -54,28 +96,124 @@ import kotlinx.coroutines.launch
  *
  * These cards used to share a tab with the AniList Client ID, the app lock and the
  * sign-out button, under the heading "Edit" - a name that describes the source file
- * rather than anything a reader is trying to do. They share a page now because they
- * are one question: how fresh the list is, what the dashboard does with it, and
- * where it can be reached from.
+ * rather than anything a reader is trying to do. They share a page because they are
+ * one subject: the list and the surfaces it appears on.
+ *
+ * ## Why the bar is drawn on the shelf
+ *
+ * "Tier lists shortcut" and "Catalogue search tab" are names for two doors, and a
+ * reader setting them is choosing a picture they already have in their head. The
+ * preview is the *real* navigation bar with the reader's own tabs - the same
+ * composable the app draws at the bottom of every screen - so the row below it
+ * cannot describe a bar the app is not showing. It is a picture, not a control:
+ * tapping it does nothing, and the rows are where the answer is written.
  */
 @Composable
-fun LibrarySettingsTab(
+internal fun LibrarySettingsTab(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     arrivingPreferences: ArrivingPreferences,
     libraryPreferences: LibraryPreferences,
     mainTabPreferences: MainTabPreferences,
-    modifier: Modifier = Modifier
+    pageTitle: String,
+    pageSubtitle: String,
+    onClosePage: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** A part a Settings search result asked for; consumed once. */
+    initialSection: LibrarySection? = null,
+    onInitialSectionConsumed: () -> Unit = {}
 ) {
-    SettingsScrollColumn(modifier) {
-        // Navigation first, then the saved-list view and its data freshness.
-        TopBarSectionCard(mainTabPreferences)
-        BottomBarSectionCard(mainTabPreferences)
-        SearchPageSectionCard(mainTabPreferences)
-        LibraryViewCard(libraryPreferences)
-        ListRefreshCard(refreshIntervalPreferences)
-        ArrivingSectionCard(arrivingPreferences)
-        // Gesture controls live in Device Manager beside the other device behaviour.
-        Spacer(modifier = Modifier.height(24.dp))
+    // The bar's preview and the two switches below it read one answer, so the tab
+    // list is collected once here rather than once per card.
+    val tabs by produceState(
+        initialValue = enabledMainTabs(
+            tierListTab = MainTabPreferences.DEFAULT_TIER_LIST_TAB,
+            searchTab = MainTabPreferences.DEFAULT_SEARCH_TAB,
+            searchAnimeEnabled = MainTabPreferences.DEFAULT_SEARCH_ANIME,
+            searchMangaEnabled = MainTabPreferences.DEFAULT_SEARCH_MANGA
+        ),
+        mainTabPreferences
+    ) {
+        combine(
+            mainTabPreferences.tierListTab,
+            mainTabPreferences.searchTab,
+            mainTabPreferences.searchAnimeEnabled,
+            mainTabPreferences.searchMangaEnabled
+        ) { tierList, search, searchAnime, searchManga ->
+            enabledMainTabs(tierList, search, searchAnime, searchManga)
+        }.collect { value = it }
+    }
+
+    SettingsShelf<LibrarySection>(
+        hubTitle = pageTitle,
+        hubSubtitle = pageSubtitle,
+        initialSection = initialSection,
+        onInitialSectionConsumed = onInitialSectionConsumed,
+        onClosePage = onClosePage,
+        contentTag = "library_tab_content",
+        modifier = modifier,
+        hub = { onOpen ->
+            SettingsScrollColumn {
+                BottomBarSample(tabs = tabs)
+                SettingsHubGroup(
+                    entries = LibrarySection.entries.map { it.shelfEntry(onOpen) },
+                    tone = SettingsGroupTone.CONTENT
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        },
+        body = { section ->
+            when (section) {
+                LibrarySection.NAVIGATION -> SettingsScrollColumn {
+                    // Navigation first: it is what the page's own preview shows, and
+                    // where a reader arrives with a question about a missing tab.
+                    TopBarSectionCard(mainTabPreferences)
+                    BottomBarSectionCard(mainTabPreferences)
+                    SearchPageSectionCard(mainTabPreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                LibrarySection.VIEW -> SettingsScrollColumn {
+                    LibraryViewCard(libraryPreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                LibrarySection.REFRESH -> SettingsScrollColumn {
+                    ListRefreshCard(refreshIntervalPreferences)
+                    ArrivingSectionCard(arrivingPreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+    )
+}
+
+/**
+ * The app's own bar, with the reader's own tabs.
+ *
+ * Not a mock: `ExpressiveNavigationBar` with `mainTabDestinations` is the exact pair
+ * the app draws at the bottom of every page, so a tab the reader turned off is a tab
+ * missing here for the same reason it is missing there. `selectedIndex` is the
+ * Library because that is the page whose settings these are, and `onSelect` is a
+ * no-op: this is a picture of the answer, and a bar that navigated away from the
+ * settings that shaped it would be a second control over the same preference.
+ */
+@Composable
+private fun BottomBarSample(tabs: List<MainTab>) {
+    // The Library is always enabled, so its index is present by construction - but
+    // `indexOf` on a list the reader can change is not worth trusting to `coerceAtLeast`
+    // alone. It falls back to zero, which is Home in every bar this app can draw.
+    val selected = tabs.indexOf(MainTab.LIBRARY).coerceAtLeast(0)
+    SectionCard(
+        title = "Your bar",
+        icon = AppVectorIcons.Tune,
+        subtitle = "The tabs you have on, as the app draws them"
+    ) {
+        ExpressiveNavigationBar(
+            destinations = mainTabDestinations(tabs = tabs, profileAvatarUrl = null),
+            selectedIndex = selected,
+            onSelect = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("library_bar_sample")
+        )
     }
 }
 

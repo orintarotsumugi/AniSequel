@@ -136,7 +136,87 @@ fun SectionCard(
     }
 }
 
-/** Decorative Material 3 Expressive silhouettes for fixed-square icon tiles. */
+/**
+ * Decorative Material 3 Expressive silhouettes for fixed-square icon tiles.
+ *
+ * The silhouette comes from the tile's *position*, not from the letters in its
+ * title. It used to be `title.hashCode() % 4`, which meant that renaming a row
+ * silently changed the shape it was drawn in, that two rows could collide by
+ * luck, and that the set of silhouettes on a shelf carried no meaning at all.
+ * Position is stable for as long as the row stays in its place, which is the one
+ * thing a reader can actually learn: the first row of a group is a cookie, the
+ * second a burst, and so on. A group's rows therefore look like a family, and
+ * two shelves start their families the same way.
+ */
+@Composable
+internal fun settingsTileShape(index: Int): Shape =
+    when ((index.coerceAtLeast(0)) % 4) {
+        0 -> expressiveShape(ExpressiveShapes.cookie)
+        1 -> expressiveShape(ExpressiveShapes.burst)
+        2 -> expressiveShape(ExpressiveShapes.diamond)
+        else -> expressiveShape(ExpressiveShapes.flower)
+    }
+
+/**
+ * The tonal family a shelf group is drawn in.
+ *
+ * Three families for three groups, assigned once by `SettingsScreen`, so colour
+ * says which shelf a row belongs to. It used to be assigned by `title.hashCode()
+ * % 3`, which is why the shelf read as a colour chart with no system behind it:
+ * two rows in the same card could come out in different families, and the
+ * neighbour they were "grouped" with had no relation to their colour.
+ */
+enum class SettingsGroupTone {
+    /** Appearance, Interface, Type & display. */
+    LOOK,
+
+    /** Library, Jokes, Seasonal. */
+    CONTENT,
+
+    /** Device, Updates, About. */
+    DEVICE,
+
+    /** Search results and one-off rows: no group to belong to. */
+    NEUTRAL
+}
+
+/**
+ * The container/content pair for a group tone.
+ *
+ * `secondaryContainer` rather than `primary` on the quiet families for the
+ * reason the section cards already record: under Material You the primary role
+ * follows the wallpaper, and a saturated wallpaper-derived tile beside a wall
+ * icon reads as a coloured sticker. A whole group of them reads as a colour
+ * chart, which is what the previous hash-seeded palette produced by accident.
+ */
+@Composable
+internal fun settingsGroupPalette(
+    tone: SettingsGroupTone,
+    index: Int = 0
+): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    return when (tone) {
+        SettingsGroupTone.LOOK -> scheme.primaryContainer to scheme.onPrimaryContainer
+        SettingsGroupTone.CONTENT -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+        SettingsGroupTone.DEVICE -> scheme.secondaryContainer to scheme.onSecondaryContainer
+        // Search results have no group, so they keep the variety a group would
+        // otherwise supply - by position, which is stable, not by title hash.
+        SettingsGroupTone.NEUTRAL -> when ((index.coerceAtLeast(0)) % 3) {
+            0 -> scheme.secondaryContainer to scheme.onSecondaryContainer
+            1 -> scheme.tertiaryContainer to scheme.onTertiaryContainer
+            else -> scheme.primaryContainer to scheme.onPrimaryContainer
+        }
+    }
+}
+
+/**
+ * Decorative silhouettes for a *section card's* tile.
+ *
+ * Kept separate from [settingsTileShape] because a card's tile has no position in
+ * a list to read - it is seeded from the card's title so one card always draws
+ * the same way. That is the honest use of a hash: identity for a single surface,
+ * not ordering for a set of rows.
+ */
 @Composable
 internal fun settingsDecorativeShape(seed: String): Shape =
     when ((seed.hashCode() and Int.MAX_VALUE) % 4) {
@@ -146,7 +226,7 @@ internal fun settingsDecorativeShape(seed: String): Shape =
         else -> expressiveShape(ExpressiveShapes.flower)
     }
 
-/** A stable Material tonal family for each settings section. */
+/** A stable Material tonal family for a single settings section card. */
 @Composable
 internal fun settingsIconPalette(seed: String): Pair<Color, Color> {
     val scheme = MaterialTheme.colorScheme
@@ -391,6 +471,14 @@ fun InfoRow(label: String, value: String) {
     }
 }
 
+/**
+ * The scrolling body every settings page uses.
+ *
+ * No `state` parameter: it had one while Type & display swapped its two halves in
+ * place, and the halves are a shelf of their own now, so every caller wants the
+ * same fresh scroll per level and `rememberSaveableStateHolder` is what preserves
+ * it. A parameter no call site passes reads as an option and is not.
+ */
 @Composable
 fun SettingsScrollColumn(
     modifier: Modifier = Modifier,

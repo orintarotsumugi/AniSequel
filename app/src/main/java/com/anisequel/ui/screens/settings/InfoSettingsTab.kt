@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,43 +52,160 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
- * The About & support page: what this build is, and what it does with your data.
+ * One part of About & support.
+ *
+ * The page was five cards in one scroll. They are three different subjects - what
+ * this build is, what it does with your data, and who to thank for it - so they get
+ * a row each, two at a time. The version is on the Build row itself: it used to be
+ * a separate stamp card above the rows, which repeated the version, version code
+ * and package that page draws again.
+ */
+internal enum class AboutSection(
+    override val title: String,
+    override val subtitle: String,
+    override val icon: ImageVector,
+    override val testTag: String
+) : SettingsShelfSection {
+    BUILD(
+        title = "About AniSequel",
+        subtitle = "Version, package and where the data comes from",
+        icon = AppVectorIcons.SectionAbout,
+        testTag = "about_row_build"
+    ),
+    AUTHENTICITY(
+        title = "App authenticity",
+        subtitle = "That this copy is the build the release signed",
+        icon = AppVectorIcons.CheckCircle,
+        testTag = "about_row_authenticity"
+    ),
+    DIAGNOSTICS(
+        title = "Diagnostics",
+        subtitle = "The last crash, kept on this device",
+        icon = AppVectorIcons.Info,
+        testTag = "about_row_diagnostics"
+    ),
+    PRIVACY(
+        title = "Privacy",
+        subtitle = "What leaves this device, and what never does",
+        icon = AppVectorIcons.Privacy,
+        testTag = "about_row_privacy"
+    ),
+    LINKS(
+        title = "Help & links",
+        subtitle = "Source, issues and AniList's documentation",
+        icon = AppVectorIcons.SectionHelp,
+        testTag = "about_row_links"
+    ),
+    CREDITS(
+        title = "Credits",
+        subtitle = "The developer, the helpers and the honourable mentions",
+        icon = AppVectorIcons.Star,
+        testTag = "about_row_credits"
+    )
+}
+
+/**
+ * About & support.
  *
  * ## What moved out, and why
  *
  * This page used to be the old "Info" tab under a new name, which meant it still
  * carried the profile card, the demo sign-in prompt, the list snapshot, the
- * AniList connection check and the sign-out button - all of them a second copy
- * of something the AniList account page or the connection row on the shelf
- * already offered. Two sign-out buttons in one Settings screen is the clearest
- * version of the problem (both called `logout()`; a reader could reasonably
- * wonder if they differed), but the duplication was wider than that: the page
- * whose subtitle promises "release notes, updates and privacy" was mostly
- * account and diagnostics, and the account page was mostly a form.
+ * AniList connection check and the sign-out button - all of them a second copy of
+ * something the account page or the account card on the Settings shelf already
+ * offered. Two sign-out buttons in one Settings screen is the clearest version of
+ * the problem (both called `logout()`; a reader could reasonably wonder if they
+ * differed), but the duplication was wider than that.
  *
- * Everything account-shaped now lives on [EditSettingsTab], where the session
- * already was, and the connection check lives on the shelf row that opens it.
+ * Everything account-shaped now lives on `EditSettingsTab`, and the connection
+ * check lives on the account card that opens it.
  *
- * ## The order the cards are in
+ * ## The order the parts are in
  *
- * Identity, currency, change, trouble, trust, help: what this build is, whether
- * it is the newest one, what changed, the crash report if there is one, what
- * leaves the device, and where to go with a problem. Diagnostics stays above
+ * Identity, then trouble and trust, then the way out: what this build is, the
+ * crash report if there is one, what leaves the device, where to go with a
+ * problem, and who to thank for the app being here at all. Diagnostics sits beside
  * Privacy because Privacy points at it - "off unless you turn them on in
- * Diagnostics above" is only true in this order.
+ * Diagnostics" is only true with those two on one screen.
  */
 @Composable
-fun InfoSettingsTab(
-    modifier: Modifier = Modifier
+internal fun InfoSettingsTab(
+    pageTitle: String,
+    pageSubtitle: String,
+    onClosePage: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** A part a Settings search result asked for; consumed once. */
+    initialSection: AboutSection? = null,
+    onInitialSectionConsumed: () -> Unit = {}
 ) {
-    SettingsScrollColumn(modifier) {
-        BuildCard()
-        AppAuthenticityCard()
-        CrashReportCard()
-        PrivacyCard()
-        HelpLinksCard()
-        Spacer(modifier = Modifier.height(24.dp))
-    }
+    SettingsShelf<AboutSection>(
+        hubTitle = pageTitle,
+        hubSubtitle = pageSubtitle,
+        initialSection = initialSection,
+        onInitialSectionConsumed = onInitialSectionConsumed,
+        onClosePage = onClosePage,
+        contentTag = "about_tab_content",
+        modifier = modifier,
+        hub = { onOpen ->
+            SettingsScrollColumn {
+                SettingsShelfGroup(
+                    label = "This build",
+                    sections = listOf(AboutSection.BUILD, AboutSection.AUTHENTICITY),
+                    // The version, on the row that opens it. It used to be a
+                    // separate "build stamp" card above these rows, which drew the
+                    // version, the version code and the package - all three of which
+                    // the Build page draws again one tap away. A fact belongs on the
+                    // row that leads to the page that explains it, not on a card of
+                    // its own *and* the page.
+                    values = mapOf(AboutSection.BUILD to BuildConfig.VERSION_NAME),
+                    tone = SettingsGroupTone.DEVICE,
+                    onOpen = onOpen
+                )
+                // Two subjects rather than one heading over four rows:
+                // diagnostics and privacy are things the app does *to* the reader
+                // and can be checked, and the links and the credits are places to
+                // go and people to thank.
+                SettingsShelfGroup(
+                    label = "Trouble & trust",
+                    sections = listOf(AboutSection.DIAGNOSTICS, AboutSection.PRIVACY),
+                    tone = SettingsGroupTone.DEVICE,
+                    onOpen = onOpen
+                )
+                SettingsShelfGroup(
+                    label = "Help & credits",
+                    sections = listOf(AboutSection.LINKS, AboutSection.CREDITS),
+                    tone = SettingsGroupTone.DEVICE,
+                    onOpen = onOpen
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        },
+        body = { section ->
+            when (section) {
+                AboutSection.BUILD -> SettingsScrollColumn {
+                    BuildCard()
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                AboutSection.AUTHENTICITY -> SettingsScrollColumn {
+                    AppAuthenticityCard()
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                AboutSection.DIAGNOSTICS -> SettingsScrollColumn {
+                    CrashReportCard()
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                AboutSection.PRIVACY -> SettingsScrollColumn {
+                    PrivacyCard()
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                AboutSection.LINKS -> SettingsScrollColumn {
+                    HelpLinksCard()
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                AboutSection.CREDITS -> CreditsSectionBody()
+            }
+        }
+    )
 }
 
 /**
@@ -641,7 +759,7 @@ private fun HelpLinksCard() {
  * as the source: the reader who is on Settings > Info looking for "where does this
  * come from" wants the same place the updater reads `update.json` from.
  */
-private const val GITHUB_REPOSITORY_URL = "https://github.com/orintarotsumugi/AniSequel"
+internal const val GITHUB_REPOSITORY_URL = "https://github.com/orintarotsumugi/AniSequel"
 
 /** Where a crash report goes once it is on the clipboard. */
 private const val GITHUB_ISSUES_URL = "$GITHUB_REPOSITORY_URL/issues"

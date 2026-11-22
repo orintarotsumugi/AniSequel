@@ -1,10 +1,15 @@
 package com.anisequel
 
+import com.anisequel.ui.screens.settings.AboutSection
 import com.anisequel.ui.screens.settings.InterfaceSection
+import com.anisequel.ui.screens.settings.JokeSection
+import com.anisequel.ui.screens.settings.LibrarySection
 import com.anisequel.ui.screens.settings.SettingsPage
 import com.anisequel.ui.screens.settings.ThemeSection
+import com.anisequel.ui.screens.settings.TypeSection
 import com.anisequel.ui.screens.settings.SettingsSearch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -138,5 +143,47 @@ class SettingsSearchTest {
     @Test
     fun `an empty query has no highlights`() {
         assertTrue(SettingsSearch.highlightRanges("Anything", "  ").isEmpty())
+    }
+
+    /**
+     * Every shelf part that carries a name is reachable by its own title.
+     *
+     * The search index gained four more pages' worth of parts in the rework that
+     * split them into shelves, and they are indexed from the enums rather than by
+     * hand - so this pins the property that makes that safe: the title the shelf row
+     * draws is a query that lands back on the same part. A part renamed on the shelf
+     * cannot leave a result that opens the page at its top and makes the reader hunt
+     * for the row they typed.
+     *
+     * The Interface and Appearance shelves are not listed: their results carry typed
+     * sections (`interfaceSection`/`themeSection`) rather than a name, and the tests
+     * above already pin those two handoffs.
+     */
+    @Test
+    fun `every shelf part is searchable and lands on itself`() {
+        data class Part(val page: SettingsPage, val title: String, val name: String)
+
+        val parts = buildList {
+            TypeSection.entries.forEach {
+                add(Part(SettingsPage.TYPE_AND_DISPLAY, it.title, it.name))
+            }
+            JokeSection.entries.forEach { add(Part(SettingsPage.JOKES, it.title, it.name)) }
+            LibrarySection.entries.forEach { add(Part(SettingsPage.LIBRARY, it.title, it.name)) }
+            AboutSection.entries.forEach { add(Part(SettingsPage.ABOUT, it.title, it.name)) }
+        }
+
+        parts.forEach { part ->
+            val result = SettingsSearch.search(part.title)
+                .firstOrNull { it.sectionName == part.name }
+            assertNotNull(
+                "searching \"${part.title}\" does not land on ${part.name}",
+                result
+            )
+            assertEquals(
+                "${part.name} resolves to the wrong page",
+                part.page,
+                result!!.page
+            )
+        }
     }
 }

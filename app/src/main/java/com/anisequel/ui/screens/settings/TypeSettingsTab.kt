@@ -63,28 +63,27 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * Type & reading: the reader's own font, size and title motion.
+ * The Text half of Type & display: the reader's own font, size and title motion.
  *
- * A page of its own rather than rows on Appearance, because these are the three
- * choices that change what the app is like to *read* rather than what it looks
- * like - and because the samples need room to play. Every control commits on
- * release, not on every drag tick: a DataStore write per frame would put a disk
- * round trip inside the animation the slider is driving.
+ * ## Why it is a section body rather than a page
  *
- * The samples are the point of the page. A size slider without text to look at,
- * or a scroll-speed slider without a long title, asks the reader to set a number
- * and then go find out what it did.
+ * Text size and display density were two pages, and inline "Display size" on one
+ * of them linked to the other - the code already knew the question was one
+ * question. Both now live behind one row on the shelf, so "make everything
+ * bigger" has one place to start and a visible choice at the top of it.
+ *
+ * ## Why every control commits on release
+ *
+ * A DataStore write per drag tick would put a disk round trip inside the animation
+ * the slider is driving.
+ *
+ * The samples are the point of the section. A size slider without text to look
+ * at, or a scroll-speed slider without a long title, asks the reader to set a
+ * number and then go find out what it did.
  */
 @Composable
-fun TypeSettingsTab(
+internal fun TypeTextSectionBody(
     themePreferences: ThemePreferences,
-    /**
-     * Read here only for the Display size pointer below. The density itself is
-     * configured on its own page, because it scales every dp rather than just text.
-     */
-    interfacePreferences: InterfacePreferences,
-    /** Opens the dedicated Display size page from the pointer card. */
-    onOpenDisplaySize: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -95,13 +94,6 @@ fun TypeSettingsTab(
             useDynamicColor = true
         )
     )
-
-    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
-        initialValue = InterfacePreferences.InterfaceSettings()
-    )
-    val deviceDpi = rememberDeviceDensityDpi()
-    val displayAutomatic = interfaceSettings.dpiMode == com.anisequel.domain.ui.DpiMode.AUTOMATIC
-    val effectiveDpi = if (displayAutomatic) deviceDpi else DisplayDpi.clamp(interfaceSettings.displayDpi)
 
     var importError by remember { mutableStateOf<String?>(null) }
     var importing by remember { mutableStateOf(false) }
@@ -143,12 +135,6 @@ fun TypeSettingsTab(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        DisplaySizePointerCard(
-            effectiveDpi = effectiveDpi,
-            automatic = displayAutomatic,
-            onOpen = onOpenDisplaySize
-        )
-
         SectionCard(
             title = "Font",
             icon = AppVectorIcons.TextBold,

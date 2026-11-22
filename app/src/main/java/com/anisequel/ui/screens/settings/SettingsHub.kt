@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import com.anisequel.ui.components.icons.Icons
 import com.anisequel.ui.components.icons.automirrored.filled.ArrowBack
@@ -35,6 +37,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -223,6 +226,21 @@ data class SettingsHubEntry(
     val testTag: String,
     val onClick: () -> Unit,
     /**
+     * The setting's current state, drawn on the row itself.
+     *
+     * This is the difference between a table of contents and a control panel.
+     * The shelf used to describe only what was behind each row, so "is OLED on?",
+     * "how often does the list refresh?" and "is the app lock set?" each cost a
+     * page visit and a Back to answer. Everything here is a value the page below
+     * is already reading; passing it up costs one collector at the shelf and saves
+     * the whole trip.
+     *
+     * Null when the row has nothing honest to say - Updates has no answer until it
+     * has checked, and a guess would be worse than silence. Never a restatement of
+     * the subtitle: this line is the *answer*, the subtitle is the *question*.
+     */
+    val value: String? = null,
+    /**
      * The page or part a search result belongs to, printed above its title.
      *
      * Null for an ordinary shelf row: repeating "Settings" over every row would
@@ -259,7 +277,16 @@ data class SettingsHubEntry(
 @Composable
 fun SettingsHubGroup(
     entries: List<SettingsHubEntry>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * The tonal family every tile in this card is drawn in.
+     *
+     * Assigned per group by the shelf, so colour identifies the section a row
+     * belongs to. `NEUTRAL` is the default because a group of search results has
+     * no section to name; those rows take their variety from their position
+     * instead - see [settingsGroupPalette].
+     */
+    tone: SettingsGroupTone = SettingsGroupTone.NEUTRAL
 ) {
     if (entries.isEmpty()) return
     Surface(
@@ -280,19 +307,24 @@ fun SettingsHubGroup(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
                     )
                 }
-                SettingsHubEntryRow(entry)
+                SettingsHubEntryRow(entry = entry, index = index, tone = tone)
             }
         }
     }
 }
 
 @Composable
-private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
+private fun SettingsHubEntryRow(
+    entry: SettingsHubEntry,
+    index: Int,
+    tone: SettingsGroupTone
+) {
     val haptics = LocalHapticFeedback.current
     // Shared with `bouncyPress` so the press comes from the row's own clickable,
     // which cancels when the gesture is claimed as a scroll. The fallback pointer
     // loop would spring every row the thumb passes while scrolling the shelf.
     val interactionSource = remember { MutableInteractionSource() }
+    val palette = settingsGroupPalette(tone, index)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -307,26 +339,31 @@ private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
                 entry.onClick()
             }
             .testTag(entry.testTag)
+            .semantics {
+                // The value is the answer the row exists for; without this a
+                // screen reader reads the question and no state.
+                if (entry.value != null) stateDescription = entry.value
+            }
             .padding(horizontal = 16.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // The chevron is `KeyboardArrowRight` rather than a custom vector because it
         // is the platform's own "there is another page this way", which is exactly the
-        // promise the row makes. The icon tile uses `secondaryContainer` like
-        // [SectionCard]; a saturated primary tile on five rows at once turns the shelf
-        // into a colour chart.
+        // promise the row makes. The icon tile takes its family from the group and its
+        // silhouette from its position - see [settingsGroupPalette] and
+        // [settingsTileShape] for why neither is seeded from the title any more.
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(settingsDecorativeShape(entry.title))
-                .background(settingsIconPalette(entry.title).first),
+                .clip(settingsTileShape(index))
+                .background(palette.first),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = entry.icon,
                 contentDescription = null,
-                tint = settingsIconPalette(entry.title).second,
+                tint = palette.second,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -355,12 +392,205 @@ private fun SettingsHubEntryRow(entry: SettingsHubEntry) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        if (entry.value != null) {
+            // Narrow and end-aligned: a value is a glance, and a long one (a
+            // palette name, a version) must never push the title into an ellipsis
+            // to say itself. `labelMedium` in the primary role rather than a pill:
+            // a coloured capsule on every row would turn the shelf into a control
+            // panel of badges, and the value is information, not an action.
+            Text(
+                text = entry.value,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 104.dp)
+            )
+        }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.size(22.dp)
         )
+    }
+}
+
+/**
+ * The account, as a card rather than a row.
+ *
+ * The shelf used to open with a normal row for the account and a second row for
+ * the connection check - the only action row on the shelf, and one that made the
+ * page's contract "every row is a page" false. Both are one subject: whether the
+ * app is talking to AniList as somebody. So the account is a wide card at the top
+ * that carries its own live state, and the connection check became the chip on it.
+ *
+ * A hero surface rather than a stronger row because it is the one thing on this
+ * screen whose answer changes what every page below it is looking at - a real
+ * AniList list or the built-in demo - and it is glanced at, not read.
+ */
+@Composable
+internal fun SettingsAccountCard(
+    name: String?,
+    subtitle: String,
+    connectionLabel: String,
+    /** True reachable, false unreachable, null not yet checked. */
+    connectionHealthy: Boolean?,
+    onOpenAccount: () -> Unit,
+    onCheckConnection: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val haptics = LocalHapticFeedback.current
+    val cardInteraction = remember { MutableInteractionSource() }
+    val chipInteraction = remember { MutableInteractionSource() }
+    val chipContainer = when (connectionHealthy) {
+        true -> scheme.secondaryContainer
+        false -> scheme.errorContainer
+        null -> scheme.surfaceContainerHigh
+    }
+    val chipContent = when (connectionHealthy) {
+        true -> scheme.onSecondaryContainer
+        false -> scheme.onErrorContainer
+        null -> scheme.onSurfaceVariant
+    }
+
+    Surface(
+        shape = ExpressiveShapes.extraLarge,
+        color = scheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bouncyPress(pressedScale = 0.98f, interactionSource = cardInteraction)
+                    .clickable(
+                        interactionSource = cardInteraction,
+                        indication = null,
+                        role = Role.Button,
+                        onClickLabel = "Open AniList account"
+                    ) {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onOpenAccount()
+                    }
+                    .testTag("settings_account_card")
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(settingsTileShape(0))
+                        .background(scheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val initial = name?.trim()?.firstOrNull()?.uppercaseChar()
+                    if (initial != null) {
+                        Text(
+                            text = initial.toString(),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = scheme.onPrimaryContainer
+                        )
+                    } else {
+                        Icon(
+                            imageVector = AppVectorIcons.SectionAniList,
+                            contentDescription = null,
+                            tint = scheme.onPrimaryContainer,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "AniList",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.primary
+                    )
+                    Spacer(modifier = Modifier.size(2.dp))
+                    Text(
+                        text = name ?: "Not signed in",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = scheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.size(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            // The connection check, as the account's own status. Tapping it runs
+            // the check the old shelf row ran; the row is a fact, the chip is the
+            // action, and they are about the same session.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = ExpressiveShapes.pill,
+                    color = chipContainer,
+                    contentColor = chipContent,
+                    modifier = Modifier
+                        .bouncyPress(pressedScale = 0.94f, interactionSource = chipInteraction)
+                        .clip(ExpressiveShapes.pill)
+                        .clickable(
+                            interactionSource = chipInteraction,
+                            indication = null,
+                            role = Role.Button,
+                            onClickLabel = "Check the AniList connection"
+                        ) {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onCheckConnection()
+                        }
+                        .testTag("settings_row_connection")
+                ) {
+                    // The padding sits on the content, inside the surface: on the
+                    // surface's own modifier it would inset the pill rather than its
+                    // label, and the text would touch the capsule's ends.
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 34.dp)
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (connectionHealthy == false) {
+                                AppVectorIcons.SignalOff
+                            } else {
+                                AppVectorIcons.SignalOn
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Connection: $connectionLabel",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -3632,3 +3632,124 @@ to 88% opacity. It decodes at half the display's width on Soft and a third on He
 upload, competing far less with the poster memory cache that the list behind the
 sheet is about to draw. Crisp is uncapped, because that setting *is* the picture;
 the hero - the copy drawn sharp - is untouched.
+
+## Settings: three shelves, nine rows, and a value on every row
+
+### The shelf was a table of contents pretending to be a control panel
+
+Eleven rows under five headings, and two of those headings - "Library &
+dashboard", "This device" - headed exactly one row. A label over a single row is
+a hierarchy level that carries nothing: the reader parses a section with no
+members, and it spends 36dp of vertical space saying so. The rows also described
+themselves and never answered themselves, so "is OLED on?", "how often does the
+list refresh?" and "is the app lock set?" each cost a page visit and a Back.
+
+The shelf is three groups of three now - *Look & layout*, *What it shows*,
+*Device & app* - because those are the three questions a reader arrives with, and
+every group holds destinations.
+
+### The account is a card, and the connection check is its status chip
+
+The account row and a Connection check row were the same subject, and the check
+was the only row on the shelf that did not open a page - so the screen's contract
+("every row is a page") was false in exactly one place. They are one card:
+identity, session state, and a pill that runs the same probe the row ran. The
+chip's verdict is read from `ApiStatusProbeState.ui`, so it is the same answer the
+dialog shows rather than a second opinion.
+
+### `SettingsSummaries`: values assembled at the graph, drawn by the shelf
+
+Every row's value (`Dark`, `30 min`, `Snow`, `Lock on`, the installed version) is
+collected once in `SettingsScreen` from the *same* `ThemePreferences`,
+`InterfacePreferences`, `RefreshIntervalPreferences`, `JokePreferences`,
+`SeasonalPreferences` and `AppLockPreferences` instances the pages write through.
+The hub never collects a preference itself. Two readers of one DataStore can
+disagree about what is stored, and a row that says "30 min" above a page whose
+chips say "1 hour" is worse than a row with no value at all. A value that has not
+been read yet is `null` and draws nothing: a guess in the value slot is
+indistinguishable from an answer.
+
+`Updates` has no value and never will in this design. The app keeps no *last
+checked* answer, so there is nothing honest to say until a check runs, and "Up to
+date" without having asked would be the one lie on a screen of facts.
+
+### `SettingsShelf`: one level, one implementation
+
+Interface and Appearance had each grown their own copy of the same shelf - a
+nullable section state, a `BackHandler` enabled only while a part is open, a
+`SaveableStateHolder` so a part's scroll survives, an `AnimatedContent` with the
+shared push/pop, and a header naming the level on screen. Four more pages were
+about to make that six copies, and the copies had already drifted: one announced
+"Back to Card design" from a level two steps out. `SettingsShelf` is that
+implementation once, generic over the page's own enum, and it back-labels every
+part as `"Back to ${hubTitle}"` so no page carries a hand-written sentence that
+can name a screen the arrow does not reach.
+
+It is deliberately *single-level*. The one page that had a third level - Interface
+> Card design > Card shape - lost the middle one: the three card parts are rows
+beside the layout choices, and the preview that level was worth now sits on the
+page's own shelf (`CardDesignGroup`). Reaching the card's frame is one tap instead
+of three, and no screen stacks three titles above a control.
+
+### Search targets are names, not one state per shelf
+
+`SettingsSearchResult.sectionName` carries a part as its enum's name, and the page
+that owns that enum resolves it. `SettingsScreen` keeps one `rememberSaveable`
+string for the target instead of one typed state and two callbacks per shelf - the
+plumbing, not the feature, was what a new sub-page cost. The four new shelves are
+indexed *from their enums* (`sectionResults`), so the title a row draws is the
+query that returns it; the older hand-written entries stay, and the `Interface` /
+`Appearance` typed sections are unchanged because those two handoffs are typed.
+
+### Tile identity is group + position, not `title.hashCode()`
+
+The icon tile took its tonal family from `title.hashCode() % 3` and its silhouette
+from `% 4`. Renaming a row silently repainted it, two rows could collide by luck,
+and the set of colours on a shelf carried no meaning - the shelf read as a colour
+chart with no system behind it. Colour is the group's (`SettingsGroupTone`:
+primary for *Look*, tertiary for *Content*, secondary for *Device*), and the
+silhouette is the row's position in its group. Both are stable for as long as the
+row stays where it is, which is the only thing a reader can learn. Search results,
+which belong to no group, take their variety from position.
+
+### Previews moved to where the choice is made
+
+A setting whose effect is visual is chosen by looking, so the pages that gained a
+shelf kept - or gained - the picture: the Jokes shelf draws the *real* toast pill
+(`JokeToastPill`) with the reader's own name, stamp, edge and line effect; the
+Library shelf draws the *real* navigation bar (`ExpressiveNavigationBar` +
+`mainTabDestinations`) with the reader's own tabs; Type & display opens on a
+specimen of the current type and scale; Interface keeps the card mock-up on the
+shelf that used to be one level down. None of them is a mock drawn for Settings:
+a preview written separately is an advert, can be left behind, and nothing fails
+when it is.
+
+### Two pages that asked one question are one page
+
+"Type & reading" and "Display size" sat next to each other with no way to tell
+which one made the app bigger, and the Type page carried a card whose only job was
+a button to the Display size page - the app's own navigation admitting the
+ambiguity. They are one destination with two parts now (font and text size; the
+automatic-or-manual density), so "make it bigger" has one place to start.
+
+### A fact belongs on the row, not on a card about the row
+
+The About shelf first opened with a "build stamp" card - version, version code,
+package - above its rows, and the Build page below it drew all three again. A
+controls-shaped preview earns its place because the choice changes what the app
+looks like; a card that repeats three rows one tap away only spends the reader's
+attention twice. `SettingsHubEntry.value` already exists for exactly this, so the
+Build row carries `BuildConfig.VERSION_NAME` and the page is the one place the
+details are written out. `SettingsShelfGroup(values = …)` is how a shelf states
+such a fact at rest; it is empty by default, because a part whose state is a
+*setting* already says so in its subtitle and a value there would be a second,
+hand-maintained copy of the same sentence.
+
+### What deliberately did not change
+
+*Seasonal effects* stays one scroll. Its sliders and its live sky preview are one
+control: moving the sliders a level down would leave a preview with nothing to
+follow and sliders with nothing to preview, which is the failure its design exists
+to avoid. *Device Manager*, *Updates* and the account page stay flat for the same
+reason the shelf is grouped - they are short, and a shelf over three cards is a
+tap for nothing.
