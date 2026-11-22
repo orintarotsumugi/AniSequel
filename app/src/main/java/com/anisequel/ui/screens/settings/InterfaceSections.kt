@@ -354,66 +354,36 @@ internal fun InterfaceLibrarySection(
 }
 
 /**
- * The card, in three screens: its shape, the words it prints, and the art under them.
+ * The card's own group on the Interface shelf: the preview, its three screens and
+ * the reset.
  *
- * ## Why these are peers of the Interface shelf
+ * ## Why this is a group and no longer a shelf
  *
- * They used to be a second shelf inside this one - Interface > Card design > Card
- * shape - and every level drew its own header under the one above, so a reader who
- * opened a part saw three breadcrumb rows and a sliver of the control they came for.
- * The three parts now open from the Card design shelf as siblings of "Card design" on
- * the Interface page, with exactly one header on screen at a time. Reset card design
- * stays on the shelf, because it resets every part.
+ * The three parts used to sit one level below a "Card design" row, which made this
+ * the only four-level stack in Settings and stacked three titles before a control.
+ * The intermediate level held nothing but three rows and this preview, so it is
+ * gone: the parts are rows here, and the preview - the one thing that level was
+ * worth - is drawn above them, where a reader choosing a style is already looking.
  *
- * ## Why the drafts live in the text section
+ * ## Why the explanatory line is not padding
  *
- * [CardTextSection] keeps its own title and rating drafts, keyed on the stored
- * values: a rotation mid-drag used to keep the preference and lose the draft, and the
- * preview above the sliders has to read the value under the finger. The write still
- * happens on release, for the reason the bar-lift slider documents - a preference
- * written per frame would rebuild the grid behind the page under the thumb.
- */
-internal enum class CardDesignPart(
-    val title: String,
-    val subtitle: String,
-    val icon: ImageVector,
-    val testTag: String
-) {
-    SHAPE(
-        title = "Card shape",
-        subtitle = "Style and the cover's own proportions",
-        icon = AppVectorIcons.ViewGrid,
-        testTag = "card_design_row_shape"
-    ),
-    TEXT(
-        title = "Name and score",
-        subtitle = "Type size, weight, scrolling and which score",
-        icon = AppVectorIcons.TextBold,
-        testTag = "card_design_row_text"
-    ),
-    POSTER(
-        title = "Poster art",
-        subtitle = "AniList or BetterPosters, and what the card adds to it",
-        icon = AppVectorIcons.SectionAppearance,
-        testTag = "card_design_row_poster"
-    )
-}
-
-/**
- * The shelf: the card as it is now, the three screens that change it, and one reset.
+ * "Card design" sounds like it owns the Library's layout, and it does not: the
+ * Library view decides the columns and whether a mode prints captions at all, and
+ * this decides only what each card is made of. Saying so here is cheaper than a
+ * reader discovering it after choosing Big cards and finding three across.
  *
- * The explanatory line above the preview is not padding. "Card design" sounds like it
- * owns the Library's layout, and it does not: the Library view decides the columns and
- * whether a mode prints captions at all, and the card design only decides what each
- * card is made of. Saying that here is cheaper than a reader discovering it after
- * choosing Big cards and finding three across.
+ * ## Why the reset stays here
+ *
+ * It resets every part - the frame, the two type scales and the source - so a
+ * button inside one of them would be a button that clears controls the reader
+ * cannot see from there.
  */
 @Composable
-internal fun CardDesignShelf(
+internal fun CardDesignGroup(
     interfacePreferences: InterfacePreferences,
     previewEntries: List<MediaListEntryItem>,
     barTabs: List<MainTab>,
-    onOpen: (CardDesignPart) -> Unit
+    onOpen: (InterfaceSection) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val style by interfacePreferences.cardStyle.collectAsStateWithLifecycle(
@@ -424,60 +394,42 @@ internal fun CardDesignShelf(
     )
     val design = interfaceSettings.cardDesign
 
-    SettingsScrollColumn {
-        CollapsibleText(
-            text = "These three screens change the card itself: its frame, the words " +
-                "on it and the art behind them. They never change the Library's chosen " +
-                "view - its column count, and a caption-free mode such as Cover wall, " +
-                "stay exactly as the Library page set them - so a card can be restyled " +
-                "without the list rearranging under it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    SettingsSectionLabel(text = "Cards", compact = true)
+    CollapsibleText(
+        text = "These three screens change the card itself: its frame, the words " +
+            "on it and the art behind them. They never change the Library's chosen " +
+            "view - its column count, and a caption-free mode such as Cover wall, " +
+            "stay exactly as the Library page set them - so a card can be restyled " +
+            "without the list rearranging under it.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    CardDesignPreview(
+        style = style,
+        design = design,
+        entries = previewEntries,
+        viewMode = interfaceSettings.libraryView,
+        barTabs = barTabs
+    )
+    SettingsHubGroup(
+        tone = SettingsGroupTone.LOOK,
+        entries = listOf(
+            InterfaceSection.CARD_SHAPE.shelfEntry(onOpen),
+            InterfaceSection.CARD_TEXT.shelfEntry(onOpen),
+            InterfaceSection.CARD_POSTER.shelfEntry(onOpen)
         )
-        CardDesignPreview(
-            style = style,
-            design = design,
-            entries = previewEntries,
-            viewMode = interfaceSettings.libraryView,
-            barTabs = barTabs
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsHubGroup(
-            entries = listOf(
-                cardDesignEntry(CardDesignPart.SHAPE, onOpen),
-                cardDesignEntry(CardDesignPart.TEXT, onOpen),
-                cardDesignEntry(CardDesignPart.POSTER, onOpen)
-            )
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-        SettingsButton(
-            text = "Reset card design",
-            icon = AppVectorIcons.Refresh,
-            variant = SettingsButtonVariant.Outlined,
-            // Disabled rather than hidden: a control that vanishes leaves the reader
-            // wondering whether the page lost a feature.
-            enabled = design != CardDesign.DEFAULT,
-            onClick = { scope.launch { interfacePreferences.setCardDesign(CardDesign.DEFAULT) } },
-            modifier = Modifier.testTag("card_design_reset")
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-    }
+    )
+    SettingsButton(
+        text = "Reset card design",
+        icon = AppVectorIcons.Refresh,
+        variant = SettingsButtonVariant.Outlined,
+        // Disabled rather than hidden: a control that vanishes leaves the reader
+        // wondering whether the page lost a feature.
+        enabled = design != CardDesign.DEFAULT,
+        onClick = { scope.launch { interfacePreferences.setCardDesign(CardDesign.DEFAULT) } },
+        modifier = Modifier.testTag("card_design_reset")
+    )
 }
-
-/** One shelf row, named and described by the sub-page it opens. */
-private fun cardDesignEntry(
-    part: CardDesignPart,
-    onOpen: (CardDesignPart) -> Unit
-): SettingsHubEntry = SettingsHubEntry(
-    icon = part.icon,
-    title = part.title,
-    subtitle = part.subtitle,
-    testTag = part.testTag,
-    onClick = { onOpen(part) }
-)
 
 /** Style and cover shape: the two answers that only change what a card's frame is. */
 @Composable

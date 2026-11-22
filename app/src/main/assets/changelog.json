@@ -1,6 +1,60 @@
 {
   "versions": [
     {
+      "version": "2.5.3",
+      "entries": [
+        {
+          "title": "The launch screen usually does not draw at all",
+          "detail": "Opening the app read the stored theme, the interface settings and the app-lock choice, drew a placeholder until they answered, and only then read the stored session and the first-run answer behind a second placeholder - and only then did the dashboard start reading your saved list off disk. None of those reads depends on the one above it; they were serialised purely by the order the screens were composed in. They all start together at process start now, and the answers they produce seed the screens that used to draw a placeholder waiting for them, so a launch reads once, concurrently, and the first frame is the app."
+        },
+        {
+          "title": "Your list's saved copy is parsed before the first frame",
+          "detail": "The dashboard's first paint waits on two saved records - your profile and your list - and the list is the one snapshot measured in megabytes. That file read used to begin after both splash screens had resolved, so the reader watched a skeleton while a large file was read and parsed. It is started with everything else now, while the window is still being inflated."
+        },
+        {
+          "title": "A custom display density no longer resizes the app on launch",
+          "detail": "The display density is applied to the whole app above the theme, and the launch screen only waited for the theme and the lock - so a first frame drawn at the shipped default was re-laid-out a frame later at the reader's chosen density. The density is now part of what the launch wait covers, and an unreadable interface file falls back to the shipped defaults instead of holding the splash until the watchdog."
+        },
+        {
+          "title": "A title page's blurred backdrop is decoded at the blur's resolution",
+          "detail": "The artwork behind the Info page was decoded at the panel's own resolution - about 10 MB on a 1080p phone, twice while the cover crossfaded to the banner - for a picture drawn under an 18dp blur and a legibility scrim. It decodes at half that width on Soft and a third on Heavy: four and nine times less bitmap to allocate, decode and upload, and it competes far less with the poster cache on the list behind it. Crisp, which is the setting that means a sharp picture, keeps the full decode, and the hero is untouched."
+        }
+      ,
+        {
+          "title": "Settings is three groups of three, and every row says what it is set to",
+          "detail": "The shelf had eleven rows under five headings, two of which headed exactly one row, and it answered nothing: \"is OLED on?\", \"how often does the list refresh?\" and \"is the app lock set?\" each cost a page visit and a Back. It is three groups now - what it looks like, what it shows, what it runs on - and every row carries its current value on the right. The header and the search field no longer scroll away, so the one control that reaches every setting is available from any position in the list."
+        },
+        {
+          "title": "The account is a card, and the connection check is on it",
+          "detail": "The account row and a separate Connection check row were the same subject, and the check was the only row on the shelf that did not open a page. They are one card at the top: your avatar, who you are signed in as, how many titles the list actually holds, and a status pill that runs the same check the row used to. Every row on the shelf now opens a page, and neither the connection state nor the list behind the app needs to be asked for."
+        },
+        {
+          "title": "Type and display size are one page",
+          "detail": "\"Type & reading\" and \"Display size\" sat next to each other with no way to tell which one made the app bigger, and the Type page carried a card whose only job was a button to the other. Both are behind one row now, with a sample of your current type and scale above them: the font and text size on one part, the automatic-or-manual display density on the other."
+        },
+        {
+          "title": "Jokes, Library and About got shelves, and Card design lost a level",
+          "detail": "The pages with seven, six and five cards in one scroll are shelves now, one row per subject, while the pages that were already short stay one scroll. The card's three parts moved up beside the layout choices, so reaching the card's shape is one tap instead of three and no screen stacks three titles before the first control."
+        },
+        {
+          "title": "The previews moved to where the choice is made",
+          "detail": "The joke page draws the real toast pill with your own name, stamp and line style; the library page draws the real navigation bar with your own tabs; the type page shows a specimen of the type and scale you are reading it in. They are the same composables the app uses rather than mocks, so a preview cannot describe something the app does not draw."
+        },
+        {
+          "title": "Settings search can land on a shelf part",
+          "detail": "A result for a part of a page opens that part instead of the page's top, for every shelf including the ones added in this pass. The parts are indexed from the same enum the shelf draws its rows from, so renaming a row cannot leave a result behind that opens a page and leaves you to find it."
+        },
+        {
+          "title": "Device Manager stops drawing two placeholder cards",
+          "detail": "Opening Device Manager before its saved settings answered drew two \"reading your saved settings\" cards and then replaced both with the real ones - a jump under the thumb, on the one page where every other page had already settled on a default. The cards are drawn immediately now. The app-lock switch keeps its short reading line on purpose: drawing the switch off for a frame before a stored \"on\" arrives would be a security claim the app has not read yet."
+        },
+        {
+          "title": "About now says who made it",
+          "detail": "A Credits part joins the About page: the developer, the three other Android developers whose apps taught this one something (Dantotsu, Dartotsu and AnymeX), and the honourable mentions. Every name is a link to the profile or to the app it names, and they open through the app's one link handler, so a phone with nothing registered for the address still leaves you the address to copy."
+        }
+      ]
+    },
+    {
       "version": "2.5.2",
       "entries": [
         {

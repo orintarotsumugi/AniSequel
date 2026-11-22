@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -27,8 +28,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,6 +52,7 @@ import com.anisequel.ui.components.AppJokes
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.JokeLineText
 import com.anisequel.ui.components.JokePreviewBus
+import com.anisequel.ui.components.JokeToastPill
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -70,11 +74,93 @@ import kotlinx.coroutines.launch
  * Chatty" is a real state: turning jokes back on should restore the pace, dwell,
  * tones and moments the reader chose rather than silently resetting them.
  */
+/**
+ * One part of the joke page.
+ *
+ * The page was seven cards in one scroll - the switch and the persona, the line
+ * style and its sample, the pace, the placement, the topics, the moments, the
+ * saved lines and a preview button at the bottom. A reader who wanted to slow her
+ * down scrolled past four cards that had nothing to do with it, and the page's
+ * subtitle ("personality, jokes, triggers and animations") had stopped describing
+ * most of what was on it.
+ *
+ * The parts are the questions, and the shelf says which is which. Titles and
+ * subtitles live here only, so the row and the part cannot drift apart.
+ */
+internal enum class JokeSection(
+    override val title: String,
+    override val subtitle: String,
+    override val icon: ImageVector,
+    override val testTag: String
+) : SettingsShelfSection {
+    PERSONA(
+        title = "Ani-chan",
+        subtitle = "The switch, golden lines, her name and her stamp",
+        icon = AppVectorIcons.AnimeSparkle,
+        testTag = "joke_row_persona"
+    ),
+    TEXT_EFFECT(
+        title = "Line style",
+        subtitle = "How the words arrive, with a sample to watch",
+        icon = AppVectorIcons.TextBold,
+        testTag = "joke_row_text"
+    ),
+    PACE(
+        title = "Pace & dwell",
+        subtitle = "How often a line comes, and how long it stays",
+        icon = AppVectorIcons.Schedule,
+        testTag = "joke_row_pace"
+    ),
+    PLACEMENT(
+        title = "Where she appears",
+        subtitle = "The edge she speaks from and the pages she visits",
+        icon = AppVectorIcons.Tune,
+        testTag = "joke_row_placement"
+    ),
+    MOMENTS(
+        title = "When she appears",
+        subtitle = "The moments that invite a line",
+        icon = AppVectorIcons.Refresh,
+        testTag = "joke_row_moments"
+    ),
+    TONES(
+        title = "Topics",
+        subtitle = "What she is allowed to talk about",
+        icon = AppVectorIcons.Tag,
+        testTag = "joke_row_tones"
+    ),
+    SAVED(
+        title = "Saved lines",
+        subtitle = "The jokes you kept, and where to hear them again",
+        icon = AppVectorIcons.Star,
+        testTag = "joke_row_saved"
+    )
+}
+
+/**
+ * The joke toast's control panel.
+ *
+ * The shelf answers the page's first question before anything is opened: what the
+ * pill actually looks like with the reader's own name, stamp and line style. It is
+ * the real toast drawn by the real composable, not a mock - a preview written
+ * separately is an advert, and it is the kind of thing that is left behind when
+ * the pill changes.
+ *
+ * The master switch and everything else stay separate: "Off but Chatty" is a real
+ * state, and turning jokes back on restores the pace, dwell, tones and moments the
+ * reader chose rather than silently resetting them.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun JokeSettingsTab(
+internal fun JokeSettingsTab(
     jokePreferences: JokePreferences,
-    modifier: Modifier = Modifier
+    pageTitle: String,
+    pageSubtitle: String,
+    onClosePage: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** A part a Settings search result asked for; consumed once. */
+    initialSection: JokeSection? = null,
+    onInitialSectionConsumed: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val settings by jokePreferences.settings.collectAsStateWithLifecycle(initialValue = JokeSettings())
@@ -83,41 +169,158 @@ fun JokeSettingsTab(
     // `AppJokes.orderedFavourites` for why a saved line is never dropped.
     val saved = remember(favourites) { AppJokes.orderedFavourites(favourites) }
 
-    SettingsScrollColumn(modifier) {
-        AniChanCard(
-            settings = settings,
-            onEnabledChange = { enabled ->
-                scope.launch {
-                    jokePreferences.setEnabled(enabled)
-                    // "Off but Chatty" is worth preserving, but an *enabled*
-                    // stale Off would have nothing to schedule. Normal is the
-                    // honest fallback when the switch comes back on.
-                    if (enabled && settings.frequency == JokeFrequency.OFF) {
-                        jokePreferences.setFrequency(JokeFrequency.NORMAL)
-                    }
-                }
-            },
-            onGoldenChange = { enabled ->
-                scope.launch { jokePreferences.setGoldenJokesEnabled(enabled) }
+    SettingsShelf<JokeSection>(
+        hubTitle = pageTitle,
+        hubSubtitle = pageSubtitle,
+        initialSection = initialSection,
+        onInitialSectionConsumed = onInitialSectionConsumed,
+        onClosePage = onClosePage,
+        contentTag = "jokes_tab_content",
+        modifier = modifier,
+        hub = { onOpen ->
+            SettingsScrollColumn {
+                JokePillSample(settings = settings)
+                PreviewAndReset(settings = settings, scope = scope, preferences = jokePreferences)
+
+                SettingsShelfGroup(
+                    label = "Her voice",
+                    sections = listOf(JokeSection.PERSONA, JokeSection.TEXT_EFFECT),
+                    tone = SettingsGroupTone.CONTENT,
+                    onOpen = onOpen
+                )
+                SettingsShelfGroup(
+                    label = "When she appears",
+                    sections = listOf(
+                        JokeSection.PACE,
+                        JokeSection.PLACEMENT,
+                        JokeSection.MOMENTS
+                    ),
+                    tone = SettingsGroupTone.CONTENT,
+                    onOpen = onOpen
+                )
+                SettingsShelfGroup(
+                    label = "What she says",
+                    sections = listOf(JokeSection.TONES, JokeSection.SAVED),
+                    tone = SettingsGroupTone.CONTENT,
+                    onOpen = onOpen
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
+        },
+        body = { section ->
+            when (section) {
+                JokeSection.PERSONA -> SettingsScrollColumn {
+                    AniChanCard(
+                        settings = settings,
+                        onEnabledChange = { enabled ->
+                            scope.launch {
+                                jokePreferences.setEnabled(enabled)
+                                // "Off but Chatty" is worth preserving, but an
+                                // *enabled* stale Off would have nothing to schedule.
+                                // Normal is the honest fallback when the switch comes
+                                // back on.
+                                if (enabled && settings.frequency == JokeFrequency.OFF) {
+                                    jokePreferences.setFrequency(JokeFrequency.NORMAL)
+                                }
+                            }
+                        },
+                        onGoldenChange = { enabled ->
+                            scope.launch { jokePreferences.setGoldenJokesEnabled(enabled) }
+                        }
+                    )
+                    PersonaCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.TEXT_EFFECT -> SettingsScrollColumn {
+                    TextEffectCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.PACE -> SettingsScrollColumn {
+                    PaceCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.PLACEMENT -> SettingsScrollColumn {
+                    PlacementCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.MOMENTS -> SettingsScrollColumn {
+                    MomentsCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.TONES -> SettingsScrollColumn {
+                    TonesCard(settings = settings, scope = scope, preferences = jokePreferences)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+                JokeSection.SAVED -> SettingsScrollColumn {
+                    JokeFavouritesCard(
+                        lines = saved,
+                        onPreview = { line -> JokePreviewBus.requestPreview(line) },
+                        onRemove = { line -> scope.launch { jokePreferences.toggleFavourite(line) } },
+                        onClear = { scope.launch { jokePreferences.clearFavourites() } }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+    )
+}
+
+/**
+ * The real toast, drawn where the reader is choosing how it looks.
+ *
+ * `visible = true` because this is not an arrival: it is the resting pill. The
+ * dismiss and favourite actions are no-ops here - the point of the sample is the
+ * name, the stamp, the edge and the line effect, and making the heart work in a
+ * settings card would be a second copy of a control that lives on the toast
+ * itself. The tag is on the wrapper so it cannot be mistaken for the live pill.
+ */
+@Composable
+private fun JokePillSample(settings: JokeSettings) {
+    // A shipped line rather than invented copy: a preview that shows a sentence the
+    // app will never say is a preview of a different app.
+    val sampleLine = remember {
+        AppJokes.lines.firstOrNull() ?: "A backlog is a load-bearing word."
+    }
+    SectionCard(
+        title = "The pill",
+        icon = AppVectorIcons.AnimeSparkle,
+        subtitle = "The real toast, with your name, stamp and line style"
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("joke_pill_sample"),
+            contentAlignment = Alignment.Center
+        ) {
+            JokeToastPill(
+                joke = sampleLine,
+                golden = settings.goldenJokesEnabled,
+                visible = true,
+                fromBottom = settings.position == JokePosition.BOTTOM,
+                dwell = settings.dwell,
+                // `displayName`/`displayStamp` rather than the raw fields, because
+                // the host draws the fallback for a blank name or stamp and a sample
+                // that drew the blank would be the one place the app's pill looks
+                // broken.
+                speakerName = settings.displayName,
+                stamp = settings.displayStamp,
+                textEffect = settings.textEffect,
+                compact = settings.compact,
+                isFavourite = false,
+                onToggleFavourite = {},
+                onDismiss = {},
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "This is the toast itself rather than a drawing of it - the same " +
+                "surface that appears over the app, on the edge you chose. Change the " +
+                "name, stamp or line style and it updates here.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        // Identity and core behaviour lead; presentation refinements follow.
-        PersonaCard(settings = settings, scope = scope, preferences = jokePreferences)
-        PaceCard(settings = settings, scope = scope, preferences = jokePreferences)
-        PlacementCard(settings = settings, scope = scope, preferences = jokePreferences)
-        TonesCard(settings = settings, scope = scope, preferences = jokePreferences)
-        MomentsCard(settings = settings, scope = scope, preferences = jokePreferences)
-        TextEffectCard(settings = settings, scope = scope, preferences = jokePreferences)
-
-        JokeFavouritesCard(
-            lines = saved,
-            onPreview = { line -> JokePreviewBus.requestPreview(line) },
-            onRemove = { line -> scope.launch { jokePreferences.toggleFavourite(line) } },
-            onClear = { scope.launch { jokePreferences.clearFavourites() } }
-        )
-
-        PreviewAndReset(settings = settings, scope = scope, preferences = jokePreferences)
     }
 }
 

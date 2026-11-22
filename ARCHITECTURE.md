@@ -26,18 +26,31 @@ The code is grouped by responsibility:
 
 ### Settings map
 
-- **Appearance:** light/dark/system theme, palettes, cover-derived colour, backgrounds and OLED mode.
-- **Interface:** navigation, Home and Library layouts, cards, gestures and motion.
-- **Type & reading:** fonts, saved typefaces, text size and title behaviour.
-- **Jokes:** Ani-chan identity, tone, timing, triggers, compact mode and reveal animation.
-- **Seasonal effects:** particle style, density, size, speed and performance limits.
-- **Library & dashboard:** list refresh cadence, arriving rows, dashboard sections and bottom-bar destinations.
-- **Device Manager:** display behaviour, app lock, performance limits and cover-cache budget.
-- **AniList account:** connection, client configuration and sign-out.
-- **Updates:** installed version, update checks, release notes and crash-report options.
-- **About & support:** app details, privacy information, repository and issue links.
+The shelf is three groups of three rows plus the account card that leads it, and
+every row carries its current value (theme mode, card style, text scale, refresh
+interval, whether Ani-chan is on, the installed build) read from the same
+preference instances the pages write through (`SettingsSummaries`).
 
-Settings search indexes destinations and individual controls, retaining page and section metadata so a result can navigate to the relevant setting.
+- **Account (card, not a row):** who is signed in, the session, and the connection
+  check as a status chip.
+- **Look & layout**
+  - *Appearance:* light/dark/system theme, palettes, cover-derived colour, backgrounds and OLED mode.
+  - *Interface:* navigation, Home and Library layouts, the card and its three parts, gestures and motion. One shelf level; the card preview lives on it.
+  - *Type & display:* fonts, saved typefaces, text size and title behaviour, then automatic-or-manual display density. One destination so "make it bigger" has one entrance.
+- **What it shows**
+  - *Library & dashboard:* the two navigation bars with a live bar preview, the remembered library view, and refresh cadence plus arriving rows.
+  - *Jokes:* the real toast pill on the shelf, then identity, line style, timing, placement, moments, topics and saved lines.
+  - *Seasonal effects:* particle style, density, size, speed and performance limits. Deliberately one scroll - its sliders and its live preview are one control.
+- **Device & app**
+  - *Device Manager:* display behaviour, app lock, performance limits and cover-cache budget.
+  - *Updates:* update checks and release notes.
+  - *About & support:* the installed version on the Build row, then build details, authenticity, diagnostics, privacy and links.
+
+A page with several unrelated subjects and no live preview is a shelf
+(`SettingsShelf`, one level deep); a short page stays one scroll. Settings search
+indexes destinations and individual controls, and its shelf parts are generated
+from the section enums themselves, so a result carries the page and part it must
+open.
 
 ### Network and caching
 

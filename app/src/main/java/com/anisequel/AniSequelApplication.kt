@@ -8,6 +8,7 @@ import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.AuthRepositoryImpl
 import com.anisequel.data.repository.DiagnosticsPreferences
+import com.anisequel.data.repository.StartupWarmup
 
 /**
  * Supplies Coil with the app's tuned [ImageLoader].
@@ -58,6 +59,16 @@ class AniSequelApplication : Application(), ImageLoaderFactory {
         super.onCreate()
         val preferences = diagnosticsPreferences
         CrashReports.install(this) { preferences.crashReportsEnabled }
+        // The stored theme, interface settings, app-lock choice, session and
+        // first-run answer, plus the disk tier under the dashboard's first
+        // paint - all of them read here, concurrently, rather than each one
+        // waiting for the screen above it to be composed. See [StartupWarmup]
+        // for what the serial chain cost and why this is read-only.
+        //
+        // Started after the crash handler is installed, so a failure in any of
+        // these reads is recorded like any other rather than lost in the first
+        // milliseconds of the process.
+        StartupWarmup.begin(this, authRepository)
     }
 
     override fun newImageLoader(): ImageLoader = NetworkClient.createImageLoader(this)

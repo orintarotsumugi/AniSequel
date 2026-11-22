@@ -52,6 +52,7 @@ import com.anisequel.data.repository.OnboardingPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.SeasonalPreferences
+import com.anisequel.data.repository.StartupWarmup
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.data.repository.TierListPreferences
 import com.anisequel.domain.ui.NavBarLift
@@ -281,7 +282,14 @@ fun AppNavigation(
     // install paint Home and only then pop the setup wizard over it - the app's
     // first impression was a screen the reader was not allowed to use yet. The
     // gate below treats "not read" as a wait, not as "done".
-    val onboardingCompleted by onboardingPreferences.completed.collectAsStateWithLifecycle(initialValue = null)
+    //
+    // The warm read at process start is the one thing allowed to seed it, because
+    // its answer *is* the stored answer: with it there, the app draws its first
+    // real screen instead of a placeholder that said "Reading your setup..." for the
+    // length of a file read.
+    val onboardingCompleted by onboardingPreferences.completed.collectAsStateWithLifecycle(
+        initialValue = StartupWarmup.onboardingCompleted
+    )
 
     // How the media cards are drawn. Read here and handed down as a composition
     // local rather than as another parameter on every destination, because the
@@ -310,7 +318,8 @@ fun AppNavigation(
     // Clamped again on this side: DataStore can hold a value written by an older
     // build, and a lift outside the slider's range is not a layout this app draws.
     val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
-        initialValue = InterfacePreferences.InterfaceSettings()
+        initialValue = StartupWarmup.interfaceSettings
+            ?: InterfacePreferences.InterfaceSettings()
     )
 
     // One instance for the app: its answer cache is the feature (see [BetterPostersApi]).

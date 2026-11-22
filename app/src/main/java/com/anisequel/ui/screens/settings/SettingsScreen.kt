@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.BuildConfig
 import com.anisequel.data.changelog.ChangelogRepository
 import com.anisequel.data.model.MediaListEntryItem
@@ -53,6 +54,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.viewmodel.AuthViewModel
 import com.anisequel.ui.viewmodel.rememberApiStatusProbe
+import kotlin.enums.enumEntries
 /** The key the [rememberSaveableStateHolder] files the shelf under. */
 private const val HUB_SAVEABLE_KEY = "settings_hub"
 
@@ -151,19 +153,26 @@ internal enum class SettingsPage(
     // Its own page rather than rows on Appearance: font, size and title motion
     // change how reading feels on every screen, and each one needs a sample to be
     // judged by - which is a page, not a switch.
-    TYPE(
-        "Type & reading",
-        "Fonts, saved typefaces, text size and title behaviour",
-        AppVectorIcons.TextBold
+    TYPE_AND_DISPLAY(
+        "Type & display",
+        "Fonts, saved typefaces, text size and how large the app draws",
+        AppVectorIcons.TextBold,
+        ownsHeader = true
     ),
-    // Display size is its own page rather than a card under Interface or Type:
-    // the mode and the advanced density controls need room, and the number scales
-    // every dp in the app, not just the text beside it.
-    DISPLAY("Display size", "Automatic or manual app density", AppVectorIcons.Tune),
-    JOKES("Jokes", "Ani-chan personality, jokes, triggers and animations", AppVectorIcons.AnimeSparkle),
+    JOKES(
+        "Jokes",
+        "Ani-chan's lines, timing, topics and where she appears",
+        AppVectorIcons.AnimeSparkle,
+        ownsHeader = true
+    ),
     // The one page in Settings that draws something rather than switching it: the
     // shape, density, size and speed are only judgeable next to the sky they
     // produce, so it is a page with a preview and not four rows on Appearance.
+    //
+    // It stays one scroll rather than becoming a shelf for the same reason: its
+    // sliders and its preview are one control. Moving the sliders a level down
+    // would leave a preview with nothing to follow and sliders with nothing to
+    // show - the failure its whole design exists to avoid.
     SEASONAL(
         "Seasonal effects",
         "Seasonal particles, their appearance and performance limits",
@@ -171,8 +180,9 @@ internal enum class SettingsPage(
     ),
     LIBRARY(
         "Library & dashboard",
-        "AniList refresh timing, dashboard sections and navigation bar",
-        AppVectorIcons.Library
+        "Navigation bars, the library view and how fresh the list is",
+        AppVectorIcons.Library,
+        ownsHeader = true
     ),
     // The four device-shaped choices were in four different pages because each was
     // written beside the feature that first needed it - the frame-rate ceiling under
@@ -196,7 +206,12 @@ internal enum class SettingsPage(
     // "and links" is not padding: the page carries the repository and the issue
     // tracker, which is where a bug report actually goes. A subtitle that stopped
     // at "privacy" would describe three of its four cards.
-    ABOUT("About & support", "App details, privacy information and support links", AppVectorIcons.SectionAbout)
+    ABOUT(
+        "About & support",
+        "App details, privacy, support links and the people behind it",
+        AppVectorIcons.SectionAbout,
+        ownsHeader = true
+    )
 }
 
 /**
@@ -318,17 +333,34 @@ fun SettingsScreen(
     // rather than in `SettingsRoot` also lets it survive opening a result and
     // coming back to the same answer list.
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    // A search result can point one level below a page. The target is handed to the
-    // page's own shelf once, then consumed; without clearing it, reopening
-    // Interface from the normal row would jump to the last searched part again.
-    var interfaceTarget by rememberSaveable { mutableStateOf<InterfaceSection?>(null) }
-    var themeTarget by rememberSaveable { mutableStateOf<ThemeSection?>(null) }
-    // One probe, for the one place that checks: the shelf's "AniList connection"
-    // row and the dialog it opens share it, so a Check tap cannot disagree with
-    // the row that opened it. The About page used to raise a second, independent
-    // probe for its own check button; that card is gone because the row here
-    // already opens the same dialog.
+    // A search result can point one level below a page. One string rather than one
+    // typed state per shelf: the target is the section's enum name, resolved by the
+    // page that owns that enum. It used to be two typed states (an `InterfaceSection`
+    // and a `ThemeSection`) with a third needed for every new shelf - the plumbing,
+    // not the feature, was what a new sub-page cost. Handed to the page once, then
+    // consumed; without clearing it, reopening Interface from the normal row would
+    // jump to the last searched part again.
+    var targetSection by rememberSaveable { mutableStateOf<String?>(null) }
+    // One probe, for the one place that checks: the account card's connection chip
+    // and the dialog it opens share it, so a Check tap cannot disagree with the
+    // state that opened it.
     val apiProbe = rememberApiStatusProbe(checkApiReachability)
+    val apiUi by apiProbe.ui.collectAsStateWithLifecycle()
+    // The row values, read from the same preference instances the pages write
+    // through - see `rememberSettingsSummaries` for why they are assembled here and
+    // not inside the hub.
+    val summaries = rememberSettingsSummaries(
+        themePreferences = themePreferences,
+        interfacePreferences = interfacePreferences,
+        refreshIntervalPreferences = refreshIntervalPreferences,
+        jokePreferences = jokePreferences,
+        seasonalPreferences = seasonalPreferences,
+        appLockPreferences = appLockPreferences
+    )
+    val connectionLabel = when {
+        apiUi.isChecking -> "checking"
+        else -> apiUi.reachability.shortLabel()
+    }
 
     // The shelf and the pages are separate compositions, and `AnimatedContent`
     // disposes the outgoing one when its slide finishes - so `rememberScrollState`
@@ -342,8 +374,7 @@ fun SettingsScreen(
         when {
             page != null -> {
                 page = null
-                interfaceTarget = null
-                themeTarget = null
+                targetSection = null
             }
             searchQuery.isNotBlank() -> searchQuery = ""
             else -> onNavigateBack()
@@ -373,15 +404,27 @@ fun SettingsScreen(
                     if (destination == null) {
                         SettingsRoot(
                             viewer = viewer,
+                            watchedCount = totalWatchedCount,
+                            missedCount = totalMissedCount,
+                            summaries = summaries,
+                            connectionLabel = connectionLabel,
+                            connectionHealthy = if (apiUi.isChecking) null else apiUi.reachability.health(),
                             onClose = onNavigateBack,
                             onOpen = {
-                                interfaceTarget = null
-                                themeTarget = null
+                                targetSection = null
                                 page = it
                             },
+                            onOpenAccount = {
+                                targetSection = null
+                                page = SettingsPage.ACCOUNT
+                            },
                             onOpenSearchResult = { result ->
-                                interfaceTarget = result.interfaceSection
-                                themeTarget = result.themeSection
+                                // The typed interface/theme targets are kept so the
+                                // two existing shelves need no change; every newer
+                                // shelf arrives as a name and resolves it locally.
+                                targetSection = result.interfaceSection?.name
+                                    ?: result.themeSection?.name
+                                    ?: result.sectionName
                                 page = result.page
                             },
                             onCheckConnection = { showConnectionCheck = true },
@@ -400,8 +443,7 @@ fun SettingsScreen(
                                     subtitle = destination.subtitle,
                                     onBack = {
                                         page = null
-                                        interfaceTarget = null
-                                        themeTarget = null
+                                        targetSection = null
                                     }
                                 )
                             }
@@ -430,19 +472,11 @@ fun SettingsScreen(
                                     totalWatchedCount = totalWatchedCount,
                                     totalMissedCount = totalMissedCount,
                                     cardPreviewEntries = cardPreviewEntries,
-                                    interfaceTarget = interfaceTarget,
-                                    onInterfaceTargetConsumed = { interfaceTarget = null },
-                                    themeTarget = themeTarget,
-                                    onThemeTargetConsumed = { themeTarget = null },
+                                    targetSection = targetSection,
+                                    onTargetConsumed = { targetSection = null },
                                     onClosePage = {
                                         page = null
-                                        interfaceTarget = null
-                                        themeTarget = null
-                                    },
-                                    onOpenPage = { destination ->
-                                        interfaceTarget = null
-                                        themeTarget = null
-                                        page = destination
+                                        targetSection = null
                                     }
                                 )
                             }
@@ -464,27 +498,64 @@ fun SettingsScreen(
 /**
  * The shelf.
  *
- * The sections are the reader's questions in order: how it looks, how it behaves,
- * who it is signed in as, whether the network is awake, and what changed. Rows in
- * one subject share a card and are separated by a hairline, so the gap between two
- * cards means "different subject" rather than "next row" - see `SettingsHubGroup`.
+ * Three groups of three, with the account on its own card above them.
+ *
+ * ## Why three groups rather than five
+ *
+ * The shelf used to carry five labels, and two of them - "Library & dashboard"
+ * and "This device" - headed exactly one row. A heading over a single row is a
+ * hierarchy level that carries nothing: the reader parses a section with no
+ * members, and it spends a label's worth of vertical space (26dp above, 10dp
+ * below) to say so. Nine rows divide honestly into the three questions a reader
+ * arrives with: what it looks like, what it shows, and what it runs on.
+ *
+ * ## Why the account is a card and not a row
+ *
+ * It used to be two rows - the account itself and a Connection check action -
+ * and the action was the only non-page on the shelf, which made the screen's
+ * contract ("every row opens a page") false. They are one subject, so they are
+ * one card: identity, session state, and the connection chip that runs the same
+ * check the row used to. See [SettingsAccountCard].
+ *
+ * ## Why the header and the search field do not scroll
+ *
+ * Header, field and nine rows is more than a screen, so the field used to leave
+ * the screen exactly when a reader had scrolled past the rows it searches. Pinning
+ * it costs about 120dp of viewport and keeps the one control that reaches every
+ * setting available from every scroll position. Only the list below it scrolls,
+ * and it still keeps its position across a page visit - see the
+ * `rememberSaveableStateHolder` in `SettingsScreen`.
+ *
+ * ## Why every row now carries a value
+ *
+ * The subtitle says what is behind the row; the value says what is set. That is
+ * the difference between a table of contents and a control panel, and it is what
+ * spares the reader a page visit and a Back to answer "is OLED on?". See
+ * [SettingsHubEntry.value] and [SettingsSummaries].
  */
 @Composable
 private fun SettingsRoot(
     viewer: ViewerProfile?,
+    /** The dashboard's already-loaded counts, for the account card's second line. */
+    watchedCount: Int?,
+    missedCount: Int?,
+    summaries: SettingsSummaries,
+    connectionLabel: String,
+    connectionHealthy: Boolean?,
     onClose: () -> Unit,
     onOpen: (SettingsPage) -> Unit,
+    onOpenAccount: () -> Unit,
     onOpenSearchResult: (SettingsSearchResult) -> Unit,
     onCheckConnection: () -> Unit,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // The pinned half: the screen's name and the field that can reach every
+        // setting, available from any scroll position.
         Column(
             modifier = Modifier
                 .widthIn(max = MaxSettingsContentWidth)
@@ -496,122 +567,126 @@ private fun SettingsRoot(
                 onQueryChange = onSearchQueryChange,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
             )
+        }
 
-            if (searchQuery.isNotBlank()) {
-                SettingsSearchResults(
-                    query = searchQuery,
-                    onQueryChange = onSearchQueryChange,
-                    onOpen = onOpenSearchResult,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            } else {
-                // The account leads now. It is the one row whose answer changes what
-                // every page below it is looking at - demo list or real AniList list -
-                // and it used to sit fourth, under two sections a signed-out reader
-                // would walk past on the way to "am I signed in?".
-                SettingsSectionLabel("AniList")
-                SettingsHubGroup(
-                    entries = listOf(
-                        SettingsPage.ACCOUNT.entry(
-                            "settings_row_account",
-                            onOpen,
-                            // The one live fact on the shelf: whether this session is a
-                            // real AniList account or the built-in demo list. Everything
-                            // else the row could say is already on the page it opens.
-                            subtitle = viewer?.let { "Signed in as ${it.name}" }
-                                ?: "Not signed in - browsing the demo list"
-                        ),
-                        // `SignalOn`, not `BrokenHeart`: this row asks a question. A
-                        // broken heart beside "connection" claims the answer before the
-                        // check has run, on a screen where the answer is usually fine.
-                        SettingsHubEntry(
-                            icon = AppVectorIcons.SignalOn,
-                            title = "Connection check",
-                            subtitle = "Ask AniList whether it is reachable",
-                            onClick = onCheckConnection,
-                            testTag = "settings_row_connection"
-                        )
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                SettingsSectionLabel("Personalisation")
-                SettingsHubGroup(
-                    entries = listOf(
-                        SettingsPage.APPEARANCE.entry(
-                            "settings_row_appearance",
-                            onOpen
-                        ),
-                        SettingsPage.UI.entry(
-                            "settings_row_ui",
-                            onOpen
-                        ),
-                        SettingsPage.TYPE.entry(
-                            "settings_row_type",
-                            onOpen
-                        ),
-                        SettingsPage.DISPLAY.entry(
-                            "settings_row_display",
-                            onOpen
-                        ),
-                        SettingsPage.JOKES.entry(
-                            "settings_row_jokes",
-                            onOpen
-                        ),
-                        SettingsPage.SEASONAL.entry(
-                            "settings_row_seasonal",
-                            onOpen
-                        )
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                SettingsSectionLabel("Library & dashboard")
-                SettingsHubGroup(
-                    entries = listOf(
-                        SettingsPage.LIBRARY.entry(
-                            "settings_row_library",
-                            onOpen
-                        )
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                SettingsSectionLabel("This device")
-                SettingsHubGroup(
-                    entries = listOf(
-                        SettingsPage.DEVICE.entry(
-                            "settings_row_device",
-                            onOpen
-                        )
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                // The connection check used to sit under a "Network" label of its own,
-                // which is a whole section heading for one row - and a heading that
-                // names the transport rather than the thing being checked. It lives
-                // with the account row at the top, because it is the same AniList.
-                SettingsSectionLabel("About")
-                SettingsHubGroup(
-                    entries = listOf(
-                        SettingsPage.UPDATES.entry(
-                            "settings_row_updates",
-                            onOpen
-                        ),
-                        SettingsPage.ABOUT.entry(
-                            "settings_row_about",
-                            onOpen
-                        )
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-
-                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    SettingsVersionFooter(
-                        versionName = BuildConfig.VERSION_NAME,
-                        versionCode = BuildConfig.VERSION_CODE
+        // The scrolling half. `weight` rather than `fillMaxSize` because the pinned
+        // half above has already taken its height.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = MaxSettingsContentWidth)
+                    .fillMaxWidth()
+            ) {
+                if (searchQuery.isNotBlank()) {
+                    SettingsSearchResults(
+                        query = searchQuery,
+                        onQueryChange = onSearchQueryChange,
+                        onOpen = onOpenSearchResult,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                } else {
+                    // The account leads. It is the one answer that changes what every
+                    // row below it is looking at - a real AniList list or the built-in
+                    // demo - and it is now a card rather than a row, because it carries
+                    // a second control (the connection check).
+                    SettingsAccountCard(
+                        name = viewer?.name,
+                        // `large` first: the tile is 52dp, and AniList's medium
+                        // avatar is the one sized for a 36dp row.
+                        avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
+                        subtitle = accountSubtitle(viewer, watchedCount, missedCount),
+                        connectionLabel = connectionLabel,
+                        connectionHealthy = connectionHealthy,
+                        onOpenAccount = onOpenAccount,
+                        onCheckConnection = onCheckConnection,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+
+                    // One group per question, one tonal family per group, and no
+                    // heading over a group that holds a single row.
+                    SettingsSectionLabel("Look & layout")
+                    SettingsHubGroup(
+                        tone = SettingsGroupTone.LOOK,
+                        entries = listOf(
+                            SettingsPage.APPEARANCE.entry(
+                                "settings_row_appearance",
+                                onOpen,
+                                value = summaries.appearance
+                            ),
+                            SettingsPage.UI.entry(
+                                "settings_row_ui",
+                                onOpen,
+                                value = summaries.interfaceStyle
+                            ),
+                            SettingsPage.TYPE_AND_DISPLAY.entry(
+                                "settings_row_typedisplay",
+                                onOpen,
+                                value = summaries.type
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+
+                    SettingsSectionLabel("What it shows")
+                    SettingsHubGroup(
+                        tone = SettingsGroupTone.CONTENT,
+                        entries = listOf(
+                            SettingsPage.LIBRARY.entry(
+                                "settings_row_library",
+                                onOpen,
+                                value = summaries.library
+                            ),
+                            SettingsPage.JOKES.entry(
+                                "settings_row_jokes",
+                                onOpen,
+                                value = summaries.jokes
+                            ),
+                            SettingsPage.SEASONAL.entry(
+                                "settings_row_seasonal",
+                                onOpen,
+                                value = summaries.seasonal
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+
+                    SettingsSectionLabel("Device & app")
+                    SettingsHubGroup(
+                        tone = SettingsGroupTone.DEVICE,
+                        entries = listOf(
+                            SettingsPage.DEVICE.entry(
+                                "settings_row_device",
+                                onOpen,
+                                value = summaries.device
+                            ),
+                            // No value: this app keeps no *last checked* answer, and a
+                            // row that said "Up to date" without having asked would be
+                            // the one lie on a screen of facts.
+                            SettingsPage.UPDATES.entry(
+                                "settings_row_updates",
+                                onOpen
+                            ),
+                            SettingsPage.ABOUT.entry(
+                                "settings_row_about",
+                                onOpen,
+                                value = summaries.about
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        SettingsVersionFooter(
+                            versionName = BuildConfig.VERSION_NAME,
+                            versionCode = BuildConfig.VERSION_CODE
+                        )
+                    }
                 }
             }
         }
@@ -631,22 +706,81 @@ private fun SettingsRoot(
  * holds before it draws them: the divider goes *between* them, and a lambda per row
  * cannot tell the group where the last one is.
  *
- * The one exception is [subtitle], used only by the account row to state who is
- * signed in. That is not a second description of the page - it is a fact about
- * the session that changes while the page itself does not, and the shelf is
- * where a reader glances to ask whether they are signed in at all.
+ * [value] is the page's current setting, read at the shelf - not a second
+ * description of the page. It is the one thing on the row that changes while the
+ * page behind it does not.
  */
 private fun SettingsPage.entry(
     testTag: String,
     onOpen: (SettingsPage) -> Unit,
-    subtitle: String? = null
+    value: String? = null
 ): SettingsHubEntry = SettingsHubEntry(
     icon = this.icon,
     title = title,
-    subtitle = subtitle ?: this.subtitle,
+    subtitle = subtitle,
     testTag = testTag,
-    onClick = { onOpen(this) }
+    onClick = { onOpen(this) },
+    value = value
 )
+
+/**
+ * The account card's second line.
+ *
+ * "Your list, session and sign-in" described the *page* the card opens, which the
+ * chevron already promises. The counts describe the list the card is about, and
+ * they are the numbers the dashboard has already loaded - a reader who came to
+ * Settings to check "is this my account" gets an answer with evidence. Both are
+ * absent until the list's first load answers, and an absent count draws no claim
+ * rather than a zero.
+ */
+private fun accountSubtitle(viewer: ViewerProfile?, watched: Int?, missed: Int?): String {
+    if (viewer == null) return "Browsing the demo list - connect AniList to see your own"
+    val watchedLine = watched?.let { count ->
+        if (count == 1) "1 title in your list" else "$count titles in your list"
+    }
+    val missedLine = missed?.takeIf { it > 0 }?.let { count ->
+        if (count == 1) "1 sequel waiting" else "$count sequels waiting"
+    }
+    return listOfNotNull(watchedLine, missedLine).joinToString(" · ")
+        .ifEmpty { "Your list, session and sign-in" }
+}
+
+/**
+ * Resolves a search result's section name against the enum that owns it.
+ *
+ * The name rather than the enum instance so one `rememberSaveable` state can
+ * carry a target for every shelf in Settings: an enum is not `Parcelable`, and one
+ * typed state per shelf is the plumbing this replaces. An unknown name (a result
+ * from a build that had a section this one dropped) resolves to null, which opens
+ * the page at its shelf instead of crashing - the same honesty `SettingsSearch`
+ * gives a result it cannot place.
+ */
+private inline fun <reified T : Enum<T>> String?.toSection(): T? =
+    this?.let { name -> enumEntries<T>().firstOrNull { it.name == name } }
+
+/** The chip's short verdict, because `ApiReachability.label` is a sentence. */
+private fun ApiReachability.shortLabel(): String = when (this) {
+    ApiReachability.ONLINE -> "Reachable"
+    ApiReachability.SLOW -> "Slow"
+    ApiReachability.RATE_LIMITED -> "Rate limited"
+    ApiReachability.OFFLINE -> "Unreachable"
+    ApiReachability.DOWN -> "Down"
+    ApiReachability.NO_ANSWER -> "No answer"
+    ApiReachability.UNKNOWN -> "Not checked"
+}
+
+/**
+ * True answered, false did not, null no verdict yet.
+ *
+ * `RATE_LIMITED` is healthy: AniList answered, it just asked for fewer requests,
+ * and painting the chip as a failure would send the reader looking for a network
+ * problem that is not there.
+ */
+private fun ApiReachability.health(): Boolean? = when (this) {
+    ApiReachability.ONLINE, ApiReachability.SLOW, ApiReachability.RATE_LIMITED -> true
+    ApiReachability.OFFLINE, ApiReachability.DOWN, ApiReachability.NO_ANSWER -> false
+    ApiReachability.UNKNOWN -> null
+}
 
 /** The body of a hub page, with every control the old tabs had. */
 @Composable
@@ -670,25 +804,36 @@ private fun SettingsPageContent(
     totalWatchedCount: Int?,
     totalMissedCount: Int?,
     cardPreviewEntries: List<MediaListEntryItem>,
-    /** An Interface part a search result asked for, consumed once by that page. */
-    interfaceTarget: InterfaceSection?,
-    onInterfaceTargetConsumed: () -> Unit,
-    /** An Appearance part a search result asked for, consumed once by that page. */
-    themeTarget: ThemeSection?,
-    onThemeTargetConsumed: () -> Unit,
+    /**
+     * The shelf section a search result asked for, as its enum's name.
+     *
+     * One string for every shelf instead of a typed state per shelf: the section
+     * resolves it against its own enum, so adding a sub-page no longer costs three
+     * states and two callbacks in this screen.
+     */
+    targetSection: String?,
+    onTargetConsumed: () -> Unit,
     /** Leaves the open page for the Settings shelf; used by the pages that own theirs. */
-    onClosePage: () -> Unit,
-    /** Opens another Settings page from inside one - Type & reading links to Display size. */
-    onOpenPage: (SettingsPage) -> Unit
+    onClosePage: () -> Unit
 ) {
     when (page) {
+        // The account page is reached from the hero card rather than a shelf row, so
+        // it does not own a header - `SettingsScreen` draws "AniList account" above
+        // it like any other flat page.
+        SettingsPage.ACCOUNT -> EditSettingsTab(
+            authViewModel = authViewModel,
+            onNavigateToLogin = onNavigateToLogin,
+            viewer = viewer,
+            totalWatchedCount = totalWatchedCount,
+            totalMissedCount = totalMissedCount
+        )
         SettingsPage.APPEARANCE -> ThemeTab(
             themePreferences = themePreferences,
             pageTitle = page.title,
             pageSubtitle = page.subtitle,
             onClosePage = onClosePage,
-            initialSection = themeTarget,
-            onInitialSectionConsumed = onThemeTargetConsumed
+            initialSection = targetSection.toSection<ThemeSection>(),
+            onInitialSectionConsumed = onTargetConsumed
         )
         SettingsPage.UI -> InterfaceTab(
             themePreferences = themePreferences,
@@ -699,27 +844,39 @@ private fun SettingsPageContent(
             onClosePage = onClosePage,
             previewEntries = cardPreviewEntries,
             mainTabPreferences = mainTabPreferences,
-            initialSection = interfaceTarget,
-            onInitialSectionConsumed = onInterfaceTargetConsumed
+            initialSection = targetSection.toSection<InterfaceSection>(),
+            onInitialSectionConsumed = onTargetConsumed
         )
-        SettingsPage.TYPE -> TypeSettingsTab(
+        SettingsPage.TYPE_AND_DISPLAY -> TypeDisplayTab(
             themePreferences = themePreferences,
             interfacePreferences = interfacePreferences,
-            onOpenDisplaySize = { onOpenPage(SettingsPage.DISPLAY) }
-        )
-        SettingsPage.DISPLAY -> DpiSettingsTab(
-            interfacePreferences = interfacePreferences,
-            modifier = Modifier.fillMaxSize()
-        )
-        SettingsPage.JOKES -> JokeSettingsTab(jokePreferences = jokePreferences)
-        SettingsPage.SEASONAL -> SeasonalSettingsTab(
-            seasonalPreferences = seasonalPreferences
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage,
+            initialSection = targetSection.toSection<TypeSection>(),
+            onInitialSectionConsumed = onTargetConsumed
         )
         SettingsPage.LIBRARY -> LibrarySettingsTab(
             refreshIntervalPreferences = refreshIntervalPreferences,
             arrivingPreferences = arrivingPreferences,
             libraryPreferences = libraryPreferences,
-            mainTabPreferences = mainTabPreferences
+            mainTabPreferences = mainTabPreferences,
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage,
+            initialSection = targetSection.toSection<LibrarySection>(),
+            onInitialSectionConsumed = onTargetConsumed
+        )
+        SettingsPage.JOKES -> JokeSettingsTab(
+            jokePreferences = jokePreferences,
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage,
+            initialSection = targetSection.toSection<JokeSection>(),
+            onInitialSectionConsumed = onTargetConsumed
+        )
+        SettingsPage.SEASONAL -> SeasonalSettingsTab(
+            seasonalPreferences = seasonalPreferences
         )
         SettingsPage.DEVICE -> DeviceManagerTab(
             seasonalPreferences = seasonalPreferences,
@@ -727,14 +884,13 @@ private fun SettingsPageContent(
             themePreferences = themePreferences,
             appLockPreferences = appLockPreferences
         )
-        SettingsPage.ACCOUNT -> EditSettingsTab(
-            authViewModel = authViewModel,
-            onNavigateToLogin = onNavigateToLogin,
-            viewer = viewer,
-            totalWatchedCount = totalWatchedCount,
-            totalMissedCount = totalMissedCount
-        )
         SettingsPage.UPDATES -> UpdatesSettingsTab(changelogRepository = changelogRepository)
-        SettingsPage.ABOUT -> InfoSettingsTab()
+        SettingsPage.ABOUT -> InfoSettingsTab(
+            pageTitle = page.title,
+            pageSubtitle = page.subtitle,
+            onClosePage = onClosePage,
+            initialSection = targetSection.toSection<AboutSection>(),
+            onInitialSectionConsumed = onTargetConsumed
+        )
     }
 }

@@ -67,16 +67,144 @@ class SettingsLayoutTest {
 
         val screen = source(settings + "SettingsScreen.kt")
         listOf(
-            "SettingsSectionLabel(\"Personalisation\")",
-            "SettingsSectionLabel(\"AniList\")",
-            "SettingsSectionLabel(\"About\")"
+            "SettingsSectionLabel(\"Look & layout\")",
+            "SettingsSectionLabel(\"What it shows\")",
+            "SettingsSectionLabel(\"Device & app\")"
         ).forEach { label ->
             assertTrue("the shelf lost its $label heading", screen.contains(label))
         }
+        // A heading over a single row is the hierarchy this rework removed: it made
+        // the reader parse a section with no members. The shelf has three groups and
+        // every one of them holds destinations.
+        assertFalse(
+            "a one-row section is back, so the shelf has a label that names nothing",
+            screen.contains("SettingsSectionLabel(\"Library & dashboard\")") ||
+                screen.contains("SettingsSectionLabel(\"This device\")") ||
+                screen.contains("SettingsSectionLabel(\"Personalisation\")")
+        )
         assertTrue(
             "the rows are no longer built from the page enum, so a row can drift " +
                 "from the page it opens",
             screen.contains("SettingsPage.APPEARANCE.entry(")
+        )
+        // The account is a card, not a row, and the connection check is the chip on
+        // it - the shelf's contract is "every row opens a page", and the old action
+        // row was the one exception.
+        assertTrue(
+            "the account is no longer the card at the top of the shelf",
+            screen.contains("SettingsAccountCard(")
+        )
+        // The chip is drawn by the card, which lives in SettingsHub.kt; the page
+        // only places the card. Reading one file here is what made this assertion
+        // fail on a build where the chip was drawn correctly.
+        assertTrue(
+            "the connection check lost its row tag",
+            screen.contains("settings_row_connection") ||
+                hub.contains("settings_row_connection")
+        )
+        assertFalse(
+            "a Connection check action row is back, so the shelf is not all pages",
+            screen.contains("title = \"Connection check\"")
+        )
+    }
+
+    /**
+     * The shelf answers its own rows.
+     *
+     * This is the payoff of the redesign: "is OLED on?", "how often does the list
+     * refresh?" and "is the lock set?" are answered by looking, not by opening a
+     * page and pressing Back. The failure this guards is a value that is drawn for
+     * some rows and silently forgotten for the rest, because nothing errors when a
+     * row omits it.
+     */
+    @Test
+    fun `every destination row carries its current value`() {
+        val hub = source(settings + "SettingsHub.kt")
+        assertTrue(
+            "the row model has no value field, so the shelf cannot state a setting",
+            hub.contains("val value: String? = null")
+        )
+        assertTrue(
+            "the row does not draw its value",
+            hub.contains("entry.value") && hub.contains("stateDescription")
+        )
+
+        val screen = source(settings + "SettingsScreen.kt")
+        val summaries = source(settings + "SettingsSummaries.kt")
+        listOf(
+            "summaries.appearance",
+            "summaries.interfaceStyle",
+            "summaries.type",
+            "summaries.library",
+            "summaries.jokes",
+            "summaries.seasonal",
+            "summaries.device",
+            "summaries.about"
+        ).forEach { value ->
+            assertTrue("the shelf stopped reading $value", screen.contains(value))
+        }
+        // Assembled from the same preference instances the pages write through, or
+        // the row and the page could describe two different stored values.
+        listOf(
+            "themePreferences.settings",
+            "interfacePreferences.cardStyle",
+            "refreshIntervalPreferences.interval",
+            "jokePreferences.settings",
+            "seasonalPreferences.settings",
+            "appLockPreferences.enabled"
+        ).forEach { store ->
+            assertTrue("the summaries stopped reading $store", summaries.contains(store))
+        }
+        assertFalse(
+            "the hub collects preferences itself, so two screens can disagree",
+            hub.contains("SettingsSummaries(")
+        )
+    }
+
+    /**
+     * A setting whose effect is visual is chosen by looking.
+     *
+     * Every page that had a preview keeps it, and the pages that gained one in this
+     * rework draw it on their own shelf: the joke pill is the real toast, the library
+     * bar is the real navigation bar, and the type specimen is the type the reader is
+     * already reading. A preview written separately is an advert - it can be left
+     * behind, and nothing fails when it is.
+     */
+    @Test
+    fun `each settings page keeps a preview of what it changes`() {
+        val jokes = source(settings + "JokeSettingsTab.kt")
+        assertTrue(
+            "the joke page no longer shows the toast it configures",
+            jokes.contains("JokeToastPill(")
+        )
+        val library = source(settings + "LibrarySettingsTab.kt")
+        assertTrue(
+            "the library page no longer draws the bar its switches change",
+            library.contains("ExpressiveNavigationBar(")
+        )
+        assertTrue(
+            "the library bar preview is not built from the reader's own tabs",
+            library.contains("mainTabDestinations(")
+        )
+        val type = source(settings + "TypeDisplayTab.kt")
+        assertTrue(
+            "the type page lost its specimen",
+            type.contains("TypeSpecimenCard(")
+        )
+        val appearance = source(settings + "ThemeTab.kt")
+        assertTrue(
+            "the appearance page lost its live theme sample",
+            appearance.contains("ThemePreviewCard(")
+        )
+        val seasonal = source(settings + "SeasonalSettingsTab.kt")
+        assertTrue(
+            "the seasonal page lost the sky preview that makes its sliders judgeable",
+            seasonal.contains("PreviewCard(")
+        )
+        val iface = source(settings + "InterfaceSections.kt")
+        assertTrue(
+            "the card group lost the preview that is the answer to a style choice",
+            iface.contains("CardDesignPreview(")
         )
     }
 
@@ -176,7 +304,115 @@ class SettingsLayoutTest {
         assertTrue("checked rows should have a visible tonal state", components.contains("background(rowContainer)"))
         val hub = source(settings + "SettingsHub.kt")
         assertTrue("hub groups should use expressive large surfaces", hub.contains("ExpressiveShapes.extraLarge"))
-        assertTrue("hub entries should share the section icon palette", hub.contains("settingsIconPalette(entry.title)"))
+        // The tile's colour is the *group's*, and its silhouette is its position in
+        // the group. Both used to be `title.hashCode()`, which meant renaming a row
+        // repainted it and two rows could collide by luck.
+        assertTrue(
+            "hub entries no longer take their colour from the group they belong to",
+            hub.contains("settingsGroupPalette(tone, index)")
+        )
+        assertTrue(
+            "hub entries no longer take their silhouette from their position",
+            hub.contains("settingsTileShape(index)")
+        )
+    }
+
+    /**
+     * Two pages that asked one question are one page.
+     *
+     * "Type & reading" and "Display size" sat next to each other on the shelf with
+     * no way to tell which one made the app bigger, and the Type page carried a card
+     * whose only job was a button to the other. One row replaced both.
+     */
+    @Test
+    fun `type and display size are one destination`() {
+        val screen = source(settings + "SettingsScreen.kt")
+        assertTrue(
+            "the merged page is not in the page enum",
+            screen.contains("TYPE_AND_DISPLAY(")
+        )
+        assertFalse(
+            "Display size is a destination of its own again",
+            screen.contains("DISPLAY(\"Display size\"")
+        )
+        assertTrue(
+            "the merged page is not dispatched",
+            screen.contains("SettingsPage.TYPE_AND_DISPLAY -> TypeDisplayTab(")
+        )
+        val type = source(settings + "TypeDisplayTab.kt")
+        assertTrue(
+            "the merged page lost the text half",
+            type.contains("TypeTextSectionBody(")
+        )
+        assertTrue(
+            "the merged page lost the display-size half",
+            type.contains("DisplaySizeSectionBody(")
+        )
+        assertFalse(
+            "the pointer card between the two pages is back",
+            source(settings + "DpiSettingsTab.kt").contains("DisplaySizePointerCard(")
+        )
+    }
+
+    /**
+     * The Interface page is one level deep.
+     *
+     * Card design sat between the page and the three screens that change a card, so
+     * the stack was Interface -> Card design -> Card shape and three titles stacked
+     * before a control. The parts are peers now, and the preview the middle level was
+     * worth lives on the page's own shelf.
+     */
+    @Test
+    fun `the card design shelf is gone and its parts are peers of the layout rows`() {
+        // Two files: the page's stack and the group that draws the cards. The
+        // requirement is about the page's shape, not about which file holds a line.
+        val iface = source(settings + "InterfaceTab.kt") +
+            source(settings + "InterfaceSections.kt")
+        assertFalse(
+            "a Card design section is back, so the page is four levels deep again",
+            iface.contains("InterfaceSection.CARDS") || iface.contains("fun parent()")
+        )
+        assertTrue(
+            "the three card parts are not on the Interface shelf",
+            iface.contains("InterfaceSection.CARD_SHAPE.shelfEntry(onOpen)")
+        )
+        assertTrue(
+            "the shelf no longer runs through the shared one-level scaffold",
+            iface.contains("SettingsShelf<InterfaceSection>(")
+        )
+        assertTrue(
+            "the card preview left the shelf with the level it used to sit on",
+            iface.contains("fun CardDesignGroup(")
+        )
+    }
+
+    /**
+     * About states the build on its shelf, and says it in one place.
+     *
+     * The shelf briefly opened with a "build stamp" card above its rows, which drew
+     * the version, the version code and the package - the same three facts the Build
+     * page draws one tap away. A row can carry a fact at rest instead, so the reader
+     * sees which build this is *before* choosing a row, and the page stays the only
+     * place the details are written out.
+     */
+    @Test
+    fun `the about shelf states the build once and the page does not draw it again`() {
+        val about = source(settings + "InfoSettingsTab.kt")
+        assertTrue(
+            "the About shelf no longer states which build this is, so the one fact " +
+                "the page exists for is a tap away",
+            about.contains("AboutSection.BUILD to BuildConfig.VERSION_NAME")
+        )
+        assertFalse(
+            "a build stamp card is back above the rows, drawing the version rows the " +
+                "Build page draws one tap below it",
+            about.contains("BuildStampCard(")
+        )
+        assertTrue(
+            "the shelf's row values are not passed through the shared group, so a " +
+                "fact cannot be stated on any shelf",
+            source(settings + "SettingsShelf.kt").contains("values: Map<T, String> = emptyMap()")
+        )
     }
 
     @Test
@@ -189,8 +425,12 @@ class SettingsLayoutTest {
         val jokes = source(settings + "JokeSettingsTab.kt")
         assertTrue("speaker identity should precede timing refinements",
             jokes.indexOf("PersonaCard(settings") < jokes.indexOf("PaceCard(settings"))
-        assertTrue("text presentation should follow placement choices",
-            jokes.indexOf("PlacementCard(settings") < jokes.indexOf("TextEffectCard(settings"))
+        // The order that matters is the shelf's now, not the file's: the parts are a
+        // menu, and a reader meets "where she appears" before "what she talks about".
+        assertTrue("placement should be offered before the topics she may use",
+            jokes.indexOf("JokeSection.PLACEMENT") < jokes.indexOf("JokeSection.TONES"))
+        assertTrue("the persona should be offered before placement",
+            jokes.indexOf("JokeSection.PERSONA") < jokes.indexOf("JokeSection.PLACEMENT"))
     }
 
     private fun findProjectRoot(): File {

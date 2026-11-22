@@ -109,6 +109,48 @@ class SnapshotStoreTest {
         )
     }
 
+    /**
+     * The launch prefetch, and the one rule it may not break.
+     *
+     * `StartupWarmup` loads a kind's file before anything asks for it, so the
+     * dashboard's first paint does not pay for a multi-megabyte read. That is only
+     * safe if loading a file is not *reading* a value: an entry that went stale
+     * while the app was closed has to stay stale, or a prefetch would resurrect the
+     * list the store exists to expire - and the prefetch runs on every launch.
+     */
+    @Test
+    fun `a prefetch answers a later read without renewing the entry`() = runTest {
+        val node = mediaNode(id = 42, description = "A synopsis")
+        store().write(KIND, KEY, MediaNode::class.java, node)
+        val writtenAt = now
+
+        now = writtenAt + 5 * 60 * 1000L
+        store().prefetch(KIND)
+
+        val read = store().read(KIND, KEY, MediaNode::class.java, DAY)
+        assertEquals(node, read?.value)
+        assertEquals(
+            "a prefetched entry must keep the moment it was written, exactly like a " +
+                "cold read: loading the file is not a refresh",
+            writtenAt,
+            read?.storedAtMillis
+        )
+
+        now = writtenAt + DAY + 1
+        assertNull(
+            "an entry prefetched before it expired is still expired afterwards",
+            store().read(KIND, KEY, MediaNode::class.java, DAY)
+        )
+    }
+
+    /** A kind that has never been written costs the prefetch one `isFile` check. */
+    @Test
+    fun `prefetching a kind with no file is not an error`() = runTest {
+        store().prefetch(KIND)
+
+        assertNull(store().read(KIND, KEY, MediaNode::class.java, DAY))
+    }
+
     @Test
     fun `an unparseable payload is a miss, and a plain write recovers it`() = runTest {
         // A payload written for one shape and read back as another is what a

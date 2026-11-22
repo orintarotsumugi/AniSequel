@@ -63,8 +63,27 @@ fun DeviceManagerTab(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val seasonalSettings by seasonalPreferences.settings.collectAsStateWithLifecycle(initialValue = null)
-    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
+    // Defaults rather than null, which is what every other settings page does -
+    // including `SeasonalSettingsTab`, the page this card came from. The null used
+    // to drive a pair of "Reading your saved … settings" placeholder cards, which
+    // meant a cold open drew two skeletons, then two real cards: a layout jump, and
+    // a screen whose own copy said it had not read anything yet. A default is a
+    // number the reader may see for one frame; a placeholder is a screen telling
+    // them it has nothing to show.
+    //
+    // The app-lock switch below keeps its own reading line, deliberately: it is one
+    // line *inside* an existing card, so nothing moves, and drawing the switch off
+    // for a frame before a stored "on" arrives would be a security claim the app has
+    // not read yet.
+    val seasonalSettings by seasonalPreferences.settings.collectAsStateWithLifecycle(
+        initialValue = SeasonalSettings()
+    )
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
+        initialValue = ThemePreferences.ThemeSettings(
+            themeMode = ThemeMode.DEFAULT,
+            useDynamicColor = true
+        )
+    )
     val ceiling by devicePreferences.ceiling.collectAsStateWithLifecycle()
 
     // Re-read on resume, the same way the card did on the Seasonal page: a reader
@@ -79,75 +98,44 @@ fun DeviceManagerTab(
     }
 
     SettingsScrollColumn(modifier) {
-        if (seasonalSettings == null) {
-            SectionCard(
-                title = "Device",
-                icon = AppVectorIcons.DevicePhone,
-                subtitle = "Loading device and performance settings"
-            ) {
-                Text(
-                    text = "Reading your saved performance settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            val settings = seasonalSettings ?: SeasonalSettings()
-            val detected = remember { detectSeasonalQualityTier(context) }
-            val resolvedQuality = remember(settings.quality, detected) {
-                settings.quality.resolve(detected)
-            }
-            DeviceCard(
+        val settings = seasonalSettings
+        val detected = remember { detectSeasonalQualityTier(context) }
+        val resolvedQuality = remember(settings.quality, detected) {
+            settings.quality.resolve(detected)
+        }
+        DeviceCard(
+            rate = settings.frameRate,
+            offered = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz),
+            resolvedHz = seasonalFrameHz(
                 rate = settings.frameRate,
-                offered = availableSeasonalFrameRates(screen.currentHz, screen.supportedHz),
-                resolvedHz = seasonalFrameHz(
-                    rate = settings.frameRate,
-                    tierHz = resolvedQuality.frameHz,
-                    deviceHz = screen.currentHz
-                ),
-                screen = screen,
-                tierName = SeasonalQuality.of(resolvedQuality)
-                    .displayName
-                    .lowercase(java.util.Locale.ROOT),
-                ceiling = ceiling,
-                usedBytes = usedBytes,
-                onRateChange = { rate ->
-                    scope.launch { seasonalPreferences.setFrameRate(rate) }
-                },
-                onCeilingChange = { option ->
-                    // Synchronous by design: one string in a preferences file, whose value
-                    // the image loader reads at the next process start.
-                    devicePreferences.setCeiling(option)
-                },
-                onClearCache = {
-                    context.clearCoverCache()
-                    usedBytes = context.coverCacheBytes()
-                }
-            )
-        }
-
-        if (themeSettings == null) {
-            SectionCard(
-                title = "Display",
-                icon = AppVectorIcons.FullscreenExpand,
-                subtitle = "Full screen and the system bars"
-            ) {
-                Text(
-                    text = "Reading your saved display settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                tierHz = resolvedQuality.frameHz,
+                deviceHz = screen.currentHz
+            ),
+            screen = screen,
+            tierName = SeasonalQuality.of(resolvedQuality)
+                .displayName
+                .lowercase(java.util.Locale.ROOT),
+            ceiling = ceiling,
+            usedBytes = usedBytes,
+            onRateChange = { rate ->
+                scope.launch { seasonalPreferences.setFrameRate(rate) }
+            },
+            onCeilingChange = { option ->
+                // Synchronous by design: one string in a preferences file, whose value
+                // the image loader reads at the next process start.
+                devicePreferences.setCeiling(option)
+            },
+            onClearCache = {
+                context.clearCoverCache()
+                usedBytes = context.coverCacheBytes()
             }
-        } else {
-            DisplaySection(
-                themePreferences = themePreferences,
-                settings = themeSettings ?: ThemePreferences.ThemeSettings(
-                    themeMode = ThemeMode.DEFAULT,
-                    useDynamicColor = true
-                ),
-                scope = scope
-            )
-        }
+        )
+
+        DisplaySection(
+            themePreferences = themePreferences,
+            settings = themeSettings,
+            scope = scope
+        )
 
         AppLockCard(appLockPreferences)
 

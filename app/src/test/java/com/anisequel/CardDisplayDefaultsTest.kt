@@ -164,10 +164,27 @@ class CardDisplayDefaultsTest {
         val settings = "app/src/main/java/com/anisequel/ui/screens/settings/"
         val header = Regex("""SettingsSubHeader\(""")
 
+        // Interface and the pages converted with it hand their header to the shared
+        // one-level shelf, which draws exactly one for whatever level is on screen.
+        // The failure is the same one this test was written for - a page drawing a
+        // header *around* its own shelf, so two titles stack before a control - it
+        // has just moved into the scaffold.
         assertTrue(
-            "InterfaceTab draws more than one header, so a sub-screen stacks titles",
-            header.findAll(source(settings + "InterfaceTab.kt")).count() == 1
+            "InterfaceTab draws its own header as well as the shelf's, so a " +
+                "sub-screen stacks titles",
+            header.findAll(source(settings + "InterfaceTab.kt")).count() == 0
         )
+        assertTrue(
+            "the shared shelf does not draw exactly one header, so every page that " +
+                "uses it is one title short or one title over",
+            header.findAll(source(settings + "SettingsShelf.kt")).count() == 1
+        )
+        listOf("JokeSettingsTab.kt", "LibrarySettingsTab.kt", "InfoSettingsTab.kt").forEach { page ->
+            assertTrue(
+                "$page draws a header of its own on top of the shelf's",
+                header.findAll(source(settings + page)).count() == 0
+            )
+        }
         assertTrue(
             "ThemeTab draws more than one header, so a sub-screen stacks titles",
             header.findAll(source(settings + "ThemeTab.kt")).count() == 1

@@ -237,7 +237,13 @@ class AniListRepositoryImpl(
     private val nowMillis: () -> Long = System::currentTimeMillis
 ) : AniListRepository {
 
-    private companion object {
+    /**
+     * Internal rather than private for one caller: [StartupWarmup] prefetches the
+     * two snapshot kinds a launch reads before it has a repository to ask - the
+     * kinds are named here rather than there, so the warm read cannot spell a file
+     * name this class does not write. Nothing else outside this file may use it.
+     */
+    internal companion object {
         /**
          * Soft bound on the in-memory detail cache. One node per opened card
          * is held for the lifetime of the VM; without a ceiling, opening a

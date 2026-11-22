@@ -3561,3 +3561,219 @@ job; KSP and Kotlin together were under 70 seconds. The input was almost all
 `com.anisequel.ui.components.icons` now, with the same package suffixes and
 property names, so no screen changed its import beyond the root. R8 fell to
 **1m40s** and the job to **6m49s**. Adding an icon is a file, not the artifact.
+
+## 2.5.3: a launch is one batch of reads, not five in a row
+
+### The chain, and why it was a chain
+
+Opening AniSequel cost a *sequence* of small reads, and each one waited for the
+screen above it to be composed before it started:
+
+1. `MainActivity` collects the theme, the interface settings and the app-lock
+   choice, and draws the branded placeholder until they answer. Three reads, one
+   batch - they start together because they are collected together.
+2. Only once that gate opens does `AppNavigation` compose. It collects the stored
+   session and the first-run answer behind a *second* placeholder, and the session
+   is the expensive member of the whole set: a DataStore read plus a
+   hardware-keystore decrypt.
+3. Only once *that* gate opens is the dashboard's ViewModel built, and its first
+   paint waits on two more reads from the disk tier - the saved viewer and the
+   saved list, the latter being the one snapshot measured in megabytes.
+
+Nothing in step 2 depends on step 1, and nothing in step 3 depends on either. The
+serialisation was an artifact of *when each flow was first collected*, which is a
+property of the composition tree rather than of the data.
+
+### What `StartupWarmup` does
+
+`AniSequelApplication.onCreate` starts every one of those reads concurrently on a
+process-scoped `Dispatchers.IO` scope, and keeps four answers - theme, interface,
+app-lock, first-run - plus the session token and a resolved flag. It also
+prefetches the two snapshot files the dashboard is about to read
+(`SnapshotStore.prefetch`, which loads a file without answering a lookup and
+without touching the entry's timestamp, so a stale snapshot stays stale).
+
+The screen that used to wait for a read now *seeds* its collector's initial value
+from the warm answer: `collectAsStateWithLifecycle(initialValue = …)`. That is the
+whole mechanism - the flow is still the source of truth, and a value that changes
+while the app runs still arrives through it. Only the first frame changes, from
+"the default, then the stored answer" to "the stored answer".
+
+The session is seeded through `seedAuthState(resolved, token)` rather than by
+handing `AuthViewModel` a nullable token, because `null` already means "no session"
+and "not read yet" is a different answer - the distinction `AuthUiState.Restoring`
+exists for. A wrong collapse there is a login screen on every cold start for a
+reader who is signed in.
+
+### The one value that is deliberately not seeded
+
+The app lock. A stored *off* resolves the gate (there is nothing to cover), but a
+stored *on* must not: the first frame would then draw the reader's list before the
+gate exists, and on a cold start that frame can be the one the system snapshots for
+Recents. The lock resolves through its own first-composition effect, exactly as it
+did before.
+
+### The launch gate now includes the interface settings
+
+`displayDpi` is applied above the theme, so a first frame composed from the default
+density is the whole app laid out at the shipped 447dpi and re-laid-out at the
+reader's choice one frame later - the visible resize that seeding "the shipped
+default rather than the device's dpi" was meant to prevent, arriving one frame late
+instead of on frame zero. `InterfaceSettings` carries `isLoaded` now, and `.catch`es
+an `IOException` into the defaults, because a gate on a read that cannot fail-soft is
+a splash with no exit except the watchdog.
+
+### A blurred backdrop decodes at the blur's resolution
+
+The artwork behind the Info page was decoded at the panel's own resolution - about
+10MB on a 1080p phone - to be drawn under an 18dp blur and a scrim running from 30%
+to 88% opacity. It decodes at half the display's width on Soft and a third on Heavy
+(`backdropDecodeWidthPx`): four and nine times less bitmap to allocate, decode and
+upload, competing far less with the poster memory cache that the list behind the
+sheet is about to draw. Crisp is uncapped, because that setting *is* the picture;
+the hero - the copy drawn sharp - is untouched.
+
+## Settings: three shelves, nine rows, and a value on every row
+
+### The shelf was a table of contents pretending to be a control panel
+
+Eleven rows under five headings, and two of those headings - "Library &
+dashboard", "This device" - headed exactly one row. A label over a single row is
+a hierarchy level that carries nothing: the reader parses a section with no
+members, and it spends 36dp of vertical space saying so. The rows also described
+themselves and never answered themselves, so "is OLED on?", "how often does the
+list refresh?" and "is the app lock set?" each cost a page visit and a Back.
+
+The shelf is three groups of three now - *Look & layout*, *What it shows*,
+*Device & app* - because those are the three questions a reader arrives with, and
+every group holds destinations.
+
+### The account is a card, and the connection check is its status chip
+
+The account row and a Connection check row were the same subject, and the check
+was the only row on the shelf that did not open a page - so the screen's contract
+("every row is a page") was false in exactly one place. They are one card:
+identity, session state, and a pill that runs the same probe the row ran. The
+chip's verdict is read from `ApiStatusProbeState.ui`, so it is the same answer the
+dialog shows rather than a second opinion.
+
+### `SettingsSummaries`: values assembled at the graph, drawn by the shelf
+
+Every row's value (`Dark`, `30 min`, `Snow`, `Lock on`, the installed version) is
+collected once in `SettingsScreen` from the *same* `ThemePreferences`,
+`InterfacePreferences`, `RefreshIntervalPreferences`, `JokePreferences`,
+`SeasonalPreferences` and `AppLockPreferences` instances the pages write through.
+The hub never collects a preference itself. Two readers of one DataStore can
+disagree about what is stored, and a row that says "30 min" above a page whose
+chips say "1 hour" is worse than a row with no value at all. A value that has not
+been read yet is `null` and draws nothing: a guess in the value slot is
+indistinguishable from an answer.
+
+`Updates` has no value and never will in this design. The app keeps no *last
+checked* answer, so there is nothing honest to say until a check runs, and "Up to
+date" without having asked would be the one lie on a screen of facts.
+
+### `SettingsShelf`: one level, one implementation
+
+Interface and Appearance had each grown their own copy of the same shelf - a
+nullable section state, a `BackHandler` enabled only while a part is open, a
+`SaveableStateHolder` so a part's scroll survives, an `AnimatedContent` with the
+shared push/pop, and a header naming the level on screen. Four more pages were
+about to make that six copies, and the copies had already drifted: one announced
+"Back to Card design" from a level two steps out. `SettingsShelf` is that
+implementation once, generic over the page's own enum, and it back-labels every
+part as `"Back to ${hubTitle}"` so no page carries a hand-written sentence that
+can name a screen the arrow does not reach.
+
+It is deliberately *single-level*. The one page that had a third level - Interface
+> Card design > Card shape - lost the middle one: the three card parts are rows
+beside the layout choices, and the preview that level was worth now sits on the
+page's own shelf (`CardDesignGroup`). Reaching the card's frame is one tap instead
+of three, and no screen stacks three titles above a control.
+
+### Search targets are names, not one state per shelf
+
+`SettingsSearchResult.sectionName` carries a part as its enum's name, and the page
+that owns that enum resolves it. `SettingsScreen` keeps one `rememberSaveable`
+string for the target instead of one typed state and two callbacks per shelf - the
+plumbing, not the feature, was what a new sub-page cost. The four new shelves are
+indexed *from their enums* (`sectionResults`), so the title a row draws is the
+query that returns it; the older hand-written entries stay, and the `Interface` /
+`Appearance` typed sections are unchanged because those two handoffs are typed.
+
+### Tile identity is group + position, not `title.hashCode()`
+
+The icon tile took its tonal family from `title.hashCode() % 3` and its silhouette
+from `% 4`. Renaming a row silently repainted it, two rows could collide by luck,
+and the set of colours on a shelf carried no meaning - the shelf read as a colour
+chart with no system behind it. Colour is the group's (`SettingsGroupTone`:
+primary for *Look*, tertiary for *Content*, secondary for *Device*), and the
+silhouette is the row's position in its group. Both are stable for as long as the
+row stays where it is, which is the only thing a reader can learn. Search results,
+which belong to no group, take their variety from position.
+
+### Previews moved to where the choice is made
+
+A setting whose effect is visual is chosen by looking, so the pages that gained a
+shelf kept - or gained - the picture: the Jokes shelf draws the *real* toast pill
+(`JokeToastPill`) with the reader's own name, stamp, edge and line effect; the
+Library shelf draws the *real* navigation bar (`ExpressiveNavigationBar` +
+`mainTabDestinations`) with the reader's own tabs; Type & display opens on a
+specimen of the current type and scale; Interface keeps the card mock-up on the
+shelf that used to be one level down. None of them is a mock drawn for Settings:
+a preview written separately is an advert, can be left behind, and nothing fails
+when it is.
+
+### Two pages that asked one question are one page
+
+"Type & reading" and "Display size" sat next to each other with no way to tell
+which one made the app bigger, and the Type page carried a card whose only job was
+a button to the Display size page - the app's own navigation admitting the
+ambiguity. They are one destination with two parts now (font and text size; the
+automatic-or-manual density), so "make it bigger" has one place to start.
+
+### A fact belongs on the row, not on a card about the row
+
+The About shelf first opened with a "build stamp" card - version, version code,
+package - above its rows, and the Build page below it drew all three again. A
+controls-shaped preview earns its place because the choice changes what the app
+looks like; a card that repeats three rows one tap away only spends the reader's
+attention twice. `SettingsHubEntry.value` already exists for exactly this, so the
+Build row carries `BuildConfig.VERSION_NAME` and the page is the one place the
+details are written out. `SettingsShelfGroup(values = …)` is how a shelf states
+such a fact at rest; it is empty by default, because a part whose state is a
+*setting* already says so in its subtitle and a value there would be a second,
+hand-maintained copy of the same sentence.
+
+### The account card is the one place that says "this is you"
+
+Two details were missing from it and both were already in the app: the reader's
+avatar (`viewer.avatar`, drawn by the profile tab, the account page and every
+comment) and the two list counts the dashboard has already loaded. The card drew
+the first letter of the name instead, on the one surface whose whole job is "who
+is signed in", and described the page it opens rather than the list it is about.
+The letter stays *underneath* the avatar, so a demo session, an honest load
+failure and a screenshot with no network still draw something, and the counts
+draw nothing until they arrive - a zero would be a claim about the reader's list
+that nobody has read yet.
+
+### A default is not a placeholder
+
+Device Manager was the last page that drew its own loading state: two
+"Reading your saved … settings" cards while the preferences answered, replaced by
+the real cards a frame later. That is a layout jump on the way in, and it is also
+a screen whose copy says it has nothing to show - on a page whose own sibling
+(`SeasonalSettingsTab`, where the card came from) ships a default. Every settings
+page now draws with defaults and corrects itself; the one deliberate exception is
+the app-lock switch, whose "reading" line sits *inside* an existing card and stays
+because drawing the switch off for a frame before a stored "on" arrives is a
+security claim the app has not read yet.
+
+### What deliberately did not change
+
+*Seasonal effects* stays one scroll. Its sliders and its live sky preview are one
+control: moving the sliders a level down would leave a preview with nothing to
+follow and sliders with nothing to preview, which is the failure its design exists
+to avoid. *Device Manager*, *Updates* and the account page stay flat for the same
+reason the shelf is grouped - they are short, and a shelf over three cards is a
+tap for nothing.

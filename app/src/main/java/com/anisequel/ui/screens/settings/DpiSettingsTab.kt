@@ -3,6 +3,7 @@ package com.anisequel.ui.screens.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,32 +12,44 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.repository.InterfacePreferences
+import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.ui.DisplayDpi
 import com.anisequel.domain.ui.DpiMode
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.theme.rememberDeviceDensityDpi
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
- * Display size: one page for how large the app draws, with an advanced mode.
+ * The Display size half of Type & display.
  *
  * Android's own display-density setting is a number with an implicit default of
  * "whatever this panel reports". Exposing only the number forced every install to
- * draw at 447 dpi, which is fine on a phone and wrong on a tablet. This page makes
- * the two answers separate: Automatic follows the device, Manual keeps the reader's
- * number. Both write one preference pair at the app root, so neither can leave the
- * chosen mode and the chosen number disagreeing.
+ * draw at 447 dpi, which is fine on a phone and wrong on a tablet. This section
+ * makes the two answers separate: Automatic follows the device, Manual keeps the
+ * reader's number. Both write one preference pair at the app root, so neither can
+ * leave the chosen mode and the chosen number disagreeing.
+ *
+ * ## Why this no longer has a pointer card to a separate page
+ *
+ * It used to live on its own page, and the Type page held a card whose only job
+ * was a button to this one. Two rows on the Settings shelf named "Type & reading"
+ * and "Display size" left the reader to guess which one made the app bigger; the
+ * pointer card was the app admitting the guess was hard. Both are one section
+ * here, so the pointer has nothing left to point at.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DpiSettingsTab(
+internal fun DisplaySizeSectionBody(
     interfacePreferences: InterfacePreferences,
     modifier: Modifier = Modifier
 ) {
@@ -142,42 +155,73 @@ fun DpiSettingsTab(
 }
 
 /**
- * A small door from Type & reading to the full page.
+ * One shelf-level sample of what the two halves do.
  *
- * Text size stays where it is - it scales only text - while the density scales
- * every dp in the app. A pointer here is enough: duplicating the slider would
- * leave two controls on one preference, and the one off screen would go stale.
+ * The hub is where the reader decides which half to open, and both halves are
+ * about a change they can already see: the type and the scale they are reading
+ * this sentence in. The readout is the same pair of numbers the page below writes,
+ * so the sample cannot describe a size the app is not drawing.
+ *
+ * Deliberately not a slider: this is a picture of the answer, not a second control
+ * over the same preference.
  */
 @Composable
-internal fun DisplaySizePointerCard(
-    effectiveDpi: Int,
-    automatic: Boolean,
-    onOpen: () -> Unit,
+internal fun TypeSpecimenCard(
+    themePreferences: ThemePreferences,
+    interfacePreferences: InterfacePreferences,
     modifier: Modifier = Modifier
 ) {
+    val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
+    val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
+    val deviceDpi = rememberDeviceDensityDpi()
+    val effectiveDpi = interfaceSettings?.let { settings ->
+        if (settings.dpiMode == DpiMode.AUTOMATIC) {
+            deviceDpi
+        } else {
+            DisplayDpi.clamp(settings.displayDpi)
+        }
+    }
+    val automatic = interfaceSettings?.dpiMode == DpiMode.AUTOMATIC
+
     SectionCard(
-        title = "Display size",
-        icon = AppVectorIcons.Tune,
-        subtitle = "Every card, caption and gap, not just text",
+        title = "Sample",
+        icon = AppVectorIcons.TextBold,
+        subtitle = "The type and scale you are reading this in",
         modifier = modifier
     ) {
         Text(
-            text = if (automatic) {
-                "Automatic · following your device ($effectiveDpi dpi)"
-            } else {
-                "Manual · $effectiveDpi dpi"
-            },
-            style = MaterialTheme.typography.titleSmall,
+            text = "Aa",
+            style = MaterialTheme.typography.displaySmall,
             color = MaterialTheme.colorScheme.primary
         )
-        Spacer(modifier = Modifier.height(10.dp))
-        SettingsButton(
-            text = "Display size settings",
-            onClick = onOpen,
-            icon = AppVectorIcons.Tune,
-            variant = SettingsButtonVariant.Outlined,
-            fillWidth = true,
-            testTag = "open_display_size"
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Sequels you haven't started, sorted by how overdue they are.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
         )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = themeSettings?.fontScale?.let { "${(it * 100).roundToInt()}% text" }
+                    ?: "Reading your text size",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = when {
+                    effectiveDpi == null -> "Reading your display size"
+                    automatic -> "Automatic · $effectiveDpi dpi"
+                    else -> "Manual · $effectiveDpi dpi"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }

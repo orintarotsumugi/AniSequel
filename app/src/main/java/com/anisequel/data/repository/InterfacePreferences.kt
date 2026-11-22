@@ -22,7 +22,9 @@ import com.anisequel.domain.ui.NavBarLift
 import com.anisequel.domain.ui.PosterOverlays
 import com.anisequel.domain.ui.PosterSource
 import com.anisequel.domain.ui.ProgressBarStyle
+import java.io.IOException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
 private val Context.interfaceDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -235,7 +237,20 @@ class InterfacePreferences(private val context: Context) {
          * Read at `MainActivity` beside the number: the two are one answer, and a
          * second flow would let the mode change a frame after the number.
          */
-        val dpiMode: DpiMode = DpiMode.DEFAULT
+        val dpiMode: DpiMode = DpiMode.DEFAULT,
+        /**
+         * Whether this is the stored answer or the defaults above.
+         *
+         * Read by the launch gate. The density - the number *and* the mode - is
+         * applied above the theme, so a first frame drawn from the defaults is the
+         * whole app laid out at the shipped 447dpi and then re-laid-out at the
+         * reader's choice one frame later: the visible resize that seeding "the
+         * shipped default rather than the device's dpi" was supposed to prevent,
+         * arriving one frame late instead of on frame zero. `MainActivity` therefore
+         * waits for this answer the way it already waits for the theme's, and that
+         * wait has to be able to *end*: see the `.catch` on [settings].
+         */
+        val isLoaded: Boolean = false
     )
 
     /**
@@ -316,9 +331,26 @@ class InterfacePreferences(private val context: Context) {
                 displayDpi = DisplayDpi.clamp(
                     preferences[Keys.DISPLAY_DPI] ?: DisplayDpi.DEFAULT_DPI
                 ),
-                dpiMode = DpiMode.fromStorage(preferences[Keys.DPI_MODE])
+                dpiMode = DpiMode.fromStorage(preferences[Keys.DPI_MODE]),
+                isLoaded = true
             )
         }
+            // The same read failure as the theme's, and now the same consequence:
+            // the launch gate waits for this emission before it draws anything, so
+            // an `IOException` on a corrupt interface file used to be a splash with
+            // no exit until the watchdog. Emitting the defaults is the recoverable
+            // answer - the reader gets the app at the shipped density, and the
+            // stored choices are still on disk if the read was merely transient.
+            //
+            // Only `IOException` is swallowed: a defaulted layout is not a fix for a
+            // bug in the parser.
+            .catch { error ->
+                if (error is IOException) {
+                    emit(InterfaceSettings(isLoaded = true))
+                } else {
+                    throw error
+                }
+            }
 
     suspend fun setCardStyle(style: MediaCardStyle) {
         context.interfaceDataStore.edit { preferences ->
