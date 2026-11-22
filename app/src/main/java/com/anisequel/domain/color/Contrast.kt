@@ -103,9 +103,12 @@ object Contrast {
         // the ratio is smooth and monotonic in the blend, so 5% steps land within
         // a channel of the exact answer, and the search stays readable.
         var best = foreground
+        // Stepped as a `Double` and narrowed at the blend: the floor is a ratio, so
+        // the arithmetic that decides it stays in `Double`, and only the colour
+        // maths - which is a fraction of a channel - is `Float`.
         var step = 0.05
         while (step <= 0.90) {
-            val candidate = blend(foreground, background, step)
+            val candidate = blend(foreground, background, step.toFloat())
             if (ratio(candidate, background) < floor) break
             best = candidate
             step += 0.05
@@ -127,7 +130,7 @@ object Contrast {
         if (ratio(foreground, background) >= floor) return foreground
         var step = 0.05
         while (step < 1.0) {
-            val candidate = blend(foreground, anchor, step)
+            val candidate = blend(foreground, anchor, step.toFloat())
             if (ratio(candidate, background) >= floor) return candidate
             step += 0.05
         }
