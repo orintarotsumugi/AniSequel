@@ -174,6 +174,26 @@ class SnapshotStore(
     }
 
     /**
+     * Loads one kind's file into memory without answering a lookup.
+     *
+     * The store already caches a parsed file for the session, but it is loaded
+     * on the *first* [read] - which is, by construction, the lookup on the
+     * caller's critical path. A completed list is a multi-megabyte file, and on
+     * a cold start that read landed after the first frame had already been asked
+     * for, so the dashboard waited for it with the reader looking at a spinner.
+     *
+     * Prefetching moves the file read to a moment that is not the critical path
+     * (see [StartupWarmup]) and changes nothing else: no entry is added, nothing
+     * is deleted, and a stale entry stays stale, because expiry is decided by
+     * the TTL each [read] passes in, not by when the file was loaded.
+     *
+     * A kind that is not on disk costs one failed `isFile` check.
+     */
+    suspend fun prefetch(kind: String) {
+        lock.withLock { entries(kind) }
+    }
+
+    /**
      * Stores [value] under [key] and writes the file.
      *
      * [storedAtMillis] is passed by the caller when the same moment is already

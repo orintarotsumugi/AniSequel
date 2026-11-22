@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -15,9 +16,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Dimension
+import coil.size.Size as CoilSize
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.posterUrl
 import com.anisequel.ui.components.cards.cardPosterUrl
@@ -125,6 +130,18 @@ internal fun InfoPageBackdrop(
     // cost nothing; the same rule the new Home's backdrop follows.
     val artworkBlur = if (radius > 0.dp) Modifier.blur(radius) else Modifier
 
+    // How wide the backdrop is allowed to decode - see [backdropDecodeWidthPx].
+    //
+    // The *display's* width, read synchronously from the resources, rather than a
+    // measured box or `LocalWindowInfo`: the sheet is a full-screen dialog, so the
+    // display is the box, and both of the alternatives can report zero on the first
+    // composition - which would mean no cap on the frame that matters, a second
+    // decode at the capped size the moment the size arrived, and a page that paid
+    // twice for the artwork it is trying to draw once.
+    val context = LocalContext.current
+    val displayWidthPx = context.resources.displayMetrics.widthPixels
+    val decodeWidthPx = backdropDecodeWidthPx(displayWidthPx, blur)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -139,7 +156,19 @@ internal fun InfoPageBackdrop(
                 modifier = Modifier.fillMaxSize()
             ) { active ->
                 AsyncImage(
-                    model = active,
+                    model = remember(active, decodeWidthPx, context) {
+                        // A `String` when there is no cap, so the no-blur path is the
+                        // same request Coil built before this existed.
+                        decodeWidthPx?.let { width ->
+                            ImageRequest.Builder(context)
+                                .data(active)
+                                // Width only: Coil scales the height to keep the
+                                // artwork's aspect, which is what stops the
+                                // `ContentScale.Crop` below from squashing faces.
+                                .size(CoilSize(width, Dimension.Undefined))
+                                .build()
+                        } ?: active
+                    },
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     // Top-anchored for the same reason as the hero: a wide banner's
@@ -272,3 +301,40 @@ private const val BACKDROP_SCALE = 1.01f
  * is visibly the title's artwork by the time the first card has been read.
  */
 private val HERO_HANDOFF_FADE = 200.dp
+
+/**
+ * The width, in pixels, the backdrop's artwork may decode at.
+ *
+ * ## What the full-size decode was costing
+ *
+ * The backdrop is a full-screen decoration under an 18dp blur and a scrim that runs
+ * from 30% to 88% of `surface`. It was decoded at the panel's own resolution - on a
+ * 1080x2400 phone that is a ~10MB bitmap held against a 1900px-wide source, and two
+ * of them are live while the artwork crossfades from the AniList cover to the banner
+ * the detail response brings. None of that detail can be seen: the blur removes it,
+ * and the scrim lowers the contrast of what is left. What the pixels *do* cost is
+ * real - the decode is on the frame the page opens on, and the bitmap competes for
+ * the same heap percentage as the poster memory cache, so opening a page can evict
+ * the covers the list behind it is about to draw again.
+ *
+ * The hero draws the same picture sharp, and it is untouched: this is the copy
+ * nobody is looking at.
+ *
+ * ## Why the divisor follows the blur
+ *
+ * The three settings are not three tastes, they are three amounts of remaining
+ * detail, so the honest cap is the one that matches them. Among them, `CRISP` is
+ * the case that must not be capped at all - a sharp backdrop is the picture, and
+ * half-resolution art under text is exactly the softness the reader turned the
+ * blur off to avoid. It returns null, meaning "no cap": the request is the plain
+ * URL, which is what the page asked Coil for before this existed.
+ */
+internal fun backdropDecodeWidthPx(containerWidthPx: Int, blur: InfoBackdropBlur): Int? {
+    if (containerWidthPx <= 0) return null
+    val divisor = when (blur) {
+        InfoBackdropBlur.CRISP -> return null
+        InfoBackdropBlur.SOFT -> 2
+        InfoBackdropBlur.HEAVY -> 3
+    }
+    return (containerWidthPx / divisor).coerceAtLeast(1)
+}

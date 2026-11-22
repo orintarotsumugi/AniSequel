@@ -55,10 +55,19 @@ class AuthViewModel(
      * construct this; when it is absent the token is stored unchecked, exactly
      * as it used to be.
      */
-    private val aniListRepository: AniListRepository? = null
+    private val aniListRepository: AniListRepository? = null,
+    /**
+     * The session state this holder starts in.
+     *
+     * [AuthUiState.Restoring] unless the caller already knows the answer - see
+     * [seedAuthState]. `checkCurrentAuth` reads the same token and publishes the
+     * same state one dispatch later, so a seed only removes a frame from the
+     * launch; it is never a second opinion about who is signed in.
+     */
+    initialState: AuthUiState = AuthUiState.Restoring
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Restoring)
+    private val _uiState = MutableStateFlow<AuthUiState>(initialState)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     private val _clientId = MutableStateFlow(AuthRepositoryImpl.DEFAULT_CLIENT_ID)
@@ -304,4 +313,24 @@ class AuthViewModel(
         AniListOAuth.authorizationUrl(
             _clientId.value.ifBlank { AuthRepositoryImpl.DEFAULT_CLIENT_ID }
         )
+}
+
+/**
+ * The session state a launch may already know, from the warm read at process start.
+ *
+ * The distinction this exists for is the one [AuthUiState.Restoring] documents: "no
+ * session" and "not read yet" are different answers, and `AppNavigation` draws a
+ * splash for the second while choosing its start destination from the first. A
+ * caller may only answer `Authenticated`/`Unauthenticated` when the read actually
+ * completed, which is why [resolved] is a parameter rather than an inferred
+ * `token == null`.
+ *
+ * Extracted and pure so the mapping is a fact a test can pin - the failure it
+ * guards is a launch that lands on the login screen for a signed-in reader, which
+ * is exactly the bug `AuthUiState.Restoring` was introduced to fix.
+ */
+internal fun seedAuthState(resolved: Boolean, token: String?): AuthUiState = when {
+    !resolved -> AuthUiState.Restoring
+    token.isNullOrBlank() -> AuthUiState.Unauthenticated
+    else -> AuthUiState.Authenticated(token)
 }

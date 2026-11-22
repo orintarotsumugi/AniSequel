@@ -3561,3 +3561,74 @@ job; KSP and Kotlin together were under 70 seconds. The input was almost all
 `com.anisequel.ui.components.icons` now, with the same package suffixes and
 property names, so no screen changed its import beyond the root. R8 fell to
 **1m40s** and the job to **6m49s**. Adding an icon is a file, not the artifact.
+
+## 2.5.3: a launch is one batch of reads, not five in a row
+
+### The chain, and why it was a chain
+
+Opening AniSequel cost a *sequence* of small reads, and each one waited for the
+screen above it to be composed before it started:
+
+1. `MainActivity` collects the theme, the interface settings and the app-lock
+   choice, and draws the branded placeholder until they answer. Three reads, one
+   batch - they start together because they are collected together.
+2. Only once that gate opens does `AppNavigation` compose. It collects the stored
+   session and the first-run answer behind a *second* placeholder, and the session
+   is the expensive member of the whole set: a DataStore read plus a
+   hardware-keystore decrypt.
+3. Only once *that* gate opens is the dashboard's ViewModel built, and its first
+   paint waits on two more reads from the disk tier - the saved viewer and the
+   saved list, the latter being the one snapshot measured in megabytes.
+
+Nothing in step 2 depends on step 1, and nothing in step 3 depends on either. The
+serialisation was an artifact of *when each flow was first collected*, which is a
+property of the composition tree rather than of the data.
+
+### What `StartupWarmup` does
+
+`AniSequelApplication.onCreate` starts every one of those reads concurrently on a
+process-scoped `Dispatchers.IO` scope, and keeps four answers - theme, interface,
+app-lock, first-run - plus the session token and a resolved flag. It also
+prefetches the two snapshot files the dashboard is about to read
+(`SnapshotStore.prefetch`, which loads a file without answering a lookup and
+without touching the entry's timestamp, so a stale snapshot stays stale).
+
+The screen that used to wait for a read now *seeds* its collector's initial value
+from the warm answer: `collectAsStateWithLifecycle(initialValue = …)`. That is the
+whole mechanism - the flow is still the source of truth, and a value that changes
+while the app runs still arrives through it. Only the first frame changes, from
+"the default, then the stored answer" to "the stored answer".
+
+The session is seeded through `seedAuthState(resolved, token)` rather than by
+handing `AuthViewModel` a nullable token, because `null` already means "no session"
+and "not read yet" is a different answer - the distinction `AuthUiState.Restoring`
+exists for. A wrong collapse there is a login screen on every cold start for a
+reader who is signed in.
+
+### The one value that is deliberately not seeded
+
+The app lock. A stored *off* resolves the gate (there is nothing to cover), but a
+stored *on* must not: the first frame would then draw the reader's list before the
+gate exists, and on a cold start that frame can be the one the system snapshots for
+Recents. The lock resolves through its own first-composition effect, exactly as it
+did before.
+
+### The launch gate now includes the interface settings
+
+`displayDpi` is applied above the theme, so a first frame composed from the default
+density is the whole app laid out at the shipped 447dpi and re-laid-out at the
+reader's choice one frame later - the visible resize that seeding "the shipped
+default rather than the device's dpi" was meant to prevent, arriving one frame late
+instead of on frame zero. `InterfaceSettings` carries `isLoaded` now, and `.catch`es
+an `IOException` into the defaults, because a gate on a read that cannot fail-soft is
+a splash with no exit except the watchdog.
+
+### A blurred backdrop decodes at the blur's resolution
+
+The artwork behind the Info page was decoded at the panel's own resolution - about
+10MB on a 1080p phone - to be drawn under an 18dp blur and a scrim running from 30%
+to 88% opacity. It decodes at half the display's width on Soft and a third on Heavy
+(`backdropDecodeWidthPx`): four and nine times less bitmap to allocate, decode and
+upload, competing far less with the poster memory cache that the list behind the
+sheet is about to draw. Crisp is uncapped, because that setting *is* the picture;
+the hero - the copy drawn sharp - is untouched.

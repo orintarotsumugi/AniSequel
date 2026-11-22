@@ -39,6 +39,7 @@ import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.AuthRepository
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.MotionStyle
+import com.anisequel.data.repository.StartupWarmup
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.update.UpdateController
@@ -53,6 +54,7 @@ import com.anisequel.ui.theme.applyImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.theme.ThemePalette
 import com.anisequel.ui.viewmodel.AuthViewModel
+import com.anisequel.ui.viewmodel.seedAuthState
 import java.lang.ref.WeakReference
 import kotlinx.coroutines.delay
 
@@ -110,8 +112,15 @@ class MainActivity : ComponentActivity() {
      * and only then learn it should have been covered - a one-frame view of the
      * reader's list is still a view of it, and on a cold start it can be the
      * frame the system snapshots for the recents switcher.
+     *
+     * Seeded from [StartupWarmup] for the one answer that is safe to seed: a
+     * stored *off* means there is nothing to cover, so the gate is already
+     * resolved and the placeholder never draws. A stored *on* is deliberately not
+     * seeded - the lock has not been drawn yet, and skipping the placeholder
+     * there is the one-frame view above. It resolves on the first composition's
+     * own effect instead, exactly as it did before the warm read existed.
      */
-    private var appLockReady by mutableStateOf(false)
+    private var appLockReady by mutableStateOf(StartupWarmup.appLockEnabled == false)
 
     /**
      * Whether the platform's own animation scale is non-zero.
@@ -190,6 +199,17 @@ class MainActivity : ComponentActivity() {
                         // signed-out person's list and bio on disk for the next
                         // account. See [AniListSnapshots].
                         snapshots = AniListSnapshots.of(applicationContext)
+                    ),
+                    // The stored session, when the warm read got there first.
+                    //
+                    // `checkCurrentAuth` answers with this same value one dispatch
+                    // later, so seeding only removes a frame - it cannot vouch for a
+                    // session the flow would not. `seedAuthState` is what keeps "no
+                    // session" and "not read yet" from being confused, and the
+                    // property stays `Restoring` if the read has not landed.
+                    initialState = seedAuthState(
+                        resolved = StartupWarmup.authResolved,
+                        token = StartupWarmup.authToken
                     )
                 ) as T
             }
@@ -295,21 +315,28 @@ class MainActivity : ComponentActivity() {
             // settings screen's switch would sit next to a preview that had
             // already repainted.
             //
-            // Seeded from the defaults so the first frame has a real theme
-            // instead of flashing the light one before the read completes.
+            // Seeded from the warm read where there is one. The defaults are the
+            // fallback for a launch where the read has not landed yet - the same
+            // answer this had before, so nothing regresses; where the warm read has
+            // landed, the first composed frame already wears the reader's theme
+            // instead of flashing the light one and then correcting itself.
             val themeSettings by themePreferences.settings.collectAsStateWithLifecycle(
-                initialValue = ThemePreferences.ThemeSettings(
+                initialValue = StartupWarmup.themeSettings ?: ThemePreferences.ThemeSettings(
                     themeMode = ThemeMode.DEFAULT,
                     useDynamicColor = true
                 )
             )
 
             // Only the density is read at this level, and only because it has to be in
-            // scope above the theme. `initial` is the shipped default rather than the
-            // device's dpi: a first frame at the panel's own density and a second at
-            // 447 would be a visible resize of the whole app on every launch.
+            // scope above the theme. `initial` is the shipped default when the warm
+            // read has not answered: a first frame at the panel's own density and a
+            // second at 447 would be a visible resize of the whole app on every
+            // launch. Seeded where possible, and the gate below now waits for the real
+            // answer, so the resize cannot happen at all on a launch that read the
+            // file.
             val interfaceSettings by interfacePreferences.settings.collectAsStateWithLifecycle(
-                initialValue = InterfacePreferences.InterfaceSettings()
+                initialValue = StartupWarmup.interfaceSettings
+                    ?: InterfacePreferences.InterfaceSettings()
             )
 
             // A stall is the one failure a `.catch` cannot help with.
@@ -340,8 +367,11 @@ class MainActivity : ComponentActivity() {
 
             // `null` until the stored choice has been read, which is why the
             // initial value is not `false`: the two are different answers, and
-            // treating "not read yet" as "off" is the flash this guards.
-            val storedAppLock: Boolean? by appLockPreferences.enabled.collectAsStateWithLifecycle(initialValue = null)
+            // treating "not read yet" as "off" is the flash this guards. The warm
+            // read shortens "yet" to nothing on most launches.
+            val storedAppLock: Boolean? by appLockPreferences.enabled.collectAsStateWithLifecycle(
+                initialValue = StartupWarmup.appLockEnabled
+            )
             LaunchedEffect(storedAppLock) {
                 val enabled = storedAppLock ?: return@LaunchedEffect
                 appLockEnabled = enabled
@@ -424,6 +454,7 @@ class MainActivity : ComponentActivity() {
                             // drawn instead, so both pre-screen waits look deliberate.
                             if (!launchGateReady(
                                     themeLoaded = themeSettings.isLoaded,
+                                    interfaceLoaded = interfaceSettings.isLoaded,
                                     lockLoaded = appLockReady,
                                     watchdogElapsed = launchWatchdogElapsed
                                 )
@@ -678,16 +709,23 @@ internal fun rateLimitMessage(retryAfterSeconds: Int?, seed: String = "rate-limi
 /**
  * Whether the launch screen may step aside.
  *
- * `watchdogElapsed` wins over both reads because it exists for the day one of them
+ * `watchdogElapsed` wins over every read because it exists for the day one of them
  * never answers at all. Extracted so the rule is a fact a test can pin rather than
- * a pair of `||`s buried in a composition. The lock is not skipped: its own
+ * a chain of `&&`s buried in a composition. The lock is not skipped: its own
  * collector calls `setLocked(true)` when a late `true` arrives.
+ *
+ * `interfaceLoaded` is part of the gate for one specific reason: `displayDpi` is
+ * applied to the whole app *above* the theme, so composing with the default and
+ * then receiving the stored value re-lays-out every screen one frame in. That is a
+ * visible resize of the app on launch - not a colour arriving late - and the only
+ * place it can be avoided is here, before the first frame is drawn.
  */
 internal fun launchGateReady(
     themeLoaded: Boolean,
+    interfaceLoaded: Boolean,
     lockLoaded: Boolean,
     watchdogElapsed: Boolean
-): Boolean = watchdogElapsed || (themeLoaded && lockLoaded)
+): Boolean = watchdogElapsed || (themeLoaded && interfaceLoaded && lockLoaded)
 
 /**
  * Only the fact that this Activity has already been unlocked, and only across a
