@@ -4062,3 +4062,40 @@ a second tap within that window cancelled the coroutine and left the reset
 undone. `requestScrollToItem(0)` is not a coroutine, cannot be cancelled, and is
 applied by the same measure pass that lays the new list out, so no frame ever
 shows the new list at the old position.
+
+**The shimmer was a square, and the comment list was one list.** Two waiting
+states that looked wrong for two different reasons, found together because the
+same complaint ("the shimmer is broken") pointed at both.
+
+The shimmer band was a square of `0.7 × max(width, height)` travelling
+diagonally, which is only right on a roughly square block. Its *height* was tied
+to the block's longest edge, so on a wide skeleton the highlight left the box
+through the top and bottom for part of every loop - on a phone-width 340×40 bar it
+was visible for about half the cycle. That is not a slow sweep, it is a sweep that
+stops and restarts, and it is what every full-width skeleton in the app did
+(comment lines, card bars, load-more strips). The band is now a stripe as tall as
+the box, with a width that is a share of the box's width, so it enters at one edge
+and leaves at the other exactly once per loop whatever the aspect ratio. The
+position is `shimmerBandLeft`, a pure function, so `ShimmerGeometryTest` can pin
+the property that was broken (no dead zone, full travel, monotonic) without a
+device.
+
+The comment sheet's list had the same defect the Library's grid had: one lazy
+list handed a different item set. Opening another thread replaced every row, and
+because reply rows carry `animateItem`'s removal animation, the *previous*
+thread's comments were drawn as fading rows over the new thread's skeleton - two
+conversations on screen, which is what "opening them too fast" looked like. The
+new thread also started at the old thread's scroll position, where the chat
+behaviour expects an empty list to place at the newest comment. Both are now
+per-thread: `key(state.activityId)` around the list, and the scroll position is
+`rememberSaveable` keyed on the thread so a rotation still restores it.
+
+A spoiler's image was the third: a block image with no declared height reserves
+its space from its placeholder, and that placeholder was a 28dp spinner. Revealing
+a spoiler showed a dot, then a full-width picture, and the page under it jumped by
+the picture's height. The block case now waits on the app's skeleton at a
+landscape shape and settles on the layout spring; the inline case keeps the
+spinner, because a plate behind a 50dp icon that is about to become a transparent
+logo would claim a box the picture never has. The live-card path (a WebView, not
+Coil) uses the same plate, so a spoiler holding an AniList card no longer waits on
+the one bare spinner left in the markdown renderer.

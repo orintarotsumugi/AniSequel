@@ -26,7 +26,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
@@ -121,6 +120,21 @@ fun rememberShimmerPhase(
  * this modifier could not avoid while it was rebuilding the brush in the draw
  * body.
  *
+ * ## The band is a full-height stripe, not a square
+ *
+ * It used to be a square of `0.7 x max(width, height)` travelling diagonally,
+ * which is only correct on a box that is roughly square. The band's *vertical*
+ * extent was that same `0.7 x max(...)`, so on any wide skeleton - a comment's
+ * 12dp text line, the full-width bar inside a card - the highlight left the box
+ * top and bottom for a part of every loop: measured on a phone-width 340x40 bar
+ * it was visible for about half of the sweep, so the shimmer read as a highlight
+ * that stopped in the middle of the skeleton and started again. A stripe as tall
+ * as the box cannot do that at any aspect ratio, and it makes every skeleton on
+ * screen cross in the same time, which is what the shared phase was for.
+ *
+ * [shimmerBandLeft] is the position, kept as a pure function so the geometry can
+ * be tested without a device; see `ShimmerGeometryTest`.
+ *
  * Pair with `Modifier.clip` *above* this one: the clip wraps the drawBehind
  * output, so the sweep is cut to the box's rounded corners exactly as
  * `.background(brush)` used to be.
@@ -134,24 +148,35 @@ private fun Modifier.shimmerBackground(phase: State<Float>): Modifier {
     }
 
     return drawWithCache {
-        val bleed = maxOf(size.width, size.height) * SHIMMER_BLEED_FRACTION
-        val band = Size(bleed * 2f, bleed * 2f)
-        val brush = Brush.linearGradient(
+        val bandWidth = maxOf(size.width * SHIMMER_BAND_FRACTION, 1f)
+        val brush = Brush.horizontalGradient(
             colors = colors,
-            start = Offset.Zero,
-            end = Offset(x = bleed * 2f, y = bleed * 2f)
+            startX = 0f,
+            endX = bandWidth
         )
         onDrawBehind {
-            // The clamped ends of the old gradient were this colour, so a solid
-            // base plus the band is pixel-identical at every phase.
+            // The clamped ends of the gradient are this colour, so a solid base
+            // plus the band is pixel-identical at every phase.
             drawRect(color = high)
-            val centre = -bleed + phase.value * (size.width + 2f * bleed)
-            translate(left = centre - bleed, top = centre - bleed) {
-                drawRect(brush = brush, size = band)
+            translate(left = shimmerBandLeft(phase.value, size.width, bandWidth)) {
+                drawRect(brush = brush, size = Size(bandWidth, size.height))
             }
         }
     }
 }
+
+/**
+ * Where the band's left edge sits for [phase], in pixels.
+ *
+ * Starts one band-width left of the box and ends one band-width right of it, so
+ * the highlight enters from outside and leaves through the far edge: the loop's
+ * two ends show a plain skeleton, which is also the frame a paused screen keeps.
+ * The band is *not* scaled to the box's height - it is the box's height - which
+ * is the part that keeps wide skeletons from losing the sweep (see
+ * [shimmerBackground]).
+ */
+internal fun shimmerBandLeft(phase: Float, widthPx: Float, bandWidthPx: Float): Float =
+    -bandWidthPx + phase.coerceIn(0f, 1f) * (widthPx + bandWidthPx)
 
 /**
  * One skeleton block: a clipped box painted with the shared shimmer.
@@ -267,13 +292,12 @@ fun ShimmerCard(
 }
 
 /**
- * How far the highlight's centre sits outside the box on each side, as a
- * fraction of the box's longest edge.
+ * How wide the highlight is, as a fraction of the box's width.
  *
- * Relative rather than a fixed pixel offset: a 300px bleed crosses a 100dp chip
- * in a tenth of the sweep and never reaches the far edge of a tablet card at
- * all, so the same skeleton looked half-painted at one width and strobed at
- * another. Measured off the box, every skeleton enters and leaves its own edges.
+ * Relative rather than a fixed pixel width: an 80px band is most of a 100dp chip
+ * and a sliver of a tablet card, so the same skeleton looked flooded at one width
+ * and striped at another. Measured off the box, the highlight is the same *share*
+ * of every skeleton and crosses each one in the same time.
  */
-private const val SHIMMER_BLEED_FRACTION = 0.35f
+private const val SHIMMER_BAND_FRACTION = 0.6f
 private const val SHIMMER_DURATION_MILLIS = 1100

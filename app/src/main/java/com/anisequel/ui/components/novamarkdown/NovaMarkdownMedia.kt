@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.novamarkdown
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -44,6 +45,8 @@ import coil.request.ImageRequest
 import coil.size.Dimension
 import coil.size.Size
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
+import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
 
@@ -150,6 +153,11 @@ private fun NovaImageContent(
 
     Box(
         modifier = mediaModifier
+            // The waiting plate is one shape and the artwork is another, so the
+            // difference is a size change rather than a redraw. Settling it on the
+            // layout spring is what stops a spoiler's picture from snapping the
+            // text under it down the page the instant the bytes land.
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
             .bouncyPress(interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource) {
                 openExternalUrlOrCopy(context, tapUrl)
@@ -175,7 +183,7 @@ private fun NovaImageContent(
                 // failed drew a full-bleed warning triangle the size of the
                 // artwork it was standing in for - and a bio's whole page became
                 // a warning sign because one GIF was missing.
-                loading = { NovaImagePending(modifier = Modifier.size(28.dp)) },
+                loading = { NovaImagePending(fillsBox = fillsBox) },
                 error = { NovaImageUnavailable() }
             )
         }
@@ -183,20 +191,49 @@ private fun NovaImageContent(
 }
 
 /**
- * Something small where the picture will be, while it is on its way.
+ * Where the picture will be, while it is on its way.
  *
- * A spinner rather than a copy of the artwork's box: the box is already reserved
- * by [novaImageSizeModifier], so this only has to say "not yet" in a size that
- * does not become the page's most prominent thing when a network is slow.
+ * ## Why a block image gets a plate and an icon does not
+ *
+ * A block image is the whole point of the block: a spoiler that is hiding a
+ * screenshot or a card. Its placeholder used to be a 28dp spinner, which on an
+ * image with no declared height *was* the box - so a revealed spoiler showed a
+ * dot, then a full-width picture, and the article under it jumped. The plate is
+ * the app's own skeleton (see [ShimmerBox]) at a landscape shape, so the wait
+ * looks like the artwork arriving rather than like the page failing to draw.
+ *
+ * An inline picture is usually a 50dp icon or a logo in a row of them, and the
+ * container deliberately paints nothing behind a loaded one (AniList's social
+ * art is transparent). A shimmering plate there would draw a box around an icon
+ * that is about to become transparent, so the small spinner stays: it says "not
+ * yet" without claiming a shape the picture will not have.
  */
 @Composable
-private fun NovaImagePending(modifier: Modifier = Modifier) {
-    CircularProgressIndicator(
-        modifier = modifier,
-        strokeWidth = 2.dp,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+private fun NovaImagePending(fillsBox: Boolean) {
+    if (!fillsBox) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(28.dp),
+            strokeWidth = 2.dp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
+        return
+    }
+    ShimmerBox(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(NOVA_IMAGE_PENDING_ASPECT),
+        shape = MaterialTheme.shapes.medium
     )
 }
+
+/**
+ * The shape a block image's placeholder takes while its bytes are on the wire.
+ *
+ * Landscape, because that is what a bio's block images almost always are - a
+ * banner, a screenshot, an AniList card - and a plate that is too *tall* would
+ * shrink the page back up as it loads, which is the jump this is here to avoid.
+ */
+private const val NOVA_IMAGE_PENDING_ASPECT = 16f / 10f
 
 /**
  * The honest state for an image that will not load: a sentence, not a triangle.

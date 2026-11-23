@@ -18,6 +18,18 @@
         {
           "title": "Switching between the anime and manga halves no longer scrambles the covers",
           "detail": "Both halves drew into one lazy grid, and a type switch replaced every poster in it. The grid kept the old list's per-poster animation state - the fade a removed poster is still playing, the offsets a placement spring is travelling between - so the outgoing covers were drawn over the incoming ones and rows sat at offsets that belonged to the other list. Two quick switches left several of those on top of each other, and leaving the page and coming back was the only thing that cleared them, because that also started from nothing. Each half gets its own grid now, and the switch resets the scroll in the tap itself rather than a frame later, where a second tap could cancel it."
+        },
+        {
+          "title": "Skeletons shimmer all the way across",
+          "detail": "The loading highlight was a square band travelling diagonally, which only works on a roughly square block. Its height was tied to the block's longest edge, so on any wide skeleton - a comment's text line, the full-width bar in a card - the highlight left the block top and bottom for part of every loop: on a phone-width bar it was visible for about half the cycle, which read as a shimmer that stopped in the middle and started again. The highlight is a stripe as tall as the block now, so it enters at one edge and leaves at the other, once per loop, on every shape."
+        },
+        {
+          "title": "A spoiler's picture waits as a picture, not a dot",
+          "detail": "A hidden image usually has no declared height, so its space was reserved by its placeholder - a 28dp spinner. Revealing the spoiler showed a dot, then the whole picture, and everything under it jumped by the picture's height the moment it arrived. A block image now waits on the app's own shimmering plate at a landscape shape, and the box settles from that shape to the artwork's on the layout spring instead of snapping. A live AniList card, which renders in a platform view rather than in the image loader, waits on the same plate rather than the bare spinner it kept while everything around it shimmered. Small inline images keep the spinner, because a plate behind a transparent logo would draw a box the picture will never have."
+        },
+        {
+          "title": "Opening a comment thread no longer draws the last one over it",
+          "detail": "The comments list was reused when a different thread was opened, and every comment fades out through the same list animation the rest of the app uses - so the previous conversation was drawn as fading rows on top of the new thread's loading skeleton, and the new thread opened at the previous one's scroll position. Each thread gets its own list and its own scroll position now, which is also what the chat view's \"open at the newest comment\" rule expects."
         }
       ]
     },

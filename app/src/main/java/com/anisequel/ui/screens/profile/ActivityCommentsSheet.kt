@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -185,7 +184,14 @@ fun ActivityCommentsSheet(
     /** The profile's minute-tick, so "12m" becomes "1h" while the sheet is open. */
     nowEpochSecond: Long? = null
 ) {
-    val listState = rememberLazyListState()
+    // One scroll position per thread, and the thread is an input rather than a
+    // `remember` key alone so a rotation still restores the place the reader was
+    // at. Reusing one position across threads handed a freshly opened thread the
+    // row index of the conversation before it - the sheet is composed at one call
+    // site, so the state object outlives the thread it was measuring.
+    val listState = rememberSaveable(state.activityId, saver = LazyListState.Saver) {
+        LazyListState()
+    }
     val sheetState = rememberFullHeightSheetState()
 
     // The editor's whole state. Held here rather than in the composer because a

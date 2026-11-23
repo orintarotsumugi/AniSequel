@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.launch
@@ -65,87 +66,97 @@ internal fun ColumnScope.ThreadList(
     val scope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            // The list is keyed by reply id, and a repeated key is a hard
-            // `IllegalArgumentException` in Compose. The store guarantees one entry
-            // per id; see `CommentsState.replies`.
-            state = listState,
-            contentPadding = PaddingValues(bottom = 8.dp)
-        ) {
-            val head = state.head
-            if (head != null) {
-                item(key = "thread_head", contentType = "head") {
-                    ThreadHeadRow(
-                        head = head,
+        // A new list per thread, for the reason the Library records on its own
+        // grid: a lazy list keeps per-key animation state, and opening another
+        // thread replaces every key in it. The outgoing comments then fade out
+        // *over* the incoming skeleton - two threads on screen at once, which is
+        // what opening threads quickly used to look like - and the new thread
+        // inherits the old one's scroll position. The chat's "open at the newest
+        // row" effect expects an empty list, not fifty rows of somebody else's
+        // conversation.
+        key(state.activityId) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                // The list is keyed by reply id, and a repeated key is a hard
+                // `IllegalArgumentException` in Compose. The store guarantees one entry
+                // per id; see `CommentsState.replies`.
+                state = listState,
+                contentPadding = PaddingValues(bottom = 8.dp)
+            ) {
+                val head = state.head
+                if (head != null) {
+                    item(key = "thread_head", contentType = "head") {
+                        ThreadHeadRow(
+                            head = head,
+                            canPost = canPost,
+                            isReplyTarget = replyTargetId != null && head.id == replyTargetId,
+                            onReply = onReply,
+                            onQuote = onQuote,
+                            nowEpochSecond = nowEpochSecond,
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+                }
+
+                when {
+                    state.isLoading -> item(key = "loading", contentType = "loading") {
+                        // The rows that are coming, at the sizes they will have. A
+                        // spinner here was the one waiting state in the app whose shape
+                        // was already known and thrown away.
+                        //
+                        // The shimmer is owned by this item rather than by the sheet: an
+                        // infinite transition composed above the list kept ticking while
+                        // comments were on screen and while the editor covered them, for
+                        // a skeleton that was not drawn. Composed here, it exists only
+                        // for as long as the waiting state does.
+                        // The rows that replace it already fade in on the list's effect
+                        // tokens; this slot was the one that simply vanished, so the wait
+                        // ended in a cut. On the same pair the swap reads as one state
+                        // becoming the next rather than as a screen being swapped out.
+                        CommentRowsSkeleton(
+                            phase = rememberShimmerPhase(),
+                            modifier = Modifier.animateItem(
+                                // The placement spec too: without it this slot kept
+                                // Compose's default spring, so the skeleton moved on a
+                                // different physics from every row that replaced it and
+                                // ignored the Motion style setting while doing so.
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+
+                    state.replies.isEmpty() -> threadEmptyContent(
+                        state = state,
+                        hasHead = head != null,
                         canPost = canPost,
-                        isReplyTarget = replyTargetId != null && head.id == replyTargetId,
+                        onRetry = onRetry
+                    )
+
+                    else -> threadReplyItems(
+                        state = state,
+                        viewerId = viewerId,
+                        canPost = canPost,
+                        visible = visible,
+                        replyDepths = replyDepths,
+                        continuations = continuations,
+                        replyTargetId = replyTargetId,
+                        hiddenCount = hiddenCount,
+                        onRetry = onRetry,
+                        onLoadOlder = onLoadOlder,
                         onReply = onReply,
                         onQuote = onQuote,
-                        nowEpochSecond = nowEpochSecond,
-                        modifier = Modifier.animateItem(
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                        )
+                        onLikeReply = onLikeReply,
+                        onManageReply = onManageReply,
+                        onShowCommentLikers = onShowCommentLikers,
+                        nowEpochSecond = nowEpochSecond
                     )
                 }
-            }
-
-            when {
-                state.isLoading -> item(key = "loading", contentType = "loading") {
-                    // The rows that are coming, at the sizes they will have. A
-                    // spinner here was the one waiting state in the app whose shape
-                    // was already known and thrown away.
-                    //
-                    // The shimmer is owned by this item rather than by the sheet: an
-                    // infinite transition composed above the list kept ticking while
-                    // comments were on screen and while the editor covered them, for
-                    // a skeleton that was not drawn. Composed here, it exists only
-                    // for as long as the waiting state does.
-                    // The rows that replace it already fade in on the list's effect
-                    // tokens; this slot was the one that simply vanished, so the wait
-                    // ended in a cut. On the same pair the swap reads as one state
-                    // becoming the next rather than as a screen being swapped out.
-                    CommentRowsSkeleton(
-                        phase = rememberShimmerPhase(),
-                        modifier = Modifier.animateItem(
-                            // The placement spec too: without it this slot kept
-                            // Compose's default spring, so the skeleton moved on a
-                            // different physics from every row that replaced it and
-                            // ignored the Motion style setting while doing so.
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                        )
-                    )
-                }
-
-                state.replies.isEmpty() -> threadEmptyContent(
-                    state = state,
-                    hasHead = head != null,
-                    canPost = canPost,
-                    onRetry = onRetry
-                )
-
-                else -> threadReplyItems(
-                    state = state,
-                    viewerId = viewerId,
-                    canPost = canPost,
-                    visible = visible,
-                    replyDepths = replyDepths,
-                    continuations = continuations,
-                    replyTargetId = replyTargetId,
-                    hiddenCount = hiddenCount,
-                    onRetry = onRetry,
-                    onLoadOlder = onLoadOlder,
-                    onReply = onReply,
-                    onQuote = onQuote,
-                    onLikeReply = onLikeReply,
-                    onManageReply = onManageReply,
-                    onShowCommentLikers = onShowCommentLikers,
-                    nowEpochSecond = nowEpochSecond
-                )
             }
         }
 
