@@ -179,7 +179,13 @@ class ProfileBannerShapeTest {
         )
         assertTrue(
             "the banner never learns its picture's size, so 'Adapt' can only be a guess",
-            header.contains("onImageSize = { imageSize = it }")
+            header.contains("onImageSize = { measured ->") &&
+                header.contains("imageSize = measured")
+        )
+        assertTrue(
+            "the measurement is not remembered, so a revisit still opens at the " +
+                "placeholder height and animates to the picture's own",
+            header.contains("BannerAspectMemory.remember(banner, measured)")
         )
         assertTrue(
             "the measured height is not animated, so a portrait banner snaps the whole " +
