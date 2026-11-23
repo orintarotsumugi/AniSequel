@@ -11,6 +11,14 @@ import java.util.concurrent.TimeUnit
  * burst limiter that rejects requests that arrive too close together. When it
  * trips, the response carries `Retry-After` with the number of seconds to wait.
  *
+ * Since 2026-11-23 the budget is charged per *field* as well as per request:
+ * every aliased root and every `Page` in a document counts separately, so one
+ * document can spend several of the thirty. That is why the cover batch asks for
+ * one `Page.media(id_in:)` field rather than one alias per link (see
+ * `GraphQLQueries.getMediaCoversQuery`), and why the retry below is per document
+ * rather than per alias - a 429 for the document is one answer, not one per
+ * field.
+ *
  * The retry here is deliberately narrow:
  *
  *  - **One** extra attempt, not a loop. A client that retries until it succeeds

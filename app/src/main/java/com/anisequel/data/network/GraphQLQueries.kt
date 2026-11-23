@@ -144,6 +144,12 @@ object GraphQLQueries {
               large
             }
             bannerImage
+            # Added to the schema in the 2026-11-23 privacy overhaul. A private
+            # account - or one the viewer blocked, which now behaves the same way -
+            # withholds its list, so the dashboard has to know before it spends a
+            # request on the list that will not come. See `ViewerProfile`.
+            privacy
+            isBlocked
             statistics {
               anime {
                 count
@@ -239,6 +245,11 @@ object GraphQLQueries {
             bannerImage
             createdAt
             updatedAt
+            # `privacy`/`isBlocked` are what let the screen say "this profile is
+            # private" instead of printing zeroes for a withheld list. Added to the
+            # schema in the 2026-11-23 privacy overhaul; a block behaves as private.
+            privacy
+            isBlocked
             statistics {
               anime {
                 count
@@ -840,7 +851,7 @@ object GraphQLQueries {
     val GET_USER_MANGA_LIST: String = mediaListQuery("GetUserMangaList")
 
     /**
-     * Many media in one request, one aliased root field each.
+     * Many media in one request, as one `Page.media` connection for the batch.
      *
      * The preview cards in a bio each name an AniList entity, and the obvious
      * implementation - one `getMediaDetail` per card - spends one of AniList's 30
@@ -848,88 +859,82 @@ object GraphQLQueries {
      * so opening one profile could exhaust the budget and hand the next person who
      * opens anything a 429.
      *
-     * `Media` takes a single id *per field*, but aliasing the *root* field is
-     * ordinary GraphQL: `m0: Page { media(id: 1, type: ANIME) }`, `m1: Page {
-     * media(id: 1, type: MANGA) }` in one document, one round trip. Aliasing the
-     * field is what makes it possible to ask for both sides of an id that is used
-     * by *both* media namespaces in the same batch - a bare id would have
-     * collapsed them to one entry and answered with only one of the two posters.
-     * See [MediaCoverKey] for why the type cannot be dropped.
+     * ## Why one root field and not one aliased root per id
      *
-     * ## Why each alias resolves `Page.media` and not the `Media` root field
+     * This document used to emit `m0: Page { media(id: ...) }`, `m1: ...` - one
+     * alias per link - because `Media` takes a single id per field. That was
+     * correct when a document counted as one request. AniList changed the
+     * limiter on 2026-11-23: **every aliased root and every `Page` in a request
+     * now counts towards the budget separately**, and `X-RateLimit-Remaining`
+     * drops by the alias count. Verified against the live API: one alias took
+     * remaining from 28 to 27, five aliases took it from 27 to 22. So a
+     * twelve-link bio spent twelve of the thirty requests the batch was written
+     * to avoid spending, and two profiles could exhaust the minute.
+     *
+     * `Page.media` takes `id_in: [Int]`, so **one** root field answers the whole
+     * batch, whatever its size and whatever mix of anime and manga it holds. The
+     * id list is the filter; the response's `type` is what the caller keys each
+     * cover by, so [MediaCoverKey]'s namespace distinction is preserved without
+     * a per-id type argument. Verified live: the same batch costs one unit of
+     * `X-RateLimit-Remaining`, and an id in both namespaces comes back twice.
+     * The caller must therefore accept only the keys it asked for, because the
+     * ids alone cannot say which namespace was requested.
+     *
+     * ## Why the connection and not the `Media` root field
      *
      * `Media(id:)` is *nullable*, and AniList does not answer it with null: a
-     * batch in which one id has no media - a link to a deleted entry, or an id
-     * that belongs to the other media namespace - comes back as **HTTP 404** with
-     * `errors: ["Not Found."]`, and the whole response is a failure even though
-     * the other aliases resolved. Every poster in the bio then fell back to the
-     * placeholder, because one of a dozen links was stale, and the failure named
-     * nothing the reader could act on. Verified against the live API: the same
-     * request written with `m0: Media(...)` answers 404, and written with
-     * `m0: Page { media(...) }` answers 200 with `"m0": { "media": [] }`.
-     *
-     * `Page.media` is a *connection*, so it filters instead of failing, and an id
-     * with no media is an empty list. That is the one shape this batch can be
-     * asked in without letting the weakest link in a bio take the whole document
-     * down with it. The caller reads `media.firstOrNull()`, which is null for the
-     * empty case - the same "nothing to draw here" it already handled.
+     * batch in which one id has no media - a link to a deleted entry - comes
+     * back as **HTTP 404** with `errors: ["Not Found."]`, and the whole response
+     * is a failure even though the other ids resolved. Every poster in the bio
+     * then fell back to the placeholder, because one of a dozen links was stale,
+     * and the failure named nothing the reader could act on. Verified against the
+     * live API: the same request written with `Media(...)` answers 404, and
+     * written with `Page { media(...) }` answers 200 with the unresolvable id
+     * simply absent from the list.
      *
      * This is distinct from the `Page` limitation noted on
      * [AniListApiService.getUserFollowers], which is about two child fields
      * *inside* a single `Page` and not about two fields at the root.
      *
      * Only the fields a preview card draws. The full detail query
-     * ([getMediaDetailQuery]) carries a
-     * description, banner and studio per entry, and a bio's dozen cards would
-     * turn that into a payload the screen cannot use.
+     * ([getMediaDetailQuery]) carries a description, banner and studio per entry,
+     * and a bio's dozen cards would turn that into a payload the screen cannot
+     * use.
      */
     fun getMediaCoversQuery(keys: List<MediaCoverKey>): String {
         require(keys.isNotEmpty()) { "a cover batch needs at least one id" }
-        val fields = keys.indices.joinToString("\n") { index ->
-            """
-            m$index: Page {
-              media(id: ${'$'}id$index, type: ${'$'}type$index) {
-                id
-                type
-                title { romaji english userPreferred }
-                format
-                averageScore
-                coverImage { extraLarge large }
-                siteUrl
-              }
-            }
-            """.trimIndent()
-        }
-        // `type` is nullable in AniList's `Media` field, so the variable is too.
-        // Declaring it `MediaType!` would make the whole document invalid.
-        //
-        // The `$` sigil is `\$` here because a declaration needs one and a
-        // template is not one: `"id$it: Int"` produced `id0: Int`, which is not
-        // a variable declaration at all. The use sites below were written with
-        // the sigil, so the document asked for a variable it never declared -
-        // and AniList answered **HTTP 400, "Expected $, found Name \"id0\""**
-        // for the whole batch. Every poster in every bio therefore stayed on its
-        // placeholder, with nothing on screen saying why, because the covers
-        // request is one of the few the user never sees fail. Verified against
-        // the live API: the same batch written with `\$id0` answers 200.
-        val variables = keys.indices.joinToString(", ") { index ->
-            "${'$'}id$index: Int, ${'$'}type$index: MediaType"
-        }
+        // Twice the key count, because one id can resolve in both media
+        // namespaces and the connection returns both. Derived from the batch
+        // rather than from a second constant, so it cannot drift below what the
+        // caller asks for; the batch cap keeps it under `Page`'s 50-row ceiling.
+        val perPage = minOf(MAX_PAGE_PER_REQUEST, keys.size * 2)
         return """
-            query MediaCovers($variables) {
-            $fields
+            query MediaCovers(${'$'}ids: [Int]) {
+              media: Page(page: 1, perPage: $perPage) {
+                media(id_in: ${'$'}ids) {
+                  id
+                  type
+                  title { romaji english userPreferred }
+                  format
+                  averageScore
+                  coverImage { extraLarge large }
+                  siteUrl
+                }
+              }
             }
         """.trimIndent()
     }
 
     /**
-     * The alias [getMediaCoversQuery] gives the nth id, so results can be read back.
+     * AniList's documented `perPage` ceiling for any connection.
      *
-     * Indexed by *position* in the requested list rather than by media id, because
-     * two entries in one batch may share an id across the anime and manga
-     * namespaces - a single key per alias would collide and drop one of them.
+     * A document that asks for more than the server allows is silently truncated
+     * rather than rejected, so the last cards of a long batch simply never arrive.
+     * The cover batch is the one document that derives its page size from the size
+     * of the request, which is why the ceiling is named rather than written as a
+     * literal beside the arithmetic.
      */
-    fun mediaCoverAlias(index: Int): String = "m$index"
+    private const val MAX_PAGE_PER_REQUEST = 50
 
     /**
      * How many entities one preview document may ask for.
@@ -1796,6 +1801,14 @@ object GraphQLQueries {
             gender
             age
             bloodType
+            # Added to the schema 2026-11-23. Three shapes share the type: an
+            # `initial` height when the character grows, equal `min`/`max` for a
+            # single measurement, and a different pair for a range. See `Height`.
+            height {
+              initial { metric imperial }
+              min { metric imperial }
+              max { metric imperial }
+            }
             favourites
             siteUrl
             isFavourite
@@ -1861,6 +1874,13 @@ object GraphQLQueries {
             primaryOccupations
             gender
             age
+            # Same field and the same three shapes as the character query; staff
+            # heights are usually `null`, which the facts row simply omits.
+            height {
+              initial { metric imperial }
+              min { metric imperial }
+              max { metric imperial }
+            }
             yearsActive
             homeTown
             bloodType

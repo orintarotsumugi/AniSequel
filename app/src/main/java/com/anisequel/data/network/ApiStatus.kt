@@ -142,6 +142,7 @@ fun AniListErrorKind?.toReachability(): ApiReachability = when (this) {
     AniListErrorKind.RATE_LIMITED -> ApiReachability.RATE_LIMITED
     AniListErrorKind.INVALID_SESSION,
     AniListErrorKind.NOT_FOUND,
+    AniListErrorKind.PRIVATE_PROFILE,
     AniListErrorKind.INVALID_REQUEST,
     AniListErrorKind.MALFORMED_RESPONSE -> ApiReachability.ONLINE
 
@@ -254,6 +255,25 @@ fun AniListErrorKind.friendlyCopy(): ApiErrorCopy = when (this) {
             "The profile was last seen arguing about filler and then the signal cut out.",
             "No such user. The internet has finally granted them privacy.",
             "Ani-chan checked the blocked list. That is where hope goes to die."
+        )
+    )
+
+    AniListErrorKind.PRIVATE_PROFILE -> ApiErrorCopy(
+        headline = "This profile is private",
+        detail = "AniList keeps a private account's list and statistics to itself, so there " +
+            "is nothing here to read. A block looks the same from this side, and neither " +
+            "is something signing in again can change.",
+        quips = listOf(
+            "The list is there. It is just not for us.",
+            "Ani-chan respects a closed door.",
+            "Private means private, even for Ani-chan.",
+            "Their watch history is a state secret.",
+            "The profile is wearing its invisibility cloak.",
+            "Ani-chan knocked. Nobody answered, on purpose.",
+            "Some shelves are not for browsing.",
+            "This one is between them and AniList.",
+            "Ani-chan was told to come back with a warrant.",
+            "The list exists. Your invitation does not."
         )
     )
 

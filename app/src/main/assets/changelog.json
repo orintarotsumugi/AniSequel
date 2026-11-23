@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "2.5.9",
+      "entries": [
+        {
+          "title": "A bio's posters cost one request, not one per link",
+          "detail": "AniList now counts every aliased field and every Page in a request against the rate limit separately, so the covers document - which asked for one Page per link - spent ten of the thirty requests a minute it was written to save. The whole batch is one Page.media(id_in:) field now, which the API charges once however many links it carries. Posters are matched back by media type as well as id, because one id can exist as both an anime and a manga."
+        },
+        {
+          "title": "Character and staff pages show a height",
+          "detail": "AniList added a dedicated height field to characters and staff and reports it in both centimetres and feet/inches. The facts row now prints both, once for a single measurement instead of as \"185 - 185 cm\", as a range when the ends really differ, and as \"Initially ...\" for a character who grows. A person with no recorded height simply has one fewer row."
+        },
+        {
+          "title": "A private profile says so instead of reading zero",
+          "detail": "AniList's privacy overhaul makes a private account withhold its list and statistics, and makes a block behave the same way. The app asked for the list anyway and drew the empty answer as an account that had watched nothing. It reads the account's privacy and block state first and says the profile is private, without spending a request on a list that will not come. A refused profile is also no longer mistaken for an expired session, which used to offer to sign the reader out of their own working account."
+        }
+      ]
+    },
+    {
       "version": "2.5.8",
       "entries": [
         {

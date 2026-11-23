@@ -3994,3 +3994,46 @@ follow and sliders with nothing to preview, which is the failure its design exis
 to avoid. *Device Manager*, *Updates* and the account page stay flat for the same
 reason the shelf is grouped - they are short, and a shelf over three cards is a
 tap for nothing.
+
+## 2.5.9: the API started charging for aliases, and a private profile is not empty
+
+AniList's 2026-11-23 changelog changed two things that the app had quietly built
+assumptions on, and both assumptions failed in a way the compiler cannot see.
+
+**Every aliased field is a request now.** The bio cover batch was written as one
+`Page` alias per link (`m0`, `m1`, ...) because that made a dozen links cost one
+request instead of a dozen. The new limiter counts each of those aliases
+separately: verified against the live API, five aliases moved
+`X-RateLimit-Remaining` by five, and a single `Page.media(id_in: [...])` field
+moved it by one no matter how many ids it carried. So the document is one
+connection for the whole batch, and the response is matched back by the
+`(type, id)` pair because `id_in` is not namespace-scoped - an id that exists as
+both an anime and a manga comes back twice, and matching on the id alone would
+put the wrong poster on one of the cards.
+
+The entity-preview batch was already shaped this way (one root per type,
+`id_in`), which is why only the cover document needed rewriting. The lesson is
+the one the file already states for `studios(isMain: true)`: the cost of a
+document is a property of the *documents around it* and only shows up in
+production, so it is asserted rather than reviewed.
+
+**A private account withholds its list, and a block behaves the same way.** The
+old app asked for the list regardless and drew the empty answer as "0 watched" -
+an account that had watched nothing, which is a different person from one that
+did not share it. `User.privacy` and `User.isBlocked` are read with the profile,
+and the dashboard and profile screens stop when either says the data is
+withheld: the list request is cancelled and never painted, which on a
+thirty-a-minute budget also means a profile opened twice cannot spend the
+budget twice on an answer that never changes.
+
+The refusal also had to stop being an auth failure. AniList overloads 403 for a
+rejected token and for private data, and the app signs the reader out on the
+first - so browsing a stranger's private page offered to end a session that was
+working. `PRIVATE_PROFILE` is its own kind, decided before the 401/403 branch on
+both the HTTP and the GraphQL road, and it is deliberately not retryable: signing
+in again does not open somebody else's list.
+
+Character and staff pages gained AniList's new `height` field in the same pass.
+Its three shapes (an `initial` height, equal `min`/`max`, a real range) are
+resolved in the model rather than at each call site, because "185 - 185 cm" for
+a single measurement is a conversion artefact that reads as a bug.

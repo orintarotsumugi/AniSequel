@@ -48,8 +48,8 @@ import org.junit.Test
  *    exactly why it read as a missing feature rather than a wrong id.
  *
  * `MediaCoverKey` documents the same collision for cover art, where
- * `getMediaCoversQuery` already solves it with `Page.media(id:, type:)`. The detail
- * path is the one that was missed.
+ * `getMediaCoversQuery` already keeps the two apart by keying each answer on the
+ * media type as well as the id. The detail path is the one that was missed.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MediaDetailNamespacingTest {

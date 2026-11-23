@@ -31,6 +31,19 @@ enum class AniListErrorKind {
     /** The requested user or media does not exist. */
     NOT_FOUND,
 
+    /**
+     * The profile exists, but AniList withholds its list and statistics.
+     *
+     * Its own kind rather than [NOT_FOUND], because the two tell the reader
+     * different things: a private account is not a typo, and signing in again
+     * will not reveal it. It is also deliberately **not** [INVALID_SESSION]: the
+     * privacy overhaul (2026-11-23) makes a blocked account look private, and
+     * before this kind existed a 403 on somebody's profile was classified as a
+     * dead token - so browsing a stranger's page offered to sign the reader out
+     * of their own working session.
+     */
+    PRIVATE_PROFILE,
+
     /** The server rejected the query or the mutation. */
     INVALID_REQUEST,
 
@@ -131,6 +144,11 @@ internal fun GraphQLError.toAniListException(): AniListException {
         status == 429 -> rateLimitedException(
             message = "AniList is rate limiting this device. Try again in a moment."
         )
+        // A withheld profile is decided before 401/403 on purpose. Since the
+        // 2026-11-23 privacy overhaul a blocked account answers like a private
+        // one, and treating that 403 as a dead token offered to sign the reader
+        // out of a session that was working perfectly - on somebody else's page.
+        reportsPrivateProfile(text) -> privateProfileException()
         status == 401 || status == 403 -> sessionExpiredException()
         // 5xx before the wording checks, like the 429 above: a status carried on a
         // GraphQL error can arrive on an HTTP 200 (`rateLimitedException`'s note
@@ -145,6 +163,38 @@ internal fun GraphQLError.toAniListException(): AniListException {
         else -> AniListException(AniListErrorKind.INVALID_REQUEST, text)
     }
 }
+
+/**
+ * Whether an error message is AniList saying it will not show a profile.
+ *
+ * Matched on both words the API uses rather than on a fixed sentence: the privacy
+ * overhaul introduced blocks into the same answer, and a message that says
+ * "blocked" is exactly as private as one that says "private". The `user`/`profile`
+ * half keeps an unrelated field named `private` (a private message, say) from
+ * being read as a withheld account.
+ */
+internal fun reportsPrivateProfile(text: String): Boolean {
+    if (text.isBlank()) return false
+    val namesPerson = text.contains("user", ignoreCase = true) ||
+        text.contains("profile", ignoreCase = true) ||
+        text.contains("account", ignoreCase = true)
+    val saysWithheld = text.contains("private", ignoreCase = true) ||
+        text.contains("blocked", ignoreCase = true)
+    return namesPerson && saysWithheld
+}
+
+/**
+ * Builds a [AniListErrorKind.PRIVATE_PROFILE] failure.
+ *
+ * No app-wide notice: unlike a dead token or a server outage, this is not a
+ * problem with the session or with AniList - it is an answer about one profile,
+ * and the surface that asked for it already has somewhere to say so.
+ */
+private fun privateProfileException(): AniListException =
+    AniListException(
+        kind = AniListErrorKind.PRIVATE_PROFILE,
+        message = "This AniList profile is private."
+    )
 
 /**
  * Builds a [AniListErrorKind.INVALID_SESSION] failure and raises the app-wide
@@ -239,6 +289,13 @@ fun aniListHttpError(
 ): AniListException {
     // Verdicts the body cannot overturn, decided first. 429 is also the only
     // place `Retry-After` exists, so it has to be answered here.
+    //
+    // A withheld profile is the one exception, and it has to come before the
+    // 401/403 branch: the privacy overhaul makes a block answer like a private
+    // account, and a private account's refusal is not a dead session.
+    if (code == 403 && reportsPrivateProfile(reportedError?.message.orEmpty())) {
+        return privateProfileException()
+    }
     if (code == 401 || code == 403) {
         return sessionExpiredException(cause = cause)
     }

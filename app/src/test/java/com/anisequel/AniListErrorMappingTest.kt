@@ -12,7 +12,7 @@ import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaDetailData
-import com.anisequel.data.model.MediaCoverPage
+import com.anisequel.data.model.MediaCoversData
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MangaPreviewData
@@ -137,7 +137,7 @@ class AniListErrorMappingTest {
         // answers with no data rather than growing a fake that can drift.
         override suspend fun getMediaCovers(
             request: GraphQLRequest
-        ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
+        ): GraphQLResponse<MediaCoversData> = GraphQLResponse(MediaCoversData())
 
         // Added with the entity previews for the same reason as the covers above.
         override suspend fun getEntityPreviews(
@@ -459,7 +459,7 @@ class RequestCoalescingPolicyTest {
         // answers with no data rather than growing a fake that can drift.
         override suspend fun getMediaCovers(
             request: GraphQLRequest
-        ): GraphQLResponse<Map<String, MediaCoverPage>> = GraphQLResponse(emptyMap())
+        ): GraphQLResponse<MediaCoversData> = GraphQLResponse(MediaCoversData())
 
         // Added with the entity previews for the same reason as the covers above.
         override suspend fun getEntityPreviews(

@@ -497,6 +497,27 @@ class UserOverviewViewModel(
                 return@launch
             }
 
+            // A private profile, or one the viewer blocked, no longer exposes its
+            // list or statistics (AniList, 2026-11-23). Rendering that as a page of
+            // zeroes is a wrong answer, not an empty one: the person may have
+            // thousands of entries this screen was simply not given. The chunked
+            // list download is cancelled rather than awaited, because there is
+            // nothing it could return.
+            //
+            // Own profiles are excluded because the viewer's own token can read
+            // their list whatever their privacy setting says.
+            if (!isOwnProfile && overview.isPrivateProfile) {
+                listDeferred?.cancel()
+                loadedOverview = null
+                loadedList = null
+                _uiState.value = UserOverviewUiState.Error(
+                    message = "This AniList profile is private.",
+                    canRetry = false,
+                    kind = AniListErrorKind.PRIVATE_PROFILE
+                )
+                return@launch
+            }
+
             // Published before the list is awaited, and deliberately so: see the
             // note above. `isLibraryLoading` is the flag that stops the Stats tab and
             // the Library page from rendering "0 completed" for the length of the
@@ -518,9 +539,13 @@ class UserOverviewViewModel(
             // the bug this position avoids.
             loadMediaCovers(overview.about)
 
-            // If fetching the anime list fails (for instance on accounts with private lists
-            // or temporary rate limits), gracefully build the profile with null list data
-            // rather than failing the entire profile screen when the overview succeeded.
+            // A list fetch that was refused or throttled still builds the page
+            // with null list data rather than failing the whole screen when the
+            // overview succeeded. A *private* profile never reaches this point: it
+            // is decided above, before the request, because there is nothing to
+            // wait for and nothing to put in the grid. This path is for the
+            // transient failures - a rate limit, an edge failure - where the bio
+            // and the favourites are still worth drawing.
             //
             // The *reason* is carried through rather than discarded. `getOrNull()`
             // threw away the only evidence that "no list" and "could not read the

@@ -42,27 +42,37 @@ val MediaNode.mediaCoverKey: MediaCoverKey
     get() = MediaCoverKey(type ?: "ANIME", id)
 
 /**
- * One alias of the batched cover query, as AniList answers it.
+ * A page of cover answers, as the batched cover query returns it.
+ *
+ * One `Page.media` connection for the whole batch, aliased `media`, so this is
+ * read as a fixed field rather than as a map keyed by alias. See
+ * [GraphQLQueries.getMediaCoversQuery] for why the batch is one root field and
+ * not one alias per id - AniList's limiter counts each alias separately now, and
+ * an alias per link spent the budget the batch existed to save.
  *
  * ## Why the batch is a connection and not the `Media` root field
  *
  * `Media(id:)` is nullable, and AniList answers a batch containing an id it
  * cannot resolve with **HTTP 404** and `errors: ["Not Found."]` rather than with
- * a null field - so one stale link in a bio (a deleted entry, or an id that
- * belongs to the other media namespace) failed the *whole* response, and every
- * poster on the card fell back to the placeholder even though the other aliases
- * had resolved. `Page.media` filters instead of failing: an id with no media is
- * an empty list, on a 200. See [GraphQLQueries.getMediaCoversQuery], which is
- * where the shape is written.
+ * a null field - so one stale link in a bio (a deleted entry) failed the *whole*
+ * response, and every poster on the card fell back to the placeholder even
+ * though the other ids had resolved. `Page.media` filters instead of failing: an
+ * id with no media is simply absent, on a 200.
  *
  * [media] is a list rather than a single node because that is what a connection
- * gives, and it is null only if the field itself is absent - the caller reads
- * `firstOrNull()` either way, so an empty list, a null list and a missing alias
- * are all the same "no cover for this one" rather than three branches.
+ * gives, and it is null only if the field itself is absent. An empty list, a
+ * null list and an absent page are all the same "no cover for these" to the
+ * caller rather than three branches.
  */
 @JsonClass(generateAdapter = true)
 data class MediaCoverPage(
     val media: List<MediaNode>? = null
+)
+
+/** The payload of the batched cover query, with its single `media` page. */
+@JsonClass(generateAdapter = true)
+data class MediaCoversData(
+    val media: MediaCoverPage? = null
 )
 
 /**
