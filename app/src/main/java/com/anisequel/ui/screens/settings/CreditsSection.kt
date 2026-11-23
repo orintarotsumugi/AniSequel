@@ -77,6 +77,16 @@ import com.anisequel.ui.theme.AniSequelTheme
  * rate limit to render a page of four names is not a trade this screen needs, and
  * a profile picture is the least time-sensitive thing in the app.
  *
+ * ## Why Chimnoy's face moves
+ *
+ * He asked for the portrait Dartotsu lists for him, and that portrait is an
+ * animated GIF rather than a GitHub avatar. It is one URL of his own choosing, so
+ * it is pinned here the same way the others are - `AsyncImage` already resolves
+ * through the app's one `ImageLoader`, which registers Coil's
+ * `ImageDecoderDecoder`, so the animation plays without a second decode path and
+ * without a drawable in the APK. The letter stays underneath it like every other
+ * face, which is what a failed load still shows.
+ *
  * ## Why there is a quote on the developer card
  *
  * The person who wrote the app wrote the sentence too. Paraphrasing it into
@@ -509,8 +519,12 @@ private val HELPERS = listOf(
     Credit(
         name = "itsmechinmoy",
         handle = "itsmechinmoy",
-        avatarUrl = "https://avatars.githubusercontent.com/u/167056923?s=256",
         profileUrl = "https://github.com/itsmechinmoy",
+        // The animated portrait, not the GitHub avatar: this is the picture he
+        // uses for himself in Dartotsu's developer list, and the one he asked to
+        // have here. Pinned as his own URL rather than re-hosted, so the credit
+        // points at the source of the image he chose.
+        avatarUrl = "https://files.catbox.moe/o45l03.gif",
         note = "Maintaining Dantotsu from Rebelonion, and a lot of help with this " +
             "app and its suggestions.",
         apps = listOf(

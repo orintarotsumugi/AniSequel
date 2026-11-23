@@ -61,17 +61,22 @@ class CreditsLinksTest {
      * The profile pictures are GitHub's own, pinned as the resolved CDN URLs
      * (`github.com/<user>.png?size=256` answers 302 to these) rather than fetched
      * from the GitHub API: a request and a rate limit per render is not a trade a
-     * page of four names needs. What the test pins is that each person has one and
-     * that it is the *same person* as the profile link beside it - a swapped avatar
-     * is a credit that thanks the wrong developer, and nothing about it looks wrong
-     * on screen.
+     * page of four names needs. Chimnoy's is the exception - the animated portrait
+     * Dartotsu lists for him - and it is pinned by value like the others. What the
+     * test pins is that each person has one and that it is the *same person* as the
+     * profile link beside it - a swapped avatar is a credit that thanks the wrong
+     * developer, and nothing about it looks wrong on screen.
      */
     @Test
     fun `every credit has the face that goes with the profile`() {
         val creditSource = credits
         listOf(
             "https://avatars.githubusercontent.com/u/139042138?s=256",
-            "https://avatars.githubusercontent.com/u/167056923?s=256",
+            // Chimnoy's is the one animated portrait on the page, so it is pinned
+            // separately: a rewrite back to the static GitHub avatar would still
+            // render a face, which is exactly the kind of change no screenshot and
+            // no compile catches.
+            "https://files.catbox.moe/o45l03.gif",
             "https://avatars.githubusercontent.com/u/99584765?s=256",
             "https://avatars.githubusercontent.com/u/108048963?s=256"
         ).forEach { url ->
@@ -81,6 +86,11 @@ class CreditsLinksTest {
                 creditSource.contains("\"$url\"")
             )
         }
+        assertTrue(
+            "the animated portrait is drawn for more than one credit, so a face the " +
+                "reader did not choose is moving",
+            Regex("\\.gif\"").findAll(creditSource).count() == 1
+        )
         assertTrue(
             "the avatars are not drawn as images at all",
             creditSource.contains("AsyncImage(")

@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "2.5.8",
+      "entries": [
+        {
+          "title": "The credits page shows itsmechinmoy's own animated portrait",
+          "detail": "Every helper's card drew a GitHub avatar. Chimnoy's row now uses the animated portrait he uses in Dartotsu's developer list, pinned as his own URL rather than re-hosted, so his face moves while the other names stay still. It is the one animated image on the page, and it is only on his row."
+        },
+        {
+          "title": "The card preview prints a caption only where the Library does",
+          "detail": "Shelf never prints a title under its covers in the Library, and the card-design preview printed one anyway - a picture of a page the reader would not get. The caption rule now lives on the Library view itself, and the grid and both Settings previews read that one answer."
+        },
+        {
+          "title": "Mosaic previews as a mosaic",
+          "detail": "Mosaic's whole difference from Big cards is the full-width cover every third cell, and the card-design preview drew it as a flat two-up grid. It now draws the landscape anchor over the pair, at the proportion the Library gives the hero, so the two modes no longer preview alike."
+        },
+        {
+          "title": "Grouped covers previews its status heading",
+          "detail": "Grouped covers sorts the poster grid under status headings; the preview drew the grid without them, which made the mode look like the plain poster grid beside it. The preview now opens with the heading the Library prints above the covers."
+        },
+        {
+          "title": "The Compact grid preview keeps its names",
+          "detail": "The layout preview drew the Compact grid caption-free while the Library prints a name under every compact cover. All four poster modes in that preview now ask the mode whether it prints a caption, so choosing a density no longer shows a page that does not exist."
+        }
+      ]
+    },
+    {
       "version": "2.5.7",
       "entries": [
         {
