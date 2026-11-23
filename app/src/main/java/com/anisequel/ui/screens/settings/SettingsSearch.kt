@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -57,6 +58,12 @@ internal fun SettingsSearchBar(
 ) {
     var focused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    // Back dismisses the keyboard before it closes Settings. The field had no
+    // handler of its own, so a blank query with the caret in it fell through to
+    // SettingsScreen's handler and closed the whole screen - the one action a
+    // reader who just tapped into a search box has not asked for.
+    BackHandler(enabled = focused) { focusManager.clearFocus() }
 
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(

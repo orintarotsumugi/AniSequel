@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -70,8 +69,9 @@ import com.anisequel.ui.components.expressive.bouncyPress
  * - **Every animated value is drawn, not laid out.** The settle scale and the icon
  *   scale are read inside `graphicsLayer`, so a row of chips settling at once is one
  *   draw-phase invalidation each instead of a relayout per frame per chip. The
- *   border width is the one animated *layout* value, and it is a single dp step at
- *   the same moment the colours change.
+ *   border is a constant width whose *colour* moves: animating 1dp to 2dp changed
+ *   each chip's measured size, so selecting one nudged every chip after it in the
+ *   row - the same defect the appearance tiles already record and do not have.
  * - **Selected beats disabled.** "Mixed" is the active quick-pick on the Jokes page
  *   and is deliberately not clickable, and the last tone that is on cannot be
  *   switched off. Enabled-first meant the chip describing the current state was
@@ -140,11 +140,10 @@ internal fun SettingsChoiceChip(
         animationSpec = ExpressiveMotion.FastEffects,
         label = "settings_chip_border"
     )
-    val borderWidth by animateDpAsState(
-        targetValue = if (selected) 2.dp else 1.dp,
-        animationSpec = ExpressiveMotion.FastSpatialDp,
-        label = "settings_chip_border_width"
-    )
+    // 1.5dp at both ends, like the appearance tiles: a width that changes is a
+    // layout change, and a row of pills growing by half a dp re-flows under the
+    // finger. `borderColor` above carries the selection instead.
+    val borderWidth = 1.5.dp
     // The chosen pill sits a hair larger than its neighbours, on the bouncy token:
     // a selection that only changes colour is invisible to a reader glancing past
     // the row, and the overshoot is what makes it read as the page *accepting* the

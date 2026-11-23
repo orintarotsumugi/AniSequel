@@ -1,5 +1,54 @@
 {
   "versions": [
+{
+    "version": "2.5.5",
+    "entries": [
+      {
+        "title": "The build stamp cannot sit on a row",
+        "detail": "The version line was the last child of the shelf and also of the crossfade that swaps the shelf for search results. With no size transform that container lays the outgoing mode out at the incoming one's height, which is how the stamp was drawn across \"Device Manager\" in the 2.5.4 screenshot. It is a sibling of the crossfade now, drawn only while the shelf is showing and clipped with the list it sits under."
+      },
+      {
+        "title": "The type sample stays inside its card",
+        "detail": "The size preview is scaled in the draw phase so dragging does not reflow the paragraph, but that also left its layout at 100%: at 125% and above the last line drew over the slider. The card reserves the scaled height now, in 8dp steps so a drag does not re-measure it on every tick."
+      },
+      {
+        "title": "Reset on Seasonal effects resets the thumbs",
+        "detail": "Reset wrote the stored defaults but the sliders are drafts keyed on the committed value, so a value that was already the default - or a thumb dragged without committing - kept its old number while the sky reset. Reset seeds every draft as well as the store."
+      },
+      {
+        "title": "Refining a search starts at the best answer",
+        "detail": "Scrolling to the top was keyed on entering search mode, so typing a second word while scrolled through the first answer left the reader at that offset and the best matches above the viewport. Every query change returns to the top; the mode change keeps its spring, a refined query snaps."
+      },
+      {
+        "title": "Downloaded font families are read off the main thread",
+        "detail": "The list of stored families is a directory walk plus a name decode per family, and its comment already said it ran on the IO dispatcher. It did not - it ran in the frame that draws the page. It is dispatched now."
+      },
+      {
+        "title": "A GIF key is saved to the field it was typed into",
+        "detail": "Save ran in a coroutine that read the selected provider when it resumed, so switching chips mid-save filed the key under whichever provider was selected by then. The provider is captured with the editor."
+      },
+      {
+        "title": "A selected chip no longer nudges its row",
+        "detail": "The chip's border animated from 1dp to 2dp, which changes its measured size, so choosing one pill pushed every pill after it along the row. The border is a constant 1.5dp and the colour carries the selection, the way the appearance tiles already work."
+      },
+      {
+        "title": "A row's value crossfades where it sits",
+        "detail": "The value is end-aligned on the row, but its AnimatedContent was start-aligned, so a change drew the old value against the left edge of the new value's width before it faded. The transition is end-aligned too."
+      },
+      {
+        "title": "Back dismisses the search keyboard first",
+        "detail": "With the caret in the search field and a blank query, Back fell through to the screen's handler and closed Settings. The field now consumes Back while it has focus and only drops the keyboard."
+      },
+      {
+        "title": "The Search tab switch admits when it cannot be honoured",
+        "detail": "The bar hides Search when both catalogue halves are off, while the switch above kept reading \"on\". It is disabled with the reason when there is no page for the bar to add."
+      },
+      {
+        "title": "Controls settle with the theme instead of after it",
+        "detail": "Eleven selection transitions - the tab bar, both segmented bars, the state chip, the navigation bar and the appearance tiles - animated a colour spring toward a scheme role. The scheme animates every role on every frame of a theme change, so those targets never settled and the control arrived a beat after its page. They animate one progress and read both endpoints live, the pattern rememberStateColor already documents."
+      }
+    ]
+  },
     {
       "version": "2.5.4",
       "entries": [

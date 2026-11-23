@@ -466,14 +466,19 @@ private fun CommentMediaCard(context: android.content.Context) {
         // of their own still needs somewhere to paste it. Which credential wins is
         // decided once, in `gifSearchApiFor` - a saved reader key replaces the
         // bundled one for as long as it is on this device.
-        if (settings.gifProvider.keyLabel.isNotEmpty()) {
+        // Captured once. The save runs in a coroutine, and it used to read
+        // `settings.gifProvider` when it resumed: switching chips while a save was
+        // in flight stored the key under whichever provider was selected by then,
+        // not the field it was typed into.
+        val keyProvider = settings.gifProvider
+        if (keyProvider.keyLabel.isNotEmpty()) {
             Spacer(modifier = Modifier.height(14.dp))
             GifKeyEditor(
-                provider = settings.gifProvider,
+                provider = keyProvider,
                 currentKey = currentKey,
                 onSave = { key ->
                     scope.launch {
-                        when (settings.gifProvider) {
+                        when (keyProvider) {
                             GifProvider.TENOR -> preferences.setTenorApiKey(key)
                             GifProvider.KLIPY -> preferences.setKlipyApiKey(key)
                             GifProvider.GIPHY -> preferences.setGiphyApiKey(key)

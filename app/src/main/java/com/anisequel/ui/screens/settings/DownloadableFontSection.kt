@@ -86,7 +86,12 @@ internal fun DownloadableFontSection(
     var storedFamilies by remember { mutableStateOf<List<DownloadedFamily>?>(null) }
     var storedRevision by remember { mutableIntStateOf(0) }
     LaunchedEffect(storedRevision) {
-        storedFamilies = CustomFontStore.downloadedFamilies(context)
+        // Off the main thread, as the comment above always claimed. This is a
+        // directory walk of the font folder plus a decode of each family's name,
+        // and it ran on the frame that draws the page.
+        storedFamilies = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            CustomFontStore.downloadedFamilies(context)
+        }
     }
 
     val stored = storedFamilies.orEmpty()

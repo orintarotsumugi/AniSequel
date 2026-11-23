@@ -25,13 +25,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -311,6 +314,16 @@ private fun TextSizeSection(
         mutableFloatStateOf(committedScale.coerceIn(MIN_FONT_SCALE, MAX_FONT_SCALE))
     }
     val ratio = if (committedScale > 0f) draft / committedScale else 1f
+    // The sample's layout height at 100%. Scaling it in the draw phase leaves the
+    // *layout* at 100%, so at 175% the last line of the sample drew across the
+    // slider below the card - a preview that broke the card it was previewing.
+    // Reserving the scaled overflow as real height is the fix; it is quantised to
+    // 8dp so a thumb drag does not re-measure the card on every tick.
+    var sampleHeightPx by remember { mutableIntStateOf(0) }
+    val reservedSampleHeight = with(LocalDensity.current) {
+        val overflow = (sampleHeightPx * (ratio - 1f)).coerceAtLeast(0f)
+        (kotlin.math.ceil(overflow / (8f * density)) * 8f).dp
+    }
     // The sample scales in the draw phase rather than by re-styling every text
     // run: multiplying `fontSize` on each drag tick re-laid-out the paragraph on
     // every frame, which made the preview jump and reflow instead of read like a
@@ -372,11 +385,13 @@ private fun TextSizeSection(
         // for the release write - and without rebuilding the whole type scale
         // every frame.
         Column(
-            modifier = Modifier.graphicsLayer {
-                scaleX = ratio
-                scaleY = ratio
-                transformOrigin = TransformOrigin(0f, 0f)
-            }
+            modifier = Modifier
+                .onSizeChanged { sampleHeightPx = it.height }
+                .graphicsLayer {
+                    scaleX = ratio
+                    scaleY = ratio
+                    transformOrigin = TransformOrigin(0f, 0f)
+                }
         ) {
             SampleLine(
                 text = "A long title scrolls here, so nothing is cut",
@@ -388,6 +403,7 @@ private fun TextSizeSection(
                 base = MaterialTheme.typography.bodyMedium
             )
         }
+        Spacer(modifier = Modifier.height(reservedSampleHeight))
 
         Slider(
             state = rememberBoundSliderState(

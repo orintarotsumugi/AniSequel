@@ -269,6 +269,15 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
     val tierListTab by mainTabPreferences.tierListTab.collectAsStateWithLifecycle(initialValue = null)
     val searchTab by mainTabPreferences.searchTab.collectAsStateWithLifecycle(initialValue = null)
+    // The bar itself hides Search when neither catalogue half is on (see
+    // `enabledMainTabs`), so the switch that adds it has to know the same fact.
+    val searchAnimeEnabled by mainTabPreferences.searchAnimeEnabled
+        .collectAsStateWithLifecycle(initialValue = null)
+    val searchMangaEnabled by mainTabPreferences.searchMangaEnabled
+        .collectAsStateWithLifecycle(initialValue = null)
+    // Unknown means "not answered yet", not "off": disabling the switch for the
+    // frame before DataStore replies would make it flicker under the reader.
+    val catalogueAvailable = searchAnimeEnabled != false || searchMangaEnabled != false
 
     SectionCard(
         title = "Bottom bar",
@@ -302,9 +311,17 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
             // available would be understood as cosmetic.
             SwitchRow(
                 title = "Search tab",
-                subtitle = "Add Search to the bar. Turning this off hides only the tab; " +
-                    "the top-bar shortcut still opens the page.",
+                subtitle = if (catalogueAvailable) {
+                    "Add Search to the bar. Turning this off hides only the tab; " +
+                        "the top-bar shortcut still opens the page."
+                } else {
+                    "There is no Search page for the bar to add while both catalogue " +
+                        "halves are off below. Turn anime or manga search back on first."
+                },
                 checked = searchTab == true,
+                // A switch that says the tab is on while the bar has no such tab is
+                // the two settings disagreeing in front of the reader.
+                enabled = catalogueAvailable,
                 onCheckedChange = { enabled ->
                     scope.launch { mainTabPreferences.setSearchTab(enabled) }
                 },

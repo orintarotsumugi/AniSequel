@@ -3,7 +3,6 @@ package com.anisequel.ui.screens.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -62,6 +61,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.expressive.rememberStateColor
 import com.anisequel.ui.theme.DarkColorScheme
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LightColorScheme
@@ -499,13 +499,11 @@ private fun ThemeModeTile(
     // to 2dp on selection. The old pair changed the layout by half a dp as well
     // as the colour, so the tile under the finger nudged its neighbours and the
     // border could not crossfade. The selected colour still does all the talking.
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.outlineVariant
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val borderColor = rememberStateColor(
+        active = selected,
+        whenInactive = MaterialTheme.colorScheme.outlineVariant,
+        whenActive = MaterialTheme.colorScheme.primary,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "theme_mode_border_${mode.name}"
     )
 

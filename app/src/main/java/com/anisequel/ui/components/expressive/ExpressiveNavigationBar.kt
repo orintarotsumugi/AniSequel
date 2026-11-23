@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.expressive
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -404,22 +403,22 @@ private fun NavigationItem(
         animationSpec = ExpressiveMotion.SelectionScale,
         label = "nav_item_selection_scale"
     )
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            Color.Transparent
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // The selection is the animated value; the scheme roles behind it are read
+    // fresh every frame. A colour spring aimed at a role re-targets for every frame
+    // of a theme change and lands after the bar it belongs to - see
+    // `rememberStateColor`.
+    val container = rememberStateColor(
+        active = selected,
+        whenInactive = Color.Transparent,
+        whenActive = MaterialTheme.colorScheme.secondaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "nav_item_container"
     )
-    val content by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val content = rememberStateColor(
+        active = selected,
+        whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+        whenActive = MaterialTheme.colorScheme.onSecondaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "nav_item_content"
     )
 

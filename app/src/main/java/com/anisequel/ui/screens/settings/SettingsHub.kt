@@ -424,6 +424,10 @@ private fun SettingsHubEntryRow(
                     ).using(null)
                 },
                 label = "settings_row_value",
+                // End-aligned, or the outgoing value is drawn against the start of
+                // the new value's width and slides sideways out of the row it was
+                // already sitting at the end of.
+                contentAlignment = Alignment.CenterEnd,
                 modifier = Modifier.widthIn(max = 104.dp)
             ) { value ->
                 Text(

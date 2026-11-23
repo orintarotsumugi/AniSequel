@@ -30,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -558,11 +559,19 @@ private fun SettingsRoot(
     // viewport they were typed into.
     val hubScroll = rememberScrollState()
     val searching = searchQuery.isNotBlank()
-    LaunchedEffect(searching) {
-        // Animated, not `scrollTo`: the list is moving out of the way of the field
-        // the reader is typing in, and a spring reads as the shelf getting out of
-        // the way rather than as a jump.
-        if (hubScroll.value != 0) hubScroll.animateScrollTo(0)
+    LaunchedEffect(searching, searchQuery) {
+        // Animated, not `scrollTo`, when the mode changes: the list is moving out of
+        // the way of the field the reader is typing in, and a spring reads as the
+        // shelf getting out of the way rather than as a jump.
+        //
+        // A refined query is a different list, not a new mode, so it snaps instead.
+        // Before this, only `searching` was a key: typing a second word while
+        // scrolled through the first answer left the reader at that offset, with the
+        // best matches for the new query drawn above the viewport they were typing
+        // into - the same failure the mode change already fixed.
+        if (hubScroll.value != 0) {
+            if (searching) hubScroll.scrollTo(0) else hubScroll.animateScrollTo(0)
+        }
     }
 
     Column(
@@ -617,7 +626,11 @@ private fun SettingsRoot(
                             fadeOut(animationSpec = ExpressiveMotion.FastEffects)
                         ).using(null)
                     },
-                    label = "settings_search_mode"
+                    label = "settings_search_mode",
+                    // A crossfade draws two contents at once. Clipping the container
+                    // is what keeps a taller outgoing mode from drawing past the
+                    // list it belongs to while the new one shrinks in.
+                    modifier = Modifier.clipToBounds()
                 ) { isSearching ->
                     if (isSearching) {
                         SettingsSearchResults(
@@ -714,12 +727,21 @@ private fun SettingsRoot(
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
 
-                        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                            SettingsVersionFooter(
-                                versionName = BuildConfig.VERSION_NAME,
-                                versionCode = BuildConfig.VERSION_CODE
-                            )
-                        }
+                    }
+                }
+                // Outside the crossfade, deliberately. This was the last child of
+                // the shelf branch, which made the mode transition its parent: with
+                // `using(null)` the container takes the target's height, and the
+                // stamp could be placed over the rows it is meant to sit under - the
+                // overlap a 2.5.4 screenshot showed as the version printed across
+                // "Device Manager". As a sibling it can only follow the shelf, and
+                // `!searching` keeps it out of a result list.
+                if (!searching) {
+                    Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        SettingsVersionFooter(
+                            versionName = BuildConfig.VERSION_NAME,
+                            versionCode = BuildConfig.VERSION_CODE
+                        )
                     }
                 }
             }
