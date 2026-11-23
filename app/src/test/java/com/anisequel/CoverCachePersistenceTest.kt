@@ -1,5 +1,6 @@
 package com.anisequel
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -131,5 +132,50 @@ class CoverCachePersistenceTest {
             candidate = candidate.parentFile
         }
         error("could not locate gradle.properties from $start")
+    }
+
+    /**
+     * The profile snapshots outlive a cache wipe for the same reason the covers do.
+     *
+     * `cacheDir` is Android's to empty. The bio, the banner and avatar URLs, the
+     * favourites and the list were snapshotted into it, so "Clear cache" - or a
+     * low-storage sweep the reader never saw - made the next profile open download
+     * every part of a page that had not changed. The snapshots are page content,
+     * not scratch data, and they belong in the same private storage as the artwork
+     * they are drawn with.
+     *
+     * The legacy directory is deliberately still read: the one `cacheDir` reference
+     * below is the adoption of what earlier builds wrote, so an update does not
+     * cost the reader the profile they already had.
+     */
+    @Test
+    fun `profile snapshots are not in a directory android may empty`() {
+        val snapshots = source(
+            "app/src/main/java/com/anisequel/data/repository/SnapshotStore.kt"
+        )
+        val directory = source(
+            "app/src/main/java/com/anisequel/data/repository/AniListSnapshotsDirectory.kt"
+        )
+
+        assertTrue(
+            "the snapshot store no longer takes its directory from the shared helper, " +
+                "so one of the two call sites can drift back to cacheDir",
+            snapshots.contains("snapshotDirectory(context.applicationContext)")
+        )
+        assertTrue(
+            "profile snapshots are not under noBackupFilesDir, so a cache wipe makes " +
+                "the next profile open download its bio, banner, avatar and list again",
+            directory.contains("applicationContext.noBackupFilesDir")
+        )
+        assertEquals(
+            "the legacy cacheDir directory must be adopted once and otherwise unused, " +
+                "which means exactly one reference to it - the migration",
+            1,
+            Regex("cacheDir").findAll(directory).count()
+        )
+        assertTrue(
+            "the legacy directory is mentioned but never actually adopted",
+            directory.contains("legacyCacheDirectory.renameTo(target)")
+        )
     }
 }

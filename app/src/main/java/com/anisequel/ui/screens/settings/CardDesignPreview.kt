@@ -41,6 +41,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.LocalCardDesign
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.POSTER_ASPECT
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.cardRatingStyle
 import com.anisequel.ui.components.cards.libraryRating
@@ -52,6 +53,7 @@ import com.anisequel.ui.navigation.enabledMainTabs
 import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.screens.library.LibraryGroupHeading
 import com.anisequel.ui.screens.library.LibraryListRow
+import com.anisequel.ui.screens.library.MOSAIC_HERO_ASPECT
 import com.anisequel.ui.screens.library.LibraryTableHeader
 import com.anisequel.ui.screens.profile.libraryProgressLabel
 
@@ -164,11 +166,26 @@ internal fun CardDesignPreview(
                     if (entries.isEmpty()) {
                         PreviewEmptyState()
                     } else {
-                        when (viewMode) {
-                            LibraryViewMode.LIST,
-                            LibraryViewMode.GROUPED,
-                            LibraryViewMode.TABLE -> PreviewListShape(
+                        // Every arm is a fact on the mode, not a view name spelled
+                        // again here: Mosaic and Grouped covers used to fall into
+                        // the plain-grid arm, so two of the ten views previewed as
+                        // their neighbour and the reader could not see the shape
+                        // they were choosing. See `LibraryViewMode`.
+                        when {
+                            viewMode.drawsRows -> PreviewListShape(
                                 mode = viewMode,
+                                entries = entries
+                            )
+
+                            viewMode.hasHeroCells -> PreviewMosaicShape(
+                                mode = viewMode,
+                                style = style,
+                                entries = entries
+                            )
+
+                            viewMode.hasStatusHeadings -> PreviewGroupedCoversShape(
+                                mode = viewMode,
+                                style = style,
                                 entries = entries
                             )
 
@@ -193,9 +210,9 @@ internal fun CardDesignPreview(
  * rows, and the reader's real covers repeated when their list is shorter.
  *
  * Two rows rather than one: a one-row preview cannot show how a caption collides
- * with the next row, which is the thing the card design most often gets wrong. A
- * cover wall draws no caption, exactly as the Library's own `titleVisible = false`
- * does in that mode.
+ * with the next row, which is the thing the card design most often gets wrong. The
+ * caption itself is the mode's own answer - Cover wall and Shelf draw none, exactly
+ * as the Library draws none in those modes.
  */
 @Composable
 private fun PreviewGridShape(
@@ -216,35 +233,139 @@ private fun PreviewGridShape(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 row.forEach { entry ->
-                    val media = entry.media
-                    MediaPosterCell(
-                        coverUrl = cardPosterUrl(media),
-                        coverColor = media.posterColor.toCoverColorOrNull(),
-                        title = media.displayName,
-                        score = libraryRating(entry, ListOwner.MINE),
+                    PreviewPosterCell(
+                        entry = entry,
                         style = style,
-                        titleVisible = mode != LibraryViewMode.COVERS,
-                        modifier = Modifier.weight(1f),
-                        overlay = {
-                            // The corner the *meta* occupies, which is the corner
-                            // the style left free: a style that puts the rating
-                            // top-start moves this pill. Two capsules stacked in one
-                            // corner is the collision this preview exists to catch
-                            // before the reader meets it in the grid.
-                            libraryProgressLabel(entry)?.let { progress ->
-                                PreviewProgressPill(
-                                    label = progress,
-                                    modifier = Modifier.align(
-                                        metaCornerFor(style).toAlignment()
-                                    )
-                                )
-                            }
-                        }
+                        // The mode decides whether a caption is printed, exactly as
+                        // it does in the Library. This said "everything but Cover
+                        // wall", so Shelf - which never prints a name - drew one
+                        // here, under the covers it was supposed to show without.
+                        showTitle = mode.showsCaption,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Mosaic's rhythm: a full-width anchor over the pair it breaks.
+ *
+ * The Library draws every third cover as a landscape banner, and this preview used
+ * to draw a flat two-up grid under the Mosaic name - the one difference between it
+ * and Big cards, invisible in the page that exists to show it.
+ */
+@Composable
+private fun PreviewMosaicShape(
+    mode: LibraryViewMode,
+    style: MediaCardStyle,
+    entries: List<MediaListEntryItem>
+) {
+    val columns = mode.columns.coerceAtLeast(1)
+    // `NovaPoster` draws the hero at `MOSAIC_HERO_ASPECT` regardless of the cover
+    // proportion the reader picked, while `MediaPosterCell` multiplies whatever it
+    // is given by that bias - so the bias is divided out and the banner keeps the
+    // shape the Library actually gives it.
+    val heroAspect = MOSAIC_HERO_ASPECT / LocalCardDesign.current.size.coverBias
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PreviewPosterCell(
+            entry = entries.first(),
+            style = style,
+            showTitle = mode.showsCaption,
+            aspect = heroAspect,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            repeat(columns) { index ->
+                PreviewPosterCell(
+                    entry = entries[(index + 1) % entries.size],
+                    style = style,
+                    showTitle = mode.showsCaption,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Grouped covers: the status heading, then the poster grid it sorts.
+ *
+ * "Your titles" rather than a status, for the reason the row preview gives: the
+ * entries handed to this frame are the reader's most recently touched, not one
+ * status group, and a heading that named one would be the invented data this page
+ * has already removed once.
+ */
+@Composable
+private fun PreviewGroupedCoversShape(
+    mode: LibraryViewMode,
+    style: MediaCardStyle,
+    entries: List<MediaListEntryItem>
+) {
+    val columns = mode.columns.coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        LibraryGroupHeading(label = "Your titles", count = entries.size)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            repeat(columns) { index ->
+                PreviewPosterCell(
+                    entry = entries[index % entries.size],
+                    style = style,
+                    showTitle = mode.showsCaption,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One poster, drawn by the cell the Library draws.
+ *
+ * Extracted when the Mosaic and Grouped-covers arms arrived: three copies of the
+ * same cell would have let the progress pill sit in a different corner depending on
+ * which mode the reader was previewing.
+ *
+ * The pill takes the corner the *meta* occupies, which is the corner the style left
+ * free: a style that puts the rating top-start moves this pill. Two capsules stacked
+ * in one corner is the collision this preview exists to catch before the reader
+ * meets it in the grid.
+ */
+@Composable
+private fun PreviewPosterCell(
+    entry: MediaListEntryItem,
+    style: MediaCardStyle,
+    showTitle: Boolean,
+    modifier: Modifier = Modifier,
+    aspect: Float = POSTER_ASPECT
+) {
+    val media = entry.media
+    MediaPosterCell(
+        coverUrl = cardPosterUrl(media),
+        coverColor = media.posterColor.toCoverColorOrNull(),
+        title = media.displayName,
+        score = libraryRating(entry, ListOwner.MINE),
+        style = style,
+        aspect = aspect,
+        titleVisible = showTitle,
+        modifier = modifier,
+        overlay = {
+            libraryProgressLabel(entry)?.let { progress ->
+                PreviewProgressPill(
+                    label = progress,
+                    modifier = Modifier.align(metaCornerFor(style).toAlignment())
+                )
+            }
+        }
+    )
 }
 
 /**

@@ -128,12 +128,20 @@ fun AboutCard(
      */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
+    // `NovaMarkdown.parse` keeps its own LRU of documents, so the ten frames a
+    // scroll costs this card are map lookups rather than parses - and the copy the
+    // ViewModel parsed for the bio's posters is the copy drawn here.
     val nodes = remember(about) { NovaMarkdown.parse(about) }
     // Keyed to the bio: the card keeps its composition slot when the screen
     // swaps one profile's overview for another's, so an unkeyed flag opened the
     // next person's bio already expanded (and remembered that across rotation).
     var expanded by rememberSaveable(about) { mutableStateOf(false) }
-    val isCollapsed = isBioCollapsible(about, nodes) && !expanded
+    // Asked once. The toggle below needs the same answer, and it used to ask for
+    // it a second time - two full walks of the document (including the recursive
+    // image search) on every composition, and `animateContentSize` recomposes this
+    // card on every frame of the expand, so a long bio paid for both throughout.
+    val collapsible = remember(about, nodes) { isBioCollapsible(about, nodes) }
+    val isCollapsed = collapsible && !expanded
 
     Card(
         modifier = modifier
@@ -167,7 +175,7 @@ fun AboutCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
-                if (isBioCollapsible(about, nodes)) {
+                if (collapsible) {
                     Text(
                         text = if (expanded) "Show less" else "Show more",
                         // Matches the disclosure under every Settings paragraph: one

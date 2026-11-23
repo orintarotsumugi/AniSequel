@@ -177,21 +177,30 @@ class UserOverviewViewModel(
      * account after ten sequential requests of blanks. The comment above the call
      * said the opposite of what the code did, which is how it survived.
      *
-     * ## Why the state is cleared even when there is nothing to fetch
+     * ## Why the state is cleared when the bio changes
      *
-     * Both early returns below happen *before* the previous `coverJob` was
-     * cancelled, and nothing else reset `_mediaCovers`. So a refresh after the
-     * author removed their AniList links left the old map published, and an
-     * in-flight request could still land and overwrite it. `coverJob` is a child
-     * of `viewModelScope` rather than of `loadJob`, so cancelling a reload does
-     * not stop it either. Clearing first makes the state honest: whatever is
-     * published belongs to the bio currently on screen.
+     * A changed document is replaced immediately: the previous `coverJob` is
+     * cancelled and `_mediaCovers` emptied, so a poster from the last profile
+     * cannot sit under the new bio while its own batch is in flight. `coverJob` is
+     * a child of `viewModelScope` rather than of `loadJob`, so cancelling a reload
+     * would not stop it either.
+     *
+     * The one exception is a repeat of the document that is already on screen -
+     * see [coversBio]: there, the published map *is* the answer, and clearing it
+     * was the blink.
      */
     private fun loadMediaCovers(about: String?) {
+        val bio = about?.takeIf { it.isNotBlank() }
+        if (bio == coversBio) return
+
+        coversBio = bio
         coverJob?.cancel()
         _mediaCovers.value = emptyMap()
+        if (bio == null) return
 
-        val bio = about?.takeIf { it.isNotBlank() } ?: return
+        // `NovaMarkdown.parse` memoises the document, so the card that draws this
+        // same bio is handed the blocks this pass produced rather than parsing it
+        // again.
         val keys = novaMediaCoverKeysIn(NovaMarkdown.parse(bio))
         if (keys.isEmpty()) return
 
@@ -200,11 +209,32 @@ class UserOverviewViewModel(
             // classifies, but a throw on the way back would land here as an
             // uncaught exception on `viewModelScope` and close the app over a bio's
             // inline posters. Nothing on this path needs them to arrive.
-            repositoryResult { aniListRepository.getMediaCovers(keys) }.onSuccess { covers ->
-                _mediaCovers.value = covers
-            }
+            repositoryResult { aniListRepository.getMediaCovers(keys) }
+                .onSuccess { covers -> _mediaCovers.value = covers }
+                .onFailure {
+                    // Only if this bio is still the one on screen: a failure that
+                    // arrives after the reader has moved to another profile must
+                    // not clear the new document's claim.
+                    if (coversBio == bio) coversBio = null
+                }
         }
     }
+
+    /**
+     * The bio whose posters are in [mediaCovers], or whose batch is in flight.
+     *
+     * This is what makes a second call for the same document a no-op. The profile
+     * publishes twice on a normal open - the saved copy first, then the live
+     * overview - and both carry the same bio, so the second call used to cancel the
+     * first batch, empty the map, and ask for exactly the same keys again: every
+     * inline poster on the page blinked off and came back for a request that had
+     * already been made. A refresh with no bio edit did the same thing again.
+     *
+     * Cleared on a failed batch, so a later refresh can still retry a request that
+     * never landed - the invariant is "this document is answered", not "this
+     * document has been asked about once".
+     */
+    private var coversBio: String? = null
 
     private var coverJob: Job? = null
 

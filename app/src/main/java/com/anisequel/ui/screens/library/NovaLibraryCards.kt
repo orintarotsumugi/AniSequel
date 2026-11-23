@@ -496,8 +496,9 @@ private fun LibraryGridPoster(
         isManga = isManga,
         compact = viewMode == LibraryViewMode.COMPACT ||
             viewMode == LibraryViewMode.SHELF,
-        showTitle = viewMode != LibraryViewMode.SHELF &&
-            viewMode != LibraryViewMode.COVERS,
+        // The mode answers this, not the surface: the two Settings previews read
+        // the same property, so a preview cannot print a caption the grid drops.
+        showTitle = viewMode.showsCaption,
         large = viewMode == LibraryViewMode.CARDS || hero,
         hero = hero,
         onClick = onClick,

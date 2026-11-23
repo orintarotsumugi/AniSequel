@@ -424,10 +424,11 @@ object AniListSnapshots {
     fun of(context: Context): SnapshotStore =
         instance ?: synchronized(this) {
             instance ?: SnapshotStore(
-                directory = File(context.applicationContext.cacheDir, SNAPSHOT_DIRECTORY),
+                // Private storage, not `cacheDir`: see [snapshotDirectory] for why a
+                // directory Android may empty is the wrong home for the profile the
+                // screen is built from.
+                directory = snapshotDirectory(context.applicationContext),
                 moshi = NetworkClient.json
             ).also { instance = it }
         }
-
-    private const val SNAPSHOT_DIRECTORY = "anilist_snapshots"
 }

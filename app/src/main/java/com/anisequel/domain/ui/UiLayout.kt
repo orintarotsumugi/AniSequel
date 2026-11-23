@@ -293,6 +293,51 @@ enum class LibraryViewMode(
         columns = 3
     );
 
+    /**
+     * Whether a cover in this mode prints a caption under the artwork.
+     *
+     * ## Why this is on the enum
+     *
+     * It was written three times - once in the Library grid, once in the layout
+     * preview and once in the card-design preview - and the three had already
+     * drifted: the previews printed a caption under a Shelf cover, and the layout
+     * preview drew the Compact grid caption-free while the Library prints its
+     * names. A preview that promises a page the app does not draw is worse than no
+     * preview, because the reader chooses the mode by looking at it. The grid and
+     * both previews read this one answer now.
+     */
+    val showsCaption: Boolean
+        get() = this != SHELF && this != COVERS
+
+    /**
+     * Whether the mode is a run of rows rather than a grid of posters.
+     *
+     * The three row modes are drawn by the Library's own list row, so the
+     * card-design preview has to draw rows for them too - a poster grid there is a
+     * picture of a page the mode never produces.
+     */
+    val drawsRows: Boolean
+        get() = this == LIST || this == GROUPED || this == TABLE
+
+    /**
+     * Whether every third cell is a full-width banner, as [MOSAIC] arranges it.
+     *
+     * The card-design preview needs it for the same reason the Library does: a
+     * flat two-up grid under the Mosaic name is the mode's own choice being
+     * previewed as its neighbour.
+     */
+    val hasHeroCells: Boolean
+        get() = this == MOSAIC
+
+    /**
+     * Whether the poster grid is sorted under status headings.
+     *
+     * Only [GROUPED_COVERS] among the grid modes; [GROUPED] is sorted the same way
+     * but draws rows, which [drawsRows] already claims.
+     */
+    val hasStatusHeadings: Boolean
+        get() = this == GROUPED_COVERS
+
     companion object {
         // AniSequel 2.4 opens the Library on expressive two-column poster cards.
         // An explicit stored choice still wins, so existing readers keep their layout.

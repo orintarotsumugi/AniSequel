@@ -84,12 +84,17 @@ internal fun LibraryViewPreview(
                         label = "library_view_preview_mode"
                     ) { current ->
                         when (current) {
-                            LibraryViewMode.GRID -> MiniGrid(entries, 3, true)
-                            LibraryViewMode.COMPACT -> MiniGrid(entries, 4, false)
+                            // The caption flag is the mode's own answer, not a copy
+                            // written here: the Compact grid used to draw without
+                            // the names the Library prints under it, so the reader
+                            // choosing it was shown a caption-free page that does
+                            // not exist. See `LibraryViewMode.showsCaption`.
+                            LibraryViewMode.GRID -> MiniGrid(entries, 3, current.showsCaption)
+                            LibraryViewMode.COMPACT -> MiniGrid(entries, 4, current.showsCaption)
                             LibraryViewMode.LIST -> MiniList(entries)
                             LibraryViewMode.GROUPED -> MiniGrouped(entries)
-                            LibraryViewMode.CARDS -> MiniGrid(entries, 2, true)
-                            LibraryViewMode.SHELF -> MiniGrid(entries, 5, false)
+                            LibraryViewMode.CARDS -> MiniGrid(entries, 2, current.showsCaption)
+                            LibraryViewMode.SHELF -> MiniGrid(entries, 5, current.showsCaption)
                             LibraryViewMode.TABLE -> MiniTable(entries)
                             LibraryViewMode.COVERS -> MiniCoverWall(entries)
                             LibraryViewMode.MOSAIC -> MiniMosaic(entries)

@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,64 +45,128 @@ import com.anisequel.data.network.friendlyCopy
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
+import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.rememberShimmerPhase
 import kotlin.random.Random
 
 /**
  * The profile screen's waiting state.
  *
- * A spinner and a sentence, not the dashboard's shimmer cards. There is nothing
- * shaped like a list to sketch: the profile is one header and a few rows that
- * change shape entirely between a person who has pinned a lot and one who has
- * pinned nothing, and a skeleton of the wrong shape would be a lie about the
- * page for the length of the fetch.
+ * ## Why this is shaped like the page now
+ *
+ * It used to be a centred spinner and a sentence, on the argument that the profile
+ * has no fixed shape: one person pins eight favourites and another pins none, so a
+ * skeleton of the rows would be a guess. That argument holds for the rows and not
+ * for the header - every profile opens with a banner, an avatar on its bottom edge,
+ * a name and two list counts, in the same places. So the first frame of a cold open
+ * was a bare spinner where the page's own header was about to be, and the header
+ * then arrived as a jump. The skeleton draws those fixed pieces and stops at the
+ * About card; it does not invent a favourites row that may not exist.
+ *
+ * The sentence stays underneath. A skeleton says "something is coming", not what,
+ * and the message is the only part of this screen that can say that a profile is
+ * being read from AniList rather than computed locally.
  */
 @Composable
 fun ProfileLoadingView(
     message: String,
     modifier: Modifier = Modifier
 ) {
+    // One phase for every bar, so the sweep crosses the page as one light rather
+    // than each box shimmering on its own clock.
+    val phase = rememberShimmerPhase()
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp)
-            .testTag("profile_loading"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .verticalScroll(rememberScrollState())
+            .testTag("profile_loading")
     ) {
-        // The loader sits in an expressive container rather than floating on the
-        // page. A 44dp morphing dot alone at the centre of a full screen reads as
-        // a stuck splash; the tinted shape gives it a top and a bottom and makes
-        // the wait look composed. `primaryContainer` is the same surface the
-        // Library's waiting header uses, so the two pages describe one state the
-        // same way.
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            modifier = Modifier.size(68.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                ExpressiveLoadingIndicator(
-                    modifier = Modifier.size(34.dp),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                shape = RoundedCornerShape(
+                    bottomStart = ExpressiveShapes.LargeCorner,
+                    bottomEnd = ExpressiveShapes.LargeCorner
+                ),
+                phase = phase
+            )
+            // The avatar hangs 22dp below the banner in the real header; the
+            // skeleton overlaps it by the same amount so the page does not settle
+            // upwards when the profile lands.
+            ShimmerBox(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp)
+                    .offset(y = 22.dp)
+                    .size(92.dp),
+                shape = RoundedCornerShape(ExpressiveShapes.PillCorner),
+                phase = phase
+            )
         }
-        Spacer(modifier = Modifier.height(18.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "This usually takes a moment.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .widthIn(max = ProfileMaxContentWidth)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+        ) {
+            // Clears the avatar's 22dp overhang, plus the air the real header puts
+            // between the portrait and the name.
+            Spacer(modifier = Modifier.height(28.dp))
+            ShimmerBox(modifier = Modifier.width(180.dp).height(26.dp), phase = phase)
+            Spacer(modifier = Modifier.height(10.dp))
+            ShimmerBox(modifier = Modifier.width(140.dp).height(14.dp), phase = phase)
+            Spacer(modifier = Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                repeat(2) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        phase = phase
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = MaterialTheme.shapes.large,
+                phase = phase
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                shape = MaterialTheme.shapes.medium,
+                phase = phase
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 28.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ExpressiveLoadingIndicator(
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
