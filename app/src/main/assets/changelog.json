@@ -14,6 +14,10 @@
         {
           "title": "A private profile says so instead of reading zero",
           "detail": "AniList's privacy overhaul makes a private account withhold its list and statistics, and makes a block behave the same way. The app asked for the list anyway and drew the empty answer as an account that had watched nothing. It reads the account's privacy and block state first and says the profile is private, without spending a request on a list that will not come. A refused profile is also no longer mistaken for an expired session, which used to offer to sign the reader out of their own working account."
+        },
+        {
+          "title": "Switching between the anime and manga halves no longer scrambles the covers",
+          "detail": "Both halves drew into one lazy grid, and a type switch replaced every poster in it. The grid kept the old list's per-poster animation state - the fade a removed poster is still playing, the offsets a placement spring is travelling between - so the outgoing covers were drawn over the incoming ones and rows sat at offsets that belonged to the other list. Two quick switches left several of those on top of each other, and leaving the page and coming back was the only thing that cleared them, because that also started from nothing. Each half gets its own grid now, and the switch resets the scroll in the tap itself rather than a frame later, where a second tap could cancel it."
         }
       ]
     },

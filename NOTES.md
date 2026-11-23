@@ -4037,3 +4037,28 @@ Character and staff pages gained AniList's new `height` field in the same pass.
 Its three shapes (an `initial` height, equal `min`/`max`, a real range) are
 resolved in the model rather than at each call site, because "185 - 185 cm" for
 a single measurement is a conversion artefact that reads as a bug.
+
+**A type switch now gets its own grid.** Reported as covers drawn across each
+other, and over the shelf header, after scrolling one half of the library and
+switching back and forth quickly - and it cleared itself when the page was left
+and reopened, which is the tell. Both halves had always drawn into one
+`LazyVerticalGrid`, and a switch replaced every item in it. A lazy layout keeps
+per-key state: the fade animation a removed key is still playing, and the
+offsets a placement spring is travelling between. None of that survives its key,
+and the new keys inherit it anyway - so the
+outgoing list was drawn as ghosts over the incoming cells, rows sat at offsets
+that belonged to the other list, and two quick switches stacked several of those
+on top of each other. Leaving the page fixed it because it also destroyed the layout.
+
+So each media type gets its own layout (`key(isManga)` on the new Library,
+`key(type)` on the classic one) and `animateItem` was left alone, because a
+filter or a sort keeps most keys and the animations belong to those.
+
+The scroll reset moved with it. It used to run from `LaunchedEffect(type)`
+calling the suspending `scrollToItem(0)`: an effect runs on the frame *after* the
+one that replaced the item set, so the grid first laid the new list out at the
+old list's index and was then jumped, animating every cell across the jump - and
+a second tap within that window cancelled the coroutine and left the reset
+undone. `requestScrollToItem(0)` is not a coroutine, cannot be cancelled, and is
+applied by the same measure pass that lays the new list out, so no frame ever
+shows the new list at the old position.
