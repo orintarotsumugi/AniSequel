@@ -172,8 +172,25 @@ private fun AppLockCard(appLockPreferences: AppLockPreferences) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val enabledState by appLockPreferences.enabled.collectAsStateWithLifecycle(initialValue = null)
-    val deviceHasSecureLock = remember {
-        context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+    // Re-read when the app comes back, not once for the life of the card.
+    //
+    // This used to be a bare `remember`, and the screen it depends on is one the
+    // reader has to leave the app to change: add a PIN in the system Settings and
+    // come back, and the switch was still disabled and still saying "Set a screen
+    // lock on this device first" about a screen lock that was already set - until
+    // the process restarted. Every other platform fact on these pages is re-read on
+    // resume for the same reason (`screen` and `usedBytes` below, and `MotionSection`
+    // re-reads the animation scale), because a value read once behind a screen the
+    // reader can edit goes stale on the way back.
+    val resumed = rememberIsResumed()
+    var deviceHasSecureLock by remember {
+        mutableStateOf(
+            context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
+        )
+    }
+    LaunchedEffect(resumed) {
+        deviceHasSecureLock =
+            context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
     }
 
     SectionCard(
