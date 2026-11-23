@@ -180,14 +180,19 @@ internal fun AnimeColourSection(
             // Retention is a sub-option of the layer: with the layer off no sheet
             // ever borrows a colour, so this switch could be on with nothing in
             // the world for it to keep. It is disabled with the reason instead of
-            // silently inert.
-            subtitle = if (settings.animeThemeEnabled) {
-                "Keep the background and accent after the sheet closes."
-            } else {
-                "Turn on Anime dynamic theme above first - there is no borrowed colour to keep yet."
+            // silently inert - but only while it is off. A stored "on" has to stay
+            // removable, or turning the layer off would trap the setting behind a
+            // switch that is checked and cannot be touched.
+            subtitle = when {
+                settings.animeThemeEnabled ->
+                    "Keep the background and accent after the sheet closes."
+                settings.animeThemeRetainColor ->
+                    "Anime dynamic theme is off, so this is not in use. Turn it off here, or turn the theme back on to use it."
+                else ->
+                    "Turn on Anime dynamic theme above first - there is no borrowed colour to keep yet."
             },
             checked = settings.animeThemeRetainColor,
-            enabled = settings.animeThemeEnabled,
+            enabled = settings.animeThemeEnabled || settings.animeThemeRetainColor,
             onCheckedChange = { retain ->
                 // The preference, the accent it writes or takes back, and the
                 // layer that has to stop outranking every other source when

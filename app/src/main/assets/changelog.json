@@ -57,7 +57,7 @@
       },
       {
         "title": "Retain anime colour says when it has nothing to keep",
-        "detail": "The switch could be on while Anime dynamic theme was off, so no sheet ever borrowed a colour for it to retain. It is disabled with that reason, and the tint and revert pickers explain what turns them on instead of only being dimmed."
+        "detail": "The switch could be on while Anime dynamic theme was off, so no sheet ever borrowed a colour for it to retain. It is disabled with that reason, but off is always allowed - a stored on can never be trapped behind a disabled switch - and the tint and revert pickers explain what turns them on instead of only being dimmed."
       },
       {
         "title": "Saved on the Client ID means saved",
