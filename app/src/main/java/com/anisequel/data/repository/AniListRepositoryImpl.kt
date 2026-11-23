@@ -109,9 +109,11 @@ private val MUTATION_PATTERN = Regex("""^\s*mutation\b""")
  * fifty; before this cap they were all aliases in one document, so one refusal
  * left every poster in the bio permanently blank.
  *
- * Ten keeps each document comfortably inside the limit and bounds the damage of
- * a refusal to the ten cards that shared it. The rest of the bio is carried by
- * further batches.
+ * The cap is not what keeps the request cheap any more. Since AniList began
+ * charging each alias against the rate limit, the batch asks for one
+ * `Page.media(id_in:)` field rather than one alias per link, so a batch costs a
+ * single request whatever its size and the cap only bounds the damage of a
+ * refusal to the cards that shared the document.
  */
 internal const val MAX_COVER_BATCH_KEYS = 10
 
@@ -198,9 +200,48 @@ internal fun <K> expiredThenOldestKeys(
     return expired.map { it.key } + oldestLive
 }
 
-/** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] aliases each. */
+/** [keys] split into documents of at most [MAX_COVER_BATCH_KEYS] links each. */
 internal fun mediaCoverBatches(keys: List<MediaCoverKey>): List<List<MediaCoverKey>> =
     keys.chunked(MAX_COVER_BATCH_KEYS)
+
+/**
+ * The distinct ids one cover batch sends to `Page.media(id_in:)`.
+ *
+ * Distinct because the batch is not type-scoped: `anime/1` and `manga/1` are one
+ * number, so sending it twice asks the server to look up the same id twice for a
+ * list that cannot tell the two requests apart.
+ */
+internal fun mediaCoverBatchIds(keys: List<MediaCoverKey>): List<Int> =
+    keys.map { it.id }.distinct()
+
+/**
+ * The covers a `Page.media(id_in:)` answer resolves for [batch], keyed by request.
+ *
+ * The id list cannot say which media namespace was asked for, so a batch that
+ * wanted `anime/1` also receives `manga/1` when that id exists in both. Matching
+ * the response back to the requested key is what keeps the two apart - without
+ * it, a bio linking one of them would show the other's poster under the first's
+ * card, which is the confident-wrong-answer failure [MediaCoverKey] exists to
+ * prevent.
+ *
+ * Pure and `internal` for the same reason [mediaCoverBatches] is: the rule is
+ * the thing that must not regress, and the network call around it is not what a
+ * test should have to fake.
+ */
+internal fun mediaCoversFrom(
+    batch: List<MediaCoverKey>,
+    nodes: List<MediaNode>
+): Map<MediaCoverKey, MediaCover> {
+    val requested = batch.associateBy { it.graphqlType to it.id }
+    val found = LinkedHashMap<MediaCoverKey, MediaCover>()
+    nodes.forEach { node ->
+        val type = node.type?.uppercase(Locale.ROOT) ?: return@forEach
+        val key = requested[type to node.id] ?: return@forEach
+        val url = node.coverImage?.bestUrl ?: return@forEach
+        found[key] = MediaCover(url = url, title = node.title?.bestTitleOrNull)
+    }
+    return found
+}
 
 class AniListRepositoryImpl(
     private val apiService: AniListApiService,
@@ -1524,59 +1565,32 @@ class AniListRepositoryImpl(
         }
         if (missing.isEmpty()) return Result.success(resolved)
 
-        // One alias per key in each batch, so the response is read back by
-        // position - two keys sharing an id would otherwise need two aliases on
-        // the same field. Batches rather than one document: see
+        // One `Page.media(id_in:)` connection per batch, read back by the
+        // (type, id) pair the response carries. The ids alone cannot say which
+        // namespace was asked for - an id that exists as both anime and manga
+        // comes back twice - so the answer is matched against the keys this batch
+        // actually requested. Batches rather than one document: see
         // [MAX_COVER_BATCH_KEYS].
         val fresh = LinkedHashMap<MediaCoverKey, MediaCover>()
         var anyAccepted = false
         var firstFailure: Throwable? = null
 
         mediaCoverBatches(missing).forEach { batch ->
-            val variables = buildMap {
-                batch.forEachIndexed { index, key ->
-                    put("id$index", key.id)
-                    put("type$index", key.graphqlType)
-                }
-            }
             execute(
                 GraphQLRequest(
                     query = GraphQLQueries.getMediaCoversQuery(batch),
-                    variables = variables
+                    variables = mapOf("ids" to mediaCoverBatchIds(batch))
                 ),
                 apiService::getMediaCovers
             ).fold(
-                onSuccess = { byAlias ->
+                onSuccess = { data ->
                     anyAccepted = true
-                    batch.forEachIndexed { index, key ->
-                        // `firstOrNull` rather than a single node: the batch asks
-                        // `Page.media` precisely so an id with no media is an empty
-                        // list instead of a 404 that fails the other eleven cards.
-                        // See [MediaCoverPage].
-                        val node = byAlias[GraphQLQueries.mediaCoverAlias(index)]
-                            ?.media
-                            ?.firstOrNull()
-                        val url = node?.coverImage?.bestUrl
-                        if (url != null) {
-                            // The key comes from the request rather than from
-                            // `node.type`. They should agree, but if AniList ever
-                            // answers with a different type than the one asked for,
-                            // the card has to find the cover under the key it
-                            // requested it by or it draws the placeholder over a
-                            // request it already paid for.
-                            val cover = MediaCover(
-                                url = url,
-                                // The real title, which the query asks for on every
-                                // entry. A bio link of `anilist.co/anime/1` has no
-                                // readable name in it, so this is the only thing that
-                                // can label the card with anything but the type and a
-                                // number.
-                                title = node.title?.bestTitleOrNull
-                            )
-                            fresh[key] = cover
-                            resolved[key] = cover
-                        }
-                    }
+                    // The id list is not type-scoped, so the answer is matched
+                    // back to the keys this batch asked for. See
+                    // [mediaCoversFrom] for the collision it prevents.
+                    val covers = mediaCoversFrom(batch, data.media?.media.orEmpty())
+                    fresh.putAll(covers)
+                    resolved.putAll(covers)
                 },
                 onFailure = { error ->
                     if (firstFailure == null) firstFailure = error

@@ -46,6 +46,17 @@ data class UserOverview(
     /** Unix seconds. Absent for accounts created before 2020 - AniList does not backfill it. */
     val createdAt: Int? = null,
     val updatedAt: Int? = null,
+    /**
+     * AniList's `UserPrivacy` - `PUBLIC`, `SEMI_PUBLIC` or `PRIVATE`.
+     *
+     * The bio and avatar stay visible on a private account, but the list, the
+     * statistics and the activity stream do not. Reading this is how the profile
+     * screen tells "a reader with nothing tracked" from "a reader who has not
+     * shared it" - two states that otherwise both print zero.
+     */
+    val privacy: String? = null,
+    /** Whether a block is in force, which since 2026-11-23 behaves as private. */
+    val isBlocked: Boolean? = null,
     val statistics: UserStatistics? = null,
     val favourites: Favourites? = null,
     /**
@@ -54,7 +65,11 @@ data class UserOverview(
      * use.
      */
     val stats: AniListUserStats? = null
-)
+) {
+    /** True when AniList withholds this profile's list and statistics. */
+    val isPrivateProfile: Boolean
+        get() = isWithheldProfile(privacy = privacy, isBlocked = isBlocked)
+}
 
 /**
  * `User.stats` - deprecated by AniList in favour of `User.statistics`, and still

@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,9 +35,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import com.anisequel.ui.components.ShimmerBox
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -226,18 +224,19 @@ internal fun NovaDynamicSvg(
         contentAlignment = Alignment.Center
     ) {
         when (val current = state) {
-            NovaSvgState.Loading -> Box(
+            // The card that is coming, at the shape it will have. A spinner in
+            // the same slot said "wait" without saying what for, and a spoiler
+            // hiding an AniList card is exactly the case where the reader has just
+            // asked to see a *picture* - so the waiting state is the picture's
+            // plate, painted by the same skeleton every other screen uses
+            // (`ShimmerBox`). The slot already reserved `DEFAULT_SVG_ASPECT`, so
+            // nothing moves when the card arrives.
+            NovaSvgState.Loading -> ShimmerBox(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(DEFAULT_SVG_ASPECT),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+                shape = MaterialTheme.shapes.medium
+            )
 
             is NovaSvgState.Ready -> NovaSvgArtwork(url = url, asset = current.asset)
 

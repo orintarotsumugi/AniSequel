@@ -575,6 +575,28 @@ class DashboardViewModel(
         listDeferred: Deferred<Result<MediaListCollection>>?
     ) {
         cachedViewer = viewer
+
+        // A private profile - or one the viewer blocked, which AniList made
+        // equivalent on 2026-11-23 - no longer exposes a list. Painting its answer
+        // would print "0 watched" for an account that simply did not share it, so
+        // the request is cancelled and the screen says why. The profile and the
+        // list are fetched in parallel (see [loadData]), so the list may already be
+        // in flight by the time this is known; cancelling it stops the wait and
+        // makes sure nothing is painted, and it saves the request outright whenever
+        // the profile landed first.
+        //
+        // Only a *scanned* profile is gated: the signed-in viewer's own privacy
+        // setting does not hide their list from their own token.
+        if (!targetUsername.isNullOrBlank() && viewer.isPrivateProfile) {
+            listDeferred?.cancel()
+            _uiState.value = DashboardUiState.Error(
+                message = "This AniList profile is private.",
+                canRetry = false,
+                kind = AniListErrorKind.PRIVATE_PROFILE
+            )
+            return
+        }
+
         if (_uiState.value !is DashboardUiState.Success) {
             _uiState.value = DashboardUiState.Loading("Scanning ${viewer.name}'s anime history...")
         }

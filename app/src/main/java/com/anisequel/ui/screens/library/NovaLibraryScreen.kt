@@ -114,7 +114,13 @@ fun NovaLibraryScreen(
     LaunchedEffect(remembered.type, remembered.filter, remembered.sort, remembered.sortAscending) {
         if (choiceMade) return@LaunchedEffect
         remembered.type?.let { stored ->
-            type = if (stored == LibraryType.MANGA) LibraryType.MANGA else LibraryType.ANIME
+            val next = if (stored == LibraryType.MANGA) LibraryType.MANGA else LibraryType.ANIME
+            // A type can arrive from outside a tap - the dashboard's "Manga List"
+            // shortcut writes the preference before it navigates. That is still a
+            // switch between the halves, so it still starts at the top; the saved
+            // position belongs to the list that was on screen.
+            if (next != type) gridState.requestScrollToItem(0)
+            type = next
         }
         remembered.filter?.let { filter = it }
         remembered.sort?.let { stored ->
@@ -156,13 +162,23 @@ fun NovaLibraryScreen(
         )
     }
 
-    LoadTypeAndResetScroll(type = type, gridState = gridState, onLoadManga = onLoadManga)
+    LoadScopedList(type = type, onLoadManga = onLoadManga)
 
     val chooseType: (LibraryType) -> Unit = { chosen ->
         if (chosen != type) {
             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             choiceMade = true
             type = chosen
+            // The new list starts at the top, and it is told so *here* rather
+            // than from an effect watching `type`. An effect runs after the frame
+            // that swapped the item set, so the grid laid the new list out at the
+            // old list's scroll index first and was then jumped - with a spring on
+            // every cell, so the page slid into place from positions it never
+            // belonged at. `requestScrollToItem` is applied by the next measure
+            // pass, which is the same one that lays the new list out, so that
+            // frame does not exist, and it cannot be cancelled the way a
+            // `scrollToItem` coroutine could be when the reader switches again.
+            gridState.requestScrollToItem(0)
             query = ""
             // A format/year filter chosen for anime would empty the manga half,
             // and the switch would look broken rather than separated. The two
@@ -273,29 +289,21 @@ fun NovaLibraryScreen(
 }
 
 /**
- * Loads the other list on a type switch and starts it at the top.
+ * Asks for the other list on a type switch.
  *
- * The remembered snapshot of the type the page opened on is what tells a
- * *switch* from a return: switching while scrolled halfway down the anime grid
- * would otherwise land halfway down the manga list, which reads as the new list
- * being mostly empty above the fold, while coming back to the page must keep
- * the position it had. Re-entering the page re-creates this snapshot at the
- * current type, so a restore does not reset.
+ * The fetch only. This used to reset the scroll as well, from a `LaunchedEffect`
+ * watching `type` - which runs on the frame *after* the one that replaced the
+ * item set, so the grid laid the new list out at the old list's scroll index
+ * before being jumped. See [NovaLibraryScreen]'s `chooseType` for where the
+ * reset lives now and what the old shape looked like.
  */
 @Composable
-private fun LoadTypeAndResetScroll(
+private fun LoadScopedList(
     type: LibraryType,
-    gridState: LazyGridState,
     onLoadManga: () -> Unit
 ) {
-    var settledType by remember { mutableStateOf<LibraryType?>(null) }
     LaunchedEffect(type) {
         if (type == LibraryType.MANGA) onLoadManga()
-        val previous = settledType
-        if (previous != null && previous != type) {
-            gridState.scrollToItem(0)
-        }
-        settledType = type
     }
 }
 

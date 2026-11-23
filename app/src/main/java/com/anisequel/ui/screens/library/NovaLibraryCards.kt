@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -314,118 +315,138 @@ internal fun NovaLibraryGrid(
                     .toSet()
             }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            modifier = Modifier
-                .fillMaxSize()
-                .testTag("nova_library_grid"),
-            state = gridState,
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 4.dp,
-                bottom = mainBarClearance() + 20.dp
-            ),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
-                .forEach { note ->
-                    item(
-                        key = "note_${note.text}",
-                        span = { GridItemSpan(maxLineSpan) }
-                    ) {
-                        PendingDataNote(note.text, busy = note.busy)
-                    }
-                }
-            if (viewMode == LibraryViewMode.GROUPED_COVERS) {
-                groupedByStatus.forEach { (option, entries) ->
-                    item(
-                        key = "group_${option.apiValue}",
-                        span = { GridItemSpan(maxLineSpan) },
-                        contentType = { "library_group_heading" }
-                    ) {
-                        LibraryGroupHeading(
-                            label = option.labelFor(isManga),
-                            count = entries.size
-                        )
-                    }
-                    gridItems(
-                        items = entries,
-                        key = { it.media.namespaceKey },
-                        contentType = { "library_grouped_poster_$columns" }
-                    ) { entry ->
-                        LibraryGridPoster(
-                            entry = entry,
-                            isManga = isManga,
-                            viewMode = viewMode,
-                            onClick = { onOpenDetail(entry.media) },
-                            modifier = Modifier.animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
-                        )
-                    }
-                }
-                if (unclassified.isNotEmpty()) {
-                    item(
-                        key = "group_unclassified",
-                        span = { GridItemSpan(maxLineSpan) },
-                        contentType = { "library_group_heading" }
-                    ) {
-                        LibraryGroupHeading(label = "Other", count = unclassified.size)
-                    }
-                    gridItems(
-                        items = unclassified,
-                        key = { it.media.namespaceKey },
-                        contentType = { "library_grouped_poster_$columns" }
-                    ) { entry ->
-                        LibraryGridPoster(
-                            entry = entry,
-                            isManga = isManga,
-                            viewMode = viewMode,
-                            onClick = { onOpenDetail(entry.media) },
-                            modifier = Modifier.animateItem(
-                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
-                            )
-                        )
-                    }
-                }
-            } else {
-                gridItems(
-                    items = visible,
-                    key = { it.media.namespaceKey },
-                    // Mosaic is a span mode, not a second cell: every third cover
-                    // takes the whole row. Without this the mode drew the same flat
-                    // two-up grid as Big cards and the choice meant nothing.
-                    span = { entry ->
-                        if (entry.media.namespaceKey in heroKeys) {
-                            GridItemSpan(maxLineSpan)
-                        } else {
-                            GridItemSpan(1)
+        // A *new* lazy layout per media type, rather than one layout handed a
+        // different list.
+        //
+        // That is the whole fix for the covers that overlapped after switching
+        // between the anime and manga halves. The lazy layout keeps per-key
+        // animation and measurement state - the fade a removed key is playing, and
+        // the offsets placement springs are travelling between - and a type switch
+        // removes every key the old state was about. Asking one layout to animate
+        // one list out while measuring another in produced exactly what two quick
+        // switches used to show: the old posters drawn over the new cells, rows
+        // sitting at offsets that belonged to the other list, and ghosts that
+        // outlived the switch. A fresh layout has none of that state to inherit,
+        // which is why
+        // leaving the page and coming back - the one thing that did work - looked
+        // correct: it also started from nothing.
+        //
+        // `isManga` and not the whole filter: a filter, a sort or a refresh keeps
+        // most keys, and their animating is the point of `animateItem` below.
+        key(isManga) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("nova_library_grid"),
+                state = gridState,
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 4.dp,
+                    bottom = mainBarClearance() + 20.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
+                    .forEach { note ->
+                        item(
+                            key = "note_${note.text}",
+                            span = { GridItemSpan(maxLineSpan) }
+                        ) {
+                            PendingDataNote(note.text, busy = note.busy)
                         }
-                    },
-                    // Part of the type, not a constant: switching from a 5-column
-                    // shelf to big cards reuses the same slot otherwise, and the
-                    // recycler keeps a caption policy that belongs to the old mode
-                    // for the first frame.
-                    contentType = { "library_poster_${viewMode.storageValue}_$columns" }
-                ) { entry ->
-                    LibraryGridPoster(
-                        entry = entry,
-                        isManga = isManga,
-                        viewMode = viewMode,
-                        hero = entry.media.namespaceKey in heroKeys,
-                        onClick = { onOpenDetail(entry.media) },
-                        modifier = Modifier.animateItem(
-                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                    }
+                if (viewMode == LibraryViewMode.GROUPED_COVERS) {
+                    groupedByStatus.forEach { (option, entries) ->
+                        item(
+                            key = "group_${option.apiValue}",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_group_heading" }
+                        ) {
+                            LibraryGroupHeading(
+                                label = option.labelFor(isManga),
+                                count = entries.size
+                            )
+                        }
+                        gridItems(
+                            items = entries,
+                            key = { it.media.namespaceKey },
+                            contentType = { "library_grouped_poster_$columns" }
+                        ) { entry ->
+                            LibraryGridPoster(
+                                entry = entry,
+                                isManga = isManga,
+                                viewMode = viewMode,
+                                onClick = { onOpenDetail(entry.media) },
+                                modifier = Modifier.animateItem(
+                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                )
+                            )
+                        }
+                    }
+                    if (unclassified.isNotEmpty()) {
+                        item(
+                            key = "group_unclassified",
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_group_heading" }
+                        ) {
+                            LibraryGroupHeading(label = "Other", count = unclassified.size)
+                        }
+                        gridItems(
+                            items = unclassified,
+                            key = { it.media.namespaceKey },
+                            contentType = { "library_grouped_poster_$columns" }
+                        ) { entry ->
+                            LibraryGridPoster(
+                                entry = entry,
+                                isManga = isManga,
+                                viewMode = viewMode,
+                                onClick = { onOpenDetail(entry.media) },
+                                modifier = Modifier.animateItem(
+                                    placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                    fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                    fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                                )
+                            )
+                        }
+                    }
+                } else {
+                    gridItems(
+                        items = visible,
+                        key = { it.media.namespaceKey },
+                        // Mosaic is a span mode, not a second cell: every third cover
+                        // takes the whole row. Without this the mode drew the same flat
+                        // two-up grid as Big cards and the choice meant nothing.
+                        span = { entry ->
+                            if (entry.media.namespaceKey in heroKeys) {
+                                GridItemSpan(maxLineSpan)
+                            } else {
+                                GridItemSpan(1)
+                            }
+                        },
+                        // Part of the type, not a constant: switching from a 5-column
+                        // shelf to big cards reuses the same slot otherwise, and the
+                        // recycler keeps a caption policy that belongs to the old mode
+                        // for the first frame.
+                        contentType = { "library_poster_${viewMode.storageValue}_$columns" }
+                    ) { entry ->
+                        LibraryGridPoster(
+                            entry = entry,
+                            isManga = isManga,
+                            viewMode = viewMode,
+                            hero = entry.media.namespaceKey in heroKeys,
+                            onClick = { onOpenDetail(entry.media) },
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

@@ -37,6 +37,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -603,7 +604,13 @@ fun ProfileLibraryTab(
         if (choiceMade) return@LaunchedEffect
         // Stays for the one window where the page is already on screen when DataStore
         // answers; every later visit finds the answer in the initializers above.
-        remembered.type?.let { stored -> type = stored }
+        remembered.type?.let { stored ->
+            // Also the dashboard's "Manga List" shortcut: a type that arrives from
+            // outside a tap is still a switch, so the saved position - which
+            // belongs to the other list - is not where this one should open.
+            if (stored != type) gridState.requestScrollToItem(0)
+            type = stored
+        }
         remembered.filter?.let { stored -> filter = stored }
         remembered.sort?.let { stored ->
             sort = stored
@@ -683,20 +690,17 @@ fun ProfileLibraryTab(
         }
     }
 
-    // Switching type replaces the visible list. Without resetting scroll, a reader
-    // scrolled deep in one list can land mid-way through the other at a position
-    // that no longer matches what they chose.
-    var settledType by remember { mutableStateOf<LibraryType?>(null) }
+    // Switching type replaces the visible list. The scroll reset happens in the
+    // type chip's own callback (see `LibraryControls`' `onType`), not here: an
+    // effect watching `type` runs on the frame *after* the one that swapped the
+    // item set, so the grid laid the new list out at the old list's scroll index
+    // and was then jumped - with a spring on every cell, which is why two quick
+    // switches left posters drawn across each other and over the page's header.
     LaunchedEffect(type) {
         // Manga is fetched on demand. The "All" scope merges anime and manga, so it
         // must ask for manga too; otherwise the combined view silently omits manga
         // titles until the reader visits the Manga filter.
         if (type == LibraryType.MANGA || type == LibraryType.ALL) onLoadManga()
-        val previous = settledType
-        if (previous != null && previous != type) {
-            gridState.scrollToItem(0)
-        }
-        settledType = type
     }
 
     // Nothing at all until DataStore has answered, because `type` is `ALL` for exactly
@@ -741,304 +745,317 @@ fun ProfileLibraryTab(
     // the same reason it does on the Library, and a card size that changed it would
     // be the card design overriding the view the reader picked.
     val columns = libraryColumns(mode = viewMode, width = maxWidth)
-    LazyVerticalGrid(
-        // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
-        // the grid must not reflow when the window changes, because the person's
-        // scroll position would no longer be the entry they were looking at.
-        columns = GridCells.Fixed(columns),
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("library_grid"),
-        state = gridState,
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls", contentType = "controls") {
-            LibraryControls(
-                type = type,
-                filter = filter,
-                counts = counts,
-                scopeSize = scoped.size,
-                scopeIsManga = type == LibraryType.MANGA,
-                sort = sort,
-                sortAscending = sortAscending,
-                onSortChange = { nextSort, nextAscending ->
-                    choiceMade = true
-                    sort = nextSort
-                    sortAscending = nextAscending
-                    scope.launch {
-                        remembered.preferences.setSort(nextSort.name, nextAscending)
-                    }
-                },
-                isLoadingManga = isLoadingManga,
-                query = query,
-                onType = { chosen ->
-                    choiceMade = true
-                    type = chosen
-                    // Recorded on the tap, not on a save button: the memory is
-                    // there so they are not asked again, and asking them to
-                    // confirm the choice would defeat it.
-                    query = ""
-                    scope.launch { remembered.preferences.setType(chosen.name) }
-                },
-                onFilter = { chosen ->
-                    choiceMade = true
-                    filter = chosen
-                    scope.launch { remembered.preferences.setFilter(chosen.name) }
-                },
-                onQueryChange = { query = it }
-            )
-        }
-
-        if (awaitingAnime) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending", contentType = "state") {
-                PendingDataNote("Still fetching this list - these counts are not final yet")
-            }
-        }
-        if (type == LibraryType.ALL && isLoadingManga && mangaEntries == null) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending_manga", contentType = "state") {
-                PendingDataNote("Still fetching manga titles for the combined list")
-            }
-        }
-
-        // A failed fetch, said plainly, in place of "nothing here".
-        //
-        // These two were the same message for every account whose list could not be
-        // read - a private list, a rate limit, a dropped connection all produced
-        // "Nothing in this list yet" and chips reading (0), which is the app
-        // asserting the one thing it has the least evidence for. The counts below
-        // are still zeroes for the same reason and are not faked here.
-        if (shouldShowLibraryError(scopedError, awaitingAnime, visible.isNotEmpty())) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_error", contentType = "state") {
-                PendingDataNote(
-                    "Couldn't load this list - $scopedError. Your bio, " +
-                        "favourites and stats are still here.",
-                    // A failure is an answer. Drawn with the default this spun a
-                    // loader beside the message, promising a result that had already
-                    // arrived and *was* the failure.
-                    busy = false
-                )
-            }
-        }
-
-        if (visible.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty", contentType = "state") {
-                LibraryEmpty(
-                    isLoading = ((type == LibraryType.MANGA || type == LibraryType.ALL) && isLoadingManga) ||
-                        (awaitingAnime && animeEntries.isEmpty()),
-                    columns = columns,
-                    // A failed fetch is not an empty list. Saying "nothing here"
-                    // when the truth is "we could not read it" is the false answer
-                    // this whole path exists to stop.
-                    failedMessage = if (scopedError != null && !awaitingAnime) {
-                        "Couldn't load this list - $scopedError"
-                    } else {
-                        null
+    // A fresh lazy layout per media type, for the reason `NovaLibraryGrid` records
+    // beside the same block: the lazy layout keeps per-key animation and
+    // measurement state, and a type switch removes every key it was about. One
+    // layout handed a different list drew the outgoing posters over the incoming
+    // cells and left rows at offsets that belonged to the other list.
+    key(type) {
+        LazyVerticalGrid(
+            // `Fixed` rather than `Adaptive`, for the reason the followers grid is:
+            // the grid must not reflow when the window changes, because the person's
+            // scroll position would no longer be the entry they were looking at.
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("library_grid"),
+            state = gridState,
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "library_controls", contentType = "controls") {
+                LibraryControls(
+                    type = type,
+                    filter = filter,
+                    counts = counts,
+                    scopeSize = scoped.size,
+                    scopeIsManga = type == LibraryType.MANGA,
+                    sort = sort,
+                    sortAscending = sortAscending,
+                    onSortChange = { nextSort, nextAscending ->
+                        choiceMade = true
+                        sort = nextSort
+                        sortAscending = nextAscending
+                        scope.launch {
+                            remembered.preferences.setSort(nextSort.name, nextAscending)
+                        }
                     },
-                    onRetry = retryScopedFailure,
+                    isLoadingManga = isLoadingManga,
                     query = query,
-                    // A status or favourites chip narrows the list even when the
-                    // search box is empty, so the empty state has to say that
-                    // rather than claiming the whole list is empty.
-                    isFiltered = filter != LibraryFilter.ALL
+                    onType = { chosen ->
+                        choiceMade = true
+                        type = chosen
+                        // Reset here, with the data change, so the grid's next measure
+                        // pass lays the new list out at the top instead of at the old
+                        // list's index. `requestScrollToItem` is not a coroutine, so a
+                        // second tap cannot cancel it, and it applies to the same frame
+                        // that swaps the items rather than one later.
+                        gridState.requestScrollToItem(0)
+                        // Recorded on the tap, not on a save button: the memory is
+                        // there so they are not asked again, and asking them to
+                        // confirm the choice would defeat it.
+                        query = ""
+                        scope.launch { remembered.preferences.setType(chosen.name) }
+                    },
+                    onFilter = { chosen ->
+                        choiceMade = true
+                        filter = chosen
+                        scope.launch { remembered.preferences.setFilter(chosen.name) }
+                    },
+                    onQueryChange = { query = it }
                 )
             }
-        } else {
-            when (viewMode) {
-                LibraryViewMode.TABLE -> {
-                    item(
-                        span = { GridItemSpan(maxLineSpan) },
-                        key = "library_table_header",
-                        contentType = "controls"
-                    ) {
-                        // `columns` is one in this mode, so the header spans the
-                        // single table column and its labels sit above the same
-                        // trailing numbers every row draws.
-                        LibraryTableHeader()
-                    }
-                    items(
-                        items = visible,
-                        key = { it.media.namespaceKey },
-                        span = { GridItemSpan(maxLineSpan) },
-                        contentType = { "library_table_row" }
-                    ) { entry ->
-                        LibraryListRow(
-                            entry = entry,
-                            detailed = true,
-                            owner = listOwner,
-                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = animateLibraryItem()
-                        )
-                    }
+
+            if (awaitingAnime) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending", contentType = "state") {
+                    PendingDataNote("Still fetching this list - these counts are not final yet")
                 }
-                LibraryViewMode.LIST -> {
-                    items(
-                        items = visible,
-                        key = { it.media.namespaceKey },
-                        span = { GridItemSpan(maxLineSpan) },
-                        contentType = { "library_list_row" }
-                    ) { entry ->
-                        LibraryListRow(
-                            entry = entry,
-                            owner = listOwner,
-                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                            modifier = animateLibraryItem()
-                        )
-                    }
+            }
+            if (type == LibraryType.ALL && isLoadingManga && mangaEntries == null) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "library_pending_manga", contentType = "state") {
+                    PendingDataNote("Still fetching manga titles for the combined list")
                 }
-                LibraryViewMode.GROUPED -> {
-                    grouped.forEach { (option, entries) ->
-                        item(
-                            span = { GridItemSpan(maxLineSpan) },
-                            key = "library_group_${option.apiValue}",
-                            contentType = "header"
-                        ) {
-                            LibraryGroupHeading(
-                                label = option.labelFor(type == LibraryType.MANGA),
-                                count = entries.size
-                            )
-                        }
-                        items(
-                            items = entries,
-                            key = { it.media.namespaceKey },
-                            span = { GridItemSpan(maxLineSpan) },
-                            contentType = { "library_grouped_row" }
-                        ) { entry ->
-                            LibraryListRow(
-                                entry = entry,
-                                owner = listOwner,
-                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                                modifier = animateLibraryItem()
-                            )
-                        }
-                    }
-                    if (unclassified.isNotEmpty()) {
-                        item(
-                            span = { GridItemSpan(maxLineSpan) },
-                            key = "library_group_other",
-                            contentType = "header"
-                        ) {
-                            LibraryGroupHeading(label = "Other", count = unclassified.size)
-                        }
-                        items(
-                            items = unclassified,
-                            key = { it.media.namespaceKey },
-                            span = { GridItemSpan(maxLineSpan) },
-                            contentType = { "library_grouped_row" }
-                        ) { entry ->
-                            LibraryListRow(
-                                entry = entry,
-                                owner = listOwner,
-                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
-                                modifier = animateLibraryItem()
-                            )
-                        }
-                    }
+            }
+
+            // A failed fetch, said plainly, in place of "nothing here".
+            //
+            // These two were the same message for every account whose list could not be
+            // read - a private list, a rate limit, a dropped connection all produced
+            // "Nothing in this list yet" and chips reading (0), which is the app
+            // asserting the one thing it has the least evidence for. The counts below
+            // are still zeroes for the same reason and are not faked here.
+            if (shouldShowLibraryError(scopedError, awaitingAnime, visible.isNotEmpty())) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "library_error", contentType = "state") {
+                    PendingDataNote(
+                        "Couldn't load this list - $scopedError. Your bio, " +
+                            "favourites and stats are still here.",
+                        // A failure is an answer. Drawn with the default this spun a
+                        // loader beside the message, promising a result that had already
+                        // arrived and *was* the failure.
+                        busy = false
+                    )
                 }
-                LibraryViewMode.GROUPED_COVERS -> {
-                    // The same headings the row grouping draws, over the grid the reader
-                    // chose. Drawn with the profile's own poster cell rather than the
-                    // Library's: the cell is what carries the owner's rating and the
-                    // favourite mark on this page.
-                    grouped.forEach { (option, entries) ->
-                        item(
-                            span = { GridItemSpan(maxLineSpan) },
-                            key = "library_group_covers_${option.apiValue}",
-                            contentType = "header"
-                        ) {
-                            LibraryGroupHeading(
-                                label = option.labelFor(type == LibraryType.MANGA),
-                                count = entries.size
-                            )
-                        }
-                        items(
-                            items = entries,
-                            key = { it.media.namespaceKey },
-                            contentType = { "library_group_covers" }
-                        ) { entry ->
-                            LibraryPoster(
-                                entry = entry,
-                                owner = listOwner,
-                                isFavourite = entry.media.namespaceKey in favouriteIds,
-                                modifier = Modifier
-                                    .widthIn(max = ProfileMaxContentWidth)
-                                    .fillMaxWidth()
-                                    .then(animateLibraryItem()),
-                                onClick = {
-                                    onOpenDetail(entry.media.withListStatus(entry.status))
-                                }
-                            )
-                        }
-                    }
-                    if (unclassified.isNotEmpty()) {
-                        item(
-                            span = { GridItemSpan(maxLineSpan) },
-                            key = "library_group_covers_other",
-                            contentType = "header"
-                        ) {
-                            LibraryGroupHeading(label = "Other", count = unclassified.size)
-                        }
-                        items(
-                            items = unclassified,
-                            key = { it.media.namespaceKey },
-                            contentType = { "library_group_covers" }
-                        ) { entry ->
-                            LibraryPoster(
-                                entry = entry,
-                                owner = listOwner,
-                                isFavourite = entry.media.namespaceKey in favouriteIds,
-                                modifier = Modifier
-                                    .widthIn(max = ProfileMaxContentWidth)
-                                    .fillMaxWidth()
-                                    .then(animateLibraryItem()),
-                                onClick = {
-                                    onOpenDetail(entry.media.withListStatus(entry.status))
-                                }
-                            )
-                        }
-                    }
-                }
-                else -> {
-                    items(
-                        items = visible,
-                        // The namespace and the id, because this grid is the merged one:
-                        // `animeEntries + mangaEntries` under the ALL scope, and the two
-                        // namespaces share their numbers. Two rows claiming one key is not a
-                        // duplicated badge, it is the lazy layout failing on a duplicate key.
-                        key = { it.media.namespaceKey },
-                        span = { entry ->
-                            if (entry.media.namespaceKey in heroKeys) {
-                                GridItemSpan(maxLineSpan)
-                            } else {
-                                GridItemSpan(1)
-                            }
+            }
+
+            if (visible.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty", contentType = "state") {
+                    LibraryEmpty(
+                        isLoading = ((type == LibraryType.MANGA || type == LibraryType.ALL) && isLoadingManga) ||
+                            (awaitingAnime && animeEntries.isEmpty()),
+                        columns = columns,
+                        // A failed fetch is not an empty list. Saying "nothing here"
+                        // when the truth is "we could not read it" is the false answer
+                        // this whole path exists to stop.
+                        failedMessage = if (scopedError != null && !awaitingAnime) {
+                            "Couldn't load this list - $scopedError"
+                        } else {
+                            null
                         },
-                        contentType = { "library_${viewMode.storageValue}" }
-                    ) { entry ->
-                        LibraryPoster(
-                            entry = entry,
-                            owner = listOwner,
-                            isFavourite = entry.media.namespaceKey in favouriteIds,
-                            // Shelf and Cover wall are caption-free browsing modes; Shelf
-                            // packs five columns, so a title under each cover is cramped and
-                            // inconsistent with the Nova library view.
-                            showTitle = viewMode != LibraryViewMode.COVERS &&
-                                viewMode != LibraryViewMode.SHELF,
-                            hero = entry.media.namespaceKey in heroKeys,
-                            modifier = Modifier
-                                .widthIn(max = ProfileMaxContentWidth)
-                                .fillMaxWidth()
-                                // Filtering, sorting and searching all rewrite this grid in
-                                // place, so without this every poster jumped to its new cell
-                                // on the frame the choice was made. `animateItem` slides the
-                                // survivors on the spatial spring and fades the ones the new
-                                // filter removed, which is what makes a filter feel like a
-                                // rearrangement rather than a redraw. Spring tokens, not
-                                // durations, for the reason the rest of the app uses them.
-                                .then(animateLibraryItem()),
-                            onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
-                        )
+                        onRetry = retryScopedFailure,
+                        query = query,
+                        // A status or favourites chip narrows the list even when the
+                        // search box is empty, so the empty state has to say that
+                        // rather than claiming the whole list is empty.
+                        isFiltered = filter != LibraryFilter.ALL
+                    )
+                }
+            } else {
+                when (viewMode) {
+                    LibraryViewMode.TABLE -> {
+                        item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            key = "library_table_header",
+                            contentType = "controls"
+                        ) {
+                            // `columns` is one in this mode, so the header spans the
+                            // single table column and its labels sit above the same
+                            // trailing numbers every row draws.
+                            LibraryTableHeader()
+                        }
+                        items(
+                            items = visible,
+                            key = { it.media.namespaceKey },
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_table_row" }
+                        ) { entry ->
+                            LibraryListRow(
+                                entry = entry,
+                                detailed = true,
+                                owner = listOwner,
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                modifier = animateLibraryItem()
+                            )
+                        }
+                    }
+                    LibraryViewMode.LIST -> {
+                        items(
+                            items = visible,
+                            key = { it.media.namespaceKey },
+                            span = { GridItemSpan(maxLineSpan) },
+                            contentType = { "library_list_row" }
+                        ) { entry ->
+                            LibraryListRow(
+                                entry = entry,
+                                owner = listOwner,
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                modifier = animateLibraryItem()
+                            )
+                        }
+                    }
+                    LibraryViewMode.GROUPED -> {
+                        grouped.forEach { (option, entries) ->
+                            item(
+                                span = { GridItemSpan(maxLineSpan) },
+                                key = "library_group_${option.apiValue}",
+                                contentType = "header"
+                            ) {
+                                LibraryGroupHeading(
+                                    label = option.labelFor(type == LibraryType.MANGA),
+                                    count = entries.size
+                                )
+                            }
+                            items(
+                                items = entries,
+                                key = { it.media.namespaceKey },
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = { "library_grouped_row" }
+                            ) { entry ->
+                                LibraryListRow(
+                                    entry = entry,
+                                    owner = listOwner,
+                                    onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                    modifier = animateLibraryItem()
+                                )
+                            }
+                        }
+                        if (unclassified.isNotEmpty()) {
+                            item(
+                                span = { GridItemSpan(maxLineSpan) },
+                                key = "library_group_other",
+                                contentType = "header"
+                            ) {
+                                LibraryGroupHeading(label = "Other", count = unclassified.size)
+                            }
+                            items(
+                                items = unclassified,
+                                key = { it.media.namespaceKey },
+                                span = { GridItemSpan(maxLineSpan) },
+                                contentType = { "library_grouped_row" }
+                            ) { entry ->
+                                LibraryListRow(
+                                    entry = entry,
+                                    owner = listOwner,
+                                    onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) },
+                                    modifier = animateLibraryItem()
+                                )
+                            }
+                        }
+                    }
+                    LibraryViewMode.GROUPED_COVERS -> {
+                        // The same headings the row grouping draws, over the grid the reader
+                        // chose. Drawn with the profile's own poster cell rather than the
+                        // Library's: the cell is what carries the owner's rating and the
+                        // favourite mark on this page.
+                        grouped.forEach { (option, entries) ->
+                            item(
+                                span = { GridItemSpan(maxLineSpan) },
+                                key = "library_group_covers_${option.apiValue}",
+                                contentType = "header"
+                            ) {
+                                LibraryGroupHeading(
+                                    label = option.labelFor(type == LibraryType.MANGA),
+                                    count = entries.size
+                                )
+                            }
+                            items(
+                                items = entries,
+                                key = { it.media.namespaceKey },
+                                contentType = { "library_group_covers" }
+                            ) { entry ->
+                                LibraryPoster(
+                                    entry = entry,
+                                    owner = listOwner,
+                                    isFavourite = entry.media.namespaceKey in favouriteIds,
+                                    modifier = Modifier
+                                        .widthIn(max = ProfileMaxContentWidth)
+                                        .fillMaxWidth()
+                                        .then(animateLibraryItem()),
+                                    onClick = {
+                                        onOpenDetail(entry.media.withListStatus(entry.status))
+                                    }
+                                )
+                            }
+                        }
+                        if (unclassified.isNotEmpty()) {
+                            item(
+                                span = { GridItemSpan(maxLineSpan) },
+                                key = "library_group_covers_other",
+                                contentType = "header"
+                            ) {
+                                LibraryGroupHeading(label = "Other", count = unclassified.size)
+                            }
+                            items(
+                                items = unclassified,
+                                key = { it.media.namespaceKey },
+                                contentType = { "library_group_covers" }
+                            ) { entry ->
+                                LibraryPoster(
+                                    entry = entry,
+                                    owner = listOwner,
+                                    isFavourite = entry.media.namespaceKey in favouriteIds,
+                                    modifier = Modifier
+                                        .widthIn(max = ProfileMaxContentWidth)
+                                        .fillMaxWidth()
+                                        .then(animateLibraryItem()),
+                                    onClick = {
+                                        onOpenDetail(entry.media.withListStatus(entry.status))
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    else -> {
+                        items(
+                            items = visible,
+                            // The namespace and the id, because this grid is the merged one:
+                            // `animeEntries + mangaEntries` under the ALL scope, and the two
+                            // namespaces share their numbers. Two rows claiming one key is not a
+                            // duplicated badge, it is the lazy layout failing on a duplicate key.
+                            key = { it.media.namespaceKey },
+                            span = { entry ->
+                                if (entry.media.namespaceKey in heroKeys) {
+                                    GridItemSpan(maxLineSpan)
+                                } else {
+                                    GridItemSpan(1)
+                                }
+                            },
+                            contentType = { "library_${viewMode.storageValue}" }
+                        ) { entry ->
+                            LibraryPoster(
+                                entry = entry,
+                                owner = listOwner,
+                                isFavourite = entry.media.namespaceKey in favouriteIds,
+                                // Shelf and Cover wall are caption-free browsing modes; Shelf
+                                // packs five columns, so a title under each cover is cramped and
+                                // inconsistent with the Nova library view.
+                                showTitle = viewMode != LibraryViewMode.COVERS &&
+                                    viewMode != LibraryViewMode.SHELF,
+                                hero = entry.media.namespaceKey in heroKeys,
+                                modifier = Modifier
+                                    .widthIn(max = ProfileMaxContentWidth)
+                                    .fillMaxWidth()
+                                    // Filtering, sorting and searching all rewrite this grid in
+                                    // place, so without this every poster jumped to its new cell
+                                    // on the frame the choice was made. `animateItem` slides the
+                                    // survivors on the spatial spring and fades the ones the new
+                                    // filter removed, which is what makes a filter feel like a
+                                    // rearrangement rather than a redraw. Spring tokens, not
+                                    // durations, for the reason the rest of the app uses them.
+                                    .then(animateLibraryItem()),
+                                onClick = { onOpenDetail(entry.media.withListStatus(entry.status)) }
+                            )
+                        }
                     }
                 }
             }

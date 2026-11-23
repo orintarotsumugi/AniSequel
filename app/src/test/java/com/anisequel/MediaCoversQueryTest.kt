@@ -1,9 +1,15 @@
 package com.anisequel
 
+import com.anisequel.data.model.MediaCover
+import com.anisequel.data.model.MediaCoverImage
 import com.anisequel.data.model.MediaCoverKey
+import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.network.GraphQLQueries
 import com.anisequel.data.repository.MAX_COVER_BATCH_KEYS
+import com.anisequel.data.repository.mediaCoverBatchIds
 import com.anisequel.data.repository.mediaCoverBatches
+import com.anisequel.data.repository.mediaCoversFrom
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,134 +20,117 @@ import org.junit.Test
  *
  * ## Why this document has its own test
  *
- * It is the one query in the app whose *shape* is the feature. A bio's dozen
- * AniList links have to cost one request, which is why each entry is its own
- * aliased field rather than fetched one at a time - see
- * [GraphQLQueries.getMediaCoversQuery].
+ * It is the one query in the app whose *shape* is a feature, and that shape
+ * changed on 2026-11-23 when AniList started counting **every aliased root and
+ * every `Page` in a request against the rate limit separately**. The old
+ * document emitted one `Page` alias per link (`m0`, `m1`, ...), so a twelve-link
+ * bio spent twelve of the thirty requests a minute the batch existed to save -
+ * verified against the live API, where five aliases took `X-RateLimit-Remaining`
+ * down by five. The batch is now one `Page.media(id_in:)` field, which the live
+ * API charges as one request however many ids it carries.
  *
  * The second thing its shape decides is whether one bad link takes the rest with
  * it, which is what the `Page` wrapper below is about.
  *
  * It is also the one query that can silently return the **wrong entity**. AniList
- * media ids are unique only within a media type, so `Media(id: 1)` is ambiguous
- * between `anilist.co/anime/1` and `anilist.co/manga/1` - and an ambiguous answer
- * is not a null, it is a confident wrong poster on a card, which is the one
- * failure mode the whole markdown preview feature guards against. The `type:`
- * argument is what removes the ambiguity, and nothing else in the app would fail
- * if it were dropped.
+ * media ids are unique only within a media type, so `anime/1` and `manga/1` share
+ * a number - and `id_in` cannot say which namespace was requested, so an answer
+ * for one id can contain both. An ambiguous answer is not a null, it is a
+ * confident wrong poster on a card, which is the one failure mode the whole
+ * markdown preview feature guards against. [mediaCoversFrom] is the rule that
+ * keeps them apart.
  */
 class MediaCoversQueryTest {
 
     private fun keys(vararg pairs: Pair<String, Int>) =
         pairs.map { MediaCoverKey(type = it.first, id = it.second) }
 
-    @Test
-    fun `asks for a type alongside every id`() {
-        val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 2))
-
-        assertTrue(
-            "Media must be asked for a type, or anime/1 and manga/1 are ambiguous",
-            query.contains("type:")
+    private fun node(type: String, id: Int, url: String? = "https://img/$type/$id.jpg") =
+        MediaNode(
+            id = id,
+            type = type,
+            title = MediaTitle(romaji = "$type $id"),
+            coverImage = url?.let { MediaCoverImage(large = it) }
         )
-        // `$` appears only at the *use* site, inside the field; the declaration
-        // list names the variables without it.
-        assertTrue(
-            "every aliased field must pass its own type variable",
-            query.contains("type: \$type0") && query.contains("type: \$type1")
-        )
-    }
 
     @Test
-    fun `declares an id and a type variable for each entry`() {
+    fun `asks for the whole batch as one connection`() {
         val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 2, "ANIME" to 3))
 
+        // The aliases are the thing that used to cost a request each. One root
+        // field answers any number of ids, so a batch is one rate-limit unit.
+        assertEquals(
+            "a batch must be one Page root field, not one alias per link",
+            1,
+            Regex("""\bPage\b""").findAll(query).count()
+        )
+        assertFalse(
+            "any alias in this document would be charged as another request",
+            Regex("""\bm\d+: """).containsMatchIn(query)
+        )
         assertTrue(
-            "AniList's type argument is a MediaType enum and must be declared as one",
-            query.contains("query MediaCovers(\$id0: Int, \$type0: MediaType")
+            "the ids travel as one list, which is what makes one root enough",
+            query.contains("media(id_in: \$ids)")
         )
-        // The sigil is not decoration. A declaration spelled `id0: Int` while the
-        // use site says `$id0` is a syntax error, and AniList answers the *whole*
-        // batch with **HTTP 400, "Expected $, found Name \"id0\""** - so no cover
-        // ever arrived and every card in every bio kept its placeholder, with no
-        // error on screen to say so. This assertion is the only one that could
-        // have caught it, and the version of it that read
-        // `contains("query MediaCovers(id0: Int")` asserted the broken spelling
-        // instead. Verified against the live API.
-        assertFalse(
-            "every variable declaration needs its `$` sigil",
-            Regex("""(?<!\$)id\d+: """).containsMatchIn(query)
-        )
-        assertFalse(
-            "the type declaration needs one too",
-            Regex("""(?<!\$)type\d+: """).containsMatchIn(query)
-        )
-        // Three entries, three declarations of each. A missing one is a document
-        // AniList rejects outright, taking every poster in the bio with it.
-        assertEquals(3, Regex("""\bid\d+: Int\b""").findAll(query).count())
-        assertEquals(3, Regex("""\btype\d+: MediaType\b""").findAll(query).count())
     }
 
     @Test
-    fun `does not declare the type variable as non-null`() {
-        // `Media.type` is nullable in AniList's schema, so a `MediaType!` variable
-        // would make the whole document invalid - and the failure would be a 400 on
-        // every profile open, which is the worst possible place to discover it.
+    fun `declares the ids once as a nullable Int list`() {
         val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1))
 
+        // `id_in` is `[Int]`, not `[Int]!`, and the sigil is not decoration: a
+        // declaration spelled `ids: [Int]` while the use site says `$ids` is a
+        // syntax error, and AniList answers the whole batch with HTTP 400 - so no
+        // cover ever arrived and every card kept its placeholder with nothing on
+        // screen to say why.
+        assertTrue(query.contains("query MediaCovers(\$ids: [Int])"))
         assertFalse(
-            "MediaType! would not validate against a nullable argument",
-            query.contains("MediaType!")
+            "the list argument is not non-null in AniList's schema",
+            query.contains("[Int]!")
         )
     }
 
     @Test
-    fun `aliases each entry so two sharing an id are still two fields`() {
-        // The anime/manga id collision: under a bare-id key these two links are one
-        // entry, and the one answer is then drawn on both cards.
-        val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 1))
-
-        assertTrue("the first entry is aliased", query.contains("m0: Page {"))
-        assertTrue("the second entry is aliased", query.contains("m1: Page {"))
-        assertEquals(
-            "two keys sharing an id must still be two aliased fields",
-            2,
-            Regex("""m\d+: Page \{""").findAll(query).count()
+    fun `the page is large enough for both media namespaces`() {
+        val size = MAX_COVER_BATCH_KEYS
+        val query = GraphQLQueries.getMediaCoversQuery(
+            (1..size).map { MediaCoverKey("ANIME", it) }
         )
+        val perPage = Regex("""perPage: (\d+)""").find(query)
+            ?.groupValues
+            ?.get(1)
+            ?.toInt()
+
+        assertTrue("the page must declare a perPage", perPage != null)
+        assertTrue(
+            "one id can resolve in both namespaces, so a page of $size would truncate the answer",
+            perPage!! >= size * 2
+        )
+        assertTrue("Page rejects a perPage over 50", perPage <= 50)
     }
 
     @Test
     fun `one unresolvable id cannot fail the whole batch`() {
         // Verified against the live API rather than reasoned about. Written as
-        // `m0: Media(id: $id0, type: $type0)` - which is what this document was -
-        // a batch containing an id with no media answers **HTTP 404** with
-        // `errors: ["Not Found."]`, and the good aliases in `data` are then
-        // discarded with it. One stale link in a hall-of-fame bio (a deleted
-        // entry, or an id that belongs to the other media namespace) blanked
-        // every poster on the card. `Page.media` filters instead of failing and
-        // answers 200 with `"m0": { "media": [] }`.
+        // `Media(id: $id)`, a batch containing an id with no media answers **HTTP
+        // 404** with `errors: ["Not Found."]`, and the good ids in `data` are then
+        // discarded with it. One stale link in a hall-of-fame bio blanked every
+        // poster on the card. `Page.media` filters instead of failing and answers
+        // 200 with the missing id absent.
         val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1, "MANGA" to 2))
 
         assertFalse(
             "a Media root field 404s the whole document as soon as one id has no media",
-            Regex("""m\d+: Media\(""").containsMatchIn(query)
+            Regex("""(^|[^.\w])Media\(""").containsMatchIn(query)
         )
-        assertTrue(
-            "every aliased field must be the connection, which cannot fail",
-            query.contains("m0: Page {") && query.contains("m1: Page {")
-        )
-        assertTrue(
-            "the media is still asked for with its type, inside the connection",
-            query.contains("media(id: \$id0, type: \$type0)") &&
-                query.contains("media(id: \$id1, type: \$type1)")
-        )
+        assertTrue("the ids must be resolved through the connection", query.contains("media(id_in:"))
     }
 
     @Test
     fun `asks for the title that labels the card`() {
         // The card's heading falls back to the URL when there is no cover, and a
         // URL of `anilist.co/anime/1` has no readable name in it - so the title in
-        // this selection is what turns `Anime #1` into the actual show. It was
-        // already on the wire and discarded.
+        // this selection is what turns `Anime #1` into the actual show.
         val query = GraphQLQueries.getMediaCoversQuery(keys("ANIME" to 1))
 
         assertTrue(
@@ -151,12 +140,17 @@ class MediaCoversQueryTest {
         listOf("romaji", "english", "userPreferred").forEach { field ->
             assertTrue("title selection is missing $field", query.contains(field))
         }
+        // The response is matched back to the request by these two, so neither can
+        // be dropped from the selection.
+        assertTrue("the answer cannot be keyed without `type`", query.contains("type"))
+        assertTrue("the answer cannot be keyed without `id`", query.contains("id"))
     }
 
     @Test
     fun `an empty batch is rejected rather than sent`() {
-        // `query MediaCovers()` with no fields is a syntax error, and a bio with
-        // no AniList links is the common case, not an exceptional one.
+        // `query MediaCovers { media: Page { media(id_in: []) } }` is a wasted
+        // request, and a bio with no AniList links is the common case, not an
+        // exceptional one.
         try {
             GraphQLQueries.getMediaCoversQuery(emptyList())
             throw AssertionError("an empty cover batch must be rejected, not sent")
@@ -167,10 +161,6 @@ class MediaCoversQueryTest {
 
     @Test
     fun `a link-heavy bio is split into documents AniList will accept`() {
-        // One document with an alias per link grows with the bio. AniList rejects
-        // an over-complex document whole, and a cover failure is invisible, so an
-        // uncapped batch would leave every poster in a "hall of fame" bio on a
-        // placeholder with nothing on screen to explain it.
         val keys = (1..2 * MAX_COVER_BATCH_KEYS + 3).map { MediaCoverKey("ANIME", it) }
 
         val batches = mediaCoverBatches(keys)
@@ -188,22 +178,67 @@ class MediaCoversQueryTest {
         )
         batches.forEach { batch ->
             // The cap only helps if each batch is still a valid document: one
-            // alias and one pair of variables per key in that batch.
+            // connection for the batch, and a page big enough to answer it.
             val query = GraphQLQueries.getMediaCoversQuery(batch)
             assertEquals(
-                "every key in a batch must have exactly one aliased field",
-                batch.size,
-                Regex("""m\d+: Page \{""").findAll(query).count()
+                "every batch must be exactly one root field now",
+                1,
+                Regex("""\bPage\b""").findAll(query).count()
             )
         }
     }
 
     @Test
-    fun `the alias helper matches what the query writes`() {
-        // `AniListRepositoryImpl` reads the response back by this name, so the two
-        // cannot drift: an alias helper that disagreed with the query would leave
-        // every card on its placeholder with no error anywhere.
-        assertEquals("m0", GraphQLQueries.mediaCoverAlias(0))
-        assertEquals("m7", GraphQLQueries.mediaCoverAlias(7))
+    fun `the same id in both namespaces is sent once`() {
+        // `id_in` is a list of numbers, so anime/1 and manga/1 are the same entry
+        // to the server. Sending it twice asks for the same lookup twice.
+        assertEquals(
+            listOf(1, 2),
+            mediaCoverBatchIds(keys("ANIME" to 1, "MANGA" to 1, "ANIME" to 2))
+        )
+    }
+
+    @Test
+    fun `a cover is matched back by namespace, not by id`() {
+        // The live API answers `id_in: [1]` with both anime/1 and manga/1 when both
+        // exist. Attaching by id alone would draw the manga poster on the anime
+        // card - a confident wrong answer, not a missing one.
+        val found = mediaCoversFrom(
+            batch = keys("ANIME" to 1),
+            nodes = listOf(node("ANIME", 1, "https://img/anime/1.jpg"), node("MANGA", 1, "https://img/manga/1.jpg"))
+        )
+
+        assertEquals(setOf(MediaCoverKey("ANIME", 1)), found.keys)
+        assertEquals("https://img/anime/1.jpg", found[MediaCoverKey("ANIME", 1)]?.url)
+    }
+
+    @Test
+    fun `both namespaces of one id are kept when both were asked for`() {
+        val found = mediaCoversFrom(
+            batch = keys("ANIME" to 1, "MANGA" to 1),
+            nodes = listOf(node("ANIME", 1, "https://img/anime/1.jpg"), node("MANGA", 1, "https://img/manga/1.jpg"))
+        )
+
+        assertEquals(
+            mapOf(
+                MediaCoverKey("ANIME", 1) to MediaCover("https://img/anime/1.jpg", "ANIME 1"),
+                MediaCoverKey("MANGA", 1) to MediaCover("https://img/manga/1.jpg", "MANGA 1")
+            ),
+            found
+        )
+    }
+
+    @Test
+    fun `a node with no cover or no type is skipped rather than guessed at`() {
+        val found = mediaCoversFrom(
+            batch = keys("ANIME" to 1, "ANIME" to 2, "ANIME" to 3),
+            nodes = listOf(
+                node("ANIME", 1),
+                node("ANIME", 2, url = null),
+                MediaNode(id = 3, type = null, title = MediaTitle(romaji = "no type"))
+            )
+        )
+
+        assertEquals(setOf(MediaCoverKey("ANIME", 1)), found.keys)
     }
 }

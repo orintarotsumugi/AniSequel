@@ -3994,3 +3994,108 @@ follow and sliders with nothing to preview, which is the failure its design exis
 to avoid. *Device Manager*, *Updates* and the account page stay flat for the same
 reason the shelf is grouped - they are short, and a shelf over three cards is a
 tap for nothing.
+
+## 2.5.9: the API started charging for aliases, and a private profile is not empty
+
+AniList's 2026-11-23 changelog changed two things that the app had quietly built
+assumptions on, and both assumptions failed in a way the compiler cannot see.
+
+**Every aliased field is a request now.** The bio cover batch was written as one
+`Page` alias per link (`m0`, `m1`, ...) because that made a dozen links cost one
+request instead of a dozen. The new limiter counts each of those aliases
+separately: verified against the live API, five aliases moved
+`X-RateLimit-Remaining` by five, and a single `Page.media(id_in: [...])` field
+moved it by one no matter how many ids it carried. So the document is one
+connection for the whole batch, and the response is matched back by the
+`(type, id)` pair because `id_in` is not namespace-scoped - an id that exists as
+both an anime and a manga comes back twice, and matching on the id alone would
+put the wrong poster on one of the cards.
+
+The entity-preview batch was already shaped this way (one root per type,
+`id_in`), which is why only the cover document needed rewriting. The lesson is
+the one the file already states for `studios(isMain: true)`: the cost of a
+document is a property of the *documents around it* and only shows up in
+production, so it is asserted rather than reviewed.
+
+**A private account withholds its list, and a block behaves the same way.** The
+old app asked for the list regardless and drew the empty answer as "0 watched" -
+an account that had watched nothing, which is a different person from one that
+did not share it. `User.privacy` and `User.isBlocked` are read with the profile,
+and the dashboard and profile screens stop when either says the data is
+withheld: the list request is cancelled and never painted, which on a
+thirty-a-minute budget also means a profile opened twice cannot spend the
+budget twice on an answer that never changes.
+
+The refusal also had to stop being an auth failure. AniList overloads 403 for a
+rejected token and for private data, and the app signs the reader out on the
+first - so browsing a stranger's private page offered to end a session that was
+working. `PRIVATE_PROFILE` is its own kind, decided before the 401/403 branch on
+both the HTTP and the GraphQL road, and it is deliberately not retryable: signing
+in again does not open somebody else's list.
+
+Character and staff pages gained AniList's new `height` field in the same pass.
+Its three shapes (an `initial` height, equal `min`/`max`, a real range) are
+resolved in the model rather than at each call site, because "185 - 185 cm" for
+a single measurement is a conversion artefact that reads as a bug.
+
+**A type switch now gets its own grid.** Reported as covers drawn across each
+other, and over the shelf header, after scrolling one half of the library and
+switching back and forth quickly - and it cleared itself when the page was left
+and reopened, which is the tell. Both halves had always drawn into one
+`LazyVerticalGrid`, and a switch replaced every item in it. A lazy layout keeps
+per-key state: the fade animation a removed key is still playing, and the
+offsets a placement spring is travelling between. None of that survives its key,
+and the new keys inherit it anyway - so the
+outgoing list was drawn as ghosts over the incoming cells, rows sat at offsets
+that belonged to the other list, and two quick switches stacked several of those
+on top of each other. Leaving the page fixed it because it also destroyed the layout.
+
+So each media type gets its own layout (`key(isManga)` on the new Library,
+`key(type)` on the classic one) and `animateItem` was left alone, because a
+filter or a sort keeps most keys and the animations belong to those.
+
+The scroll reset moved with it. It used to run from `LaunchedEffect(type)`
+calling the suspending `scrollToItem(0)`: an effect runs on the frame *after* the
+one that replaced the item set, so the grid first laid the new list out at the
+old list's index and was then jumped, animating every cell across the jump - and
+a second tap within that window cancelled the coroutine and left the reset
+undone. `requestScrollToItem(0)` is not a coroutine, cannot be cancelled, and is
+applied by the same measure pass that lays the new list out, so no frame ever
+shows the new list at the old position.
+
+**The shimmer was a square, and the comment list was one list.** Two waiting
+states that looked wrong for two different reasons, found together because the
+same complaint ("the shimmer is broken") pointed at both.
+
+The shimmer band was a square of `0.7 × max(width, height)` travelling
+diagonally, which is only right on a roughly square block. Its *height* was tied
+to the block's longest edge, so on a wide skeleton the highlight left the box
+through the top and bottom for part of every loop - on a phone-width 340×40 bar it
+was visible for about half the cycle. That is not a slow sweep, it is a sweep that
+stops and restarts, and it is what every full-width skeleton in the app did
+(comment lines, card bars, load-more strips). The band is now a stripe as tall as
+the box, with a width that is a share of the box's width, so it enters at one edge
+and leaves at the other exactly once per loop whatever the aspect ratio. The
+position is `shimmerBandLeft`, a pure function, so `ShimmerGeometryTest` can pin
+the property that was broken (no dead zone, full travel, monotonic) without a
+device.
+
+The comment sheet's list had the same defect the Library's grid had: one lazy
+list handed a different item set. Opening another thread replaced every row, and
+because reply rows carry `animateItem`'s removal animation, the *previous*
+thread's comments were drawn as fading rows over the new thread's skeleton - two
+conversations on screen, which is what "opening them too fast" looked like. The
+new thread also started at the old thread's scroll position, where the chat
+behaviour expects an empty list to place at the newest comment. Both are now
+per-thread: `key(state.activityId)` around the list, and the scroll position is
+`rememberSaveable` keyed on the thread so a rotation still restores it.
+
+A spoiler's image was the third: a block image with no declared height reserves
+its space from its placeholder, and that placeholder was a 28dp spinner. Revealing
+a spoiler showed a dot, then a full-width picture, and the page under it jumped by
+the picture's height. The block case now waits on the app's skeleton at a
+landscape shape and settles on the layout spring; the inline case keeps the
+spinner, because a plate behind a 50dp icon that is about to become a transparent
+logo would claim a box the picture never has. The live-card path (a WebView, not
+Coil) uses the same plate, so a spoiler holding an AniList card no longer waits on
+the one bare spinner left in the markdown renderer.

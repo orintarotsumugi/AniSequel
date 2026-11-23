@@ -5,6 +5,86 @@ import com.squareup.moshi.JsonClass
 import java.util.Locale
 
 /**
+ * One height, in both units AniList reports.
+ *
+ * [metric] is centimetres and may be fractional (`169.5`) because AniList stores
+ * the converted value as a float; [imperial] is the same height rounded to the
+ * nearest inch as feet and inches (`5'7"`). Both are nullable because the field
+ * is optional on the way in and the server has been known to answer only one.
+ */
+@JsonClass(generateAdapter = true)
+data class HeightValue(
+    val metric: Double? = null,
+    val imperial: String? = null
+) {
+    /**
+     * The measurement as one readable phrase, or null when neither unit arrived.
+     *
+     * Both units are shown because that is the point of the field - the server
+     * converts for the reader, so the card does not have to pick a system. Metric
+     * leads because the whole field is stored in centimetres.
+     */
+    val text: String?
+        get() {
+            val metricText = metric?.let(::formatCentimetres)
+            val imperialText = imperial?.takeIf { it.isNotBlank() }
+            return when {
+                metricText != null && imperialText != null -> "$metricText ($imperialText)"
+                else -> metricText ?: imperialText
+            }
+        }
+}
+
+/**
+ * AniList's `Height`: a single height, a range, or an initial height.
+ *
+ * The three shapes share one type, which is why [display] exists rather than the
+ * card reading [min] and [max] itself:
+ *
+ *  - **[initial]** is set when the character's height changes later in the
+ *    story. AniList says `min` and `max` are null in that case.
+ *  - **equal `min` and `max`** are a *single* height. Printing them as a range
+ *    would render Spike Spiegel as "185 - 185 cm", which is the kind of thing a
+ *    reader reads as a bug in the app.
+ *  - a genuinely different pair is the range it looks like.
+ */
+@JsonClass(generateAdapter = true)
+data class Height(
+    /** The height when first introduced, if it changes later. */
+    val initial: HeightValue? = null,
+    /** The lowest height in the range. */
+    val min: HeightValue? = null,
+    /** The highest height in the range; equal to [min] for a single height. */
+    val max: HeightValue? = null
+) {
+    /** The fact row to print, or null when AniList has no measurement. */
+    val display: String?
+        get() {
+            initial?.text?.let { return "Initially $it" }
+            val low = min?.text
+            val high = max?.text
+            return when {
+                low != null && high != null -> if (low == high) low else "$low - $high"
+                else -> low ?: high
+            }
+        }
+}
+
+/**
+ * `169.5` as `169.5 cm` and `185.0` as `185 cm`.
+ *
+ * `Double.toString` is locale-independent, which is the property that matters
+ * here: a Turkish device formatting a decimal separator differently would put a
+ * comma inside a number the rest of the app prints with a dot. The trailing
+ * `.0` is dropped because every whole height AniList has is a whole number, and
+ * "185.0 cm" reads as a conversion output rather than a measurement.
+ */
+private fun formatCentimetres(centimetres: Double): String {
+    val number = if (centimetres % 1.0 == 0.0) centimetres.toLong().toString() else centimetres.toString()
+    return "$number cm"
+}
+
+/**
  * One character, as their in-app profile page.
  *
  * Modelled beside [StudioNode] rather than folded into it, because the two answer
@@ -33,6 +113,15 @@ data class CharacterProfile(
     val gender: String? = null,
     val age: String? = null,
     val bloodType: String? = null,
+    /**
+     * AniList's dedicated height field, added 2026-11-23.
+     *
+     * A structured value rather than the free-text `age` beside it: the server
+     * reports the same measurement in centimetres and in feet/inches, and
+     * expresses "a height that changes", a range, and a single value with the
+     * same three fields. See [Height] for how those are told apart.
+     */
+    val height: Height? = null,
     val favourites: Int? = null,
     val siteUrl: String? = null,
     val isFavourite: Boolean? = null,
@@ -62,6 +151,7 @@ data class CharacterProfile(
         get() = buildList {
             gender?.takeIf { it.isNotBlank() }?.let { add("Gender" to it) }
             age?.takeIf { it.isNotBlank() }?.let { add("Age" to it) }
+            height?.display?.let { add("Height" to it) }
             dateOfBirth?.formatted?.takeIf { it != "TBA" }?.let { add("Born" to it) }
             bloodType?.takeIf { it.isNotBlank() }?.let { add("Blood type" to it) }
             favourites?.takeIf { it > 0 }?.let { add("Favourites" to it.toString()) }
@@ -95,6 +185,8 @@ data class StaffProfile(
     val primaryOccupations: List<String>? = null,
     val gender: String? = null,
     val age: String? = null,
+    /** AniList's dedicated height field, with both units. See [Height]. */
+    val height: Height? = null,
     val yearsActive: List<String>? = null,
     val homeTown: String? = null,
     val bloodType: String? = null,
@@ -138,6 +230,7 @@ data class StaffProfile(
                 ?.let { add("Role" to it.joinToString(", ")) }
             gender?.takeIf { it.isNotBlank() }?.let { add("Gender" to it) }
             age?.takeIf { it.isNotBlank() }?.let { add("Age" to it) }
+            height?.display?.let { add("Height" to it) }
             yearsActive?.takeIf { it.isNotEmpty() }?.let { years ->
                 // AniList's `[startYear, endYear]`, or `[startYear]` while the person
                 // still works. This used to be `joinToString(", ")`, which printed

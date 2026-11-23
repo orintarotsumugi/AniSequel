@@ -66,8 +66,36 @@ data class ViewerProfile(
     val name: String,
     val avatar: UserAvatar? = null,
     val bannerImage: String? = null,
+    /**
+     * AniList's `UserPrivacy`: `PUBLIC`, `SEMI_PUBLIC` or `PRIVATE`.
+     *
+     * The list and statistics are withheld on a private account - and, since
+     * 2026-11-23, so is the data of an account the viewer blocked, which is why
+     * [isBlocked] is read alongside it. A withheld profile is not an empty one,
+     * and the dashboard must not paint its absence as "0 watched".
+     */
+    val privacy: String? = null,
+    /** Whether the viewer (or the account) is blocking this profile. */
+    val isBlocked: Boolean? = null,
     val statistics: UserStatistics? = null
-)
+) {
+    /** True when AniList will not answer this profile's list for the viewer. */
+    val isPrivateProfile: Boolean
+        get() = isWithheldProfile(privacy = privacy, isBlocked = isBlocked)
+}
+
+/**
+ * Whether a profile's list and statistics are withheld from this viewer.
+ *
+ * A block behaves exactly like the "Private" setting after the 2026-11-23
+ * privacy overhaul, so both are the same answer to the one question every reader
+ * of this flag is really asking: can this screen show the person's list?
+ */
+internal fun isWithheldProfile(privacy: String?, isBlocked: Boolean?): Boolean =
+    isBlocked == true || privacy.equals(PRIVATE_PRIVACY, ignoreCase = true)
+
+/** AniList's `UserPrivacy.PRIVATE`, as the enum spells it. */
+private const val PRIVATE_PRIVACY = "PRIVATE"
 
 @JsonClass(generateAdapter = true)
 data class UserAvatar(

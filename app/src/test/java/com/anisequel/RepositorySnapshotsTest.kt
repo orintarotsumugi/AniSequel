@@ -15,7 +15,7 @@ import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.ActivityReplyWindowData
 import com.anisequel.data.model.ActivityReplyLikersData
 import com.anisequel.data.model.GraphQLResponse
-import com.anisequel.data.model.MediaCoverPage
+import com.anisequel.data.model.MediaCoversData
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaFriendsData
@@ -495,7 +495,7 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
 
     override suspend fun getMediaCovers(
         request: GraphQLRequest
-    ): GraphQLResponse<Map<String, MediaCoverPage>> = notServed("getMediaCovers")
+    ): GraphQLResponse<MediaCoversData> = notServed("getMediaCovers")
 
     override suspend fun getEntityPreviews(
         request: GraphQLRequest

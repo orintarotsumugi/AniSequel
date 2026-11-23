@@ -14,6 +14,7 @@ import com.anisequel.data.model.FollowingData
 import com.anisequel.data.model.GraphQLRequest
 import com.anisequel.data.model.GraphQLResponse
 import com.anisequel.data.model.MediaCoverPage
+import com.anisequel.data.model.MediaCoversData
 import com.anisequel.data.model.MediaFriendsData
 import com.anisequel.data.model.MangaPreviewData
 import com.anisequel.data.model.MediaListCollectionData
@@ -114,11 +115,13 @@ interface AniListApiService {
     /**
      * Cover art for many media in one round trip.
      *
-     * `Map<String, ...>` rather than a generated class because the response keys
-     * are aliases the query builds at runtime (`m0`, `m1`, ...), so the shape of
-     * the answer is not known until the request is written.
+     * One `Page.media` connection aliased `media` for the whole batch. It used to
+     * be `Map<String, ...>` because the query built one alias per id (`m0`, `m1`,
+     * ...); AniList's limiter now charges for each of those aliases separately, so
+     * the document asks `Page.media(id_in: [...])` once and the answer has a
+     * fixed shape. See [MediaCoversData] and [GraphQLQueries.getMediaCoversQuery].
      *
-     * The value is a `Page` because the same request written against the `Media`
+     * The field is a `Page` because the same request written against the `Media`
      * root field answers **404** - taking every cover in the bio with it - as soon
      * as one id in the batch has no media. See [MediaCoverPage].
      */
@@ -126,7 +129,7 @@ interface AniListApiService {
     @Headers("Content-Type: application/json", "Accept: application/json")
     suspend fun getMediaCovers(
         @Body request: GraphQLRequest
-    ): GraphQLResponse<Map<String, MediaCoverPage>>
+    ): GraphQLResponse<MediaCoversData>
 
     /**
      * Names and portraits for a batch of characters, staff or studios.

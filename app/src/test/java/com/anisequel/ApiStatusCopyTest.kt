@@ -89,6 +89,7 @@ class ApiStatusCopyTest {
         listOf(
             AniListErrorKind.INVALID_SESSION,
             AniListErrorKind.NOT_FOUND,
+            AniListErrorKind.PRIVATE_PROFILE,
             AniListErrorKind.INVALID_REQUEST,
             AniListErrorKind.MALFORMED_RESPONSE
         ).forEach { kind ->
@@ -106,6 +107,7 @@ class ApiStatusCopyTest {
 
         assertFalse(AniListErrorKind.INVALID_SESSION.isConnectionTrouble())
         assertFalse(AniListErrorKind.NOT_FOUND.isConnectionTrouble())
+        assertFalse(AniListErrorKind.PRIVATE_PROFILE.isConnectionTrouble())
         assertFalse(AniListErrorKind.INVALID_REQUEST.isConnectionTrouble())
         assertFalse(AniListErrorKind.MALFORMED_RESPONSE.isConnectionTrouble())
     }
