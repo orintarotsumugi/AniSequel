@@ -194,7 +194,14 @@ internal fun InterfaceLayoutSection(
             Spacer(modifier = Modifier.height(8.dp))
             SwitchRow(
                 title = "Continue Watching rail",
-                subtitle = "Show in-progress anime above the sequel feed on the new Home.",
+                // A disabled switch says *why* here, like the Seasonal page's
+                // dependent controls: "on" + grey without a sentence reads as a
+                // setting that broke, not as one waiting for the layout above.
+                subtitle = if (interfaceSettings.layout == AppLayout.NOVA) {
+                    "Show in-progress anime above the sequel feed on the new Home."
+                } else {
+                    "Only the new Home has this rail. Choose New look above to use it."
+                },
                 checked = interfaceSettings.showContinueRail,
                 enabled = interfaceSettings.layout == AppLayout.NOVA,
                 onCheckedChange = { show ->
@@ -418,14 +425,28 @@ internal fun CardDesignGroup(
             InterfaceSection.CARD_POSTER.shelfEntry(onOpen)
         )
     )
+    // "Card design" is the whole group, and the group's own reset has to reset
+    // all of it: the frame (style), the proportions and corners, the two type
+    // scales and the source of the art. It used to write only
+    // `CardDesign.DEFAULT`, so changing the style or the poster source and then
+    // pressing "Reset card design" left both in place - and when those were the
+    // only changes, the button was disabled and there was no reset at all.
+    val styleChanged = style != MediaCardStyle.DEFAULT
+    val sourceChanged = interfaceSettings.posterSource != PosterSource.DEFAULT
     SettingsButton(
         text = "Reset card design",
         icon = AppVectorIcons.Refresh,
         variant = SettingsButtonVariant.Outlined,
         // Disabled rather than hidden: a control that vanishes leaves the reader
         // wondering whether the page lost a feature.
-        enabled = design != CardDesign.DEFAULT,
-        onClick = { scope.launch { interfacePreferences.setCardDesign(CardDesign.DEFAULT) } },
+        enabled = design != CardDesign.DEFAULT || styleChanged || sourceChanged,
+        onClick = {
+            scope.launch {
+                if (styleChanged) interfacePreferences.setCardStyle(MediaCardStyle.DEFAULT)
+                if (sourceChanged) interfacePreferences.setPosterSource(PosterSource.DEFAULT)
+                interfacePreferences.setCardDesign(CardDesign.DEFAULT)
+            }
+        },
         modifier = Modifier.testTag("card_design_reset")
     )
 }
@@ -602,7 +623,14 @@ internal fun CardPosterSection(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    context.clearCoverCache()
+                    // The clear deletes Coil's disk cache; doing it on the click
+                    // frame froze the dialog while the files went. The dialog
+                    // closes at once and the delete finishes off the main thread.
+                    scope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            context.clearCoverCache()
+                        }
+                    }
                     pendingPosterSource = null
                 }) { Text("Clear cache") }
             },

@@ -1,6 +1,5 @@
 package com.anisequel.ui.components.expressive
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -99,22 +98,22 @@ fun ExpressiveTabBar(
                 animationSpec = if (pressed) ExpressiveMotion.PressSpatialIn else ExpressiveMotion.PressSpatialOut,
                 label = "tab_press_scale_$label"
             )
-            val container by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    Color.Transparent
-                },
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            // One progress with endpoints read live, not a colour spring aimed at a
+            // scheme role: a theme change moves every role on every frame, so the
+            // old target never settled and the tab arrived after the page it sits
+            // on. See `rememberStateColor`.
+            val container = rememberStateColor(
+                active = selected,
+                whenInactive = Color.Transparent,
+                whenActive = MaterialTheme.colorScheme.secondaryContainer,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "tab_container_$label"
             )
-            val content by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            val content = rememberStateColor(
+                active = selected,
+                whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+                whenActive = MaterialTheme.colorScheme.onSecondaryContainer,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "tab_content_$label"
             )
 
@@ -226,22 +225,20 @@ fun ExpressivePolygonSegmentedBar(
             val selected = index == selectedIndex
             val interactionSource = remember { MutableInteractionSource() }
 
-            val container by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    Color.Transparent
-                },
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            // Same rationale as `ExpressiveTabBar` above: the decision animates,
+            // the scheme roles are read every frame.
+            val container = rememberStateColor(
+                active = selected,
+                whenInactive = Color.Transparent,
+                whenActive = MaterialTheme.colorScheme.secondaryContainer,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "segment_container_${option.label}"
             )
-            val content by animateColorAsState(
-                targetValue = if (selected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            val content = rememberStateColor(
+                active = selected,
+                whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+                whenActive = MaterialTheme.colorScheme.onSecondaryContainer,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "segment_content_${option.label}"
             )
             val scale by animateFloatAsState(
@@ -364,16 +361,18 @@ fun ExpressiveSegmentedBar(
                 animationSpec = ExpressiveMotion.FastSpatialDp,
                 label = "segmented_inner_$label"
             )
-            val containerColor by animateColorAsState(
-                targetValue = if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceContainer,
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            val containerColor = rememberStateColor(
+                active = selected,
+                whenInactive = MaterialTheme.colorScheme.surfaceContainer,
+                whenActive = MaterialTheme.colorScheme.primary,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "segmented_container_$label"
             )
-            val textColor by animateColorAsState(
-                targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                animationSpec = ExpressiveMotion.FastColorEffects,
+            val textColor = rememberStateColor(
+                active = selected,
+                whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+                whenActive = MaterialTheme.colorScheme.onPrimary,
+                animationSpec = ExpressiveMotion.FastEffects,
                 label = "segmented_text_$label"
             )
 
@@ -458,14 +457,18 @@ fun ExpressiveStateChip(
     /** What the tap will do, for a chip whose label is only a name. */
     onClickLabel: String? = null
 ) {
-    val background by animateColorAsState(
-        targetValue = if (selected) selectedContainerColor else containerColor,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val background = rememberStateColor(
+        active = selected,
+        whenInactive = containerColor,
+        whenActive = selectedContainerColor,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "chip_container"
     )
-    val foreground by animateColorAsState(
-        targetValue = if (selected) selectedContentColor else contentColor,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val foreground = rememberStateColor(
+        active = selected,
+        whenInactive = contentColor,
+        whenActive = selectedContentColor,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "chip_content"
     )
     val scale by animateFloatAsState(

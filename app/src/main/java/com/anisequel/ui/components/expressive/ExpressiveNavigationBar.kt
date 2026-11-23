@@ -1,7 +1,6 @@
 package com.anisequel.ui.components.expressive
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -213,7 +212,17 @@ fun ExpressiveNavigationBar(
      * would go, and then did nothing at all. A picture of the bar should be a
      * picture, and the sample draws the reader's own tabs either way.
      */
-    gesturesEnabled: Boolean = true
+    gesturesEnabled: Boolean = true,
+    /**
+     * Whether a tap selects a destination at all.
+     *
+     * False for a sample. `onSelect = {}` already prevented navigation, but the
+     * item still pressed, rippled and announced itself as a button, so a reader
+     * who tapped a tab in Settings watched the bar acknowledge a tap that could
+     * not do anything. Off, the pill is a picture: it keeps its measured shape and
+     * its colours, and touch passes through it.
+     */
+    interactive: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -320,8 +329,9 @@ fun ExpressiveNavigationBar(
                     // A tap is ignored while the bar is being held: the long press
                     // and the tap end on the same finger-up, so without this a
                     // swipe that ends on a destination would also tap it and put
-                    // the selection back where the gesture started.
-                    enabled = !holding,
+                    // the selection back where the gesture started. A sample has no
+                    // tap at all.
+                    enabled = !holding && interactive,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)
@@ -404,22 +414,22 @@ private fun NavigationItem(
         animationSpec = ExpressiveMotion.SelectionScale,
         label = "nav_item_selection_scale"
     )
-    val container by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            Color.Transparent
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // The selection is the animated value; the scheme roles behind it are read
+    // fresh every frame. A colour spring aimed at a role re-targets for every frame
+    // of a theme change and lands after the bar it belongs to - see
+    // `rememberStateColor`.
+    val container = rememberStateColor(
+        active = selected,
+        whenInactive = Color.Transparent,
+        whenActive = MaterialTheme.colorScheme.secondaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "nav_item_container"
     )
-    val content by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.onSecondaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val content = rememberStateColor(
+        active = selected,
+        whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+        whenActive = MaterialTheme.colorScheme.onSecondaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "nav_item_content"
     )
 

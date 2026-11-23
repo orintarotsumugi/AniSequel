@@ -160,7 +160,22 @@ fun SeasonalSettingsTab(
                     seasonalPreferences.setEnabled(enabled)
                 }
             },
-            onReset = { scope.launch { seasonalPreferences.reset() } }
+            onReset = {
+                // The drafts are re-seeded here as well as in the store. Reset used
+                // to write the defaults and rely on the `remember(settings.x)` keys
+                // to reseed the thumbs - but those keys only change when the stored
+                // value changes, so a reader who had already been on the default
+                // value (or had dragged a thumb without committing) pressed Reset
+                // and watched the sky reset while the slider and its label kept the
+                // old number.
+                val defaults = SeasonalSettings()
+                draftDensity = defaults.density
+                draftSize = defaults.sizeScale
+                draftSpeed = defaults.speedScale
+                draftPileDepth = defaults.pileDepth
+                draftWind = defaults.windStrength
+                scope.launch { seasonalPreferences.reset() }
+            }
         )
 
         ShapeCard(

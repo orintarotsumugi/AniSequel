@@ -132,7 +132,11 @@ private fun JokeSavedLineRow(
 }
 
 /**
- * A 36dp icon action.
+ * A 48dp icon action.
+ *
+ * 48dp for the same reason every other control here is: a 36dp circle is below
+ * the platform's touch-target minimum, and "Show this line" / "Remove" are the
+ * two actions a reader uses most on a saved line.
  *
  * `RoundedCornerShape(percent = 50)` rather than a Material shape for the same
  * reason as every other capsule in this page: a polygon stretched to a 36dp
@@ -148,7 +152,7 @@ private fun JokeSavedLineAction(
     val haptics = LocalHapticFeedback.current
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(48.dp)
             .clip(RoundedCornerShape(percent = 50))
             .bouncyPress(pressedScale = 0.86f)
             .clickable(onClickLabel = label, role = Role.Button) {

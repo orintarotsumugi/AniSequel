@@ -280,6 +280,54 @@ class SettingsLayoutTest {
         )
     }
 
+    /**
+     * The build stamp follows the shelf; it is not laid out by the mode crossfade.
+     *
+     * The stamp was the last child of the shelf *branch*, which made the search
+     * crossfade its parent. With `using(null)` that container lays the outgoing
+     * mode out against the incoming one's height, and 2.5.4 shipped a frame with the
+     * version drawn across "Device Manager". Being a sibling is the invariant: the
+     * footer must appear after the guard that keeps it out of search mode, and never
+     * before it.
+     */
+    @Test
+    fun `the build stamp is a sibling of the search crossfade`() {
+        val screen = source(settings + "SettingsScreen.kt")
+        val guard = screen.indexOf("if (!searching) {")
+        val stamp = screen.indexOf("SettingsVersionFooter(")
+        assertTrue(
+            "the build stamp has no guard keeping it out of the result list, so it " +
+                "is back inside the mode crossfade",
+            guard >= 0
+        )
+        assertTrue(
+            "the build stamp is drawn before the shelf's guard, which means it is " +
+                "still a child of the animated branch the overlap came from",
+            stamp > guard
+        )
+    }
+
+    /**
+     * A chip's selection cannot change the space it occupies.
+     *
+     * The border animated from 1dp to 2dp; a border is part of layout, so choosing
+     * one pill measured every pill in the row again and pushed the rest sideways.
+     * The appearance tiles learned this first and record it in their own comment.
+     */
+    @Test
+    fun `a selected chip does not resize its row`() {
+        val chip = source(settings + "SettingsChoiceChip.kt")
+        assertFalse(
+            "the chip animates its border width again, so selecting one re-flows the " +
+                "whole row",
+            chip.contains("animateDpAsState(")
+        )
+        assertTrue(
+            "the chip has no constant border to carry the selection's colour",
+            chip.contains("val borderWidth = 1.5.dp")
+        )
+    }
+
     @Test
     fun `the interface page exists and the theme page is only about colour`() {
         val screen = source(settings + "SettingsScreen.kt")

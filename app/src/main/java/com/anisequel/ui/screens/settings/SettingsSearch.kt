@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.theme.AniSequelTheme
 import java.util.Locale
 
 /** The search field and its empty-query recommendations. */
@@ -57,6 +59,12 @@ internal fun SettingsSearchBar(
 ) {
     var focused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    // Back dismisses the keyboard before it closes Settings. The field had no
+    // handler of its own, so a blank query with the caret in it fell through to
+    // SettingsScreen's handler and closed the whole screen - the one action a
+    // reader who just tapped into a search box has not asked for.
+    BackHandler(enabled = focused) { focusManager.clearFocus() }
 
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -111,8 +119,11 @@ internal fun SettingsSearchBar(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     SettingsSearch.emptyStateQueries().forEach { suggestion ->
-                        FilterChip(
-                            selected = false,
+                        // A suggestion is an action, not a filter. `FilterChip`
+                        // announced a toggle that was never on, so a reader who
+                        // could not see the chip was told it was unselected after
+                        // the tap that typed the search.
+                        SuggestionChip(
                             onClick = { onQueryChange(suggestion) },
                             label = { Text(suggestion) },
                             modifier = Modifier.testTag(
@@ -277,7 +288,9 @@ private fun SettingsSearchEmpty(
         Icon(
             imageVector = AppVectorIcons.Search,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            // A 0.7-alpha caption colour is about 2.5:1 on the page's surface;
+            // the emphasis role is the one that clears the 3:1 floor.
+            tint = AniSequelTheme.emphasis.muted,
             modifier = Modifier.size(36.dp)
         )
         Spacer(modifier = Modifier.height(10.dp))
@@ -301,8 +314,7 @@ private fun SettingsSearchEmpty(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             SettingsSearch.emptyStateQueries().forEach { suggestion ->
-                FilterChip(
-                    selected = false,
+                SuggestionChip(
                     onClick = { onQueryChange(suggestion) },
                     label = { Text(suggestion) }
                 )

@@ -3,7 +3,6 @@ package com.anisequel.ui.screens.settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,6 +62,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.expressive.rememberStateColor
 import com.anisequel.ui.theme.DarkColorScheme
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.LightColorScheme
@@ -499,13 +500,11 @@ private fun ThemeModeTile(
     // to 2dp on selection. The old pair changed the layout by half a dp as well
     // as the colour, so the tile under the finger nudged its neighbours and the
     // border could not crossfade. The selected colour still does all the talking.
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.outlineVariant
-        },
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val borderColor = rememberStateColor(
+        active = selected,
+        whenInactive = MaterialTheme.colorScheme.outlineVariant,
+        whenActive = MaterialTheme.colorScheme.primary,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "theme_mode_border_${mode.name}"
     )
 
@@ -689,24 +688,31 @@ private fun CanvasChip(
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
-    val container by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceContainerHigh,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // The scheme is animated, so all three of these targets move on every frame of
+    // a theme change. Animating the colour would chase them; animating the choice
+    // and reading the two roles live does not - the same fix as `ThemeModeTile`
+    // above, which this chip was the last surface on the page to miss.
+    val container = rememberStateColor(
+        active = isSelected,
+        whenInactive = MaterialTheme.colorScheme.surfaceContainerHigh,
+        whenActive = MaterialTheme.colorScheme.primaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "canvas_chip_container"
     )
-    val content by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val content = rememberStateColor(
+        active = isSelected,
+        whenInactive = MaterialTheme.colorScheme.onSurfaceVariant,
+        whenActive = MaterialTheme.colorScheme.onPrimaryContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "canvas_chip_content"
     )
     // One width, animated colour: see `ThemeModeTile` for why the selected state
     // must not resize the control it is marking.
-    val outline by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val outline = rememberStateColor(
+        active = isSelected,
+        whenInactive = MaterialTheme.colorScheme.outlineVariant,
+        whenActive = MaterialTheme.colorScheme.primary,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "canvas_chip_outline"
     )
 
@@ -715,6 +721,10 @@ private fun CanvasChip(
         color = container,
         border = BorderStroke(1.dp, outline),
         modifier = Modifier
+            // The pill is three lines shorter than a fingertip without this: its
+            // label and 8dp of padding came to roughly 34dp, so the smallest
+            // colour control on the page had the smallest target.
+            .heightIn(min = 48.dp)
             .bouncyPress(pressedScale = 0.92f)
             .clickable(
                 role = Role.RadioButton,

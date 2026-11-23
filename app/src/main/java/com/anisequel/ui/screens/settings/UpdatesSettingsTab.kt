@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.changelog.ChangelogRepository
@@ -13,6 +17,8 @@ import com.anisequel.data.changelog.ChangelogVersion
 import com.anisequel.data.update.ReleaseNote
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ReleaseNotes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The Updates page: whether this build is current, and what changed.
@@ -37,19 +43,29 @@ fun UpdatesSettingsTab(
     // the release workflow advances the patch number past the newest published
     // release, so the version a build reports is not knowable when the notes are
     // written and an exact match would always miss. See ChangelogRepository.
-    val changelog = remember(changelogRepository) {
-        changelogRepository?.latestWithNotes()
+    // Read and parsed off the main thread. `latestWithNotes()` opens and decodes
+    // the changelog asset, and this ran it in composition - the Updates page's
+    // first frame paid for the file. The third state (`loading`) is what keeps the
+    // empty copy from flashing before the notes arrive: "No release notes yet" is
+    // a claim about the file, not about the frame it has not been read on.
+    var changelog by remember(changelogRepository) { mutableStateOf<ChangelogVersion?>(null) }
+    var loading by remember(changelogRepository) { mutableStateOf(changelogRepository != null) }
+    LaunchedEffect(changelogRepository) {
+        changelog = changelogRepository?.let { repository ->
+            withContext(Dispatchers.IO) { repository.latestWithNotes() }
+        }
+        loading = false
     }
 
     SettingsScrollColumn(modifier) {
         UpdateSectionCard()
-        ChangelogSectionCard(changelog = changelog)
+        ChangelogSectionCard(changelog = changelog, loading = loading)
         Spacer(modifier = Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
+private fun ChangelogSectionCard(changelog: ChangelogVersion?, loading: Boolean) {
     val entries = changelog?.entries
         ?.filterNot { it.title.isNullOrBlank() }
         .orEmpty()
@@ -63,7 +79,13 @@ private fun ChangelogSectionCard(changelog: ChangelogVersion?) {
         // for, and the fallback says what the card is instead.
         subtitle = changelog?.version?.let { "Release notes for $it" } ?: "Release notes"
     ) {
-        if (entries.isEmpty()) {
+        if (loading) {
+            Text(
+                text = "Reading the release notes…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (entries.isEmpty()) {
             Text(
                 text = "No release notes for this version yet. They are on the download page in the meantime.",
                 style = MaterialTheme.typography.bodyMedium,
