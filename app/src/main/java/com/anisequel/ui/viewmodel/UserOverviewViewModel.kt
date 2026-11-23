@@ -18,7 +18,7 @@ import com.anisequel.domain.usecase.fetchProfileListEagerly
 import com.anisequel.domain.usecase.mangaLibraryProblem
 import com.anisequel.domain.usecase.profileIdentityFromRoute
 import com.anisequel.domain.usecase.shouldFetchProfileList
-import com.anisequel.ui.components.novamarkdown.NovaMarkdownCache
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.novaMediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -198,9 +198,10 @@ class UserOverviewViewModel(
         _mediaCovers.value = emptyMap()
         if (bio == null) return
 
-        // Through the shared cache: `AboutCard` is drawing this same document, and
-        // parsing it twice per open was the other half of the waste here.
-        val keys = novaMediaCoverKeysIn(NovaMarkdownCache.parse(bio))
+        // `NovaMarkdown.parse` memoises the document, so the card that draws this
+        // same bio is handed the blocks this pass produced rather than parsing it
+        // again.
+        val keys = novaMediaCoverKeysIn(NovaMarkdown.parse(bio))
         if (keys.isEmpty()) return
 
         coverJob = viewModelScope.launch {

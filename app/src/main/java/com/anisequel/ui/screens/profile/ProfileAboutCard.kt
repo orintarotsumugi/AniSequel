@@ -38,7 +38,7 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.novamarkdown.NovaMarkdownCache
+import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.NovaMarkdownView
 import com.anisequel.ui.components.novamarkdown.NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.components.novamarkdown.NovaBlock
@@ -128,10 +128,10 @@ fun AboutCard(
      */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
-    // Through the shared cache rather than parsing here: the ViewModel has
-    // already parsed this same bio to find the posters its links need, and the
-    // card is asking for the answer that pass produced. See [NovaMarkdownCache].
-    val nodes = remember(about) { NovaMarkdownCache.parse(about) }
+    // `NovaMarkdown.parse` keeps its own LRU of documents, so the ten frames a
+    // scroll costs this card are map lookups rather than parses - and the copy the
+    // ViewModel parsed for the bio's posters is the copy drawn here.
+    val nodes = remember(about) { NovaMarkdown.parse(about) }
     // Keyed to the bio: the card keeps its composition slot when the screen
     // swaps one profile's overview for another's, so an unkeyed flag opened the
     // next person's bio already expanded (and remembered that across rotation).

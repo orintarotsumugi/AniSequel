@@ -8,10 +8,6 @@
           "detail": "The bio, the banner and avatar URLs, the favourites, the totals and the list were snapshotted under the app's cache directory, which Android empties whenever it wants the space back - and \"Clear cache\" empties on request. So the app kept forgetting a profile it had already read, and downloaded every part of it again. The snapshots live in private app storage now, and the first launch after the change adopts the directory the old builds wrote, so nobody pays for it with a fresh download."
         },
         {
-          "title": "A bio is parsed once, not twice",
-          "detail": "The profile screen parses a bio to find the AniList links whose posters it fetches, and the About card parses the same text to draw it. Both threw the result away, so every open walked the same Markdown twice. A bounded cache now holds parsed bios for the session, keyed on the document itself, and a reopened profile parses nothing."
-        },
-        {
           "title": "The bio's posters stop blinking on every open",
           "detail": "Each profile publishes twice - the saved copy, then the live overview - and both carried the same bio. The second publish cancelled the first poster batch, emptied the map and asked for the identical keys again, so every inline cover on the page disappeared and came back for a request that was already in flight. A bio that has been answered is left alone now, and a refresh with no bio edit asks for nothing."
         },
