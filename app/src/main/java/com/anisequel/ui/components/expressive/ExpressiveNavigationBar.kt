@@ -212,7 +212,17 @@ fun ExpressiveNavigationBar(
      * would go, and then did nothing at all. A picture of the bar should be a
      * picture, and the sample draws the reader's own tabs either way.
      */
-    gesturesEnabled: Boolean = true
+    gesturesEnabled: Boolean = true,
+    /**
+     * Whether a tap selects a destination at all.
+     *
+     * False for a sample. `onSelect = {}` already prevented navigation, but the
+     * item still pressed, rippled and announced itself as a button, so a reader
+     * who tapped a tab in Settings watched the bar acknowledge a tap that could
+     * not do anything. Off, the pill is a picture: it keeps its measured shape and
+     * its colours, and touch passes through it.
+     */
+    interactive: Boolean = true
 ) {
     val haptic = LocalHapticFeedback.current
 
@@ -319,8 +329,9 @@ fun ExpressiveNavigationBar(
                     // A tap is ignored while the bar is being held: the long press
                     // and the tap end on the same finger-up, so without this a
                     // swipe that ends on a destination would also tap it and put
-                    // the selection back where the gesture started.
-                    enabled = !holding,
+                    // the selection back where the gesture started. A sample has no
+                    // tap at all.
+                    enabled = !holding && interactive,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(index)

@@ -257,6 +257,11 @@ private fun ClientIdEditor(
     val isDefault = trimmed == AuthRepositoryImpl.DEFAULT_CLIENT_ID
     val canSave = trimmed.isNotBlank() && trimmed != currentClientId
     val isNotNumeric = trimmed.isNotEmpty() && !trimmed.all { it.isDigit() }
+    // "Saved" is a claim about the field, not a latch that stays on after the
+    // field changes. `hasSavedClientId` alone survived "Use default" (and any
+    // edit that did not go through `onValueChange`), so the button kept saying
+    // "Saved" over a value that had never been saved.
+    val saved = hasSavedClientId && trimmed == currentClientId
 
     SettingsFieldLabel(text = "Client ID")
     Spacer(modifier = Modifier.height(8.dp))
@@ -301,15 +306,15 @@ private fun ClientIdEditor(
                 testTag = "reset_client_id_button"
             )
             SettingsButton(
-                text = if (hasSavedClientId) "Saved" else "Save",
+                text = if (saved) "Saved" else "Save",
                 onClick = {
                     savedValue = trimmed
                     onSave(trimmed)
                     hasSavedClientId = true
                 },
-                icon = if (hasSavedClientId) Icons.Filled.CheckCircleOutline else null,
+                icon = if (saved) Icons.Filled.CheckCircleOutline else null,
                 enabled = canSave && !isNotNumeric,
-                variant = if (hasSavedClientId) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
+                variant = if (saved) SettingsButtonVariant.Tonal else SettingsButtonVariant.Filled,
                 modifier = Modifier.weight(1f),
                 testTag = "save_client_id_button"
             )

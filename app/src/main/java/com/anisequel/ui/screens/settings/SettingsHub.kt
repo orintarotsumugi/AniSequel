@@ -643,8 +643,10 @@ internal fun SettingsAccountCard(
                     // surface's own modifier it would inset the pill rather than its
                     // label, and the text would touch the capsule's ends.
                     Row(
+                        // 48dp, not 34: the pill is the connection check's tap
+                        // target, and it was the shortest control on the shelf.
                         modifier = Modifier
-                            .heightIn(min = 34.dp)
+                            .heightIn(min = 48.dp)
                             .padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)

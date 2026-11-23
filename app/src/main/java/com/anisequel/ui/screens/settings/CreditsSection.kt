@@ -49,6 +49,7 @@ import com.anisequel.ui.components.icons.Icons
 import com.anisequel.ui.components.icons.automirrored.filled.KeyboardArrowRight
 import com.anisequel.ui.components.icons.automirrored.filled.OpenInNew
 import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.theme.AniSequelTheme
 
 /**
  * Who made AniSequel, and who helped without being asked.
@@ -108,7 +109,9 @@ private fun DeveloperCard() {
         shape = ExpressiveShapes.extraLarge,
         color = scheme.surfaceContainerLow,
         tonalElevation = 1.dp,
-        border = BorderStroke(1.dp, scheme.outlineVariant.copy(alpha = 0.38f)),
+        // The same edge the rest of Settings uses. A 38% outlineVariant is about
+        // 1.3:1 in the light scheme - a card border that is not there.
+        border = BorderStroke(1.dp, AniSequelTheme.emphasis.boundary),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("credits_developer_card")
@@ -192,7 +195,7 @@ private fun HelpersCard() {
             if (index > 0) {
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 14.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    color = AniSequelTheme.emphasis.divider
                 )
             }
             CreditBlock(credit = credit)
@@ -269,7 +272,7 @@ private fun CreditBlock(credit: Credit) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = scheme.onSurfaceVariant.copy(alpha = 0.7f),
+                tint = AniSequelTheme.emphasis.muted,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -318,10 +321,7 @@ private fun MentionPill(text: String) {
     Surface(
         shape = ExpressiveShapes.pill,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-        )
+        border = BorderStroke(1.dp, AniSequelTheme.emphasis.divider)
     ) {
         // No `maxLines`: a thank-you that ends in an ellipsis is a thank-you the
         // reader cannot finish, and a wrapped pill is still a pill.

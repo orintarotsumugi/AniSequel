@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -53,6 +52,7 @@ import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
+import com.anisequel.ui.components.expressive.rememberStateColor
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.theme.StatusColors
@@ -337,22 +337,32 @@ private fun PreviewPlanButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val container by animateColorAsState(
-        targetValue = if (isPlanned) statusColors.successContainer else primary,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // One progress, two live endpoints. Both targets are scheme roles - `primary`
+    // and `onPrimary` are re-animated on every frame of a theme change - so a
+    // colour spring here re-targeted 60 times a second and reached the new accent
+    // after the card behind it. `rememberStateColor` is the same decision, animated
+    // once; this card's whole job is to agree with the theme while it moves.
+    val container = rememberStateColor(
+        active = isPlanned,
+        whenInactive = primary,
+        whenActive = statusColors.successContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "preview_plan_container"
     )
-    val content by animateColorAsState(
-        targetValue = if (isPlanned) statusColors.success
-        else MaterialTheme.colorScheme.onPrimary,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val content = rememberStateColor(
+        active = isPlanned,
+        whenInactive = MaterialTheme.colorScheme.onPrimary,
+        whenActive = statusColors.success,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "preview_plan_content"
     )
 
     Button(
         onClick = onClick,
+        // 48dp, not 38: this is a real tap target that changes state, and the
+        // mock card's buttons are the size the app's own buttons are.
         modifier = modifier
-            .height(38.dp)
+            .heightIn(min = 48.dp)
             .bouncyPress(pressedScale = 0.94f)
             .testTag("preview_plan_button"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
@@ -411,22 +421,27 @@ private fun PreviewWatchButton(
     modifier: Modifier = Modifier
 ) {
     val statusColors = AniSequelTheme.statusColors
-    val container by animateColorAsState(
-        targetValue = if (isWatching) statusColors.infoContainer else Color.Transparent,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // Same pairing as the Plan half: `info`/`onSurface` come from the animated
+    // scheme, so the decision is the only thing that may animate.
+    val container = rememberStateColor(
+        active = isWatching,
+        whenInactive = Color.Transparent,
+        whenActive = statusColors.infoContainer,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "preview_watch_container"
     )
-    val content by animateColorAsState(
-        targetValue = if (isWatching) statusColors.info
-        else MaterialTheme.colorScheme.onSurface,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    val content = rememberStateColor(
+        active = isWatching,
+        whenInactive = MaterialTheme.colorScheme.onSurface,
+        whenActive = statusColors.info,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "preview_watch_content"
     )
 
     OutlinedButton(
         onClick = onClick,
         modifier = modifier
-            .height(38.dp)
+            .heightIn(min = 48.dp)
             .bouncyPress(pressedScale = 0.94f)
             .testTag("preview_watch_button"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),

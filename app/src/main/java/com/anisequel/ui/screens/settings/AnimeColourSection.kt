@@ -177,8 +177,17 @@ internal fun AnimeColourSection(
         Spacer(modifier = Modifier.height(10.dp))
         SwitchRow(
             title = "Retain anime colour",
-            subtitle = "Keep the background and accent after the sheet closes.",
+            // Retention is a sub-option of the layer: with the layer off no sheet
+            // ever borrows a colour, so this switch could be on with nothing in
+            // the world for it to keep. It is disabled with the reason instead of
+            // silently inert.
+            subtitle = if (settings.animeThemeEnabled) {
+                "Keep the background and accent after the sheet closes."
+            } else {
+                "Turn on Anime dynamic theme above first - there is no borrowed colour to keep yet."
+            },
             checked = settings.animeThemeRetainColor,
+            enabled = settings.animeThemeEnabled,
             onCheckedChange = { retain ->
                 // The preference, the accent it writes or takes back, and the
                 // layer that has to stop outranking every other source when
@@ -196,7 +205,7 @@ internal fun AnimeColourSection(
         // "after" to tint. The control stays visible and disabled rather than
         // appearing with the switch, because a row that shows up on a tap moves
         // every control below it under the reader's finger.
-        val tintEnabled = settings.animeThemeRetainColor
+        val tintEnabled = settings.animeThemeEnabled && settings.animeThemeRetainColor
         ExpressivePolygonSegmentedBar(
             options = RetainedTint.entries.map { SegmentedOption(label = it.displayName) },
             selectedIndex = RetainedTint.entries.indexOf(settings.retainedTint),
@@ -212,10 +221,15 @@ internal fun AnimeColourSection(
         )
         Spacer(modifier = Modifier.height(6.dp))
         CollapsibleText(
-            text = "Full keeps the sheet's whole background. Balanced moves the " +
-                "surface ramp halfway toward the show's colour; Subtle keeps it " +
-                "mostly in the accent and buttons with only a hint in the " +
-                "background. The sheet itself always uses the full tint.",
+            text = if (tintEnabled) {
+                "Full keeps the sheet's whole background. Balanced moves the " +
+                    "surface ramp halfway toward the show's colour; Subtle keeps it " +
+                    "mostly in the accent and buttons with only a hint in the " +
+                    "background. The sheet itself always uses the full tint."
+            } else {
+                "Turn on Anime dynamic theme and Retain anime colour above to " +
+                    "choose how much of the show's colour survives the sheet."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -234,7 +248,7 @@ internal fun AnimeColourSection(
         val currentRevertIndex = if (storedRevertIndex >= 0) storedRevertIndex else 1
         // While retaining, there is no revert to configure: the colour is kept,
         // so the picker is shown dimmed rather than silently ignored.
-        val revertEnabled = !settings.animeThemeRetainColor
+        val revertEnabled = settings.animeThemeEnabled && !settings.animeThemeRetainColor
         ExpressivePolygonSegmentedBar(
             // No icons: the same `Restore` glyph three times over is three
             // identical pictures next to three different answers, so it decorated
@@ -253,12 +267,16 @@ internal fun AnimeColourSection(
         )
         Spacer(modifier = Modifier.height(8.dp))
         CollapsibleText(
-            text = if (settings.animeThemeRetainColor) {
-                "Being kept: the colour survives the sheet and the next launch, tinted " +
-                    "background included. Pick a palette, a hue, or Reset appearance to " +
-                    "take it back."
-            } else {
-                "Return to your usual theme the moment the sheet closes, or after a set time."
+            text = when {
+                !settings.animeThemeEnabled ->
+                    "Anime dynamic theme is off, so no colour is borrowed and there " +
+                        "is nothing to revert. Turn it on above to set this."
+                settings.animeThemeRetainColor ->
+                    "Being kept: the colour survives the sheet and the next launch, tinted " +
+                        "background included. Pick a palette, a hue, or Reset appearance to " +
+                        "take it back."
+                else ->
+                    "Return to your usual theme the moment the sheet closes, or after a set time."
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -187,6 +187,9 @@ private fun BottomBarSample(tabs: List<MainTab>) {
             // previews a tab it will never switch to here, which is a picture that
             // answers a finger it cannot serve.
             gesturesEnabled = false,
+            // A picture, not a control: `onSelect` is already a no-op, and without
+            // this the item still pressed and rippled as if the bar could navigate.
+            interactive = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("library_bar_sample")

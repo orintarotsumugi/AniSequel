@@ -1,6 +1,5 @@
 package com.anisequel.ui.screens.settings
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,7 +23,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +43,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.expressive.rememberStateColor
 import com.anisequel.ui.theme.DynamicThemeBuilder
 import com.anisequel.ui.theme.ThemePalette
 import kotlinx.coroutines.CoroutineScope
@@ -162,6 +161,13 @@ internal fun AccentColourSection(
                             // chosen palette the basis again.
                             themePreferences.setCustomColorHex(null)
                             themePreferences.clearAnimeColorLayer()
+                            // The retained cover colour outranks a palette in
+                            // `Theme.kt`, so without this the tap moved the check
+                            // mark (the selection terms already exclude the
+                            // retained tint) and changed nothing the app drew. A
+                            // pick is the reader taking the accent back, which is
+                            // what `releaseAnimeRetainedColor` does.
+                            themePreferences.releaseAnimeRetainedColor()
                             themePreferences.setUseDynamicColor(false)
                             themePreferences.setPalette(palette.id)
                         }
@@ -200,6 +206,12 @@ internal fun AccentColourSection(
                             // with it, which is the other override that made this
                             // chip a control that could not change anything.
                             themePreferences.clearAnimeColorLayer()
+                            // Same reason as the palette arm: the kept cover colour
+                            // outranks a custom hue, so a hue picked while it was
+                            // present was stored and never drawn. Tapping the
+                            // selected hue to go back to the palette releases it
+                            // too - the palette is the destination either way.
+                            themePreferences.releaseAnimeRetainedColor()
                             themePreferences.setUseDynamicColor(false)
                             themePreferences.setCustomColorHex(
                                 if (settings.customColorHex?.equals(hex, ignoreCase = true) == true) null else hex
@@ -242,9 +254,14 @@ private fun PaletteCard(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val borderColor by animateColorAsState(
-        targetValue = if (selected) palette.dark.primary else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // `outlineVariant` is a scheme role and the scheme is animated, so a colour
+    // spring aimed at it re-targeted on every frame of a theme change. One progress,
+    // live endpoints.
+    val borderColor = rememberStateColor(
+        active = selected,
+        whenInactive = MaterialTheme.colorScheme.outlineVariant,
+        whenActive = palette.dark.primary,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "palette_border_color"
     )
     val cardShape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
@@ -336,11 +353,13 @@ private fun HueChip(
         Color.White
     }
     // Constant ring, animated colour: a selected hue used to thicken the border,
-    // which made a 44dp control 46dp and moved the chips beside it.
-    val ring by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSurface
-        else MaterialTheme.colorScheme.outlineVariant,
-        animationSpec = ExpressiveMotion.FastColorEffects,
+    // which made the chip resize and moved the chips beside it. Both endpoints are
+    // scheme roles, so the decision animates and the roles are read live.
+    val ring = rememberStateColor(
+        active = isSelected,
+        whenInactive = MaterialTheme.colorScheme.outlineVariant,
+        whenActive = MaterialTheme.colorScheme.onSurface,
+        animationSpec = ExpressiveMotion.FastEffects,
         label = "hue_chip_ring"
     )
 
@@ -350,7 +369,8 @@ private fun HueChip(
         tonalElevation = if (isSelected) 6.dp else 1.dp,
         border = BorderStroke(width = 1.5.dp, color = ring),
         modifier = Modifier
-            .size(44.dp)
+            // 48dp, not 44: a hue is a target, and the row has the width.
+            .size(48.dp)
             .bouncyPress(pressedScale = 0.88f)
             .clickable(onClick = onClick)
             // The chip is a colour and nothing else, so the name has to be spoken:

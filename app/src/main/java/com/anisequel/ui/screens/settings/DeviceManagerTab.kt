@@ -126,8 +126,16 @@ fun DeviceManagerTab(
                 devicePreferences.setCeiling(option)
             },
             onClearCache = {
-                context.clearCoverCache()
-                usedBytes = context.coverCacheBytes()
+                // Coil's clear walks and deletes the disk cache's journal and
+                // files. On the click frame that is the whole page freezing for
+                // the duration of a file delete, so both the clear and the new
+                // size go to IO and the figure updates when they return.
+                scope.launch {
+                    usedBytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        context.clearCoverCache()
+                        context.coverCacheBytes()
+                    }
+                }
             }
         )
 
@@ -182,13 +190,21 @@ private fun AppLockCard(appLockPreferences: AppLockPreferences) {
         } else {
             SwitchRow(
                 title = "Lock AniSequel",
-                subtitle = if (deviceHasSecureLock) {
-                    "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
-                } else {
-                    "Set a screen lock on this device first - there is nothing to ask for yet."
+                subtitle = when {
+                    deviceHasSecureLock ->
+                        "Ask for your fingerprint, face or screen lock when the app opens or returns from the background."
+                    enabledState == true ->
+                        "The screen lock this used was removed from the device. Turn the lock off here, or set a screen lock again."
+                    else ->
+                        "Set a screen lock on this device first - there is nothing to ask for yet."
                 },
                 checked = enabledState == true,
-                enabled = deviceHasSecureLock,
+                // A stored "on" has to stay removable. If the device lock this
+                // switch relied on is gone, the switch drew itself checked and
+                // disabled, so the preference could never be cleared - and the
+                // app would silently lock again the moment a screen lock was set.
+                // Off is always allowed; on still needs something to ask for.
+                enabled = deviceHasSecureLock || enabledState == true,
                 onCheckedChange = { locked ->
                     scope.launch { appLockPreferences.setEnabled(locked) }
                 },

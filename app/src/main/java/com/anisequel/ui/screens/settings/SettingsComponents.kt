@@ -298,10 +298,11 @@ private fun CollapsedTextBody(
 /**
  * "Show more" / "Show less" under a collapsed paragraph.
  *
- * Full width and 40dp tall rather than a 24dp link: the whole strip is the
+ * Full width and 48dp tall rather than a 24dp link: the whole strip is the
  * target, so the control that reveals the rest of the text is not the smallest
- * thing on the card. The chevron points at the direction the text will move, and
- * the label carries the meaning for a reader who does not use the glyph.
+ * thing on the card, and it meets the same 48dp floor as every other control on
+ * the page. The chevron points at the direction the text will move, and the
+ * label carries the meaning for a reader who does not use the glyph.
  */
 @Composable
 private fun ExpandToggle(
@@ -312,11 +313,11 @@ private fun ExpandToggle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            // 36dp rather than the 40 this was: the control is a disclosure for a
-            // paragraph the reader has already half read, and at 40 it stood as tall
-            // as the rows around it. The label carries the tap target, which is still
-            // a fingertip wide.
-            .heightIn(min = 36.dp)
+            // Back to 48dp. The 36 that replaced 40 made this the only control on
+            // a Settings card under the platform's own touch-target minimum; the
+            // strip is only visible while a paragraph overflows and its height is
+            // what a thumb aims at, not a decoration.
+            .heightIn(min = 48.dp)
             .clip(MaterialTheme.shapes.small)
             .bouncyPress(pressedScale = 0.97f)
             .clickable(
