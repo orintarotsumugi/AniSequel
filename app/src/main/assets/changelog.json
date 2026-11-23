@@ -28,6 +28,10 @@
         "detail": "Three dividers on the About page and the outlines on the layout previews were drawn at half of outlineVariant, about 1.4:1 on a light card - not a faint line, an absent one. They use the same emphasis tones the rest of Settings adopted, so the version rows and the preview tiles have an edge in both themes."
       },
       {
+        "title": "The edge picker works while Ani-chan is off",
+        "detail": "The pill sample on the Jokes page is drawn on the edge stored here, and that picker was the one control that could change the sample and was locked while she was off. The name, stamp, line style and edge are all part of auditioning her, so all four stay usable now."
+      },
+      {
         "title": "Resetting the interface no longer leaves the progress bar behind",
         "detail": "The interface reset cleared the layout, the title page, the density, the rail, the card style, the poster source and the bar position, but not the progress bar style - the one key it declares and forgot. Hidden progress bars would have survived a reset that reported everything back to the shipped look."
       }
