@@ -1,196 +1,196 @@
 {
   "versions": [
-{
-  "version": "2.5.7",
-  "entries": [
     {
-      "title": "Two new Library views: Mosaic and Grouped covers",
-      "detail": "Mosaic is two covers across with every third one stretched to the full width, so a wall of equal posters has an anchor and the page says where to start rather than only how many titles there are. Grouped covers is the status grouping the row mode already had, drawn over the poster grid instead of list rows - the reader browsing artwork can now see where a title sits without a filter. Both are span-and-heading modes rather than new cards: the same cell, a different share of the row, so the card design still owns each cover's shape and the view still owns the arrangement. Both follow the cards onto a profile's list and both have their own loading skeleton."
+      "version": "2.5.7",
+      "entries": [
+        {
+          "title": "Two new Library views, Mosaic and Grouped covers",
+          "detail": "Mosaic is two covers across with every third one stretched to the full width, so a wall of equal posters has an anchor and the page says where to start rather than only how many titles there are. Grouped covers is the status grouping the row mode already had, drawn over the poster grid instead of list rows - the reader browsing artwork can now see where a title sits without a filter. Both are span-and-heading modes rather than new cards: the same cell, a different share of the row, so the card design still owns each cover's shape and the view still owns the arrangement. Both follow the cards onto a profile's list and both have their own loading skeleton."
+        },
+        {
+          "title": "Two new Home sequel styles, Deck and Film strip",
+          "detail": "Deck draws a missed sequel as the top card of a pile, with two sheets peeking out behind it, so the feed reads as a hand of recommendations instead of a list of rows. Film strip draws it as one frame of film - perforations drawn down both sides, the artwork wide between them, the actions on a strip underneath - which is the densest style that still shows a picture larger than a thumbnail. Neither is animated: the sheets and the sprockets are static shapes, because a pile that fanned itself on every recomposition is the fidgeting the style switch exists to stop."
+        },
+        {
+          "title": "The card outline stops chasing the card while it expands",
+          "detail": "Expanding \"Show more\" on a Settings card drew a line moving through the paragraph and settling when the text finished. The size animation sat on the Card's own modifier chain, which animates the size *outside* the card's drawing: the card was measured and drawn at its settled height on the first frame while only its clip grew, so the border was drawn at the bottom of where the card was going to be rather than where it was. The animation is on the content column now, so the card itself is the animating size and the outline is on the edge that is actually visible on every frame. The same change fixes the trick on collapse."
+        },
+        {
+          "title": "A failed search keeps the answer you can still read, and offers Try again",
+          "detail": "One rate-limited request for a refinement used to throw away a complete, still-true result set and replace it with a one-line apology - the worst of both states. The previous answer now stays on screen with a strip above it saying the new query did not arrive, and that strip carries a Try again control. A failure with nothing behind it gets the same control, so the reader no longer has to edit the query and hope. The retry repeats the same request immediately rather than waiting out the typing debounce."
+        },
+        {
+          "title": "The clear button stays in the search field while a query is running",
+          "detail": "The spinner replaced the X for the length of every request, so the one moment a reader most wants to start over was the moment the field could not be emptied. Both are drawn now: a small indicator beside the button, and the button in the same place it always is."
+        },
+        {
+          "title": "Counts read as unknown, not zero, while a list is still loading",
+          "detail": "The Library header said \"0 titles\" and every status pill said (0) for the whole of a cold start - the app asserting the one thing it had not yet read. The header says it is loading, the type switch prints no count for a half that is still downloading, and the pills print a dash until the scoped list has actually been counted."
+        },
+        {
+          "title": "A failure no longer spins",
+          "detail": "\"Couldn't load this list\" was drawn with the same loader as \"still fetching\", so a failure arrived with a spinner turning beside it, promising an answer that had already arrived and was the failure. The Library's empty state, its rows, its grid and a profile's list all say it plainly now, which is what the profile's stats tab has done since it shipped."
+        },
+        {
+          "title": "The loading skeletons reserve the columns the grid will draw",
+          "detail": "A five-across shelf is drawn three across on a 360dp phone, but the skeleton kept promising five covers a row and reflowed into three when the data landed - the exact jump a mode-shaped skeleton exists to prevent. Both Library skeletons use the same column arithmetic as the page now, and Mosaic's skeleton opens with the wide anchor cell its first real row has."
+        },
+        {
+          "title": "An empty Library says it is loading once",
+          "detail": "An empty list opened with a \"still fetching this list\" note stacked on top of a loading skeleton that was already saying so. The note stays for the case it was written for - a list that already has rows and is still being completed."
+        },
+        {
+          "title": "A failed search no longer scrolls a page that did not change",
+          "detail": "Returning to the top of the results was keyed on the searched term, and a failed search sets that term too, so a failure scrolled the reader away from results that had not moved. It is keyed on the answer now."
+        }
+      ]
     },
     {
-      "title": "Two new Home sequel styles: Deck and Film strip",
-      "detail": "Deck draws a missed sequel as the top card of a pile, with two sheets peeking out behind it, so the feed reads as a hand of recommendations instead of a list of rows. Film strip draws it as one frame of film - perforations drawn down both sides, the artwork wide between them, the actions on a strip underneath - which is the densest style that still shows a picture larger than a thumbnail. Neither is animated: the sheets and the sprockets are static shapes, because a pile that fanned itself on every recomposition is the fidgeting the style switch exists to stop."
+      "version": "2.5.6",
+      "entries": [
+        {
+          "title": "The Settings shelf stacks its cards again",
+          "detail": "2.5.4 wrapped the shelf and the search results in one crossfade, and every card on the page landed on the top row. AnimatedContent places each direct child of its content lambda at the same origin - it is a box with one position, not a column - so the account card, the three section labels and the three groups were all drawn on top of each other, and only the last group drawn (\"Device Manager\", \"Updates\", \"About & support\") could be seen or tapped. The swap is a plain conditional again, the way 2.5.3 had it."
+        },
+        {
+          "title": "Searching replaces the shelf without animating it",
+          "detail": "The crossfade that opened the shelf was the animation, and it was the wrong motion for the job: a query replaces one list with another rather than moving between two places. Typing now swaps the answers in place of the shelf, with no entrance to land in the wrong position."
+        },
+        {
+          "title": "The app lock notices a screen lock you just added",
+          "detail": "Device Manager read whether the phone has a screen lock once, when the card was first drawn, and never again. Going to the system settings to add a PIN and coming back left the switch disabled and still saying \"Set a screen lock on this device first\" about a lock that was already set, until the app was restarted. The card re-reads it when the app returns, the way the rest of the page re-reads the panel's frame rate."
+        },
+        {
+          "title": "The text-size reset link goes away at 100%",
+          "detail": "The Reset link beside the percentage was shown while the number itself was not the default. A slider lands on start plus a whole number of steps, and a five percent step cannot be stored exactly, so the tick the label printed as \"100%\" was really 1.0000000149 - the link sat there describing a change that had not been made. It and the title-scroll Reset now compare the rounded number the label prints."
+        },
+        {
+          "title": "A custom stamp stays selected after a stray space",
+          "detail": "Ani-chan's name and stamp were compared after trimming but stored as typed, so one trailing space saved a value no stamp chip matched: the row below showed nothing selected even though one had just been tapped, and the pill drew the padding. Both are stored trimmed now, and a pasted name two characters too long is cut to the limit instead of being refused outright, which read as a field that does not accept typing."
+        },
+        {
+          "title": "The About page's rules are visible in the light theme",
+          "detail": "Three dividers on the About page and the outlines on the layout previews were drawn at half of outlineVariant, about 1.4:1 on a light card - not a faint line, an absent one. They use the same emphasis tones the rest of Settings adopted, so the version rows and the preview tiles have an edge in both themes."
+        },
+        {
+          "title": "The edge picker works while Ani-chan is off",
+          "detail": "The pill sample on the Jokes page is drawn on the edge stored here, and that picker was the one control that could change the sample and was locked while she was off. The name, stamp, line style and edge are all part of auditioning her, so all four stay usable now."
+        },
+        {
+          "title": "Resetting the interface no longer leaves the progress bar behind",
+          "detail": "The interface reset cleared the layout, the title page, the density, the rail, the card style, the poster source and the bar position, but not the progress bar style - the one key it declares and forgot. Hidden progress bars would have survived a reset that reported everything back to the shipped look."
+        }
+      ]
     },
     {
-      "title": "The card outline stops chasing the card while it expands",
-      "detail": "Expanding \"Show more\" on a Settings card drew a line moving through the paragraph and settling when the text finished. The size animation sat on the Card's own modifier chain, which animates the size *outside* the card's drawing: the card was measured and drawn at its settled height on the first frame while only its clip grew, so the border was drawn at the bottom of where the card was going to be rather than where it was. The animation is on the content column now, so the card itself is the animating size and the outline is on the edge that is actually visible on every frame. The same change fixes the trick on collapse."
+      "version": "2.5.5",
+      "entries": [
+        {
+          "title": "The build stamp cannot sit on a row",
+          "detail": "The version line was the last child of the shelf and also of the crossfade that swaps the shelf for search results. With no size transform that container lays the outgoing mode out at the incoming one's height, which is how the stamp was drawn across \"Device Manager\" in the 2.5.4 screenshot. It is a sibling of the crossfade now, drawn only while the shelf is showing and clipped with the list it sits under."
+        },
+        {
+          "title": "The type sample stays inside its card",
+          "detail": "The size preview is scaled in the draw phase so dragging does not reflow the paragraph, but that also left its layout at 100%: at 125% and above the last line drew over the slider. The card reserves the scaled height now, in 8dp steps so a drag does not re-measure it on every tick."
+        },
+        {
+          "title": "Reset on Seasonal effects resets the thumbs",
+          "detail": "Reset wrote the stored defaults but the sliders are drafts keyed on the committed value, so a value that was already the default - or a thumb dragged without committing - kept its old number while the sky reset. Reset seeds every draft as well as the store."
+        },
+        {
+          "title": "Refining a search starts at the best answer",
+          "detail": "Scrolling to the top was keyed on entering search mode, so typing a second word while scrolled through the first answer left the reader at that offset and the best matches above the viewport. Every query change returns to the top; the mode change keeps its spring, a refined query snaps."
+        },
+        {
+          "title": "Downloaded font families are read off the main thread",
+          "detail": "The list of stored families is a directory walk plus a name decode per family, and its comment already said it ran on the IO dispatcher. It did not - it ran in the frame that draws the page. It is dispatched now."
+        },
+        {
+          "title": "A GIF key is saved to the field it was typed into",
+          "detail": "Save ran in a coroutine that read the selected provider when it resumed, so switching chips mid-save filed the key under whichever provider was selected by then. The provider is captured with the editor."
+        },
+        {
+          "title": "A selected chip no longer nudges its row",
+          "detail": "The chip's border animated from 1dp to 2dp, which changes its measured size, so choosing one pill pushed every pill after it along the row. The border is a constant 1.5dp and the colour carries the selection, the way the appearance tiles already work."
+        },
+        {
+          "title": "A row's value crossfades where it sits",
+          "detail": "The value is end-aligned on the row, but its AnimatedContent was start-aligned, so a change drew the old value against the left edge of the new value's width before it faded. The transition is end-aligned too."
+        },
+        {
+          "title": "Back dismisses the search keyboard first",
+          "detail": "With the caret in the search field and a blank query, Back fell through to the screen's handler and closed Settings. The field now consumes Back while it has focus and only drops the keyboard."
+        },
+        {
+          "title": "The Search tab switch admits when it cannot be honoured",
+          "detail": "The bar hides Search when both catalogue halves are off, while the switch above kept reading \"on\". It is disabled with the reason when there is no page for the bar to add."
+        },
+        {
+          "title": "Controls settle with the theme instead of after it",
+          "detail": "Eleven selection transitions - the tab bar, both segmented bars, the state chip, the navigation bar and the appearance tiles - animated a colour spring toward a scheme role. The scheme animates every role on every frame of a theme change, so those targets never settled and the control arrived a beat after its page. They animate one progress and read both endpoints live, the pattern rememberStateColor already documents."
+        },
+        {
+          "title": "Reset card design resets the whole group",
+          "detail": "The button wrote only the frame, proportions, corners and type scales. The card style and the poster source are part of the same group and kept their values, and when those were the only changes the button was disabled - a reset that could not reset. It now clears all three and is enabled for either."
+        },
+        {
+          "title": "A palette or hue pick beats the kept cover colour",
+          "detail": "Both pickers released the live anime layer and the wallpaper, but not the retained cover colour, which outranks a palette and a custom hue in Theme.kt. The tap was stored and the app kept drawing the kept tint; the pick now releases it too."
+        },
+        {
+          "title": "Retain anime colour says when it has nothing to keep",
+          "detail": "The switch could be on while Anime dynamic theme was off, so no sheet ever borrowed a colour for it to retain. It is disabled with that reason, but off is always allowed - a stored on can never be trapped behind a disabled switch - and the tint and revert pickers explain what turns them on instead of only being dimmed."
+        },
+        {
+          "title": "Saved on the Client ID means saved",
+          "detail": "\"Use default\" put the field back to a value that had not been saved while the button kept its Saved label and check. The label is now derived from the field matching the stored id, not from a latch."
+        },
+        {
+          "title": "An app lock can always be turned off",
+          "detail": "If the screen lock the app lock relied on was removed, the switch drew itself checked and disabled with no way to clear it - and it would lock again as soon as a lock was set. Off is allowed without a device credential; on still needs one."
+        },
+        {
+          "title": "The sample bottom bar is a picture",
+          "detail": "The preview passed an empty select callback but the tabs still pressed, rippled and announced themselves as buttons for taps that could not navigate. The bar takes an interactive flag and the sample turns it off."
+        },
+        {
+          "title": "Search suggestions announce themselves as actions",
+          "detail": "They were FilterChips, which a screen reader reports as unselected toggles that never become selected. They are suggestion chips now."
+        },
+        {
+          "title": "The cover cache clears off the click frame",
+          "detail": "Clearing it ran Coil's disk-cache delete on the main thread in both places that offer it, freezing the page while the files went. Both now dispatch the clear to IO; the Device Manager figure updates when it returns."
+        },
+        {
+          "title": "The Updates page no longer reads its notes in composition",
+          "detail": "The changelog asset was opened and parsed during the page's first frame. It loads on IO now, with a reading line in place of the \"no notes\" copy that used to flash before the file was read."
+        },
+        {
+          "title": "Disabled pickers say what enables them",
+          "detail": "The Continue Watching rail, the retained-tint picker and the revert picker were dimmed without a sentence, which reads as a setting that broke rather than one waiting for the switch above. Each names its dependency now."
+        },
+        {
+          "title": "Every Settings target is at least 48dp",
+          "detail": "The connection chip was 34, Show more 36, the hue chips 44 and the saved-line actions, canvas chips and mock-card buttons 32 to 38. They are 48 now, without changing the shapes they draw."
+        },
+        {
+          "title": "Credits draw their edges and dividers",
+          "detail": "The developer card's border was a 38% outlineVariant - about 1.3:1 in the light scheme - and the helper dividers and chevron sat under their contrast floors. They use the emphasis boundary, divider and muted roles."
+        },
+        {
+          "title": "The empty search state is legible",
+          "detail": "Its glyph was tinted with the caption colour at 70% alpha, about 2.5:1 on the page. It uses the muted role that clears 3:1."
+        },
+        {
+          "title": "The theme preview stops chasing the theme",
+          "detail": "The mock card's Plan and Watch buttons animated four colours toward scheme roles, so on a theme change each re-targeted every frame and landed after the card. They animate the decision and read both endpoints live, like the tab bar."
+        },
+        {
+          "title": "Palette and hue selection settle with the theme too",
+          "detail": "The palette card's border and the hue chip's ring had the same re-targeting problem: one endpoint was a scheme role, so a theme change restarted the spring every frame. Both animate one progress over live roles."
+        }
+      ]
     },
-    {
-      "title": "A failed search keeps the answer you can still read, and offers Try again",
-      "detail": "One rate-limited request for a refinement used to throw away a complete, still-true result set and replace it with a one-line apology - the worst of both states. The previous answer now stays on screen with a strip above it saying the new query did not arrive, and that strip carries a Try again control. A failure with nothing behind it gets the same control, so the reader no longer has to edit the query and hope. The retry repeats the same request immediately rather than waiting out the typing debounce."
-    },
-    {
-      "title": "The clear button stays in the search field while a query is running",
-      "detail": "The spinner replaced the X for the length of every request, so the one moment a reader most wants to start over was the moment the field could not be emptied. Both are drawn now: a small indicator beside the button, and the button in the same place it always is."
-    },
-    {
-      "title": "Counts read as unknown, not zero, while a list is still loading",
-      "detail": "The Library header said \"0 titles\" and every status pill said (0) for the whole of a cold start - the app asserting the one thing it had not yet read. The header says it is loading, the type switch prints no count for a half that is still downloading, and the pills print a dash until the scoped list has actually been counted."
-    },
-    {
-      "title": "A failure no longer spins",
-      "detail": "\"Couldn't load this list\" was drawn with the same loader as \"still fetching\", so a failure arrived with a spinner turning beside it, promising an answer that had already arrived and was the failure. The Library's empty state, its rows, its grid and a profile's list all say it plainly now, which is what the profile's stats tab has done since it shipped."
-    },
-    {
-      "title": "The loading skeletons reserve the columns the grid will draw",
-      "detail": "A five-across shelf is drawn three across on a 360dp phone, but the skeleton kept promising five covers a row and reflowed into three when the data landed - the exact jump a mode-shaped skeleton exists to prevent. Both Library skeletons use the same column arithmetic as the page now, and Mosaic's skeleton opens with the wide anchor cell its first real row has."
-    },
-    {
-      "title": "An empty Library says it is loading once",
-      "detail": "An empty list opened with a \"still fetching this list\" note stacked on top of a loading skeleton that was already saying so. The note stays for the case it was written for - a list that already has rows and is still being completed."
-    },
-    {
-      "title": "A failed search no longer scrolls a page that did not change",
-      "detail": "Returning to the top of the results was keyed on the searched term, and a failed search sets that term too, so a failure scrolled the reader away from results that had not moved. It is keyed on the answer now."
-    }
-  ]
-},
-{
-    "version": "2.5.6",
-    "entries": [
-      {
-        "title": "The Settings shelf stacks its cards again",
-        "detail": "2.5.4 wrapped the shelf and the search results in one crossfade, and every card on the page landed on the top row. AnimatedContent places each direct child of its content lambda at the same origin - it is a box with one position, not a column - so the account card, the three section labels and the three groups were all drawn on top of each other, and only the last group drawn (\"Device Manager\", \"Updates\", \"About & support\") could be seen or tapped. The swap is a plain conditional again, the way 2.5.3 had it."
-      },
-      {
-        "title": "Searching replaces the shelf without animating it",
-        "detail": "The crossfade that opened the shelf was the animation, and it was the wrong motion for the job: a query replaces one list with another rather than moving between two places. Typing now swaps the answers in place of the shelf, with no entrance to land in the wrong position."
-      },
-      {
-        "title": "The app lock notices a screen lock you just added",
-        "detail": "Device Manager read whether the phone has a screen lock once, when the card was first drawn, and never again. Going to the system settings to add a PIN and coming back left the switch disabled and still saying \"Set a screen lock on this device first\" about a lock that was already set, until the app was restarted. The card re-reads it when the app returns, the way the rest of the page re-reads the panel's frame rate."
-      },
-      {
-        "title": "The text-size reset link goes away at 100%",
-        "detail": "The Reset link beside the percentage was shown while the number itself was not the default. A slider lands on start plus a whole number of steps, and a five percent step cannot be stored exactly, so the tick the label printed as \"100%\" was really 1.0000000149 - the link sat there describing a change that had not been made. It and the title-scroll Reset now compare the rounded number the label prints."
-      },
-      {
-        "title": "A custom stamp stays selected after a stray space",
-        "detail": "Ani-chan's name and stamp were compared after trimming but stored as typed, so one trailing space saved a value no stamp chip matched: the row below showed nothing selected even though one had just been tapped, and the pill drew the padding. Both are stored trimmed now, and a pasted name two characters too long is cut to the limit instead of being refused outright, which read as a field that does not accept typing."
-      },
-      {
-        "title": "The About page's rules are visible in the light theme",
-        "detail": "Three dividers on the About page and the outlines on the layout previews were drawn at half of outlineVariant, about 1.4:1 on a light card - not a faint line, an absent one. They use the same emphasis tones the rest of Settings adopted, so the version rows and the preview tiles have an edge in both themes."
-      },
-      {
-        "title": "The edge picker works while Ani-chan is off",
-        "detail": "The pill sample on the Jokes page is drawn on the edge stored here, and that picker was the one control that could change the sample and was locked while she was off. The name, stamp, line style and edge are all part of auditioning her, so all four stay usable now."
-      },
-      {
-        "title": "Resetting the interface no longer leaves the progress bar behind",
-        "detail": "The interface reset cleared the layout, the title page, the density, the rail, the card style, the poster source and the bar position, but not the progress bar style - the one key it declares and forgot. Hidden progress bars would have survived a reset that reported everything back to the shipped look."
-      }
-    ]
-  },
-{
-    "version": "2.5.5",
-    "entries": [
-      {
-        "title": "The build stamp cannot sit on a row",
-        "detail": "The version line was the last child of the shelf and also of the crossfade that swaps the shelf for search results. With no size transform that container lays the outgoing mode out at the incoming one's height, which is how the stamp was drawn across \"Device Manager\" in the 2.5.4 screenshot. It is a sibling of the crossfade now, drawn only while the shelf is showing and clipped with the list it sits under."
-      },
-      {
-        "title": "The type sample stays inside its card",
-        "detail": "The size preview is scaled in the draw phase so dragging does not reflow the paragraph, but that also left its layout at 100%: at 125% and above the last line drew over the slider. The card reserves the scaled height now, in 8dp steps so a drag does not re-measure it on every tick."
-      },
-      {
-        "title": "Reset on Seasonal effects resets the thumbs",
-        "detail": "Reset wrote the stored defaults but the sliders are drafts keyed on the committed value, so a value that was already the default - or a thumb dragged without committing - kept its old number while the sky reset. Reset seeds every draft as well as the store."
-      },
-      {
-        "title": "Refining a search starts at the best answer",
-        "detail": "Scrolling to the top was keyed on entering search mode, so typing a second word while scrolled through the first answer left the reader at that offset and the best matches above the viewport. Every query change returns to the top; the mode change keeps its spring, a refined query snaps."
-      },
-      {
-        "title": "Downloaded font families are read off the main thread",
-        "detail": "The list of stored families is a directory walk plus a name decode per family, and its comment already said it ran on the IO dispatcher. It did not - it ran in the frame that draws the page. It is dispatched now."
-      },
-      {
-        "title": "A GIF key is saved to the field it was typed into",
-        "detail": "Save ran in a coroutine that read the selected provider when it resumed, so switching chips mid-save filed the key under whichever provider was selected by then. The provider is captured with the editor."
-      },
-      {
-        "title": "A selected chip no longer nudges its row",
-        "detail": "The chip's border animated from 1dp to 2dp, which changes its measured size, so choosing one pill pushed every pill after it along the row. The border is a constant 1.5dp and the colour carries the selection, the way the appearance tiles already work."
-      },
-      {
-        "title": "A row's value crossfades where it sits",
-        "detail": "The value is end-aligned on the row, but its AnimatedContent was start-aligned, so a change drew the old value against the left edge of the new value's width before it faded. The transition is end-aligned too."
-      },
-      {
-        "title": "Back dismisses the search keyboard first",
-        "detail": "With the caret in the search field and a blank query, Back fell through to the screen's handler and closed Settings. The field now consumes Back while it has focus and only drops the keyboard."
-      },
-      {
-        "title": "The Search tab switch admits when it cannot be honoured",
-        "detail": "The bar hides Search when both catalogue halves are off, while the switch above kept reading \"on\". It is disabled with the reason when there is no page for the bar to add."
-      },
-      {
-        "title": "Controls settle with the theme instead of after it",
-        "detail": "Eleven selection transitions - the tab bar, both segmented bars, the state chip, the navigation bar and the appearance tiles - animated a colour spring toward a scheme role. The scheme animates every role on every frame of a theme change, so those targets never settled and the control arrived a beat after its page. They animate one progress and read both endpoints live, the pattern rememberStateColor already documents."
-      },
-      {
-        "title": "Reset card design resets the whole group",
-        "detail": "The button wrote only the frame, proportions, corners and type scales. The card style and the poster source are part of the same group and kept their values, and when those were the only changes the button was disabled - a reset that could not reset. It now clears all three and is enabled for either."
-      },
-      {
-        "title": "A palette or hue pick beats the kept cover colour",
-        "detail": "Both pickers released the live anime layer and the wallpaper, but not the retained cover colour, which outranks a palette and a custom hue in Theme.kt. The tap was stored and the app kept drawing the kept tint; the pick now releases it too."
-      },
-      {
-        "title": "Retain anime colour says when it has nothing to keep",
-        "detail": "The switch could be on while Anime dynamic theme was off, so no sheet ever borrowed a colour for it to retain. It is disabled with that reason, but off is always allowed - a stored on can never be trapped behind a disabled switch - and the tint and revert pickers explain what turns them on instead of only being dimmed."
-      },
-      {
-        "title": "Saved on the Client ID means saved",
-        "detail": "\"Use default\" put the field back to a value that had not been saved while the button kept its Saved label and check. The label is now derived from the field matching the stored id, not from a latch."
-      },
-      {
-        "title": "An app lock can always be turned off",
-        "detail": "If the screen lock the app lock relied on was removed, the switch drew itself checked and disabled with no way to clear it - and it would lock again as soon as a lock was set. Off is allowed without a device credential; on still needs one."
-      },
-      {
-        "title": "The sample bottom bar is a picture",
-        "detail": "The preview passed an empty select callback but the tabs still pressed, rippled and announced themselves as buttons for taps that could not navigate. The bar takes an interactive flag and the sample turns it off."
-      },
-      {
-        "title": "Search suggestions announce themselves as actions",
-        "detail": "They were FilterChips, which a screen reader reports as unselected toggles that never become selected. They are suggestion chips now."
-      },
-      {
-        "title": "The cover cache clears off the click frame",
-        "detail": "Clearing it ran Coil's disk-cache delete on the main thread in both places that offer it, freezing the page while the files went. Both now dispatch the clear to IO; the Device Manager figure updates when it returns."
-      },
-      {
-        "title": "The Updates page no longer reads its notes in composition",
-        "detail": "The changelog asset was opened and parsed during the page's first frame. It loads on IO now, with a reading line in place of the \"no notes\" copy that used to flash before the file was read."
-      },
-      {
-        "title": "Disabled pickers say what enables them",
-        "detail": "The Continue Watching rail, the retained-tint picker and the revert picker were dimmed without a sentence, which reads as a setting that broke rather than one waiting for the switch above. Each names its dependency now."
-      },
-      {
-        "title": "Every Settings target is at least 48dp",
-        "detail": "The connection chip was 34, Show more 36, the hue chips 44 and the saved-line actions, canvas chips and mock-card buttons 32 to 38. They are 48 now, without changing the shapes they draw."
-      },
-      {
-        "title": "Credits draw their edges and dividers",
-        "detail": "The developer card's border was a 38% outlineVariant - about 1.3:1 in the light scheme - and the helper dividers and chevron sat under their contrast floors. They use the emphasis boundary, divider and muted roles."
-      },
-      {
-        "title": "The empty search state is legible",
-        "detail": "Its glyph was tinted with the caption colour at 70% alpha, about 2.5:1 on the page. It uses the muted role that clears 3:1."
-      },
-      {
-        "title": "The theme preview stops chasing the theme",
-        "detail": "The mock card's Plan and Watch buttons animated four colours toward scheme roles, so on a theme change each re-targeted every frame and landed after the card. They animate the decision and read both endpoints live, like the tab bar."
-      },
-      {
-        "title": "Palette and hue selection settle with the theme too",
-        "detail": "The palette card's border and the hue chip's ring had the same re-targeting problem: one endpoint was a scheme role, so a theme change restarted the spring every frame. Both animate one progress over live roles."
-      }
-    ]
-  },
     {
       "version": "2.5.4",
       "entries": [

@@ -224,7 +224,11 @@ fun NovaLibraryScreen(
             onToggleDirection = { chooseSort(sort, !sortAscending) },
             filter = filter,
             counts = counts,
-            countsKnown = !(if (isManga) isLoadingManga else isAnimeLoading),
+            countsKnown = !scopedLibraryLoading(
+                isManga = isManga,
+                isLoadingManga = isLoadingManga,
+                isLoadingAnime = isAnimeLoading
+            ),
             onChooseFilter = chooseFilter
         )
 

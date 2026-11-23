@@ -110,7 +110,11 @@ internal fun NovaLibraryHeader(
                         text = librarySubtitle(
                             size = scopedSize,
                             username = username,
-                            loading = if (isManga) isLoadingManga else isLoadingAnime
+                            loading = scopedLibraryLoading(
+                                isManga = isManga,
+                                isLoadingManga = isLoadingManga,
+                                isLoadingAnime = isLoadingAnime
+                            )
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -326,7 +330,11 @@ private fun NovaTypeSwitch(
             // A half that is still downloading has no count to print. It used to
             // print 0 in a badge beside the word "Loading", which is both a
             // contradiction and the number a reader is least able to trust.
-            val loading = if (option == LibraryType.MANGA) isLoadingManga else isLoadingAnime
+            val loading = scopedLibraryLoading(
+                isManga = option == LibraryType.MANGA,
+                isLoadingManga = isLoadingManga,
+                isLoadingAnime = isLoadingAnime
+            )
             val container by animateColorAsState(
                 targetValue = if (selected) {
                     MaterialTheme.colorScheme.primary
@@ -384,27 +392,62 @@ private fun NovaTypeSwitch(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (!loading) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(ExpressiveShapes.pill)
-                            .background(content.copy(alpha = if (selected) 0.18f else 0.10f))
-                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = count.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = content,
-                            maxLines = 1
-                        )
-                    }
-                }
+                TypeCountBadge(
+                    count = count,
+                    visible = !loading,
+                    selected = selected,
+                    content = content
+                )
             }
         }
     }
 }
+
+/**
+ * The count chip inside a type half.
+ *
+ * Extracted from [NovaTypeSwitch] because it is the one part of that switch a loading
+ * half leaves out, and writing the omission inline pushed the composable over
+ * CodeFactor's complexity line - which fails the pull request's check rather than
+ * warning about it.
+ */
+@Composable
+private fun TypeCountBadge(
+    count: Int,
+    visible: Boolean,
+    selected: Boolean,
+    content: Color
+) {
+    if (!visible) return
+    Spacer(modifier = Modifier.width(6.dp))
+    Box(
+        modifier = Modifier
+            .clip(ExpressiveShapes.pill)
+            .background(content.copy(alpha = if (selected) 0.18f else 0.10f))
+            .padding(horizontal = 7.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = content,
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * Whether the half of the list the page is showing is still downloading.
+ *
+ * Named because "the count is not known yet" is asked in three places (the subtitle,
+ * the type switch and the status pills), and an inline `if` at each of them took two
+ * composables past CodeFactor's complexity line.
+ */
+internal fun scopedLibraryLoading(
+    isManga: Boolean,
+    isLoadingManga: Boolean,
+    isLoadingAnime: Boolean
+): Boolean = if (isManga) isLoadingManga else isLoadingAnime
 
 /** One status bucket, with the count over the *whole* type scope rather than the narrowed set. */
 @Composable
