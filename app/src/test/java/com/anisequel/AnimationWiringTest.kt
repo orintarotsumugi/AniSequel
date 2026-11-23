@@ -246,6 +246,47 @@ class AnimationWiringTest {
         assertTrue("the sync must avoid redundant state writes", code.contains("state.value != value"))
     }
 
+    /**
+     * An `AnimatedContent` content lambda may emit exactly one layout child.
+     *
+     * Its measure policy places *every* measurable at `contentAlignment` inside the
+     * largest size - it is a Box with one position, not a Column - so a lambda that
+     * emits several composables as siblings draws them all at the same origin.
+     *
+     * 2.5.4 put the Settings shelf inside one: the account card, three section
+     * labels and three groups were siblings of the `else` branch, so every card
+     * landed on top of every other. The shelf showed one group - "Device Manager",
+     * "Updates", "About & support" - because the last one drawn was on top, and the
+     * six cards above it in the list were under it and untappable. 2.5.3 was fine
+     * because the swap was a plain `if`; the crossfade was the regression.
+     *
+     * So this pins both halves: no animated container around the search/shelf swap,
+     * and the shelf still drawn from the column it belongs to - otherwise the first
+     * assertion passes trivially on a screen with the shelf deleted.
+     */
+    @Test
+    fun `the settings shelf is not the content of an animated container`() {
+        val code = source(
+            "app/src/main/java/com/anisequel/ui/screens/settings/SettingsScreen.kt"
+        )
+
+        assertFalse(
+            "the search/shelf swap must stay a plain `if`: `AnimatedContent` places the " +
+                "content lambda's direct children on top of each other, which is what " +
+                "collapsed the whole shelf onto its last group",
+            code.contains("targetState = searching")
+        )
+        assertTrue(
+            "the swap must still be a conditional in the scroll column",
+            code.contains("if (searching) {")
+        )
+        assertTrue(
+            "the shelf must still draw its cards",
+            code.contains("SettingsAccountCard(") &&
+                code.contains("SettingsSectionLabel(\"Device & app\")")
+        )
+    }
+
     private fun findProjectRoot(): File {
         var candidate = File(System.getProperty("user.dir") ?: ".").absoluteFile
         while (!File(candidate, "gradle.properties").isFile) {

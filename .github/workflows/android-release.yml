@@ -191,6 +191,13 @@ jobs:
     # verification, publish. The bound exists so a step that hangs the way the
     # artifact upload did on 2026-11-11 ends the job on its own instead of
     # leaving a run that never completes.
+    #
+    # 40, not 25, because R8's wall time is the variable this job cannot predict:
+    # the same commit's `minifyReleaseWithR8` has been measured at 80s and at
+    # 18m22s, and a 24-minute run has been green. R8 now runs in its own JVM so
+    # that spread has a written ceiling - see the execution profile in
+    # settings.gradle.kts and "Release build time" in BUILDING.md - but the bound
+    # stays generous until a few runs have shown the spread is gone.
     timeout-minutes: 40
 
     # Only the keystore *location* is a literal. The keystore itself and both

@@ -370,6 +370,78 @@ Notable properties, each of which was a bug once:
 
 ---
 
+## Release build time
+
+A release build is R8 and about four minutes of everything else. `test` is
+~3 minutes (mostly Robolectric's framework-jar fetch on a cold cache), the release
+Kotlin compile is ~40 seconds, and `minifyReleaseWithR8` is whatever it feels
+like: the same commit's R8 step has been measured at **80 s and at 18 m 22 s**.
+
+What that looked like from the outside, on runs whose diffs and dependency graphs
+were nearly identical:
+
+| run | R8 task | whole job |
+| --- | --- | --- |
+| 44706092338 | 936 s | 17m00s |
+| 44862685755 | 80 s | 3m01s |
+| 45066437072 | 123 s | 8m03s |
+| 45112123803 | 1102 s | 24m21s |
+
+The last two are 2.5.4 and 2.5.5: 620 changed lines, no dependency change, a
+19 KB larger APK, and an **identical Gradle task graph** in both logs. So it was
+not the code being built, and it was not the machine either - the Kotlin compile
+in the same pair took 38 s and 64 s. It was R8, and R8 alone, taking a different
+amount of time for the same work.
+
+### Why R8 is now its own JVM
+
+R8 is the largest allocation source in this build, and it used to run inside the
+Gradle daemon, in a heap it shared with the in-process Kotlin compiler
+(`kotlin.compiler.execution.strategy`) that had just compiled 200k lines of
+source, and with Robolectric's forked test JVM alongside. That is the leading
+explanation for the spread and the one the change below acts on: how much heap
+was left when R8 started depended on the compile in front of it, not on the input
+the R8 step was given.
+
+It is inference, not a measurement - R8 prints nothing about its heap, and none of
+the runs above logged an `OutOfMemoryError`, a GC summary, or any other line to
+point at. What the change does buy is the ability to tell the two cases apart next
+time: with R8 alone in its own JVM, an 18-minute run afterwards is R8's own
+behaviour and not a neighbour competing for memory.
+
+`settings.gradle.kts` now declares an AGP *execution profile* that runs R8 out of
+process, in its own JVM, with an explicit `-Xmx`:
+
+```kotlin
+android {
+  execution {
+    defaultProfile = "r8OutOfProcess"
+    profiles { create("r8OutOfProcess") { r8 { runInSeparateProcess = true } } }
+  }
+}
+```
+
+- **Raise the heap there, not in `org.gradle.jvmargs`.** The daemon's heap belongs
+to KSP, Kotlin, AGP and lint; a larger `org.gradle.jvmargs` makes the *shared*
+  heap bigger and leaves R8 in a bigger shared heap, which is the arrangement that
+  produced the outliers. `R8BuildConfigTest` pins both halves of the profile.
+- **The settings plugin is the same AGP**, declared in `settings.gradle.kts` at
+  its own version because a settings script cannot read the version catalogue.
+  `R8BuildConfigTest` fails if the two drift, because a mismatch resolves silently.
+- **Do not solve a slow R8 by turning `isMinifyEnabled` off**, or by moving the
+  release onto `proguard-fast-rules.pro`. Both make the build fast and the APK
+  wrong, and both leave a green run. Also pinned.
+- **To find out where a slow run went,** dispatch the workflow with `profile`
+  turned on: it adds `--profile` to both Gradle invocations and uploads
+  `app/build/reports/profile`, whose per-task table names the step in seconds
+  instead of leaving it to be inferred from the log.
+- **A pull request does not run R8 at all.** It builds `debug`. So the release
+  keep rules are proved on `main`, by the release build itself - see the
+  `-PanisequelFastR8` note in `app/build.gradle.kts` for the mechanism that
+  exists if that ever needs a cheaper proof before merge.
+
+---
+
 ## APK size
 
 R8 and `shrinkResources` are both on, with the *optimized* default proguard

@@ -113,7 +113,12 @@ internal fun AppLayoutPreviews(
                     color = if (active) {
                         MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        // The emphasis boundary, not half of `outlineVariant`: at
+                        // 50% the unselected tiles had no edge at all in the light
+                        // scheme, so a row of previews read as one blob and the
+                        // selected one was the only shape in it. See
+                        // `AniSequelTheme.emphasis` and the credits card's border.
+                        AniSequelTheme.emphasis.boundary
                     }
                 )
             ) {
@@ -597,7 +602,12 @@ internal fun InfoPageStylePreviews(
                     color = if (active) {
                         MaterialTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        // The emphasis boundary, not half of `outlineVariant`: at
+                        // 50% the unselected tiles had no edge at all in the light
+                        // scheme, so a row of previews read as one blob and the
+                        // selected one was the only shape in it. See
+                        // `AniSequelTheme.emphasis` and the credits card's border.
+                        AniSequelTheme.emphasis.boundary
                     }
                 )
             ) {

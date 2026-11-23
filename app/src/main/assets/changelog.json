@@ -1,6 +1,43 @@
 {
   "versions": [
 {
+    "version": "2.5.6",
+    "entries": [
+      {
+        "title": "The Settings shelf stacks its cards again",
+        "detail": "2.5.4 wrapped the shelf and the search results in one crossfade, and every card on the page landed on the top row. AnimatedContent places each direct child of its content lambda at the same origin - it is a box with one position, not a column - so the account card, the three section labels and the three groups were all drawn on top of each other, and only the last group drawn (\"Device Manager\", \"Updates\", \"About & support\") could be seen or tapped. The swap is a plain conditional again, the way 2.5.3 had it."
+      },
+      {
+        "title": "Searching replaces the shelf without animating it",
+        "detail": "The crossfade that opened the shelf was the animation, and it was the wrong motion for the job: a query replaces one list with another rather than moving between two places. Typing now swaps the answers in place of the shelf, with no entrance to land in the wrong position."
+      },
+      {
+        "title": "The app lock notices a screen lock you just added",
+        "detail": "Device Manager read whether the phone has a screen lock once, when the card was first drawn, and never again. Going to the system settings to add a PIN and coming back left the switch disabled and still saying \"Set a screen lock on this device first\" about a lock that was already set, until the app was restarted. The card re-reads it when the app returns, the way the rest of the page re-reads the panel's frame rate."
+      },
+      {
+        "title": "The text-size reset link goes away at 100%",
+        "detail": "The Reset link beside the percentage was shown while the number itself was not the default. A slider lands on start plus a whole number of steps, and a five percent step cannot be stored exactly, so the tick the label printed as \"100%\" was really 1.0000000149 - the link sat there describing a change that had not been made. It and the title-scroll Reset now compare the rounded number the label prints."
+      },
+      {
+        "title": "A custom stamp stays selected after a stray space",
+        "detail": "Ani-chan's name and stamp were compared after trimming but stored as typed, so one trailing space saved a value no stamp chip matched: the row below showed nothing selected even though one had just been tapped, and the pill drew the padding. Both are stored trimmed now, and a pasted name two characters too long is cut to the limit instead of being refused outright, which read as a field that does not accept typing."
+      },
+      {
+        "title": "The About page's rules are visible in the light theme",
+        "detail": "Three dividers on the About page and the outlines on the layout previews were drawn at half of outlineVariant, about 1.4:1 on a light card - not a faint line, an absent one. They use the same emphasis tones the rest of Settings adopted, so the version rows and the preview tiles have an edge in both themes."
+      },
+      {
+        "title": "The edge picker works while Ani-chan is off",
+        "detail": "The pill sample on the Jokes page is drawn on the edge stored here, and that picker was the one control that could change the sample and was locked while she was off. The name, stamp, line style and edge are all part of auditioning her, so all four stay usable now."
+      },
+      {
+        "title": "Resetting the interface no longer leaves the progress bar behind",
+        "detail": "The interface reset cleared the layout, the title page, the density, the rail, the card style, the poster source and the bar position, but not the progress bar style - the one key it declares and forgot. Hidden progress bars would have survived a reset that reported everything back to the shipped look."
+      }
+    ]
+  },
+{
     "version": "2.5.5",
     "entries": [
       {

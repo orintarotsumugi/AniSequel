@@ -529,12 +529,20 @@ class InterfacePreferences(private val context: Context) {
         }
     }
 
-    /** Back to the shipped layout, title page, density, rail, card style, poster source and bar position. */
+    /**
+     * Back to the shipped layout, title page, progress bar, density, rail, card style, poster source and bar position.
+     *
+     * The progress bar style is cleared here for the same reason the title page is:
+     * both are the shape of a page the layout choice draws, and leaving one of the
+     * two behind made a reset restore everything except the bar under every title.
+     * It was the one key declared in this file that the reset skipped.
+     */
     suspend fun reset() {
         context.interfaceDataStore.edit { preferences ->
             preferences.remove(Keys.CARD_STYLE)
             preferences.remove(Keys.APP_LAYOUT)
             preferences.remove(Keys.INFO_PAGE_STYLE)
+            preferences.remove(Keys.PROGRESS_BAR_STYLE)
             preferences.remove(Keys.LIBRARY_VIEW)
             preferences.remove(Keys.SHOW_CONTINUE_RAIL)
             preferences.remove(Keys.HOME_SEQUEL_STYLE)

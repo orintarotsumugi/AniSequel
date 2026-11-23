@@ -358,8 +358,15 @@ private fun TextSizeSection(
             )
             // Appearing and disappearing on a threshold, so it animates rather
             // than popping a button into a row the reader is already dragging.
+            //
+            // Compared as the *percentage the label shows*, not as a float. A
+            // slider lands on `start + i * span / (steps + 1)`, and a five percent
+            // step is not representable in binary: the tick that reads "100%" is
+            // 1.0000000149, so `draft != 1f` stayed true at the default size and the
+            // reset link sat there describing a modification that was not one - the
+            // same fault `ThemeHub` records for "Reset appearance".
             AnimatedVisibility(
-                visible = draft != 1f,
+                visible = (draft * 100f).roundToInt() != 100,
                 enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
                     scaleIn(
                         initialScale = 0.9f,
@@ -503,7 +510,11 @@ private fun TitleMotionSection(
                 color = MaterialTheme.colorScheme.primary
             )
             AnimatedVisibility(
-                visible = draft != DEFAULT_TITLE_SCROLL_DP_PER_SECOND,
+                // Rounded to the dp/s the label prints, for the reason the text-size
+                // slider records: this track has no steps, so a drag that lands back
+                // on 60 dp/s lands on 60.000004 and the reset link stayed on screen
+                // over its own default.
+                visible = draft.roundToInt() != DEFAULT_TITLE_SCROLL_DP_PER_SECOND.roundToInt(),
                 enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
                     scaleIn(
                         initialScale = 0.9f,

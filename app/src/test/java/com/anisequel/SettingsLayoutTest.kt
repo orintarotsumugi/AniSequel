@@ -281,17 +281,16 @@ class SettingsLayoutTest {
     }
 
     /**
-     * The build stamp follows the shelf; it is not laid out by the mode crossfade.
+     * The build stamp follows the shelf and stays out of search mode.
      *
-     * The stamp was the last child of the shelf *branch*, which made the search
-     * crossfade its parent. With `using(null)` that container lays the outgoing
-     * mode out against the incoming one's height, and 2.5.4 shipped a frame with the
-     * version drawn across "Device Manager". Being a sibling is the invariant: the
-     * footer must appear after the guard that keeps it out of search mode, and never
-     * before it.
+     * It was the last child of a shelf branch that 2.5.4 also wrapped in a search
+     * crossfade, and that shipped a frame with the version drawn across "Device
+     * Manager". The crossfade is gone - it laid every card on the one behind it, see
+     * the note in `AnimationWiringTest` - so what is left to guard here is the
+     * ordering: the stamp follows the shelf's guard and is never drawn above it.
      */
     @Test
-    fun `the build stamp is a sibling of the search crossfade`() {
+    fun `the build stamp follows the shelf and stays out of search mode`() {
         val screen = source(settings + "SettingsScreen.kt")
         val guard = screen.indexOf("if (!searching) {")
         val stamp = screen.indexOf("SettingsVersionFooter(")

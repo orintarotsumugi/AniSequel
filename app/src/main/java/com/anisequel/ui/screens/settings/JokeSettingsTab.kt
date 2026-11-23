@@ -489,14 +489,21 @@ private fun PersonaCard(
     var stamp by remember(settings.stamp) { mutableStateOf(settings.stamp) }
 
     LaunchedEffect(name) {
-        if (name.trim() == settings.speakerName.trim()) return@LaunchedEffect
+        // Trimmed on the way *out* as well as on the way in. Comparing trimmed but
+        // writing raw meant a stray trailing space was stored, and the stored value
+        // is what the pill draws and what the stamp chips compare against: after one
+        // extra space at the end, no chip in the row below was selected any more even
+        // though the reader had tapped one, and the pill drew the padding.
+        val trimmed = name.trim()
+        if (trimmed == settings.speakerName.trim()) return@LaunchedEffect
         delay(450)
-        preferences.setSpeakerName(name)
+        preferences.setSpeakerName(trimmed)
     }
     LaunchedEffect(stamp) {
-        if (stamp.trim() == settings.stamp.trim()) return@LaunchedEffect
+        val trimmed = stamp.trim()
+        if (trimmed == settings.stamp.trim()) return@LaunchedEffect
         delay(450)
-        preferences.setStamp(stamp)
+        preferences.setStamp(trimmed)
     }
 
     SectionCard(
@@ -506,9 +513,11 @@ private fun PersonaCard(
     ) {
         OutlinedTextField(
             value = name,
-            onValueChange = { next ->
-                if (next.length <= MAX_SPEAKER_NAME_LENGTH) name = next
-            },
+            // Clamped, not rejected. `if (next.length <= MAX) name = next` threw the
+            // whole paste away, so pasting a name two characters too long left the
+            // field exactly as it was and read as a field that does not accept
+            // input; the first 24 characters are what the reader meant.
+            onValueChange = { next -> name = next.take(MAX_SPEAKER_NAME_LENGTH) },
             label = { Text("Name") },
             placeholder = { Text(DEFAULT_SPEAKER_NAME) },
             singleLine = true,
@@ -546,9 +555,7 @@ private fun PersonaCard(
         Spacer(modifier = Modifier.height(10.dp))
         OutlinedTextField(
             value = stamp,
-            onValueChange = { next ->
-                if (next.length <= MAX_STAMP_LENGTH) stamp = next
-            },
+            onValueChange = { next -> stamp = next.take(MAX_STAMP_LENGTH) },
             label = { Text("Or type your own") },
             placeholder = { Text(DEFAULT_STAMP) },
             singleLine = true,
@@ -665,7 +672,11 @@ private fun PlacementCard(
                 SettingsChoiceChip(
                     label = position.displayName,
                     selected = settings.position == position,
-                    enabled = settings.enabled,
+                    // Deliberately no `enabled = settings.enabled`: for the reason
+                    // this page's persona card records, the pill above is drawn at
+                    // this edge, so the edge is part of auditioning her rather than
+                    // part of turning her on. It was the one control that could change
+                    // the sample and could not be touched while she was off.
                     onClick = { scope.launch { preferences.setPosition(position) } },
                     testTag = "joke_position_${position.storageValue}"
                 )

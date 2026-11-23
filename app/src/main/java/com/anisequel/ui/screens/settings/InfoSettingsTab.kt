@@ -47,6 +47,7 @@ import com.anisequel.data.security.AppSignature
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.detail.info.COPY_CONFIRMATION_MILLIS
 import com.anisequel.ui.components.openExternalUrl
+import com.anisequel.ui.theme.AniSequelTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -243,12 +244,18 @@ private fun BuildCard() {
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 10.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    // The emphasis rung, like every other divider on this screen. A
+                    // divider at half of `outlineVariant` is about 1.4:1 on the light
+                    // card, which is not a faint line but an absent one - the same
+                    // fix the credits and the section cards already carry (`CreditsSection`
+                    // and `SectionCard` were moved off this exact alpha in 2.5.5, and
+                    // these three were missed).
+                    color = AniSequelTheme.emphasis.divider
                 )
                 InfoRow(label = "Package", value = BuildConfig.APPLICATION_ID)
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 10.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    color = AniSequelTheme.emphasis.divider
                 )
                 InfoRow(label = "Data source", value = "AniList GraphQL API")
             }
@@ -326,7 +333,7 @@ private fun AppAuthenticityCard() {
                 )
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 10.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    color = AniSequelTheme.emphasis.divider
                 )
                 Text(
                     text = "Signing certificate · SHA-256",

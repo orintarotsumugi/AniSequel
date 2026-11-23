@@ -3933,9 +3933,16 @@ where the screen was animating the wrong thing:
   (`FastColorEffects`), because the verdict arrives while the reader is looking at
   the chip and a cut between an error container and a secondary one reads as a
   different chip appearing.
-- **The shelf and the search results** crossfade with `using(null)`, the same
-  idiom `settingsLevelTransition` uses: the two modes are different heights and a
-  size transform under a scroll container fights the scroll.
+- **The shelf and the search results** were crossfaded here, with `using(null)`, on
+  the reasoning that the two modes are different heights and a size transform under
+  a scroll container fights the scroll. **That was removed in 2.5.6, and the reason
+  is worth keeping:** `AnimatedContent` places *every* direct child of its content
+  lambda at `contentAlignment` inside the largest size - it is a box with one
+  position, not a column - so the shelf branch's account card, three labels and
+  three groups were all drawn at the same origin. The last group drew on top, and
+  the shelf showed three rows with six cards underneath it. A crossfade also needs
+  both modes composed at once, which is the opposite of what a replacement list
+  wants: the swap is a plain conditional again, as it was in 2.5.3.
 - **The list springs back to the top** when the mode changes. That one is a bug
   the animation exposed: the offset outlives the content it was scrolled through,
   so a reader who had scrolled down and then typed got their answers drawn above

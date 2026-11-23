@@ -30,7 +30,6 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -607,135 +606,124 @@ private fun SettingsRoot(
                     .widthIn(max = MaxSettingsContentWidth)
                     .fillMaxWidth()
             ) {
-                // One crossfade for the whole mode change: typing a query lifts the
-                // shelf out and fades the answers in, rather than replacing nine rows
-                // with a result list between two frames. `using(null)` disables the
-                // size transform for the reason `settingsLevelTransition` records -
-                // the two modes are different heights and animating that height
-                // fought the scroll it sits in.
-                AnimatedContent(
-                    targetState = searching,
-                    transitionSpec = {
-                        (
-                            fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
-                                scaleIn(
-                                    initialScale = 0.98f,
-                                    animationSpec = ExpressiveMotion.FastSpatial
-                                )
-                            ).togetherWith(
-                            fadeOut(animationSpec = ExpressiveMotion.FastEffects)
-                        ).using(null)
-                    },
-                    label = "settings_search_mode",
-                    // A crossfade draws two contents at once. Clipping the container
-                    // is what keeps a taller outgoing mode from drawing past the
-                    // list it belongs to while the new one shrinks in.
-                    modifier = Modifier.clipToBounds()
-                ) { isSearching ->
-                    if (isSearching) {
-                        SettingsSearchResults(
-                            query = searchQuery,
-                            onQueryChange = onSearchQueryChange,
-                            onOpen = onOpenSearchResult,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        // The account leads. It is the one answer that changes what every
-                        // row below it is looking at - a real AniList list or the built-in
-                        // demo - and it is now a card rather than a row, because it carries
-                        // a second control (the connection check).
-                        SettingsAccountCard(
-                            name = viewer?.name,
-                            // `large` first: the tile is 52dp, and AniList's medium
-                            // avatar is the one sized for a 36dp row.
-                            avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
-                            subtitle = accountSubtitle(viewer, watchedCount, missedCount),
-                            connectionLabel = connectionLabel,
-                            connectionHealthy = connectionHealthy,
-                            onOpenAccount = onOpenAccount,
-                            onCheckConnection = onCheckConnection,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                        )
+                // A plain swap, not an `AnimatedContent`.
+                //
+                // 2.5.4 wrapped this pair in one, and every card on the shelf landed
+                // on top of every other card. `AnimatedContent` places each *direct
+                // child* of its content lambda at the same origin - its measure policy
+                // is a Box with one position, not a Column - and the shelf branch
+                // below emits the account card, three labels and three groups as
+                // siblings. The last group drew on top, so the shelf showed three
+                // rows ("Device Manager", "Updates", "About & support") and the six
+                // above them sat underneath, unreadable and untappable. 2.5.3 was
+                // fine because the swap was the `if` right here: the crossfade was
+                // the regression, not a polish pass with a side effect.
+                //
+                // Not re-wrapped in a Column so the animation could come back safely.
+                // A crossfade was the wrong motion for this in the first place: both
+                // branches are lists the reader is about to read, and typing a query
+                // replaces one with the other instead of moving between two places.
+                if (searching) {
+                    SettingsSearchResults(
+                        query = searchQuery,
+                        onQueryChange = onSearchQueryChange,
+                        onOpen = onOpenSearchResult,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    // The account leads. It is the one answer that changes what every
+                    // row below it is looking at - a real AniList list or the built-in
+                    // demo - and it is now a card rather than a row, because it carries
+                    // a second control (the connection check).
+                    SettingsAccountCard(
+                        name = viewer?.name,
+                        // `large` first: the tile is 52dp, and AniList's medium
+                        // avatar is the one sized for a 36dp row.
+                        avatarUrl = viewer?.avatar?.let { it.large ?: it.medium },
+                        subtitle = accountSubtitle(viewer, watchedCount, missedCount),
+                        connectionLabel = connectionLabel,
+                        connectionHealthy = connectionHealthy,
+                        onOpenAccount = onOpenAccount,
+                        onCheckConnection = onCheckConnection,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
 
-                        // One group per question, one tonal family per group, and no
-                        // heading over a group that holds a single row.
-                        SettingsSectionLabel("Look & layout")
-                        SettingsHubGroup(
-                            entries = listOf(
-                                SettingsPage.APPEARANCE.entry(
-                                    "settings_row_appearance",
-                                    onOpen,
-                                    value = summaries.appearance
-                                ),
-                                SettingsPage.UI.entry(
-                                    "settings_row_ui",
-                                    onOpen,
-                                    value = summaries.interfaceStyle
-                                ),
-                                SettingsPage.TYPE_AND_DISPLAY.entry(
-                                    "settings_row_typedisplay",
-                                    onOpen,
-                                    value = summaries.type
-                                )
+                    // One group per question, one tonal family per group, and no
+                    // heading over a group that holds a single row.
+                    SettingsSectionLabel("Look & layout")
+                    SettingsHubGroup(
+                        entries = listOf(
+                            SettingsPage.APPEARANCE.entry(
+                                "settings_row_appearance",
+                                onOpen,
+                                value = summaries.appearance
                             ),
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
-
-                        SettingsSectionLabel("What it shows")
-                        SettingsHubGroup(
-                            entries = listOf(
-                                SettingsPage.LIBRARY.entry(
-                                    "settings_row_library",
-                                    onOpen,
-                                    value = summaries.library
-                                ),
-                                SettingsPage.JOKES.entry(
-                                    "settings_row_jokes",
-                                    onOpen,
-                                    value = summaries.jokes
-                                ),
-                                SettingsPage.SEASONAL.entry(
-                                    "settings_row_seasonal",
-                                    onOpen,
-                                    value = summaries.seasonal
-                                )
+                            SettingsPage.UI.entry(
+                                "settings_row_ui",
+                                onOpen,
+                                value = summaries.interfaceStyle
                             ),
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
+                            SettingsPage.TYPE_AND_DISPLAY.entry(
+                                "settings_row_typedisplay",
+                                onOpen,
+                                value = summaries.type
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
 
-                        SettingsSectionLabel("Device & app")
-                        SettingsHubGroup(
-                            entries = listOf(
-                                SettingsPage.DEVICE.entry(
-                                    "settings_row_device",
-                                    onOpen,
-                                    value = summaries.device
-                                ),
-                                // No value: this app keeps no *last checked* answer, and a
-                                // row that said "Up to date" without having asked would be
-                                // the one lie on a screen of facts.
-                                SettingsPage.UPDATES.entry(
-                                    "settings_row_updates",
-                                    onOpen
-                                ),
-                                SettingsPage.ABOUT.entry(
-                                    "settings_row_about",
-                                    onOpen,
-                                    value = summaries.about
-                                )
+                    SettingsSectionLabel("What it shows")
+                    SettingsHubGroup(
+                        entries = listOf(
+                            SettingsPage.LIBRARY.entry(
+                                "settings_row_library",
+                                onOpen,
+                                value = summaries.library
                             ),
-                            modifier = Modifier.padding(horizontal = 20.dp)
-                        )
+                            SettingsPage.JOKES.entry(
+                                "settings_row_jokes",
+                                onOpen,
+                                value = summaries.jokes
+                            ),
+                            SettingsPage.SEASONAL.entry(
+                                "settings_row_seasonal",
+                                onOpen,
+                                value = summaries.seasonal
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
 
-                    }
+                    SettingsSectionLabel("Device & app")
+                    SettingsHubGroup(
+                        entries = listOf(
+                            SettingsPage.DEVICE.entry(
+                                "settings_row_device",
+                                onOpen,
+                                value = summaries.device
+                            ),
+                            // No value: this app keeps no *last checked* answer, and a
+                            // row that said "Up to date" without having asked would be
+                            // the one lie on a screen of facts.
+                            SettingsPage.UPDATES.entry(
+                                "settings_row_updates",
+                                onOpen
+                            ),
+                            SettingsPage.ABOUT.entry(
+                                "settings_row_about",
+                                onOpen,
+                                value = summaries.about
+                            )
+                        ),
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
                 }
-                // Outside the crossfade, deliberately. This was the last child of
-                // the shelf branch, which made the mode transition its parent: with
-                // `using(null)` the container takes the target's height, and the
-                // stamp could be placed over the rows it is meant to sit under - the
-                // overlap a 2.5.4 screenshot showed as the version printed across
-                // "Device Manager". As a sibling it can only follow the shelf, and
-                // `!searching` keeps it out of a result list.
+                // A sibling of the shelf, never its parent. This was the last child
+                // of a crossfade branch in 2.5.4, which put it inside a container
+                // sized to the *other* mode - and the stamp could be placed over the
+                // rows it is meant to sit under, the overlap a screenshot showed as
+                // the version printed across "Device Manager". `!searching` keeps it
+                // out of a result list.
                 if (!searching) {
                     Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                         SettingsVersionFooter(
