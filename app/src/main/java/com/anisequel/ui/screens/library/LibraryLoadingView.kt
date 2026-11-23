@@ -20,9 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
@@ -87,9 +89,9 @@ fun LibraryLoadingView(
         Spacer(modifier = Modifier.height(16.dp))
 
         when (viewMode) {
-            com.anisequel.domain.ui.LibraryViewMode.LIST,
-            com.anisequel.domain.ui.LibraryViewMode.TABLE,
-            com.anisequel.domain.ui.LibraryViewMode.GROUPED -> {
+            LibraryViewMode.LIST,
+            LibraryViewMode.TABLE,
+            LibraryViewMode.GROUPED -> {
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -135,7 +137,23 @@ fun LibraryLoadingView(
                 }
             }
             else -> {
-                val columns = viewMode.columns.coerceAtLeast(1)
+                // The narrowed count the real grid uses, not the mode's nominal one.
+                // A five-across shelf is drawn three across on a 360dp phone, so the
+                // skeleton promised five covers a row for the whole fetch and then
+                // reflowed into three - the jump this mode-shaped skeleton exists to
+                // avoid. Same helper, same arithmetic as the page.
+                val width = LocalConfiguration.current.screenWidthDp.dp - 32.dp
+                val columns = libraryColumns(viewMode, width)
+                if (viewMode == com.anisequel.domain.ui.LibraryViewMode.MOSAIC) {
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(MOSAIC_HERO_ASPECT),
+                        shape = MaterialTheme.shapes.medium,
+                        phase = phase
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 val showCaptions = viewMode != com.anisequel.domain.ui.LibraryViewMode.COVERS &&
                     viewMode != com.anisequel.domain.ui.LibraryViewMode.SHELF
                 val itemCount = (columns * 4).coerceIn(6, 20)

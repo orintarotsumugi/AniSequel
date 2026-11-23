@@ -28,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -504,6 +506,308 @@ internal fun NovaSequelPolaroid(
                 swipeEnabled = swipeEnabled,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+/**
+ * A missed sequel drawn as the top card of a stack of prints.
+ *
+ * The two sheets behind it are static shapes, not animation: a deck that fanned
+ * itself on every recomposition would be the fidgeting the style switch exists to
+ * stop, and the reader would learn nothing from the movement. They are offset down
+ * and to the right so the pile reads at a glance, and the front card is the usual
+ * wide artwork with the title over a scrim - the same information as a banner, at
+ * two thirds of its height, because the pile has already said "there is more here"
+ * without spending a row on it.
+ *
+ * The quick-add control sits on the card's own surface rather than on the artwork,
+ * for the reason the Polaroid records: it is drawn in theme colours, and a
+ * theme-coloured button over a photograph is a control that disappears in one of
+ * the two themes.
+ */
+@Composable
+internal fun NovaSequelDeck(
+    sequel: MissedSequel,
+    onOpen: () -> Unit,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    onHide: () -> Unit,
+    holdDurationSeconds: Int,
+    swipeEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(modifier = modifier.fillMaxWidth()) {
+        // `matchParentSize` rather than a fixed height: the Box is sized by the
+        // front card, so the two sheets cannot disagree with it about the pile's
+        // size when the title wraps to a second line.
+        NovaSurface(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(start = 20.dp, top = 20.dp)
+                .graphicsLayer { alpha = 0.35f },
+            shape = RoundedCornerShape(20.dp)
+        ) {}
+        NovaSurface(
+            modifier = Modifier
+                .matchParentSize()
+                .padding(start = 10.dp, top = 10.dp)
+                .graphicsLayer { alpha = 0.6f },
+            shape = RoundedCornerShape(20.dp)
+        ) {}
+        NovaSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .bouncyPress(pressedScale = 0.985f, interactionSource = interactionSource)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onOpen)
+                .clip(RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
+            tonalElevation = true
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                    PosterPlaceholder(
+                        title = sequel.sequelTitle,
+                        tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                        modifier = Modifier.matchParentSize()
+                    )
+                    AsyncImage(
+                        model = sequel.sequelCoverUrl,
+                        contentDescription = sequel.sequelTitle,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.88f)
+                                    )
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(0.78f)
+                            .padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        )
+                        Text(
+                            text = sequel.sequelTitle,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(
+                        onClick = onHide,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(48.dp)
+                            .testTag("nova_sequel_deck_hide_${sequel.sequelId}")
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(ExpressiveShapes.pill)
+                                .background(Color.Black.copy(alpha = 0.38f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = AppVectorIcons.Close,
+                                contentDescription = "Not interested",
+                                tint = Color.White,
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                }
+                QuickAddPlanningButton(
+                    mediaId = sequel.sequelId,
+                    isAddedToPlanning = sequel.isAddedToPlanning,
+                    isAddedToWatching = sequel.isAddedToWatching,
+                    isBusy = sequel.isSavingToList,
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching,
+                    holdDurationSeconds = holdDurationSeconds,
+                    swipeEnabled = swipeEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Width of one sprocket gutter of a [NovaSequelFilmstrip]. */
+private val FilmSprocketWidth = 14.dp
+
+/**
+ * A missed sequel drawn as one frame of a film strip.
+ *
+ * The strip is black in both themes on purpose, the way the Polaroid's paper is
+ * cream in both: a film strip is a physical object, and a Material-tinted one reads
+ * as a card with dots on it. The sprocket holes are drawn rather than shipped as an
+ * asset - they are four rectangles in a loop, and the app has no PNGs.
+ *
+ * The frame is the artwork and the caption over it; the actions are a strip below,
+ * because a film frame has no room for a button without covering the picture.
+ */
+@Composable
+internal fun NovaSequelFilmstrip(
+    sequel: MissedSequel,
+    onOpen: () -> Unit,
+    onAddToPlanning: () -> Unit,
+    onAddToWatching: () -> Unit,
+    onHide: () -> Unit,
+    holdDurationSeconds: Int,
+    swipeEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val film = Color(0xFF16151A)
+    val frameInk = Color(0xFFF4F1EA)
+    NovaSurface(
+        modifier = modifier
+            .fillMaxWidth()
+            .bouncyPress(pressedScale = 0.985f, interactionSource = interactionSource)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onOpen)
+            .clip(RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = true
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(126.dp)
+                    .background(film)
+            ) {
+                FilmSprockets()
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .padding(vertical = 7.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                ) {
+                    PosterPlaceholder(
+                        title = sequel.sequelTitle,
+                        tint = sequel.sequelMedia.posterColor.toCoverColorOrNull(),
+                        modifier = Modifier.matchParentSize()
+                    )
+                    AsyncImage(
+                        model = sequel.sequelCoverUrl,
+                        contentDescription = sequel.sequelTitle,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color.Black.copy(alpha = 0.86f), Color.Transparent)
+                                )
+                            )
+                    )
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxWidth(0.8f)
+                            .padding(start = 12.dp, end = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = sequel.relationLabel.uppercase(java.util.Locale.ROOT),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = frameInk.copy(alpha = 0.72f),
+                            letterSpacing = 1.4.sp
+                        )
+                        Text(
+                            text = sequel.sequelTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = frameInk,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                FilmSprockets()
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                QuickAddPlanningButton(
+                    mediaId = sequel.sequelId,
+                    isAddedToPlanning = sequel.isAddedToPlanning,
+                    isAddedToWatching = sequel.isAddedToWatching,
+                    isBusy = sequel.isSavingToList,
+                    onAddToPlanning = onAddToPlanning,
+                    onAddToWatching = onAddToWatching,
+                    holdDurationSeconds = holdDurationSeconds,
+                    swipeEnabled = swipeEnabled,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onHide,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("nova_sequel_filmstrip_hide_${sequel.sequelId}")
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Close,
+                        contentDescription = "Not interested",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One gutter of perforations down the side of a film-strip frame. */
+@Composable
+private fun FilmSprockets(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.width(FilmSprocketWidth).fillMaxHeight()) {
+        val holeWidth = size.width * 0.52f
+        val holeHeight = 6.dp.toPx()
+        val gap = 9.dp.toPx()
+        val radius = CornerRadius(1.5.dp.toPx())
+        var top = gap
+        // Drawn to the frame's own height rather than a fixed count: the frame is
+        // 126dp today, and a hard-coded six holes would leave a gap at the bottom
+        // the first time that number moved.
+        while (top + holeHeight < size.height - gap) {
+            drawRoundRect(
+                color = Color.White.copy(alpha = 0.20f),
+                topLeft = Offset((size.width - holeWidth) / 2f, top),
+                size = Size(holeWidth, holeHeight),
+                cornerRadius = radius
+            )
+            top += holeHeight + gap
         }
     }
 }

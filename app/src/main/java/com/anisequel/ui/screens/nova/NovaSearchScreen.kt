@@ -37,12 +37,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -90,6 +92,7 @@ import com.anisequel.ui.theme.LocalSearchAnimeEnabled
 import com.anisequel.ui.theme.LocalSearchMangaEnabled
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** How long the field waits after a keystroke before asking AniList. */
@@ -187,6 +190,70 @@ fun NovaSearchScreen(
     val friends by detailHost.friends.collectAsStateWithLifecycle()
     val friendsLoadingIds by detailHost.friendsLoading.collectAsStateWithLifecycle()
 
+    /**
+     * The one place a search is asked for.
+     *
+     * A local function rather than the body of the effect, because the "Try again"
+     * control has to make the *same* request as the search it repeats, and a second
+     * copy is how a retry quietly starts asking a different question. It does not
+     * debounce - the caller decides that - so pressing the button goes out at once
+     * while typing still waits for the burst to end.
+     */
+    suspend fun runSearch(term: String, type: MediaSearchType, generation: Int) {
+        isSearching = true
+        error = null
+        try {
+            repository.searchMedia(term, type)
+                .onSuccess { found ->
+                    // A repository implementation may complete despite cancellation.
+                    // The generation check prevents its stale answer replacing the
+                    // results for the query currently visible in the field.
+                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
+                        results = found
+                        searchedTerm = term
+                        searchedType = type
+                        error = null
+                        // A settled search is a system moment the reader can invite
+                        // a line into. Announced only for a real answer with results:
+                        // a joke over "nothing found" would read as the app mocking
+                        // the query it just failed.
+                        if (found.isNotEmpty()) {
+                            JokeMomentBus.announce(JokeMoment.SEARCH)
+                        }
+                    }
+                }
+                .onFailure { failure ->
+                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
+                        // The results already on screen are kept. This used to clear
+                        // them, so one rate-limited refinement threw away a complete,
+                        // still-true answer the reader was reading and replaced it
+                        // with a one-line apology. A failure is about the *new* term;
+                        // it is not evidence that the old answer was wrong.
+                        searchedTerm = term
+                        error = failure.message ?: "AniList did not answer."
+                    }
+                }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } finally {
+            if (isCurrentSearchGeneration(generation, requestGeneration)) isSearching = false
+        }
+    }
+
+    val searchScope = rememberCoroutineScope()
+    // No debounce here: the reader has already waited once, and tapping the control
+    // is the strongest possible statement that they mean this query now.
+    val retrySearch: () -> Unit = {
+        val type = activeType
+        val term = query.trim()
+        if (type != null && term.length >= SEARCH_MIN_LENGTH) {
+            val generation = ++requestGeneration
+            searchScope.launch {
+                runSearch(term = term, type = type, generation = generation)
+            }
+        }
+    }
+
     LaunchedEffect(query, activeType) {
         val type = activeType
         if (type == null) {
@@ -218,39 +285,8 @@ fun NovaSearchScreen(
 
         isSearching = true
         error = null
-        try {
-            delay(SEARCH_DEBOUNCE_MILLIS)
-            repository.searchMedia(term, type)
-                .onSuccess { found ->
-                    // A repository implementation may complete despite cancellation.
-                    // The generation check prevents its stale answer replacing the
-                    // results for the query currently visible in the field.
-                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
-                        results = found
-                        searchedTerm = term
-                        searchedType = type
-                        error = null
-                        // A settled search is a system moment the reader can invite
-                        // a line into. Announced only for a real answer with results:
-                        // a joke over "nothing found" would read as the app mocking
-                        // the query it just failed.
-                        if (found.isNotEmpty()) {
-                            JokeMomentBus.announce(JokeMoment.SEARCH)
-                        }
-                    }
-                }
-                .onFailure { failure ->
-                    if (isCurrentSearchGeneration(generation, requestGeneration)) {
-                        results = emptyList()
-                        searchedTerm = term
-                        error = failure.message ?: "AniList did not answer."
-                    }
-                }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } finally {
-            if (isCurrentSearchGeneration(generation, requestGeneration)) isSearching = false
-        }
+        delay(SEARCH_DEBOUNCE_MILLIS)
+        runSearch(term = term, type = type, generation = generation)
     }
 
     NovaBackdrop(modifier = modifier.fillMaxSize()) {
@@ -272,8 +308,7 @@ fun NovaSearchScreen(
                 query = query,
                 onQueryChange = { query = it },
                 activeType = activeType,
-                isSearching = isSearching,
-                hasResults = results.isNotEmpty()
+                isSearching = isSearching
             )
             CatalogueSearchBody(
                 activeType = activeType,
@@ -283,6 +318,7 @@ fun NovaSearchScreen(
                 searchedTerm = searchedTerm,
                 isSearching = isSearching,
                 error = error,
+                onRetry = retrySearch,
                 onOpenMedia = { selectedMedia = it },
                 modifier = Modifier
                     .weight(1f)
@@ -403,8 +439,7 @@ private fun CatalogueSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     activeType: MediaSearchType?,
-    isSearching: Boolean,
-    hasResults: Boolean
+    isSearching: Boolean
 ) {
     OutlinedTextField(
         value = query,
@@ -441,20 +476,19 @@ private fun CatalogueSearchField(
             )
         },
         trailingIcon = {
-            when {
-                // Keep the results that are already on screen while the next
-                // answer is on the wire. Replacing the grid with the skeleton
-                // on every keystroke tore down a whole screen of cards after
-                // the debounce started and rebuilt it when it ended, which is
-                // what made typing feel like the page was reloading.
-                isSearching && hasResults -> {
+            // Both, not either. The clear button used to be *replaced* by the
+            // spinner while a request was in flight - identical to the results
+            // staying on screen and the field staying readable - so the one moment
+            // the reader most wants to start over was the moment there was no way
+            // to empty the field. The indicator is a second, smaller element now.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isSearching) {
                     ExpressiveLoadingIndicator(
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(16.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                query.isNotEmpty() -> {
+                if (query.isNotEmpty()) {
                     IconButton(
                         onClick = { onQueryChange("") },
                         modifier = Modifier.testTag("nova_search_clear")
@@ -481,6 +515,7 @@ private fun CatalogueSearchBody(
     searchedTerm: String,
     isSearching: Boolean,
     error: String?,
+    onRetry: () -> Unit,
     onOpenMedia: (MediaNode) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -490,7 +525,11 @@ private fun CatalogueSearchBody(
     // here because the reset belongs to the grid, and keyed on the answer rather
     // than on every keystroke: typing must not scroll a page that is not changing.
     val resultGridState = rememberLazyGridState()
-    LaunchedEffect(searchedTerm, activeType) {
+    // Keyed on the answer, not the term. A failed search still sets `searchedTerm`
+    // (it is what the note is about), so keying on it scrolled the reader to the top
+    // of results that had not changed, under a failure that had nothing to do with
+    // where they were reading.
+    LaunchedEffect(results, activeType) {
         resultGridState.scrollToItem(0)
     }
     Box(modifier = modifier) {
@@ -508,9 +547,10 @@ private fun CatalogueSearchBody(
 
             isSearching && results.isEmpty() -> SearchSkeleton()
 
-            error != null -> SearchNote(
-                text = "Couldn't search AniList - $error"
-            )
+            // A failure with no answer on screen is this note; a failure *with* an
+            // answer keeps the grid and puts the note above it (see the grid branch).
+            error != null && results.isEmpty() ->
+                SearchFailureNote(message = error, onRetry = onRetry)
 
             results.isEmpty() -> SearchNote(
                 text = "No ${activeLabel ?: "catalogue"} title matches " +
@@ -563,6 +603,18 @@ private fun CatalogueSearchBody(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                    }
+                }
+                if (error != null) {
+                    // The previous answer is still true, so it stays; this strip says
+                    // the *new* query did not arrive, and offers the one action that
+                    // can change that without editing the field.
+                    item(
+                        key = "search_stale_failure",
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = "search_summary"
+                    ) {
+                        SearchFailureNote(message = error, onRetry = onRetry)
                     }
                 }
                 items(
@@ -725,6 +777,31 @@ private fun SearchSkeleton() {
                 ShimmerBox(modifier = Modifier.fillMaxWidth(0.9f).height(13.dp), phase = phase)
                 ShimmerBox(modifier = Modifier.fillMaxWidth(0.62f).height(10.dp), phase = phase)
             }
+        }
+    }
+}
+
+/**
+ * A failed search, said in one line, with the one control that can change it.
+ *
+ * It replaces the bare sentence the page used to print: "Couldn't search AniList -
+ * ..." with no way forward, so the reader's only exit was to edit the field and hope
+ * the next keystroke fared better. AniList's own client guidance for this state is a
+ * retry action rather than an empty list, and the request is right there.
+ */
+@Composable
+private fun SearchFailureNote(message: String, onRetry: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            text = "Couldn't search AniList - $message",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error
+        )
+        TextButton(
+            onClick = onRetry,
+            modifier = Modifier.testTag("nova_search_retry")
+        ) {
+            Text("Try again")
         }
     }
 }

@@ -20,6 +20,11 @@ class InterfaceModesTest {
         assertEquals(LibraryViewMode.GROUPED, LibraryViewMode.fromStorage("grouped"))
         assertEquals(LibraryViewMode.TABLE, LibraryViewMode.fromStorage("table"))
         assertEquals(LibraryViewMode.COVERS, LibraryViewMode.fromStorage("covers"))
+        assertEquals(LibraryViewMode.MOSAIC, LibraryViewMode.fromStorage("mosaic"))
+        assertEquals(
+            LibraryViewMode.GROUPED_COVERS,
+            LibraryViewMode.fromStorage("grouped_covers")
+        )
         assertEquals(LibraryViewMode.CARDS, LibraryViewMode.DEFAULT)
         assertEquals(LibraryViewMode.CARDS, LibraryViewMode.fromStorage(null))
         assertEquals(
@@ -29,6 +34,8 @@ class InterfaceModesTest {
         )
         assertEquals(HomeSequelStyle.BANNER, HomeSequelStyle.fromStorage("banner"))
         assertEquals(HomeSequelStyle.SHELF, HomeSequelStyle.fromStorage("shelf"))
+        assertEquals(HomeSequelStyle.DECK, HomeSequelStyle.fromStorage("deck"))
+        assertEquals(HomeSequelStyle.FILMSTRIP, HomeSequelStyle.fromStorage("filmstrip"))
         assertEquals(MediaCardStyle.COVER_ONLY, MediaCardStyle.fromStorage("cover_only"))
     }
 

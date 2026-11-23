@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -162,6 +163,164 @@ internal fun PolaroidStylePreview(entry: MediaListEntryItem?, modifier: Modifier
                 // the episode count is actually readable at the size this is drawn.
                 color = Color(0xFF23211F).copy(alpha = 0.68f),
                 maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * A deck: two sheets behind, the top card carrying the artwork and the caption.
+ *
+ * Drawn at the same relationship the real card uses - the sheets offset down and to
+ * the right by their own shares of the card - so the reader is choosing the pile
+ * they will actually scroll past, not a diagram of one.
+ */
+@Composable
+internal fun DeckStylePreview(entry: MediaListEntryItem?, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.86f)
+                .graphicsLayer {
+                    translationX = 10.dp.toPx()
+                    translationY = 8.dp.toPx()
+                    alpha = 0.35f
+                }
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.86f)
+                .graphicsLayer {
+                    translationX = 5.dp.toPx()
+                    translationY = 4.dp.toPx()
+                    alpha = 0.6f
+                }
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .fillMaxHeight(0.86f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                MiniCover(entry = entry, modifier = Modifier.fillMaxSize())
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                            )
+                        )
+                )
+                Text(
+                    text = previewTitle(entry),
+                    style = miniBodyStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                )
+            }
+            Text(
+                text = "Watch sequel",
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(vertical = 4.dp)
+            )
+        }
+    }
+}
+
+/** A film strip: sprockets down both sides of one wide frame. */
+@Composable
+internal fun FilmstripStylePreview(entry: MediaListEntryItem?, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF16151A)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MiniSprockets()
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .padding(vertical = 8.dp)
+                .clip(RoundedCornerShape(4.dp))
+        ) {
+            MiniCover(entry = entry, modifier = Modifier.fillMaxSize())
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(alpha = 0.84f), Color.Transparent)
+                        )
+                    )
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "SEQUEL",
+                    style = miniCaptionStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF4F1EA).copy(alpha = 0.72f),
+                    maxLines = 1
+                )
+                Text(
+                    text = previewTitle(entry),
+                    style = miniBodyStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFF4F1EA),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        MiniSprockets()
+    }
+}
+
+/** The perforations, at the size this preview can carry. */
+@Composable
+private fun MiniSprockets() {
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceEvenly
+    ) {
+        repeat(5) {
+            Box(
+                modifier = Modifier
+                    .size(width = 5.dp, height = 3.dp)
+                    .clip(RoundedCornerShape(1.dp))
+                    .background(Color.White.copy(alpha = 0.2f))
             )
         }
     }

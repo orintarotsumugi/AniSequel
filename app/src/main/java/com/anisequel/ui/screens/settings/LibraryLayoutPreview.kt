@@ -92,6 +92,8 @@ internal fun LibraryViewPreview(
                             LibraryViewMode.SHELF -> MiniGrid(entries, 5, false)
                             LibraryViewMode.TABLE -> MiniTable(entries)
                             LibraryViewMode.COVERS -> MiniCoverWall(entries)
+                            LibraryViewMode.MOSAIC -> MiniMosaic(entries)
+                            LibraryViewMode.GROUPED_COVERS -> MiniGroupedCovers(entries)
                         }
                     }
                 }
@@ -388,6 +390,89 @@ private fun MiniList(entries: List<MediaListEntryItem>) {
                         style = miniCaptionStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Mosaic: one wide anchor cover over a row of two.
+ *
+ * The preview has room for one repetition of the pattern, which is enough - the
+ * thing being chosen is the rhythm, and a second hero row would show the same
+ * rhythm twice.
+ */
+@Composable
+private fun MiniMosaic(entries: List<MediaListEntryItem>) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.15f)
+                .clip(RoundedCornerShape(10.dp))
+        ) {
+            MiniCover(
+                entry = previewEntry(entries, 0),
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            repeat(2) { index ->
+                Column(modifier = Modifier.weight(1f)) {
+                    MiniCover(
+                        entry = previewEntry(entries, index + 1),
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = previewTitle(previewEntry(entries, index + 1)),
+                        style = miniCaptionStyle(),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Grouped covers: the status headings of Grouped, with poster rows under them.
+ *
+ * Two headings with one row each rather than one heading with two: the mode's whole
+ * claim is that the wall is *sorted*, and a single section cannot show that.
+ */
+@Composable
+private fun MiniGroupedCovers(entries: List<MediaListEntryItem>) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        listOf("Watching", "Completed").forEachIndexed { groupIndex, heading ->
+            Text(
+                text = heading.uppercase(),
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                repeat(3) { index ->
+                    MiniCover(
+                        entry = previewEntry(entries, groupIndex * 3 + index),
+                        modifier = Modifier.weight(1f).fillMaxHeight()
                     )
                 }
             }

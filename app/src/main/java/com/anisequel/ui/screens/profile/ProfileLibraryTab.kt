@@ -64,6 +64,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.LocalMediaCardStyle
 import com.anisequel.ui.components.cards.ListOwner
 import com.anisequel.ui.components.cards.MediaPosterCell
+import com.anisequel.ui.components.cards.POSTER_ASPECT
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.ui.components.cards.PosterSkeletonMosaic
@@ -80,6 +81,8 @@ import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.screens.library.LibraryGroupHeading
 import com.anisequel.ui.screens.library.LibraryListRow
+import com.anisequel.ui.screens.library.MOSAIC_HERO_ASPECT
+import com.anisequel.ui.screens.library.MOSAIC_HERO_EVERY
 import com.anisequel.ui.screens.library.LibraryTableHeader
 import com.anisequel.ui.screens.library.libraryColumns
 import com.anisequel.ui.theme.AniSequelTheme
@@ -667,6 +670,18 @@ fun ProfileLibraryTab(
     val unclassified = remember(visible) {
         visible.filter { ListStatuses.normalize(it.status) == null }
     }
+    // Mosaic's wide cells, by key rather than by index: the span lambda and the cell
+    // both need the answer, and looking it up with `indexOf` walked the list once per
+    // visible poster.
+    val heroKeys = remember(visible, viewMode) {
+        if (viewMode != LibraryViewMode.MOSAIC) {
+            emptySet<String>()
+        } else {
+            visible.filterIndexed { index, _ -> index % MOSAIC_HERO_EVERY == 0 }
+                .map { it.media.namespaceKey }
+                .toSet()
+        }
+    }
 
     // Switching type replaces the visible list. Without resetting scroll, a reader
     // scrolled deep in one list can land mid-way through the other at a position
@@ -798,7 +813,11 @@ fun ProfileLibraryTab(
             item(span = { GridItemSpan(maxLineSpan) }, key = "library_error", contentType = "state") {
                 PendingDataNote(
                     "Couldn't load this list - $scopedError. Your bio, " +
-                        "favourites and stats are still here."
+                        "favourites and stats are still here.",
+                    // A failure is an answer. Drawn with the default this spun a
+                    // loader beside the message, promising a result that had already
+                    // arrived and *was* the failure.
+                    busy = false
                 )
             }
         }
@@ -917,6 +936,69 @@ fun ProfileLibraryTab(
                         }
                     }
                 }
+                LibraryViewMode.GROUPED_COVERS -> {
+                    // The same headings the row grouping draws, over the grid the reader
+                    // chose. Drawn with the profile's own poster cell rather than the
+                    // Library's: the cell is what carries the owner's rating and the
+                    // favourite mark on this page.
+                    grouped.forEach { (option, entries) ->
+                        item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            key = "library_group_covers_${option.apiValue}",
+                            contentType = "header"
+                        ) {
+                            LibraryGroupHeading(
+                                label = option.labelFor(type == LibraryType.MANGA),
+                                count = entries.size
+                            )
+                        }
+                        items(
+                            items = entries,
+                            key = { it.media.namespaceKey },
+                            contentType = { "library_group_covers" }
+                        ) { entry ->
+                            LibraryPoster(
+                                entry = entry,
+                                owner = listOwner,
+                                isFavourite = entry.media.namespaceKey in favouriteIds,
+                                modifier = Modifier
+                                    .widthIn(max = ProfileMaxContentWidth)
+                                    .fillMaxWidth()
+                                    .then(animateLibraryItem()),
+                                onClick = {
+                                    onOpenDetail(entry.media.withListStatus(entry.status))
+                                }
+                            )
+                        }
+                    }
+                    if (unclassified.isNotEmpty()) {
+                        item(
+                            span = { GridItemSpan(maxLineSpan) },
+                            key = "library_group_covers_other",
+                            contentType = "header"
+                        ) {
+                            LibraryGroupHeading(label = "Other", count = unclassified.size)
+                        }
+                        items(
+                            items = unclassified,
+                            key = { it.media.namespaceKey },
+                            contentType = { "library_group_covers" }
+                        ) { entry ->
+                            LibraryPoster(
+                                entry = entry,
+                                owner = listOwner,
+                                isFavourite = entry.media.namespaceKey in favouriteIds,
+                                modifier = Modifier
+                                    .widthIn(max = ProfileMaxContentWidth)
+                                    .fillMaxWidth()
+                                    .then(animateLibraryItem()),
+                                onClick = {
+                                    onOpenDetail(entry.media.withListStatus(entry.status))
+                                }
+                            )
+                        }
+                    }
+                }
                 else -> {
                     items(
                         items = visible,
@@ -925,6 +1007,13 @@ fun ProfileLibraryTab(
                         // namespaces share their numbers. Two rows claiming one key is not a
                         // duplicated badge, it is the lazy layout failing on a duplicate key.
                         key = { it.media.namespaceKey },
+                        span = { entry ->
+                            if (entry.media.namespaceKey in heroKeys) {
+                                GridItemSpan(maxLineSpan)
+                            } else {
+                                GridItemSpan(1)
+                            }
+                        },
                         contentType = { "library_${viewMode.storageValue}" }
                     ) { entry ->
                         LibraryPoster(
@@ -936,6 +1025,7 @@ fun ProfileLibraryTab(
                             // inconsistent with the Nova library view.
                             showTitle = viewMode != LibraryViewMode.COVERS &&
                                 viewMode != LibraryViewMode.SHELF,
+                            hero = entry.media.namespaceKey in heroKeys,
                             modifier = Modifier
                                 .widthIn(max = ProfileMaxContentWidth)
                                 .fillMaxWidth()
@@ -1205,7 +1295,16 @@ private fun LibraryPoster(
      * artwork, its tint and the chosen card style are what that mode is for - only
      * the repeated name is removed.
      */
-    showTitle: Boolean = true
+    showTitle: Boolean = true,
+    /**
+     * Mosaic's full-width cell, drawn landscape.
+     *
+     * The mode owns its arrangement - it already owns the columns and the caption
+     * policy - so the wide tile's proportion belongs to it rather than to the card
+     * design, which would stretch a full-width poster to twice the height of a phone
+     * screen.
+     */
+    hero: Boolean = false
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
@@ -1234,6 +1333,7 @@ private fun LibraryPoster(
             score = score,
             style = style,
             titleVisible = showTitle,
+            aspect = if (hero) MOSAIC_HERO_ASPECT else POSTER_ASPECT,
             modifier = Modifier.fillMaxWidth(),
             overlay = {
                 val progress: String? = libraryProgressLabel(entry)
