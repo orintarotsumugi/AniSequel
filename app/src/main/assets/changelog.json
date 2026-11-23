@@ -1,6 +1,19 @@
 {
   "versions": [
 {
+    "version": "2.5.6",
+    "entries": [
+      {
+        "title": "The Settings shelf stacks its cards again",
+        "detail": "2.5.4 wrapped the shelf and the search results in one crossfade, and every card on the page landed on the top row. AnimatedContent places each direct child of its content lambda at the same origin - it is a box with one position, not a column - so the account card, the three section labels and the three groups were all drawn on top of each other, and only the last group drawn (\"Device Manager\", \"Updates\", \"About & support\") could be seen or tapped. The swap is a plain conditional again, the way 2.5.3 had it."
+      },
+      {
+        "title": "Searching replaces the shelf without animating it",
+        "detail": "The crossfade that opened the shelf was the animation, and it was the wrong motion for the job: a query replaces one list with another rather than moving between two places. Typing now swaps the answers in place of the shelf, with no entrance to land in the wrong position."
+      }
+    ]
+  },
+{
     "version": "2.5.5",
     "entries": [
       {

@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.5.5"
-val BASELINE_VERSION_CODE = 690
+val BASELINE_VERSION_NAME = "2.5.6"
+val BASELINE_VERSION_CODE = 691
 
 plugins {
   alias(libs.plugins.android.application)
@@ -132,12 +132,20 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       isCrunchPngs = true
-      // A pull request signs a throwaway APK for review. It still runs R8 with
-      // shrinking, obfuscation and resource shrinking - so the keep rules and
-      // missing classes are exercised before merge - but skips the whole-program
-      // optimization passes (inlining, class merging) that dominate R8's wall
-      // time. Shipped builds on main and on tags never set this property, so
-      // they keep the fully optimized R8 output. See proguard-fast-rules.pro.
+      // A throwaway build signs an APK that only has to prove the keep rules and
+      // the missing-class warnings are clean before merge. It still runs R8 with
+      // shrinking, obfuscation and resource shrinking - but skips the
+      // whole-program optimization passes (inlining, class merging) that dominate
+      // R8's wall time. Shipped builds on main and on tags never set this
+      // property, so they keep the fully optimized R8 output. See
+      // proguard-fast-rules.pro.
+      //
+      // Nothing in CI passes it: pull requests build the `debug` variant instead,
+      // which is why a PR no longer exercises the release rule set at all (see the
+      // note in .github/workflows/android-release.yml). It is reachable only from a
+      // local `./gradlew assembleRelease -PanisequelFastR8=true`, for a build that
+      // has to prove the keep rules pack a working APK without paying for the
+      // optimization passes on the way.
       val fastR8 = project.findProperty("anisequelFastR8")?.toString()?.toBoolean() == true
       val r8Rules = mutableListOf<Any>(
         getDefaultProguardFile("proguard-android-optimize.txt"),
