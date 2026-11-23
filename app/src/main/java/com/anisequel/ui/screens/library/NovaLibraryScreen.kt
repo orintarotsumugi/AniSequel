@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -204,6 +205,7 @@ fun NovaLibraryScreen(
             animeCount = animeEntries.size,
             mangaCount = mangaEntries.size,
             isLoadingManga = isLoadingManga,
+            isLoadingAnime = isAnimeLoading,
             activeFilterCount = advancedFilters.activeCount,
             onSearchOpenChange = { searchOpen = it },
             onOpenFilters = { filterOpen = true },
@@ -222,6 +224,7 @@ fun NovaLibraryScreen(
             onToggleDirection = { chooseSort(sort, !sortAscending) },
             filter = filter,
             counts = counts,
+            countsKnown = !(if (isManga) isLoadingManga else isAnimeLoading),
             onChooseFilter = chooseFilter
         )
 
@@ -432,9 +435,26 @@ private fun NovaLibraryResolving() {
                 }
             }
             else -> {
-                val columns = viewMode.columns.coerceAtLeast(1)
+                // The *narrowed* count the real grid will use, not the mode's
+                // nominal one. On a 360dp phone a five-across shelf is drawn three
+                // across, so the skeleton used to promise five covers a row for the
+                // length of the fetch and then reflow into three - the exact jump
+                // the mode-shaped skeleton exists to prevent.
+                val width = LocalConfiguration.current.screenWidthDp.dp - 32.dp
+                val columns = libraryColumns(viewMode, width)
                 val showCaptions = viewMode != LibraryViewMode.COVERS &&
                     viewMode != LibraryViewMode.SHELF
+                if (viewMode == LibraryViewMode.MOSAIC) {
+                    // Mosaic opens with its wide anchor cell, so the placeholder does
+                    // too; without it the first real frame collapsed the row above it.
+                    ShimmerBox(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(MOSAIC_HERO_ASPECT),
+                        shape = RoundedCornerShape(16.dp),
+                        phase = phase
+                    )
+                }
                 val rows = if (columns >= 4) 3 else 2
                 repeat(rows) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -480,13 +500,22 @@ private fun NovaLibraryEmpty(
             .fillMaxSize()
             .padding(top = 8.dp)
     ) {
-        if (awaitingAnime) {
+        // The skeleton below already says the list is coming; a line above it saying
+        // the same thing made an empty Library open with two loading states stacked
+        // on each other. The note stays for the case it exists for - a list that has
+        // rows already and is still being completed.
+        if (awaitingAnime && !showsMangaLoader) {
             PendingDataNote("Still fetching this list - these counts are not final yet")
         }
         if (scopedError != null && !awaitingAnime) {
+            // `busy = false`: a failure is an answer, not a wait. With the default
+            // this note spun a loader beside "Couldn't load this list", promising an
+            // answer that had already arrived - the rule PendingDataNote documents
+            // and the profile's stats tab already follows.
             PendingDataNote(
                 "Couldn't load this list - $scopedError. " +
-                    "Your bio, favourites and stats are still here."
+                    "Your bio, favourites and stats are still here.",
+                busy = false
             )
         }
         when {

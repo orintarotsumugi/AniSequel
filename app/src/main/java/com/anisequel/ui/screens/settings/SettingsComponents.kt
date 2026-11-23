@@ -101,8 +101,16 @@ fun SectionCard(
     // a target that was still moving, and the tile arrived after the card it sits
     // on.
     Card(
-        modifier = modifier.fillMaxWidth()
-            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize),
+        // `animateContentSize` is deliberately *not* here; it is on the content
+        // column below. On the card's own modifier chain the size animates outside
+        // the card's drawing, so the card was measured and drawn at its **settled**
+        // height on the first frame while only its clip grew - the border therefore
+        // floated at the final position across a card that was still halfway open,
+        // and the reader saw a line move through the expanding paragraph and settle
+        // when it was done ("z-fighting", in the words of the report). Animating the
+        // inner column instead makes the card itself the animating size, so the
+        // outline is drawn at the edge that is actually visible on every frame.
+        modifier = modifier.fillMaxWidth(),
         shape = ExpressiveShapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -111,7 +119,11 @@ fun SectionCard(
         // border was the only thing defining the card and it could not be seen.
         border = BorderStroke(1.dp, AniSequelTheme.emphasis.divider)
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(18.dp)
+                .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Box(

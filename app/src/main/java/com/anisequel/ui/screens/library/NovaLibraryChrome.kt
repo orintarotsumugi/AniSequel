@@ -74,6 +74,8 @@ internal fun NovaLibraryHeader(
     animeCount: Int,
     mangaCount: Int,
     isLoadingManga: Boolean,
+    /** Whether the anime half is still on the wire - the counts say nothing yet. */
+    isLoadingAnime: Boolean,
     activeFilterCount: Int,
     onSearchOpenChange: (Boolean) -> Unit,
     onOpenFilters: () -> Unit,
@@ -105,7 +107,11 @@ internal fun NovaLibraryHeader(
                         maxLines = 1
                     )
                     Text(
-                        text = librarySubtitle(size = scopedSize, username = username),
+                        text = librarySubtitle(
+                            size = scopedSize,
+                            username = username,
+                            loading = if (isManga) isLoadingManga else isLoadingAnime
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -183,15 +189,23 @@ internal fun NovaLibraryHeader(
                 animeCount = animeCount,
                 mangaCount = mangaCount,
                 isLoadingManga = isLoadingManga,
+                isLoadingAnime = isLoadingAnime,
                 onSelect = onSelectType
             )
         }
     }
 }
 
-private fun librarySubtitle(size: Int, username: String?): String = buildString {
-    append(size)
-    append(if (size == 1) " title" else " titles")
+private fun librarySubtitle(size: Int, username: String?, loading: Boolean): String = buildString {
+    // "0 titles" is the one thing this line must never say while a fetch is in
+    // flight: the count has not been read yet, so zero is not an answer, it is the
+    // absence of one. It said exactly that for the length of every cold start.
+    if (loading) {
+        append("Loading your list")
+    } else {
+        append(size)
+        append(if (size == 1) " title" else " titles")
+    }
     username?.takeIf { it.isNotBlank() }?.let {
         append(" · @")
         append(it)
@@ -211,6 +225,8 @@ internal fun NovaLibraryTools(
     onToggleDirection: () -> Unit,
     filter: LibraryFilter,
     counts: Map<LibraryFilter, Int>,
+    /** False while the scoped half is still downloading: the counts are not answers. */
+    countsKnown: Boolean,
     onChooseFilter: (LibraryFilter) -> Unit
 ) {
     AnimatedVisibility(
@@ -266,6 +282,7 @@ internal fun NovaLibraryTools(
             NovaFilterPill(
                 label = option.labelFor(isManga),
                 count = counts[option] ?: 0,
+                countKnown = countsKnown,
                 selected = option == filter,
                 onClick = { onChooseFilter(option) },
                 testTag = "nova_library_filter_${option.name.lowercase(java.util.Locale.ROOT)}"
@@ -291,6 +308,7 @@ private fun NovaTypeSwitch(
     animeCount: Int,
     mangaCount: Int,
     isLoadingManga: Boolean,
+    isLoadingAnime: Boolean,
     onSelect: (LibraryType) -> Unit
 ) {
     Row(
@@ -305,6 +323,10 @@ private fun NovaTypeSwitch(
             LibraryType.MANGA to mangaCount
         ).forEach { (option, count) ->
             val selected = option == type
+            // A half that is still downloading has no count to print. It used to
+            // print 0 in a badge beside the word "Loading", which is both a
+            // contradiction and the number a reader is least able to trust.
+            val loading = if (option == LibraryType.MANGA) isLoadingManga else isLoadingAnime
             val container by animateColorAsState(
                 targetValue = if (selected) {
                     MaterialTheme.colorScheme.primary
@@ -362,20 +384,22 @@ private fun NovaTypeSwitch(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(ExpressiveShapes.pill)
-                        .background(content.copy(alpha = if (selected) 0.18f else 0.10f))
-                        .padding(horizontal = 7.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = count.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = content,
-                        maxLines = 1
-                    )
+                if (!loading) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(ExpressiveShapes.pill)
+                            .background(content.copy(alpha = if (selected) 0.18f else 0.10f))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = count.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = content,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -387,6 +411,7 @@ private fun NovaTypeSwitch(
 private fun NovaFilterPill(
     label: String,
     count: Int,
+    countKnown: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
     testTag: String
@@ -447,7 +472,12 @@ private fun NovaFilterPill(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = count.toString(),
+                // An em dash, not a zero: every pill reading (0) over a list that
+                // had not arrived yet was the app claiming to have counted a
+                // library it was still downloading. The dash says "not yet" and
+                // stays a dash for nothing else, because a known count is always
+                // a number.
+                text = if (countKnown) count.toString() else "–",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = content,

@@ -218,6 +218,8 @@ internal fun SequelStylePreview(
                     }
                     HomeSequelStyle.TICKET -> TicketStylePreview(entry = previewEntry(entries, 0))
                     HomeSequelStyle.POLAROID -> PolaroidStylePreview(entry = previewEntry(entries, 0))
+                    HomeSequelStyle.DECK -> DeckStylePreview(entry = previewEntry(entries, 0))
+                    HomeSequelStyle.FILMSTRIP -> FilmstripStylePreview(entry = previewEntry(entries, 0))
                 }
             }
         }

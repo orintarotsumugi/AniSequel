@@ -1,7 +1,7 @@
 {
-  "version": "2.5.6",
-  "version_code": 691,
-  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.5.6",
-  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.5.6/anisequel-universal.apk",
-  "notes": "- The Settings shelf stacks its cards again: 2.5.4 wrapped the shelf and the search results in one crossfade, and every card on the page landed on the top row. AnimatedContent places each direct child of its content lambda at the same origin - it is a box with one position, not a column - so the account card, the three section labels and the three groups were all drawn on top of each other, and only the last group drawn (\"Device Manager\", \"Updates\", \"About & support\") could be seen or tapped. The swap is a plain conditional again, the way 2.5.3 had it.\n- Searching replaces the shelf without animating it: The crossfade that opened the shelf was the animation, and it was the wrong motion for the job: a query replaces one list with another rather than moving between two places. Typing now swaps the answers in place of the shelf, with no entrance to land in the wrong position.\nBuild 691."
+  "version": "2.5.7",
+  "version_code": 692,
+  "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.5.7",
+  "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.5.7/anisequel-universal.apk",
+  "notes": "- Two new Library views: Mosaic (two across with every third cover full width) and Grouped covers (the status headings over the poster grid).\n- Two new Home sequel styles: Deck (a pile with two sheets behind the top card) and Film strip (sprockets down both sides of one wide frame).\n- The Settings card outline no longer flickers across the card while a section expands or collapses: the size animation is on the content now, so the border is drawn at the edge that is really there.\n- Fifteen loading fixes across the Library, search and a profile's list: a failure no longer spins, counts read as unknown rather than zero while a list downloads, the skeleton reserves the columns the grid will actually draw, a failed search keeps the answer still on screen and offers Try again, and the clear button stays in the search field while a query is running.\nBuild 692."
 }

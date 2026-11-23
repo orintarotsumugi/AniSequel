@@ -89,8 +89,8 @@ internal fun NovaLibraryList(
     ) {
         notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
             .forEach { note ->
-                item(key = "note_$note") {
-                    PendingDataNote(note)
+                item(key = "note_${note.text}") {
+                    PendingDataNote(note.text, busy = note.busy)
                 }
             }
         items(
@@ -139,8 +139,8 @@ internal fun NovaLibraryTable(
     ) {
         notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
             .forEach { note ->
-                item(key = "note_$note") {
-                    PendingDataNote(note)
+                item(key = "note_${note.text}") {
+                    PendingDataNote(note.text, busy = note.busy)
                 }
             }
         item(key = "table_header") {
@@ -212,8 +212,8 @@ internal fun NovaLibraryGrouped(
     ) {
         notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
             .forEach { note ->
-                item(key = "note_$note") {
-                    PendingDataNote(note)
+                item(key = "note_${note.text}") {
+                    PendingDataNote(note.text, busy = note.busy)
                 }
             }
 
@@ -288,6 +288,32 @@ internal fun NovaLibraryGrid(
         // design used to bias this by a column, which is how choosing Compact under
         // Big cards produced a three-up grid neither setting had asked for.
         val columns = libraryColumns(mode = viewMode, width = maxWidth)
+        // Only the Grouped covers arm reads these, but they are computed here rather
+        // than in the body so the heading and the posters under it come from one walk
+        // of the list, in the API's own status order.
+        val groupedByStatus = remember(visible, isManga) {
+            ListStatuses.options.mapNotNull { option ->
+                val entries = visible.filter { entry ->
+                    ListStatuses.normalize(entry.status) == option.apiValue
+                }
+                if (entries.isEmpty()) null else option to entries
+            }
+        }
+        val unclassified = remember(visible) {
+            visible.filter { entry -> ListStatuses.normalize(entry.status) == null }
+        }
+        // Which cells are the wide ones in Mosaic. A key set rather than an index
+        // lookup: the span lambda and the item content both need the answer, and
+        // `indexOf` in the content walked the whole list once per visible cell.
+        val heroKeys = remember(visible, viewMode) {
+            if (viewMode != LibraryViewMode.MOSAIC) {
+                emptySet<String>()
+            } else {
+                visible.filterIndexed { index, _ -> index % MOSAIC_HERO_EVERY == 0 }
+                    .map { it.media.namespaceKey }
+                    .toSet()
+            }
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
@@ -306,36 +332,101 @@ internal fun NovaLibraryGrid(
             notesFor(awaitingAnime = awaitingAnime, scopedError = scopedError)
                 .forEach { note ->
                     item(
-                        key = "note_$note",
+                        key = "note_${note.text}",
                         span = { GridItemSpan(maxLineSpan) }
                     ) {
-                        PendingDataNote(note)
+                        PendingDataNote(note.text, busy = note.busy)
                     }
                 }
-            gridItems(
-                items = visible,
-                key = { it.media.namespaceKey },
-                // Part of the type, not a constant: switching from a 5-column
-                // shelf to big cards reuses the same slot otherwise, and the
-                // recycler keeps a caption policy that belongs to the old mode
-                // for the first frame.
-                contentType = { "library_poster_${viewMode.storageValue}_$columns" }
-            ) { entry ->
-                NovaPoster(
-                    entry = entry,
-                    isManga = isManga,
-                    compact = viewMode == LibraryViewMode.COMPACT ||
-                        viewMode == LibraryViewMode.SHELF,
-                    showTitle = viewMode != LibraryViewMode.SHELF &&
-                        viewMode != LibraryViewMode.COVERS,
-                    large = viewMode == LibraryViewMode.CARDS,
-                    onClick = { onOpenDetail(entry.media) },
-                    modifier = Modifier.animateItem(
-                        placementSpec = ExpressiveMotion.DefaultSpatialOffset,
-                        fadeInSpec = ExpressiveMotion.ListItemFadeIn,
-                        fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+            if (viewMode == LibraryViewMode.GROUPED_COVERS) {
+                groupedByStatus.forEach { (option, entries) ->
+                    item(
+                        key = "group_${option.apiValue}",
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = { "library_group_heading" }
+                    ) {
+                        LibraryGroupHeading(
+                            label = option.labelFor(isManga),
+                            count = entries.size
+                        )
+                    }
+                    gridItems(
+                        items = entries,
+                        key = { it.media.namespaceKey },
+                        contentType = { "library_grouped_poster_$columns" }
+                    ) { entry ->
+                        LibraryGridPoster(
+                            entry = entry,
+                            isManga = isManga,
+                            viewMode = viewMode,
+                            onClick = { onOpenDetail(entry.media) },
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+                }
+                if (unclassified.isNotEmpty()) {
+                    item(
+                        key = "group_unclassified",
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = { "library_group_heading" }
+                    ) {
+                        LibraryGroupHeading(label = "Other", count = unclassified.size)
+                    }
+                    gridItems(
+                        items = unclassified,
+                        key = { it.media.namespaceKey },
+                        contentType = { "library_grouped_poster_$columns" }
+                    ) { entry ->
+                        LibraryGridPoster(
+                            entry = entry,
+                            isManga = isManga,
+                            viewMode = viewMode,
+                            onClick = { onOpenDetail(entry.media) },
+                            modifier = Modifier.animateItem(
+                                placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                                fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                                fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                            )
+                        )
+                    }
+                }
+            } else {
+                gridItems(
+                    items = visible,
+                    key = { it.media.namespaceKey },
+                    // Mosaic is a span mode, not a second cell: every third cover
+                    // takes the whole row. Without this the mode drew the same flat
+                    // two-up grid as Big cards and the choice meant nothing.
+                    span = { entry ->
+                        if (entry.media.namespaceKey in heroKeys) {
+                            GridItemSpan(maxLineSpan)
+                        } else {
+                            GridItemSpan(1)
+                        }
+                    },
+                    // Part of the type, not a constant: switching from a 5-column
+                    // shelf to big cards reuses the same slot otherwise, and the
+                    // recycler keeps a caption policy that belongs to the old mode
+                    // for the first frame.
+                    contentType = { "library_poster_${viewMode.storageValue}_$columns" }
+                ) { entry ->
+                    LibraryGridPoster(
+                        entry = entry,
+                        isManga = isManga,
+                        viewMode = viewMode,
+                        hero = entry.media.namespaceKey in heroKeys,
+                        onClick = { onOpenDetail(entry.media) },
+                        modifier = Modifier.animateItem(
+                            placementSpec = ExpressiveMotion.DefaultSpatialOffset,
+                            fadeInSpec = ExpressiveMotion.ListItemFadeIn,
+                            fadeOutSpec = ExpressiveMotion.ListItemFadeOut
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -348,15 +439,71 @@ internal fun NovaLibraryGrid(
  * full-span grid item, one list item - and the wording is the part that must not
  * diverge.
  */
-private fun notesFor(awaitingAnime: Boolean, scopedError: String?): List<String> =
+private data class LibraryNote(val text: String, val busy: Boolean)
+
+private fun notesFor(awaitingAnime: Boolean, scopedError: String?): List<LibraryNote> =
     buildList {
         if (awaitingAnime) {
-            add("Still fetching this list - these counts are not final yet")
+            add(
+                LibraryNote(
+                    text = "Still fetching this list - these counts are not final yet",
+                    busy = true
+                )
+            )
         }
         if (scopedError != null && !awaitingAnime) {
-            add("Couldn't load this list - $scopedError")
+            // `busy = false`, and it is the whole reason this list is typed: the note
+            // used to be a bare string drawn with PendingDataNote's default spinner,
+            // so "Couldn't load this list" arrived with a loader turning beside it -
+            // a promise of an answer that had already arrived and *was* the failure.
+            // ProfileStatsTab has passed `busy = false` for exactly this since it
+            // shipped; the Library's three surfaces were still spinning.
+            add(LibraryNote("Couldn't load this list - $scopedError", busy = false))
         }
     }
+
+/** How often a Mosaic row breaks into a full-width cover. */
+internal const val MOSAIC_HERO_EVERY = 3
+
+/** Width over height of a Mosaic hero cell: wide enough to read as a banner. */
+internal const val MOSAIC_HERO_ASPECT = 1.55f
+
+/**
+ * One poster cell, with the caption and shape the view mode asks for.
+ *
+ * Extracted because the grouped-covers arm and the flat grid draw the same cell, and
+ * "which modes print a caption" was already duplicated once (here and in
+ * `CardDesignPreview`) before a third copy arrived with the new modes.
+ *
+ * [hero] is Mosaic's wide cell. It uses a landscape ratio instead of the card
+ * design's own: the wide tile's *job* is to break the wall, and a full-width 2:3
+ * poster is not a break, it is a poster at double size running off the bottom of
+ * the screen. The mode owns its arrangement - it already owns the columns and the
+ * caption policy - so the hero's proportion is part of the layout rather than a
+ * second card design.
+ */
+@Composable
+private fun LibraryGridPoster(
+    entry: MediaListEntryItem,
+    isManga: Boolean,
+    viewMode: LibraryViewMode,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    hero: Boolean = false
+) {
+    NovaPoster(
+        entry = entry,
+        isManga = isManga,
+        compact = viewMode == LibraryViewMode.COMPACT ||
+            viewMode == LibraryViewMode.SHELF,
+        showTitle = viewMode != LibraryViewMode.SHELF &&
+            viewMode != LibraryViewMode.COVERS,
+        large = viewMode == LibraryViewMode.CARDS || hero,
+        hero = hero,
+        onClick = onClick,
+        modifier = modifier
+    )
+}
 
 /**
  * One cover in the new grid.
@@ -375,7 +522,9 @@ private fun NovaPoster(
     showTitle: Boolean,
     large: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Mosaic's full-width cell: a landscape crop rather than a poster. */
+    hero: Boolean = false
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
@@ -410,7 +559,13 @@ private fun NovaPoster(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(cardCoverAspect(if (large) 0.74f else 0.68f, design))
+                .aspectRatio(
+                    if (hero) {
+                        MOSAIC_HERO_ASPECT
+                    } else {
+                        cardCoverAspect(if (large) 0.74f else 0.68f, design)
+                    }
+                )
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
         ) {
             // The grid is what a cold start opens on, and `Color.Transparent` meant a

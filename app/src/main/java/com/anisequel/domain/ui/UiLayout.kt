@@ -136,6 +136,33 @@ enum class HomeSequelStyle(
         displayName = "Polaroids",
         blurb = "An instant print with the title written in the white margin underneath.",
         showsPoster = true
+    ),
+    /**
+     * A stack of prints with the sequel on the card on top.
+     *
+     * Every other style draws one surface; this one draws a pile, so the feed reads
+     * as a hand of recommendation cards rather than as a list of rows. The two
+     * sheets behind the top card are the whole idea and cost nothing but two
+     * offset shapes - which is why this is a style and not a new page.
+     */
+    DECK(
+        storageValue = "deck",
+        displayName = "Deck",
+        blurb = "A stack of prints: two sheets peek out behind the card on top.",
+        showsPoster = true
+    ),
+    /**
+     * One frame of a film strip, sprockets and all.
+     *
+     * A row is the densest style and a card the tallest; this one is the one that
+     * says the sequels are a *reel* - a wide frame with the perforations down both
+     * sides, so the artwork is the thing and the card still fits four on a screen.
+     */
+    FILMSTRIP(
+        storageValue = "filmstrip",
+        displayName = "Film strip",
+        blurb = "One frame of film: sprocket holes down the sides and the artwork wide.",
+        showsPoster = true
     );
 
     companion object {
@@ -233,6 +260,37 @@ enum class LibraryViewMode(
         displayName = "Shelf",
         blurb = "Five compact covers across for fast visual browsing.",
         columns = 5
+    ),
+    /**
+     * Two across, with every third cover spanning the whole width.
+     *
+     * The flat poster grid makes every title the same size, which is right for
+     * judging a list and wrong for looking at it: nothing in a wall of equal covers
+     * says where to start. The wide tile is the anchor, and the pattern repeats so
+     * the page still scrolls predictably. It is a *span* mode rather than a new
+     * drawing - the same cell, a different share of the row - which is why it costs
+     * one branch in each grid instead of a third set of cards.
+     */
+    MOSAIC(
+        storageValue = "mosaic",
+        displayName = "Mosaic",
+        blurb = "Two across, with every third cover a full-width banner.",
+        columns = 2
+    ),
+    /**
+     * Grouped is the list with a heading per status; this is the grid with one.
+     *
+     * The two answer different questions about the same grouping. A reader scanning
+     * a long backlog wants rows (Grouped); a reader browsing covers wants the wall
+     * to be sorted into the same six piles rather than one flat run of posters.
+     * `columns` is three, the poster grid's own count, because the caption has to
+     * keep its room under a cover.
+     */
+    GROUPED_COVERS(
+        storageValue = "grouped_covers",
+        displayName = "Grouped covers",
+        blurb = "A section per status, each drawn as a poster grid.",
+        columns = 3
     );
 
     companion object {

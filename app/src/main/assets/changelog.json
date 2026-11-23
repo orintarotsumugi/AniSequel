@@ -1,6 +1,51 @@
 {
   "versions": [
 {
+  "version": "2.5.7",
+  "entries": [
+    {
+      "title": "Two new Library views: Mosaic and Grouped covers",
+      "detail": "Mosaic is two covers across with every third one stretched to the full width, so a wall of equal posters has an anchor and the page says where to start rather than only how many titles there are. Grouped covers is the status grouping the row mode already had, drawn over the poster grid instead of list rows - the reader browsing artwork can now see where a title sits without a filter. Both are span-and-heading modes rather than new cards: the same cell, a different share of the row, so the card design still owns each cover's shape and the view still owns the arrangement. Both follow the cards onto a profile's list and both have their own loading skeleton."
+    },
+    {
+      "title": "Two new Home sequel styles: Deck and Film strip",
+      "detail": "Deck draws a missed sequel as the top card of a pile, with two sheets peeking out behind it, so the feed reads as a hand of recommendations instead of a list of rows. Film strip draws it as one frame of film - perforations drawn down both sides, the artwork wide between them, the actions on a strip underneath - which is the densest style that still shows a picture larger than a thumbnail. Neither is animated: the sheets and the sprockets are static shapes, because a pile that fanned itself on every recomposition is the fidgeting the style switch exists to stop."
+    },
+    {
+      "title": "The card outline stops chasing the card while it expands",
+      "detail": "Expanding \"Show more\" on a Settings card drew a line moving through the paragraph and settling when the text finished. The size animation sat on the Card's own modifier chain, which animates the size *outside* the card's drawing: the card was measured and drawn at its settled height on the first frame while only its clip grew, so the border was drawn at the bottom of where the card was going to be rather than where it was. The animation is on the content column now, so the card itself is the animating size and the outline is on the edge that is actually visible on every frame. The same change fixes the trick on collapse."
+    },
+    {
+      "title": "A failed search keeps the answer you can still read, and offers Try again",
+      "detail": "One rate-limited request for a refinement used to throw away a complete, still-true result set and replace it with a one-line apology - the worst of both states. The previous answer now stays on screen with a strip above it saying the new query did not arrive, and that strip carries a Try again control. A failure with nothing behind it gets the same control, so the reader no longer has to edit the query and hope. The retry repeats the same request immediately rather than waiting out the typing debounce."
+    },
+    {
+      "title": "The clear button stays in the search field while a query is running",
+      "detail": "The spinner replaced the X for the length of every request, so the one moment a reader most wants to start over was the moment the field could not be emptied. Both are drawn now: a small indicator beside the button, and the button in the same place it always is."
+    },
+    {
+      "title": "Counts read as unknown, not zero, while a list is still loading",
+      "detail": "The Library header said \"0 titles\" and every status pill said (0) for the whole of a cold start - the app asserting the one thing it had not yet read. The header says it is loading, the type switch prints no count for a half that is still downloading, and the pills print a dash until the scoped list has actually been counted."
+    },
+    {
+      "title": "A failure no longer spins",
+      "detail": "\"Couldn't load this list\" was drawn with the same loader as \"still fetching\", so a failure arrived with a spinner turning beside it, promising an answer that had already arrived and was the failure. The Library's empty state, its rows, its grid and a profile's list all say it plainly now, which is what the profile's stats tab has done since it shipped."
+    },
+    {
+      "title": "The loading skeletons reserve the columns the grid will draw",
+      "detail": "A five-across shelf is drawn three across on a 360dp phone, but the skeleton kept promising five covers a row and reflowed into three when the data landed - the exact jump a mode-shaped skeleton exists to prevent. Both Library skeletons use the same column arithmetic as the page now, and Mosaic's skeleton opens with the wide anchor cell its first real row has."
+    },
+    {
+      "title": "An empty Library says it is loading once",
+      "detail": "An empty list opened with a \"still fetching this list\" note stacked on top of a loading skeleton that was already saying so. The note stays for the case it was written for - a list that already has rows and is still being completed."
+    },
+    {
+      "title": "A failed search no longer scrolls a page that did not change",
+      "detail": "Returning to the top of the results was keyed on the searched term, and a failed search sets that term too, so a failure scrolled the reader away from results that had not moved. It is keyed on the answer now."
+    }
+  ]
+},
+{
     "version": "2.5.6",
     "entries": [
       {
