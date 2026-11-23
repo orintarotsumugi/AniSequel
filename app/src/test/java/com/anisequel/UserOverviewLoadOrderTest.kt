@@ -173,6 +173,43 @@ class UserOverviewLoadOrderTest {
             )
         }
 
+    /**
+     * An unchanged bio must not be re-asked for its posters by a refresh.
+     *
+     * The page publishes twice - the saved copy, then the live overview - and the
+     * live publish used to cancel the batch the saved copy had just started, empty
+     * the map, and ask for the same keys again. Every inline poster blinked off and
+     * came back, and the profile spent a request on a document it had already
+     * answered. A refresh with no bio edit was the same story a third time.
+     *
+     * The map is asserted too: skipping the repeat request must leave the posters
+     * on screen, not merely stop asking.
+     */
+    @Test
+    fun `an unchanged bio's covers are asked for once`() = runTest(testDispatcher) {
+        val repository = GatedListRepository(
+            listGate = CompletableDeferred<Unit>().apply { complete(Unit) },
+            bio = "https://anilist.co/anime/128893"
+        )
+        val viewModel = UserOverviewViewModel(repository, userId = 1)
+        advanceUntilIdle()
+
+        assertEquals("one batch for one bio", 1, repository.requestedCoverKeys.size)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(
+            "the bio did not change, so its posters are still the answer on screen",
+            1,
+            repository.requestedCoverKeys.size
+        )
+        assertTrue(
+            "skipping the repeat request must keep the posters",
+            viewModel.mediaCovers.value.containsKey(MediaCoverKey("ANIME", 128893))
+        )
+    }
+
     @Test
     fun `a failed list fetch still shows the profile and stops claiming to be loading`() =
         runTest(testDispatcher) {

@@ -381,7 +381,7 @@ fun AppNavigation(
 
     // The disk tier under the repository's caches. Process-wide rather than
     // per-screen because the auth ViewModel's repository writes and clears the
-    // same files - see [AniListSnapshots] - and it lives in the cache directory
+    // same files - see [AniListSnapshots] - and it lives in private app storage
     // because everything in it can be re-fetched: Android emptying it under
     // storage pressure, or the user clearing the app's cache, costs a request
     // and never a screen. Sign-out deletes it explicitly rather than trusting

@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +47,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.PannableBackdrop
 import com.anisequel.ui.components.SavedCopyPill
@@ -92,6 +95,27 @@ fun ProfileHeaderCard(
     /** How tall the banner is; see [ProfileBannerShape]. */
     bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT
 ) {
+    val context = LocalContext.current
+    // One request for one portrait, built once per URL rather than on every
+    // recomposition.
+    //
+    // The header is recomposed by the banner's height animation, by the saved-copy
+    // pill arriving and by every state publish, and a `model = "<url>"` hands Coil
+    // a new request each time. It also had no opinion about the disk cache: a
+    // portrait is the same picture on every open, and the entry has to outlive the
+    // process to make a revisit free. The URL carries AniList's content hash, so a
+    // changed portrait is a new key and stale bytes are unrepresentable.
+    val avatarRequest = remember(state.avatarUrl) {
+        state.avatarUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            ImageRequest.Builder(context)
+                .data(url)
+                .diskCacheKey("profile-avatar:$url")
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .networkCachePolicy(CachePolicy.ENABLED)
+                .build()
+        }
+    }
+
     Column(
         modifier = modifier
             .widthIn(max = maxWidth)
@@ -108,7 +132,7 @@ fun ProfileHeaderCard(
             Banner(state = state, shape = bannerShape)
 
             AsyncImage(
-                model = state.avatarUrl?.takeIf { it.isNotBlank() },
+                model = avatarRequest,
                 contentDescription = "${state.username}'s Avatar",
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -313,7 +337,29 @@ private fun Banner(
     // Keyed on the URL: a different picture is a different measurement, and reusing
     // the last one drew a portrait banner at the previous landscape height for the
     // frame before its own size landed.
-    var imageSize by remember(banner) { mutableStateOf(Size.Zero) }
+    //
+    // The remembered size is the second half of the same idea. The measurement only
+    // arrives with the decoded picture, so without it every open - including one
+    // whose banner was already on disk - laid the header out at the landscape
+    // placeholder and animated to the real height a frame later. A revisit should
+    // not have to re-measure a picture it has drawn before.
+    var imageSize by remember(banner) {
+        mutableStateOf(BannerAspectMemory.of(banner) ?: Size.Zero)
+    }
+    val context = LocalContext.current
+    // Same reasoning as the avatar's request: one stable object per URL, and an
+    // explicit disk key so the artwork survives the process. A 5MB animated banner
+    // is exactly the download a profile should never repeat.
+    val bannerRequest = remember(banner) {
+        banner?.let { url ->
+            ImageRequest.Builder(context)
+                .data(url)
+                .diskCacheKey("profile-banner:$url")
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .networkCachePolicy(CachePolicy.ENABLED)
+                .build()
+        }
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val aspect = ProfileBannerSizing.aspectFor(
@@ -355,11 +401,14 @@ private fun Banner(
             // a successful one covers it completely.
             BannerFallback()
 
-            if (banner != null) {
+            if (bannerRequest != null) {
                 PannableBackdrop(
-                    model = banner,
+                    model = bannerRequest,
                     contentDescription = "Profile Banner",
-                    onImageSize = { imageSize = it }
+                    onImageSize = { measured ->
+                        imageSize = measured
+                        BannerAspectMemory.remember(banner, measured)
+                    }
                 )
                 // Weighted toward the bottom so the artwork stays visible at the top
                 // while the identity line below has a surface to sit on.
@@ -549,5 +598,55 @@ private fun HeaderStat(
                 )
             }
         }
+    }
+}
+
+/**
+ * The last measured size of every banner this process has drawn, keyed by URL.
+ *
+ * [Banner] sizes the header from the picture itself, and the picture's dimensions
+ * are only known once it has been decoded - so the first frame of every open used
+ * the landscape placeholder and the header settled into its real height a moment
+ * later. That animation is right for a banner the reader has never seen; it is
+ * noise on the tenth visit to a profile whose banner has been on disk since the
+ * first, and it is the "header jumps on open" the measurement exists to avoid.
+ *
+ * Bounded and in-memory on purpose: this is a layout hint, not cache worth a file.
+ * Twenty-four entries are more banners than a session moves between, and a wrong
+ * or missing hint costs exactly one animation.
+ */
+internal object BannerAspectMemory {
+
+    internal const val MAX_ENTRIES = 24
+
+    private val sizes = object : LinkedHashMap<String, Size>(24, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Size>?): Boolean =
+            size > MAX_ENTRIES
+    }
+
+    /** The size measured for [url], or null if this process has never seen it. */
+    @Synchronized
+    fun of(url: String?): Size? = url?.let(sizes::get)
+
+    /**
+     * Records what [url] measured.
+     *
+     * An unusable measurement is not stored: `PannableBackdrop` reports `Size.Zero`
+     * for a banner whose intrinsic size it could not read (an SVG, some animated
+     * formats), and remembering that would size the header to the placeholder
+     * forever.
+     */
+    @Synchronized
+    fun remember(url: String?, size: Size) {
+        if (url == null) return
+        if (size.width.isNaN() || size.height.isNaN()) return
+        if (size.width <= 0f || size.height <= 0f) return
+        sizes[url] = size
+    }
+
+    /** Empties the memory. Tests only. */
+    @Synchronized
+    internal fun clear() {
+        sizes.clear()
     }
 }

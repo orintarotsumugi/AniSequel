@@ -177,13 +177,17 @@ internal const val MAX_PAGED_CACHE_ENTRIES = 40
  *
  * Pure and `internal` for the same reason [mediaCoverBatches] is: the rule is the
  * thing that must not regress, and the maps it is applied to are private state.
+ *
+ * Generic in the key so the cover cache - which is keyed by [MediaCoverKey], not
+ * by a page's string - can be trimmed by the same rule instead of growing a second
+ * copy of it.
  */
-internal fun expiredThenOldestKeys(
-    stamps: Map<String, Long>,
+internal fun <K> expiredThenOldestKeys(
+    stamps: Map<K, Long>,
     nowMillis: Long,
     ttlMillis: Long,
     ceiling: Int
-): List<String> {
+): List<K> {
     if (stamps.size <= ceiling) return emptyList()
     val (expired, fresh) = stamps.entries.partition { nowMillis - it.value > ttlMillis }
     if (expired.size >= stamps.size - ceiling) {
@@ -1569,7 +1573,6 @@ class AniListRepositoryImpl(
                                 // number.
                                 title = node.title?.bestTitleOrNull
                             )
-                            if (coverCache.size >= MAX_COVER_CACHE_ENTRIES) coverCache.clear()
                             fresh[key] = cover
                             resolved[key] = cover
                         }
@@ -1744,9 +1747,36 @@ class AniListRepositoryImpl(
         return stored.value
     }
 
+    /**
+     * Makes room in [coverCache] for [adding] more entries by dropping the least
+     * useful ones, not all of them.
+     *
+     * The cache used to `clear()` itself the moment it reached its ceiling. One
+     * bio with a dozen links on top of a wall of previews was enough to trip it,
+     * and every profile opened after that re-asked for posters whose URLs were
+     * still sitting in the snapshot file - the exact repeat request this cache
+     * exists to prevent, caused by the cache itself. Expired entries go first,
+     * then the oldest live ones, which is the rule the paged caches already use:
+     * what stays is what the reader is most likely to come back to.
+     */
+    private fun trimCoverCache(adding: Int = 1) {
+        val ceiling = MAX_COVER_CACHE_ENTRIES - adding
+        if (coverCache.size <= ceiling) return
+        val drop = expiredThenOldestKeys(
+            stamps = coverCache.entries.associate { (key, entry) -> key to entry.storedAtMillis },
+            nowMillis = nowMillis(),
+            ttlMillis = listCacheTtlMillis(),
+            ceiling = ceiling
+        )
+        drop.forEach(coverCache::remove)
+    }
+
     private suspend fun storeCovers(covers: Map<MediaCoverKey, MediaCover>) {
         if (covers.isEmpty()) return
         val storedAt = nowMillis()
+        // Room for the whole batch before it lands, so one profile's bio cannot
+        // overshoot the ceiling by the size of that batch.
+        trimCoverCache(adding = covers.size)
         covers.forEach { (key, cover) -> coverCache[key] = CachedCover(cover, storedAt) }
         snapshots?.writeAll(
             kind = SNAPSHOT_COVER,

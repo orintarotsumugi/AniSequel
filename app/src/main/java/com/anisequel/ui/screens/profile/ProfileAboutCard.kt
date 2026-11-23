@@ -38,7 +38,7 @@ import com.anisequel.data.model.MediaCoverKey
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.novamarkdown.NovaMarkdown
+import com.anisequel.ui.components.novamarkdown.NovaMarkdownCache
 import com.anisequel.ui.components.novamarkdown.NovaMarkdownView
 import com.anisequel.ui.components.novamarkdown.NOVA_MARKDOWN_COLLAPSED_BLOCK_LIMIT
 import com.anisequel.ui.components.novamarkdown.NovaBlock
@@ -128,12 +128,20 @@ fun AboutCard(
      */
     mediaCovers: Map<MediaCoverKey, MediaCover> = emptyMap()
 ) {
-    val nodes = remember(about) { NovaMarkdown.parse(about) }
+    // Through the shared cache rather than parsing here: the ViewModel has
+    // already parsed this same bio to find the posters its links need, and the
+    // card is asking for the answer that pass produced. See [NovaMarkdownCache].
+    val nodes = remember(about) { NovaMarkdownCache.parse(about) }
     // Keyed to the bio: the card keeps its composition slot when the screen
     // swaps one profile's overview for another's, so an unkeyed flag opened the
     // next person's bio already expanded (and remembered that across rotation).
     var expanded by rememberSaveable(about) { mutableStateOf(false) }
-    val isCollapsed = isBioCollapsible(about, nodes) && !expanded
+    // Asked once. The toggle below needs the same answer, and it used to ask for
+    // it a second time - two full walks of the document (including the recursive
+    // image search) on every composition, and `animateContentSize` recomposes this
+    // card on every frame of the expand, so a long bio paid for both throughout.
+    val collapsible = remember(about, nodes) { isBioCollapsible(about, nodes) }
+    val isCollapsed = collapsible && !expanded
 
     Card(
         modifier = modifier
@@ -167,7 +175,7 @@ fun AboutCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
-                if (isBioCollapsible(about, nodes)) {
+                if (collapsible) {
                     Text(
                         text = if (expanded) "Show less" else "Show more",
                         // Matches the disclosure under every Settings paragraph: one
