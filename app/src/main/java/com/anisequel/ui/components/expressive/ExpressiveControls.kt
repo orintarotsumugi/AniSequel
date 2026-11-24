@@ -337,6 +337,14 @@ fun ExpressiveSegmentedBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Every segment is measured against the tallest label, so a bar
+            // whose text has been enlarged grows as one control instead of
+            // clipping its longer choices. This is the same fix the polygon bar
+            // above already carries; this one kept its fixed 38dp and cut the
+            // second line of "Upcoming" through the middle at the app's own
+            // 175% Text size setting - on the dashboard, where the bar is the
+            // first control under the top app bar.
+            .height(IntrinsicSize.Min)
             .clip(MaterialTheme.shapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainer)
             .padding(4.dp)
@@ -389,7 +397,11 @@ fun ExpressiveSegmentedBar(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    // A minimum, not a height: the segment grows with its label
+                    // and the outer row's intrinsic height keeps the strip
+                    // even. See the outer Row above for why 38dp was wrong.
+                    .heightIn(min = 38.dp)
+                    .fillMaxHeight()
                     .bouncyPress(pressedScale = 0.94f, interactionSource = interactionSource)
                     .graphicsLayer {
                         scaleX = scale
@@ -406,7 +418,12 @@ fun ExpressiveSegmentedBar(
                     }
                     .semantics {
                         this.selected = selected
-                        role = Role.Tab
+                        // RadioButton, not Tab: this control filters a list
+                        // (status, sort, a pair of settings) and exactly one
+                        // option is ever active. TalkBack announced "tab" for
+                        // a choice that is not navigation, and the polygon
+                        // bar's own segments already answer RadioButton.
+                        role = Role.RadioButton
                     }
                     .testTag("${EXPRESSIVE_TAG}segment_$label"),
                 contentAlignment = Alignment.Center
@@ -415,7 +432,15 @@ fun ExpressiveSegmentedBar(
                     text = label,
                     style = MaterialTheme.typography.labelLarge,
                     color = textColor,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    // Two lines, like the polygon bar: a label too long for its
+                    // segment should wrap rather than be lost to a metric, and
+                    // the leading follows the style instead of pinning a sp value
+                    // that is right at 100% and wrong at everything above it.
+                    maxLines = 2,
+                    textAlign = TextAlign.Center,
+                    lineHeight = MaterialTheme.typography.labelLarge.lineHeight *
+                        SEGMENT_LEADING_FACTOR
                 )
             }
         }

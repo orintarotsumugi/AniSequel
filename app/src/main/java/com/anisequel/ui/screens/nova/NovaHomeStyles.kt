@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,14 +71,22 @@ internal fun NovaSequelBanner(
     NovaSurface(
         modifier = modifier
             .fillMaxWidth()
-            .height(190.dp)
             .bouncyPress(pressedScale = 0.985f, interactionSource = interactionSource)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onOpen)
             .clip(RoundedCornerShape(22.dp)),
         tonalElevation = true
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize()) {
+        // A minimum, not a height: the relation line, a two-line title and the
+        // quick-add strip are all text the reader can enlarge, and at 175% they
+        // need more than the 190dp this banner was pinned to - which clipped the
+        // button the card exists to offer. The Box is what grows; the artwork
+        // fills whatever height its content asks for.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 190.dp)
+        ) {
+            Box(modifier = Modifier.matchParentSize()) {
                 // Same rule as the plain home card: an unknown dominant colour used to
                 // leave nothing behind the artwork - see [PosterPlaceholder].
                 PosterPlaceholder(
@@ -167,6 +176,7 @@ internal fun NovaSequelBanner(
         }
     }
 }
+
 
 @Composable
 internal fun NovaSequelShelfCard(
@@ -294,7 +304,7 @@ internal fun NovaSequelTicket(
         shape = RoundedCornerShape(16.dp),
         tonalElevation = true
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(132.dp)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
@@ -335,7 +345,7 @@ internal fun NovaSequelTicket(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(10.dp))
                 QuickAddPlanningButton(
                     mediaId = sequel.sequelId,
                     isAddedToPlanning = sequel.isAddedToPlanning,

@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -43,13 +44,16 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  * header every mode shares, and each mode then draws its own shape underneath: the
  * heading, the aligned columns, the captions.
  *
- * ## Why 236dp
+ * ## Why 300dp
  *
- * 168dp was one row of covers and their names. A mode with two rows of text - a list
- * row, a grouped section - was cut off inside its own preview, and the difference
- * between "list" and "grouped" was exactly the part that got cut. 236dp fits the
- * header, a full row of a grid with its caption, and three rows of either list at a
- * size the words are still readable.
+ * 168dp was one row of covers and their names. 236dp was chosen for a full row of a
+ * grid "with its caption", but the arithmetic never held at the page width these
+ * previews are drawn at: a two-up poster is about 210dp tall before its two caption
+ * lines, so Big cards' caption - and with it the one difference between Big cards and
+ * Cover wall - was clipped out of its own preview. 300dp keeps a two-up row and its
+ * caption whole, and gives the list modes enough room to show the rows they promise.
+ * The height is a frame, not a measurement of the device: the covers still keep their
+ * own proportions inside it.
  */
 @Composable
 internal fun LibraryViewPreview(
@@ -68,7 +72,7 @@ internal fun LibraryViewPreview(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(236.dp)
+                .height(300.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .padding(10.dp)
@@ -99,6 +103,7 @@ internal fun LibraryViewPreview(
                             LibraryViewMode.COVERS -> MiniCoverWall(entries)
                             LibraryViewMode.MOSAIC -> MiniMosaic(entries)
                             LibraryViewMode.GROUPED_COVERS -> MiniGroupedCovers(entries)
+                            LibraryViewMode.SPOTLIGHT -> MiniSpotlight(entries)
                         }
                     }
                 }
@@ -147,10 +152,15 @@ private fun LibraryPreviewHeader(mode: LibraryViewMode) {
 /**
  * The poster modes: one row of covers, each with its caption.
  *
- * The caption carries the progress line as well as the name, because that is what
- * separates the poster grid from the cover wall in the real page - and because a
- * reader picking a density is also picking whether a caption will have room to show
- * the number.
+ * The cover sits in a clipped slot that takes whatever the caption leaves, and the
+ * caption is measured first. That is the fix for the preview that made this file
+ * worth opening: the cover used to be sized by its own 2:3 ratio, which at two and
+ * three across was taller than the whole frame, so the caption - the thing that
+ * separates Big cards from Cover wall - was pushed out of the picture entirely.
+ *
+ * The progress pill is the same one the real poster prints, in the same corner and
+ * colour, because it is the only mark on a Cover wall cover and the fastest thing to
+ * read on a Big cards one.
  */
 @Composable
 private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle: Boolean) {
@@ -160,10 +170,24 @@ private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle:
     ) {
         repeat(columns) { index ->
             Column(modifier = Modifier.weight(1f)) {
-                MiniCover(
-                    entry = previewEntry(entries, index),
-                    modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clipToBounds()
+                ) {
+                    MiniCover(
+                        entry = previewEntry(entries, index),
+                        modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                    )
+                    MiniProgressPill(
+                        progress = index + 1,
+                        total = 24,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(3.dp)
+                    )
+                }
                 if (showTitle) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -175,7 +199,7 @@ private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle:
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${index + 1}/24 \u00b7 ${88 - index * 4}%",
+                        text = "Watching \u00b7 ${index + 1} of 24",
                         style = miniCaptionStyle(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
@@ -184,6 +208,32 @@ private fun MiniGrid(entries: List<MediaListEntryItem>, columns: Int, showTitle:
             }
         }
     }
+}
+
+/**
+ * The progress capsule a real poster wears, drawn at the size a preview can read.
+ *
+ * `"12 | 24"` and `primaryContainer` are `NovaProgressPill`'s own answer, not a
+ * second badge invented here - the previews used to print a plain `"4/24"` on a
+ * scrim, which is a different mark from the one the Library draws.
+ */
+@Composable
+private fun MiniProgressPill(
+    progress: Int,
+    total: Int,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = "$progress | $total",
+        style = miniCaptionStyle(),
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        maxLines = 1,
+        modifier = modifier
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.94f))
+            .padding(horizontal = 4.dp, vertical = 2.dp)
+    )
 }
 
 /**
@@ -333,17 +383,12 @@ private fun MiniCoverWall(entries: List<MediaListEntryItem>) {
                     entry = previewEntry(entries, index),
                     modifier = Modifier.fillMaxSize()
                 )
-                Text(
-                    text = "${(index + 1) * 4}/24",
-                    style = miniCaptionStyle(),
-                    color = Color.White,
-                    maxLines = 1,
+                MiniProgressPill(
+                    progress = (index + 1) * 4,
+                    total = 24,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(4.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.62f))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 )
             }
         }
@@ -415,15 +460,44 @@ private fun MiniMosaic(entries: List<MediaListEntryItem>) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1.15f)
-                .clip(RoundedCornerShape(10.dp))
-        ) {
-            MiniCover(
-                entry = previewEntry(entries, 0),
-                modifier = Modifier.fillMaxSize()
+        Column(modifier = Modifier.fillMaxWidth().weight(1.15f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clipToBounds()
+                    .clip(RoundedCornerShape(10.dp))
+            ) {
+                MiniCover(
+                    entry = previewEntry(entries, 0),
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1.55f)
+                )
+                MiniProgressPill(
+                    progress = 12,
+                    total = 24,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(3.dp))
+            // The hero is a card too: the Library prints its name and its status
+            // line like any other poster, and the preview used to show a bare
+            // picture - the one thing that made Mosaic look like a banner instead
+            // of the first cell of a repeating rhythm.
+            Text(
+                text = previewTitle(previewEntry(entries, 0)),
+                style = miniCaptionStyle(),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Watching \u00b7 12 of 24",
+                style = miniCaptionStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
             )
         }
         Row(
@@ -432,10 +506,24 @@ private fun MiniMosaic(entries: List<MediaListEntryItem>) {
         ) {
             repeat(2) { index ->
                 Column(modifier = Modifier.weight(1f)) {
-                    MiniCover(
-                        entry = previewEntry(entries, index + 1),
-                        modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .clipToBounds()
+                    ) {
+                        MiniCover(
+                            entry = previewEntry(entries, index + 1),
+                            modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                        )
+                        MiniProgressPill(
+                            progress = index + 4,
+                            total = 24,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(3.dp)
+                        )
+                    }
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
                         text = previewTitle(previewEntry(entries, index + 1)),
@@ -464,23 +552,118 @@ private fun MiniGroupedCovers(entries: List<MediaListEntryItem>) {
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         listOf("Watching", "Completed").forEachIndexed { groupIndex, heading ->
-            Text(
-                text = heading.uppercase(),
-                style = miniCaptionStyle(),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // The heading carries the count, and the pill is the app's own tone:
+            // `LibraryGroupHeading` draws both, so a preview without the number
+            // was showing a heading the Library never prints.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text(
+                    text = heading.uppercase(),
+                    style = miniCaptionStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "3",
+                    style = miniCaptionStyle(),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 repeat(3) { index ->
-                    MiniCover(
-                        entry = previewEntry(entries, groupIndex * 3 + index),
-                        modifier = Modifier.weight(1f).fillMaxHeight()
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clipToBounds()
+                        ) {
+                            MiniCover(
+                                entry = previewEntry(entries, groupIndex * 3 + index),
+                                modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                            )
+                            MiniProgressPill(
+                                progress = groupIndex * 6 + index + 4,
+                                total = 24,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(3.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
+                        // Grouped covers is a poster grid, not a wall: the Library
+                        // prints a name under every cover in this mode.
+                        Text(
+                            text = previewTitle(
+                                previewEntry(entries, groupIndex * 3 + index)
+                            ),
+                            style = miniCaptionStyle(),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * Spotlight: one wide still, with the caption the Library prints underneath it.
+ *
+ * One cover, not a grid - the mode's column count is one, and a preview that drew a
+ * row of posters under the Spotlight name would be Big cards with a different label.
+ */
+@Composable
+private fun MiniSpotlight(entries: List<MediaListEntryItem>) {
+    val entry = previewEntry(entries, 0)
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clipToBounds()
+                .clip(RoundedCornerShape(10.dp))
+        ) {
+            MiniCover(
+                entry = entry,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.55f)
+            )
+            MiniProgressPill(
+                progress = 12,
+                total = 24,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = previewTitle(entry),
+            style = miniBodyStyle(),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "Watching \u00b7 episode 12 of 24",
+            style = miniCaptionStyle(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
     }
 }

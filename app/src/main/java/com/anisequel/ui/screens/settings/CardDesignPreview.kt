@@ -54,6 +54,7 @@ import com.anisequel.ui.navigation.mainTabDestinations
 import com.anisequel.ui.screens.library.LibraryGroupHeading
 import com.anisequel.ui.screens.library.LibraryListRow
 import com.anisequel.ui.screens.library.MOSAIC_HERO_ASPECT
+import com.anisequel.ui.screens.library.SPOTLIGHT_ASPECT
 import com.anisequel.ui.screens.library.LibraryTableHeader
 import com.anisequel.ui.screens.profile.libraryProgressLabel
 
@@ -189,6 +190,12 @@ internal fun CardDesignPreview(
                                 entries = entries
                             )
 
+                            viewMode.usesWideStill -> PreviewSpotlightShape(
+                                mode = viewMode,
+                                style = style,
+                                entries = entries
+                            )
+
                             else -> PreviewGridShape(
                                 mode = viewMode,
                                 style = style,
@@ -247,6 +254,29 @@ private fun PreviewGridShape(
             }
         }
     }
+}
+
+/**
+ * Spotlight: the one wide still the Library draws for this mode.
+ *
+ * The mode's column count is one, so the plain grid arm would draw two stacked
+ * posters at a 2:3 ratio - a page the mode never produces. The aspect is the
+ * Library's own landscape constant, with the card design's cover bias divided out
+ * for the same reason Mosaic does it: `MediaPosterCell` re-applies that bias.
+ */
+@Composable
+private fun PreviewSpotlightShape(
+    mode: LibraryViewMode,
+    style: MediaCardStyle,
+    entries: List<MediaListEntryItem>
+) {
+    PreviewPosterCell(
+        entry = entries.first(),
+        style = style,
+        showTitle = mode.showsCaption,
+        aspect = SPOTLIGHT_ASPECT / LocalCardDesign.current.size.coverBias,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 /**

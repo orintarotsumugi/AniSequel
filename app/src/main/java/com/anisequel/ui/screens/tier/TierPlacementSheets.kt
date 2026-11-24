@@ -24,6 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.domain.tier.TierCandidate
@@ -638,6 +641,12 @@ internal fun TierRenameField(
             value = text,
             onValueChange = { text = it.take(maxLength) },
             singleLine = true,
+            // The keyboard's action key is the other way a reader will try to
+            // finish this edit; it now saves rather than doing nothing.
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = { if (text.isNotBlank()) onConfirm(text) }
+            ),
             shape = ExpressiveShapes.pill,
             // The cap is shown, not just enforced: a field that silently stops
             // accepting characters reads as a keyboard that has stopped working.
@@ -650,7 +659,15 @@ internal fun TierRenameField(
                 .testTag("tier_rename_field")
         )
         Spacer(modifier = Modifier.width(8.dp))
-        IconButton(onClick = { onConfirm(text) }) {
+        // Disabled while blank, rather than accepting it. `renameTier` and
+        // `renameList` both return early on a blank name — so the old button
+        // closed the row, reported nothing, and left the old name in place. A
+        // control that looks like it succeeded and did not is the one shape of
+        // this bug a reader cannot diagnose.
+        IconButton(
+            onClick = { onConfirm(text) },
+            enabled = text.isNotBlank()
+        ) {
             Icon(
                 imageVector = AppVectorIcons.Done,
                 contentDescription = "Save name"

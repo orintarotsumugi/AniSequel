@@ -172,7 +172,13 @@ fun LibraryLoadingView(
                             ShimmerBox(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .aspectRatio(LIBRARY_POSTER_ASPECT),
+                                    .aspectRatio(
+                                        if (viewMode.usesWideStill) {
+                                            SPOTLIGHT_ASPECT
+                                        } else {
+                                            LIBRARY_POSTER_ASPECT
+                                        }
+                                    ),
                                 shape = MaterialTheme.shapes.medium,
                                 phase = phase
                             )

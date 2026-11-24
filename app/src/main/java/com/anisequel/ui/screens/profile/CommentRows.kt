@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.ActivityReply
@@ -231,6 +232,11 @@ internal fun CommentRow(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
+                        // The name shares its line with the timestamp and is
+                        // `fill = false`, so it only takes the width it needs -
+                        // until a long AniList name exceeds what is left, and
+                        // then `maxLines` alone cut the name mid-glyph.
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     CommentTimestamp(reply.createdAt, nowEpochSecond)

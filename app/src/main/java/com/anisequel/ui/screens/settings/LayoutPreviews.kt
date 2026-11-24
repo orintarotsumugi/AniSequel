@@ -32,9 +32,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,7 +102,18 @@ internal fun AppLayoutPreviews(
                         role = Role.RadioButton,
                         onClickLabel = "Use the ${layout.displayName} layout"
                     ) { onSelect(layout) }
-                    .semantics { role = Role.RadioButton }
+                    // The border and the tint say "chosen" only to a reader who
+                    // can see them. The tile is a radio choice, so it now reports
+                    // its own selected state instead of leaving TalkBack to infer
+                    // it from a click label that is identical on both tiles.
+                    .semantics {
+                        role = Role.RadioButton
+                        // `this.`: the lambda also sees the `selected` parameter of
+                        // this composable, which is an AppLayout. Without the
+                        // receiver the assignment resolves to the captured val and
+                        // does not compile.
+                        this.selected = active
+                    }
                     .testTag("app_layout_${layout.storageValue}"),
                 shape = RoundedCornerShape(20.dp),
                 color = if (active) {
@@ -589,7 +602,14 @@ internal fun InfoPageStylePreviews(
                         role = Role.RadioButton,
                         onClickLabel = "Use the ${style.displayName} title page"
                     ) { onSelect(style) }
-                    .semantics { role = Role.RadioButton }
+                    // Same as the layout tiles above: the selected page is a state
+                    // a screen reader has to be told, not a colour it has to guess.
+                    .semantics {
+                        role = Role.RadioButton
+                        // See the layout tile above: the parameter shadows the
+                        // semantics property if the receiver is not named.
+                        this.selected = active
+                    }
                     .testTag("info_page_style_${style.storageValue}"),
                 shape = RoundedCornerShape(20.dp),
                 color = if (active) {
@@ -852,21 +872,31 @@ private fun NovaInfoMini() {
  * values, so a change to the type scale reaches the previews too - and so the mini's
  * text keeps its share of the frame instead of becoming 11sp captions in a 100dp
  * column, which is what the first attempt at real text looked like.
+ *
+ * The reader's own font scale is divided out here. A mini is a picture of a page
+ * inside a fixed-height frame: at 175% its 7sp captions and 9sp names would grow
+ * into rows that no longer fit the diagram, and the shape the reader is choosing
+ * would be the thing clipped. The labels, chips and descriptions around the frame
+ * still follow the setting normally, so nothing that has to be *read* shrinks.
  */
 @Composable
+private fun miniSp(base: Float) =
+    (base / LocalDensity.current.fontScale.coerceAtLeast(0.5f)).sp
+
+@Composable
 internal fun miniTitleStyle() = MaterialTheme.typography.titleSmall.copy(
-    fontSize = 11.sp,
-    lineHeight = 13.sp
+    fontSize = miniSp(11f),
+    lineHeight = miniSp(13f)
 )
 
 @Composable
 internal fun miniBodyStyle() = MaterialTheme.typography.labelSmall.copy(
-    fontSize = 9.sp,
-    lineHeight = 11.sp
+    fontSize = miniSp(9f),
+    lineHeight = miniSp(11f)
 )
 
 @Composable
 internal fun miniCaptionStyle() = MaterialTheme.typography.labelSmall.copy(
-    fontSize = 7.sp,
-    lineHeight = 9.sp
+    fontSize = miniSp(7f),
+    lineHeight = miniSp(9f)
 )

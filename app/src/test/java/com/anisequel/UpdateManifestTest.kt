@@ -272,4 +272,29 @@ class UpdateManifestPublicationTest {
             workflow.contains("::warning title=Manifest not committed")
         )
     }
+
+    /**
+     * The drift warning compares ledger positions, not patch digits.
+     *
+     * It used to subtract the patch numbers, so the one-step roll 2.5.9 -> 2.6.0
+     * computed 9 - 0 > 1 and warned that the baseline was stale on the exact
+     * version bump it exists to allow. `VersionBaselineTest` had the same bug
+     * and was moved to changelog positions; the workflow was left behind, so the
+     * warning fired on the 2.6.0 pull request. The step needs a runner and a
+     * published release to execute, which leaves a source pin as the only place
+     * this can fail before it ships.
+     */
+    @Test
+    fun `the baseline drift warning counts ledger positions, not patches`() {
+        assertFalse(
+            "the drift check still subtracts patch components; one release such as " +
+                "2.5.9 -> 2.6.0 computes more than one apart and warns",
+            workflow.contains("LATEST_PATCH - BASELINE_PATCH")
+        )
+        assertTrue(
+            "the drift check must count positions in the changelog ledger, the same " +
+                "way VersionBaselineTest does",
+            workflow.contains("DRIFT=") && workflow.contains("index(\$baseline)")
+        )
+    }
 }

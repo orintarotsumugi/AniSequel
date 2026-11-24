@@ -163,6 +163,25 @@ enum class HomeSequelStyle(
         displayName = "Film strip",
         blurb = "One frame of film: sprocket holes down the sides and the artwork wide.",
         showsPoster = true
+    ),
+    /**
+     * One wide still per sequel, with its actions on the card rather than on the art.
+     *
+     * The feed already has a dense row, a poster card, an overlaid banner, a shelf,
+     * a stub, a print, a pile and a film frame. What it did not have is the shape a
+     * featured row asks for: a single landscape image big enough to read, with the
+     * controls in their own strip below it instead of over the picture. That is this
+     * one - the artwork is the thing being shown, and nothing is drawn on top of it
+     * except the title the image has to carry.
+     *
+     * Shares the reader's own `HomeSequelStyle` storage key, so it is a chosen style
+     * like the other eight rather than a second Home.
+     */
+    SPOTLIGHT(
+        storageValue = "spotlight",
+        displayName = "Spotlight",
+        blurb = "One wide still per sequel, with the title on the art and the actions underneath.",
+        showsPoster = true
     );
 
     companion object {
@@ -291,6 +310,28 @@ enum class LibraryViewMode(
         displayName = "Grouped covers",
         blurb = "A section per status, each drawn as a poster grid.",
         columns = 3
+    ),
+    /**
+     * One title per row, drawn as a wide still rather than a poster.
+     *
+     * The grid modes answer "how many covers share a row"; this one answers the
+     * opposite question - what a single title looks like when it is the row. The
+     * cover is a landscape crop across the whole page, the caption underneath keeps
+     * the name, status and progress the Big cards caption carries, and the column
+     * count is one so the mode's own arrangement is the answer rather than a second
+     * density of the grid.
+     *
+     * It is a grid mode, not a row mode: it still prints the poster, the progress
+     * pill and a caption, and it is drawn by the same cell as every other poster - a
+     * wide cover, one per line. `columns = 1` is the arrangement the grid reads, and
+     * [usesWideStill] is the proportion the cell and both previews read, so the page
+     * and its miniature cannot describe different shapes.
+     */
+    SPOTLIGHT(
+        storageValue = "spotlight",
+        displayName = "Spotlight",
+        blurb = "One wide still per title, with the name, status and progress underneath.",
+        columns = 1
     );
 
     /**
@@ -337,6 +378,17 @@ enum class LibraryViewMode(
      */
     val hasStatusHeadings: Boolean
         get() = this == GROUPED_COVERS
+
+    /**
+     * Whether the poster is a landscape still across the page, as [SPOTLIGHT] draws it.
+     *
+     * The grid and the two Settings previews need the same answer for the same
+     * reason [hasHeroCells] exists: the mode's proportion is part of its arrangement,
+     * and a preview that drew a 2:3 poster under a one-column name would be showing a
+     * page the Library never produces.
+     */
+    val usesWideStill: Boolean
+        get() = this == SPOTLIGHT
 
     companion object {
         // AniSequel 2.4 opens the Library on expressive two-column poster cards.

@@ -304,10 +304,10 @@ internal object SettingsSearch {
                 page = SettingsPage.UI,
                 interfaceSection = InterfaceSection.SEQUELS,
                 title = "Feed shape",
-                subtitle = "Rows, cards or banners on the new Home",
+                subtitle = "Rows, cards, banners or spotlight on the new Home",
                 eyebrow = "Interface · Home sequels",
                 icon = AppVectorIcons.HomeTab,
-                keywords = "sequel feed home card row banner",
+                keywords = "sequel feed home card row banner spotlight",
                 priority = 20
             )
         )
@@ -317,10 +317,10 @@ internal object SettingsSearch {
                 page = SettingsPage.UI,
                 interfaceSection = InterfaceSection.LIBRARY,
                 title = "Grid and rows",
-                subtitle = "Poster grid, cover wall, shelf, list, grouped and table",
+                subtitle = "Poster grid, cover wall, shelf, list, grouped, table and spotlight",
                 eyebrow = "Interface · Library view",
                 icon = AppVectorIcons.ViewGrid,
-                keywords = "library layout columns density posters",
+                keywords = "library layout columns density posters spotlight",
                 priority = 25
             )
         )
@@ -452,10 +452,10 @@ internal object SettingsSearch {
                 page = SettingsPage.UI,
                 interfaceSection = InterfaceSection.LIBRARY,
                 title = "Library layout",
-                subtitle = "Poster grid, cover wall, shelf, list, grouped and table",
+                subtitle = "Poster grid, cover wall, shelf, list, grouped, table and spotlight",
                 eyebrow = "Interface · Library view",
                 icon = AppVectorIcons.ViewGrid,
-                keywords = "grid list table grouped covers shelf columns layout posters",
+                keywords = "grid list table grouped covers shelf columns layout posters spotlight",
                 priority = 25
             )
         )

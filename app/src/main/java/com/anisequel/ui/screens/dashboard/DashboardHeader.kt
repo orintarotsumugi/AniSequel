@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -22,9 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.FilterCriteria
@@ -42,6 +46,12 @@ fun DashboardSearchBar(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    // The field filters as the reader types, so the keyboard's action key has
+    // nothing to submit - but leaving it as the default "done" left the keyboard
+    // up and the field focused, covering the first cards of the result the
+    // reader had just narrowed. Search now dismisses the keyboard, which is the
+    // same contract the settings and catalogue searches already have.
+    val focusManager = LocalFocusManager.current
 
     OutlinedTextField(
         value = query,
@@ -53,6 +63,8 @@ fun DashboardSearchBar(
             .testTag("anime_search_bar"),
         placeholder = { Text("Search franchise or sequel") },
         singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
         shape = ExpressiveShapes.pill,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surface,

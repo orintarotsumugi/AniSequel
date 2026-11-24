@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -255,7 +256,11 @@ internal fun SetupFooter(
                 onClick = onBack,
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
+                    // The wizard's Back sits beside the shared primary button,
+                    // which grows with the Text size setting. A fixed 48dp here
+                    // clipped "Back" first and then left the two buttons at
+                    // different heights in the same row.
+                    .heightIn(min = 48.dp)
                     .bouncyPress(pressedScale = 0.96f, interactionSource = backSource)
                     .testTag("onboarding_back"),
                 interactionSource = backSource

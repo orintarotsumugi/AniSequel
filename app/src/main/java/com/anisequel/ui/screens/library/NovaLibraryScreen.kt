@@ -475,7 +475,13 @@ private fun NovaLibraryResolving() {
                                 ShimmerBox(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .aspectRatio(if (viewMode == LibraryViewMode.CARDS) 0.66f else 0.68f),
+                                        .aspectRatio(
+                                            when {
+                                                viewMode == LibraryViewMode.CARDS -> 0.66f
+                                                viewMode.usesWideStill -> SPOTLIGHT_ASPECT
+                                                else -> 0.68f
+                                            }
+                                        ),
                                     shape = RoundedCornerShape(16.dp),
                                     phase = phase
                                 )

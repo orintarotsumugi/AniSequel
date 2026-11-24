@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.MediaNode
@@ -223,7 +224,12 @@ fun StudioScreen(
                         Text(
                             text = name,
                             fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
+                            maxLines = 1,
+                            // Studio names run long ("Bones Film" is short;
+                            // "J.C.Staff / Genco" is not), and a one-line bar
+                            // title without an overflow mode clips the last
+                            // glyph rather than shortening the name.
+                            overflow = TextOverflow.Ellipsis
                         )
                     },
                     navigationIcon = {

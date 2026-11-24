@@ -36,6 +36,8 @@ class InterfaceModesTest {
         assertEquals(HomeSequelStyle.SHELF, HomeSequelStyle.fromStorage("shelf"))
         assertEquals(HomeSequelStyle.DECK, HomeSequelStyle.fromStorage("deck"))
         assertEquals(HomeSequelStyle.FILMSTRIP, HomeSequelStyle.fromStorage("filmstrip"))
+        assertEquals(HomeSequelStyle.SPOTLIGHT, HomeSequelStyle.fromStorage("spotlight"))
+        assertEquals(LibraryViewMode.SPOTLIGHT, LibraryViewMode.fromStorage("spotlight"))
         assertEquals(MediaCardStyle.COVER_ONLY, MediaCardStyle.fromStorage("cover_only"))
     }
 

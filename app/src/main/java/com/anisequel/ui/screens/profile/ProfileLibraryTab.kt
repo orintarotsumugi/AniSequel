@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,9 +49,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaListEntryItem
 import com.anisequel.data.model.displayName
@@ -84,6 +88,7 @@ import com.anisequel.ui.screens.library.LibraryGroupHeading
 import com.anisequel.ui.screens.library.LibraryListRow
 import com.anisequel.ui.screens.library.MOSAIC_HERO_ASPECT
 import com.anisequel.ui.screens.library.MOSAIC_HERO_EVERY
+import com.anisequel.ui.screens.library.SPOTLIGHT_ASPECT
 import com.anisequel.ui.screens.library.LibraryTableHeader
 import com.anisequel.ui.screens.library.libraryColumns
 import com.anisequel.ui.theme.AniSequelTheme
@@ -1042,6 +1047,7 @@ fun ProfileLibraryTab(
                                 showTitle = viewMode != LibraryViewMode.COVERS &&
                                     viewMode != LibraryViewMode.SHELF,
                                 hero = entry.media.namespaceKey in heroKeys,
+                                wide = viewMode.usesWideStill,
                                 modifier = Modifier
                                     .widthIn(max = ProfileMaxContentWidth)
                                     .fillMaxWidth()
@@ -1234,12 +1240,20 @@ private fun LibrarySearchField(
     query: String,
     onQueryChange: (String) -> Unit
 ) {
+    // The filter is live, so there is nothing to submit; the action key's job is
+    // to put the keyboard away and give the list back its screen space. Left as
+    // the default it did neither, and the field kept focus until something else
+    // was tapped.
+    val focusManager = LocalFocusManager.current
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier
             .fillMaxWidth()
             .testTag("library_search_input"),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
         placeholder = {
             Text(
                 text = "Search this list...",
@@ -1321,7 +1335,15 @@ private fun LibraryPoster(
      * design, which would stretch a full-width poster to twice the height of a phone
      * screen.
      */
-    hero: Boolean = false
+    hero: Boolean = false,
+    /**
+     * Spotlight's wide still: one per row, at the Library's own landscape shape.
+     *
+     * Without this the profile page drew the new mode as a single 2:3 poster per
+     * row - a column of posters twice the height of the screen, which is the shape
+     * the mode is defined against.
+     */
+    wide: Boolean = false
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
@@ -1350,7 +1372,11 @@ private fun LibraryPoster(
             score = score,
             style = style,
             titleVisible = showTitle,
-            aspect = if (hero) MOSAIC_HERO_ASPECT else POSTER_ASPECT,
+            aspect = when {
+                hero -> MOSAIC_HERO_ASPECT
+                wide -> SPOTLIGHT_ASPECT
+                else -> POSTER_ASPECT
+            },
             modifier = Modifier.fillMaxWidth(),
             overlay = {
                 val progress: String? = libraryProgressLabel(entry)

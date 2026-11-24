@@ -201,6 +201,115 @@ internal fun SequelStylePreview(
                                 color = Color.White.copy(alpha = 0.8f),
                                 maxLines = 1
                             )
+                            // The blurb promises "a compact action strip" and the
+                            // real banner carries the quick-add control over its
+                            // artwork. This preview used to stop at the title, so
+                            // the one difference between a banner and a plain
+                            // backdrop was missing from the picture.
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Watch sequel",
+                                    style = miniCaptionStyle(),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.18f))
+                                        .padding(vertical = 3.dp)
+                                )
+                                Text(
+                                    text = "Later",
+                                    style = miniCaptionStyle(),
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    maxLines = 1,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.32f))
+                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+                    HomeSequelStyle.SPOTLIGHT -> Column(modifier = Modifier.fillMaxSize()) {
+                        // The still is the card, and the strip is measured below it:
+                        // that separation is the whole difference from Banners.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                        ) {
+                            MiniCover(
+                                entry = previewEntry(entries, 0),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
+                                        )
+                                    )
+                            )
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth(0.8f)
+                                    .padding(9.dp)
+                            ) {
+                                Text(
+                                    text = "SEQUEL",
+                                    style = miniCaptionStyle(),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = previewTitle(previewEntry(entries, 0)),
+                                    style = miniBodyStyle(),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = "Watch sequel",
+                                style = miniCaptionStyle(),
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .padding(vertical = 4.dp)
+                            )
+                            Text(
+                                text = "Later",
+                                style = miniCaptionStyle(),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
                         }
                     }
                     HomeSequelStyle.SHELF -> Row(

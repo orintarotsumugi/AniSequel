@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,7 +82,11 @@ fun SequelRelationBanner(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            onClickLabel = "Open " + sequel.parentTitle
+                            onClickLabel = "Open " + sequel.parentTitle,
+                            // Without a role this row announces its action but
+                            // not that it is a button, which is what the row's
+                            // scale-only press feedback is standing in for.
+                            role = Role.Button
                         ) { onOpenParent() }
                 }
             )
@@ -120,7 +125,12 @@ fun SequelRelationBanner(
             style = MaterialTheme.typography.labelMedium,
             color = relationColor,
             fontWeight = FontWeight.Bold,
-            maxLines = 1
+            maxLines = 1,
+            // "Side story to" and the longer relation names share the line with
+            // the parent's title, which has the weight. A label that does not
+            // fit should end in an ellipsis rather than be sliced, and the full
+            // sentence is still on the row's `onClickLabel`.
+            overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
