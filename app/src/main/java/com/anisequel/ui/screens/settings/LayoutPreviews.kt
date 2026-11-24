@@ -108,7 +108,11 @@ internal fun AppLayoutPreviews(
                     // it from a click label that is identical on both tiles.
                     .semantics {
                         role = Role.RadioButton
-                        selected = active
+                        // `this.`: the lambda also sees the `selected` parameter of
+                        // this composable, which is an AppLayout. Without the
+                        // receiver the assignment resolves to the captured val and
+                        // does not compile.
+                        this.selected = active
                     }
                     .testTag("app_layout_${layout.storageValue}"),
                 shape = RoundedCornerShape(20.dp),
@@ -602,7 +606,9 @@ internal fun InfoPageStylePreviews(
                     // a screen reader has to be told, not a colour it has to guess.
                     .semantics {
                         role = Role.RadioButton
-                        selected = active
+                        // See the layout tile above: the parameter shadows the
+                        // semantics property if the receiver is not named.
+                        this.selected = active
                     }
                     .testTag("info_page_style_${style.storageValue}"),
                 shape = RoundedCornerShape(20.dp),

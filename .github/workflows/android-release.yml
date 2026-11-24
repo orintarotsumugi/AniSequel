@@ -497,24 +497,40 @@ jobs:
           fi
           LATEST=${LATEST#v}
 
-          # Compare patch components as integers. String comparison gets this
-          # wrong: "1.0.9" sorts *above* "1.0.10", so a project past patch 9 would
-          # look infinitely out of date.
-          BASELINE_PATCH=$(echo "$BASELINE" | cut -d. -f3)
-          LATEST_PATCH=$(echo "$LATEST" | cut -d. -f3)
-          if [ -z "${BASELINE_PATCH}" ] || [ -z "${LATEST_PATCH}" ]; then
-            echo "Could not read patch numbers ('${BASELINE}' vs '${LATEST}'); skipping."
-            exit 0
-          fi
+          # Compare positions in the release ledger, not patch digits.
+          #
+          # Subtracting patches cannot tell a healthy roll from drift: 2.5.9 ->
+          # 2.6.0 is one release and computes 9 - 0 > 1, so the check warned on
+          # the exact version bump it exists to bless. VersionBaselineTest gave
+          # up on patch arithmetic for the same reason and compares positions in
+          # assets/changelog.json; the ledger is newest-first, so a baseline more
+          # than one release behind the newest is a positive difference above one.
+          DRIFT=$(jq -r --arg baseline "$BASELINE" --arg latest "$LATEST" '
+            [.versions[].version] as $ledger
+            | ($ledger | index($baseline)) as $b
+            | ($ledger | index($latest)) as $l
+            | if $b == null or $l == null then "unknown" else ($b - $l) end
+          ' app/src/main/assets/changelog.json)
 
-          if [ "$((LATEST_PATCH - BASELINE_PATCH))" -gt 1 ]; then
-            echo "::warning::gradle.properties says ${BASELINE} but ${LATEST} is " \
-                 "published - ${BASELINE} trails it by more than one release, so " \
-                 "the manifest sync has not been running. Local builds report the " \
-                 "wrong version in Settings > About."
-          else
-            echo "Baseline ${BASELINE} is in step with the newest release (${LATEST})."
-          fi
+          case "$DRIFT" in
+            unknown)
+              echo "::warning::${BASELINE} or ${LATEST} is not in " \
+                   "assets/changelog.json, so the baseline drift check could not run."
+              ;;
+            ''|*[!0-9-]*)
+              echo "Could not compare ${BASELINE} and ${LATEST} ('${DRIFT}'); skipping."
+              ;;
+            *)
+              if [ "${DRIFT}" -gt 1 ]; then
+                echo "::warning::gradle.properties says ${BASELINE} but ${LATEST} is " \
+                     "published - the baseline trails the newest release by ${DRIFT} " \
+                     "versions, so the manifest sync has not been running. Local " \
+                     "builds report the wrong version in Settings > About."
+              else
+                echo "Baseline ${BASELINE} is in step with the newest release (${LATEST})."
+              fi
+              ;;
+          esac
 
       # Robolectric does not fetch its framework jars through Gradle. It runs its
       # own Maven resolver during the *test* task, which is why the jars are in no
