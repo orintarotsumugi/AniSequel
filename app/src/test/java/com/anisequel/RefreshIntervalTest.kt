@@ -32,14 +32,14 @@ class RefreshIntervalTest {
     private fun minutes(count: Long) = base + count * 60 * 1000L
 
     @Test
-    fun `thirty minutes is what the app ships with`() {
+    fun `one day is what the app ships with`() {
         assertEquals(
-            "the default is the interval that fixes the reopen bug; changing it " +
-                    "silently reinstates a one-hour stale window nobody asked for",
-            RefreshInterval.THIRTY_MINUTES,
+            "the out-of-box cadence is the one a list opened once a day needs; " +
+                    "the shorter stops stay one slider step away",
+            RefreshInterval.ONE_DAY,
             RefreshInterval.DEFAULT
         )
-        assertEquals(30 * 60 * 1000L, RefreshInterval.THIRTY_MINUTES.staleAfterMillis)
+        assertEquals(24L * 60 * 60 * 1000, RefreshInterval.ONE_DAY.staleAfterMillis)
     }
 
     /**
@@ -84,8 +84,8 @@ class RefreshIntervalTest {
     @Test
     fun `a list past the interval is due, which is what reopening the app acts on`() {
         assertTrue(
-            "returning to the app after 45 minutes must re-fetch under the default",
-            isRefreshDue(minutes(45), base, RefreshInterval.DEFAULT)
+            "returning to the app after 45 minutes must re-fetch a 30-minute cadence",
+            isRefreshDue(minutes(45), base, RefreshInterval.THIRTY_MINUTES)
         )
     }
 

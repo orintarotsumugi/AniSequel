@@ -38,10 +38,11 @@ private const val NEVER_STALE_MILLIS = Long.MAX_VALUE
  * out was the refresh button. It read as the app ignoring what the user had just
  * done elsewhere.
  *
- * Thirty minutes is the default because it is short enough that a list is
- * current when someone opens the app to check for a new sequel, and long enough
- * that re-entering the app a handful of times in a session does not spend
- * AniList's ~30 requests a minute re-buying a multi-megabyte answer.
+ * One day is the default. A list that is opened to check a season does not need
+ * re-buying every half hour, and the resume check is what usually notices a
+ * change while the app is open, so the timer is the exception at this cadence
+ * rather than the common path. It is only the starting point: every shorter
+ * interval is one slider stop away, and onboarding can skip the choice entirely.
  *
  * [MANUAL_ONLY] is the opt-out for anyone on a metered or slow connection: the
  * cached list is reused for the whole session and only the refresh gesture
@@ -78,7 +79,7 @@ enum class RefreshInterval(
     MANUAL_ONLY("manual_only", "Manual", NEVER_STALE_MILLIS);
 
     companion object {
-        val DEFAULT = THIRTY_MINUTES
+        val DEFAULT = ONE_DAY
 
         /**
          * Reads a stored value, falling back to [DEFAULT].
