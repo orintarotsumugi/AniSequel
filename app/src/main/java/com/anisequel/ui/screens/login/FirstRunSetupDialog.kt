@@ -60,6 +60,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.screens.settings.AppLayoutPreviews
 import com.anisequel.ui.screens.settings.MotionSample
+import com.anisequel.ui.screens.settings.RefreshIntervalPicker
 import com.anisequel.ui.screens.settings.SectionCard
 import com.anisequel.ui.screens.settings.SwitchRow
 import com.anisequel.ui.screens.settings.ThemePreviewCard
@@ -569,27 +570,23 @@ internal fun SetupStepChoices(
             icon = AppVectorIcons.Refresh,
             subtitle = "How old your saved list may get before the app asks again"
         ) {
-            ChoiceChips(
-                values = RefreshInterval.entries.map {
-                    it.storageValue to it.displayName
-                },
-                selected = draft.refreshInterval,
-                onSelect = { onDraftChange(draft.copy(refreshInterval = it)) },
-                tag = "onboarding_refresh_interval"
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                text = when (RefreshInterval.fromStorage(draft.refreshInterval)) {
-                    RefreshInterval.ALWAYS ->
-                        "Check every time you return to the app."
-                    RefreshInterval.MANUAL_ONLY ->
-                        "Only the refresh button asks AniList for a new copy."
-                    else ->
-                        "Ask again after ${RefreshInterval.fromStorage(draft.refreshInterval).displayName} " +
-                            "of being away. A shorter interval spends more requests."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            RefreshIntervalPicker(
+                selected = RefreshInterval.fromStorage(draft.refreshInterval),
+                onSelect = { onDraftChange(draft.copy(refreshInterval = it.storageValue)) },
+                tag = "onboarding_refresh_interval",
+                // Shorter than the Settings copy on purpose: this page asks which
+                // interval to start with, and has no saved list yet to describe.
+                detail = { interval ->
+                    when (interval) {
+                        RefreshInterval.ALWAYS ->
+                            "Check every time you return to the app."
+                        RefreshInterval.MANUAL_ONLY ->
+                            "Only the refresh button asks AniList for a new copy."
+                        else ->
+                            "Ask again after ${interval.displayName} of being away. A " +
+                                "shorter interval spends more requests."
+                    }
+                }
             )
         }
         else -> SectionCard(

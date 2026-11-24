@@ -38,10 +38,11 @@ private const val NEVER_STALE_MILLIS = Long.MAX_VALUE
  * out was the refresh button. It read as the app ignoring what the user had just
  * done elsewhere.
  *
- * Thirty minutes is the default because it is short enough that a list is
- * current when someone opens the app to check for a new sequel, and long enough
- * that re-entering the app a handful of times in a session does not spend
- * AniList's ~30 requests a minute re-buying a multi-megabyte answer.
+ * One day is the default. A list that is opened to check a season does not need
+ * re-buying every half hour, and the resume check is what usually notices a
+ * change while the app is open, so the timer is the exception at this cadence
+ * rather than the common path. It is only the starting point: every shorter
+ * interval is one slider stop away, and onboarding can skip the choice entirely.
  *
  * [MANUAL_ONLY] is the opt-out for anyone on a metered or slow connection: the
  * cached list is reused for the whole session and only the refresh gesture
@@ -62,11 +63,23 @@ enum class RefreshInterval(
 
     ONE_HOUR("one_hour", "1 hour", 60 * 60 * 1000L),
 
+    /**
+     * A day, and [ONE_WEEK] below it, are for a list that is read once a day or
+     * once a week: someone who opens AniSequel to check a single season should
+     * not spend a request every hour on the way there. They are deliberately
+     * past the point where the timer is the common path - the resume check is
+     * what usually notices - so they are the two stops where "on its own while
+     * the app stays open" is the exception rather than the rule.
+     */
+    ONE_DAY("one_day", "1 day", 24L * 60 * 60 * 1000),
+
+    ONE_WEEK("one_week", "1 week", 7L * 24 * 60 * 60 * 1000),
+
     /** Never automatically. The refresh gesture is the only route to fresh data. */
     MANUAL_ONLY("manual_only", "Manual", NEVER_STALE_MILLIS);
 
     companion object {
-        val DEFAULT = THIRTY_MINUTES
+        val DEFAULT = ONE_DAY
 
         /**
          * Reads a stored value, falling back to [DEFAULT].

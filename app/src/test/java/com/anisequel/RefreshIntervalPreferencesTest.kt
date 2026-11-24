@@ -41,8 +41,8 @@ class RefreshIntervalPreferencesTest {
     }
 
     @Test
-    fun `defaults to thirty minutes`() = runTest {
-        assertEquals(RefreshInterval.THIRTY_MINUTES, preferences().interval.first())
+    fun `defaults to one day`() = runTest {
+        assertEquals(RefreshInterval.ONE_DAY, preferences().interval.first())
     }
 
     @Test

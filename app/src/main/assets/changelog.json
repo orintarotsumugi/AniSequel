@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "2.6.1",
+      "entries": [
+        {
+          "title": "The list refresh cadence is a slider, and it starts at one day",
+          "detail": "Settings and the first-run wizard draw the list refresh interval as the wavy Expressive track, with a stop for Always, 15 minutes, 30 minutes, 1 hour, 1 day, 1 week and Manual; the old chip row could not show seven choices on one line. One day is now the out-of-box cadence - a list opened to check a season does not need re-buying every half hour, and the resume check is what usually notices a change - while every shorter interval stays one slider stop away and onboarding can still skip the step."
+        },
+        {
+          "title": "The title page dim leaves when the page leaves",
+          "detail": "A dialog's dim is a window-manager attribute: full strength on the frame the window is added, gone on the frame it is removed. Opening a title cut the list to 60% black before the page had faded in, and closing unmasked it in one frame after the page had gone. The platform dim is now zeroed and the same scrim is drawn under the page, reading the page's own progress so the two fade as one."
+        },
+        {
+          "title": "A related title no longer replays the open",
+          "detail": "The title page's entrance and close were keyed by the media id and type, but following a relation replaces what the page shows without replacing the page: the state was recreated, the page fell to alpha 0 and replayed the whole open over a transparent window. A relation tapped during the closing fade reset the flag and cancelled the exit, so the page came back instead of leaving. Both now belong to the sheet - one entrance per window, the close keyed by its own request, and a second Close is a no-op."
+        }
+      ]
+    },
+    {
       "version": "2.6.0",
       "entries": [
         {

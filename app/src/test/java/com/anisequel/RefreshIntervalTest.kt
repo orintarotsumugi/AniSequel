@@ -32,14 +32,36 @@ class RefreshIntervalTest {
     private fun minutes(count: Long) = base + count * 60 * 1000L
 
     @Test
-    fun `thirty minutes is what the app ships with`() {
+    fun `one day is what the app ships with`() {
         assertEquals(
-            "the default is the interval that fixes the reopen bug; changing it " +
-                    "silently reinstates a one-hour stale window nobody asked for",
-            RefreshInterval.THIRTY_MINUTES,
+            "the out-of-box cadence is the one a list opened once a day needs; " +
+                    "the shorter stops stay one slider step away",
+            RefreshInterval.ONE_DAY,
             RefreshInterval.DEFAULT
         )
-        assertEquals(30 * 60 * 1000L, RefreshInterval.THIRTY_MINUTES.staleAfterMillis)
+        assertEquals(24L * 60 * 60 * 1000, RefreshInterval.ONE_DAY.staleAfterMillis)
+    }
+
+    /**
+     * The long end of the scale, added for a list that is read once a day or a
+     * week. The week must sort past the day: a slider that allowed a week but
+     * timed it as a day would refresh seven times as often as it promised.
+     */
+    @Test
+    fun `a day and a week are the long cadences`() {
+        assertEquals(
+            24L * 60 * 60 * 1000,
+            RefreshInterval.ONE_DAY.staleAfterMillis
+        )
+        assertEquals(
+            7L * 24 * 60 * 60 * 1000,
+            RefreshInterval.ONE_WEEK.staleAfterMillis
+        )
+        assertTrue(
+            "a week must not come due before a day",
+            RefreshInterval.ONE_WEEK.staleAfterMillis >
+                RefreshInterval.ONE_DAY.staleAfterMillis
+        )
     }
 
     @Test
@@ -62,8 +84,8 @@ class RefreshIntervalTest {
     @Test
     fun `a list past the interval is due, which is what reopening the app acts on`() {
         assertTrue(
-            "returning to the app after 45 minutes must re-fetch under the default",
-            isRefreshDue(minutes(45), base, RefreshInterval.DEFAULT)
+            "returning to the app after 45 minutes must re-fetch a 30-minute cadence",
+            isRefreshDue(minutes(45), base, RefreshInterval.THIRTY_MINUTES)
         )
     }
 
@@ -178,6 +200,8 @@ class RefreshIntervalTest {
         assertEquals("fifteen_minutes", RefreshInterval.FIFTEEN_MINUTES.storageValue)
         assertEquals("thirty_minutes", RefreshInterval.THIRTY_MINUTES.storageValue)
         assertEquals("one_hour", RefreshInterval.ONE_HOUR.storageValue)
+        assertEquals("one_day", RefreshInterval.ONE_DAY.storageValue)
+        assertEquals("one_week", RefreshInterval.ONE_WEEK.storageValue)
         assertEquals("manual_only", RefreshInterval.MANUAL_ONLY.storageValue)
     }
 
