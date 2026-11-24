@@ -393,7 +393,9 @@ fun SequelDetailSheet(
     // relation replaces what the page shows without replacing the page, and
     // keying either animation by the subject made the new title replay the open
     // over a transparent window (or cancel an exit already in flight).
-    val entrance = rememberSheetEntrance()
+    //
+    // Created below, after the flight: the page waits for the copy's picture (see
+    // `entranceGate`), so the two can start on the same frame.
 
     val finishDismiss: () -> Unit = {
         if (themeSettings.animeThemeRetainColor) {
@@ -420,6 +422,14 @@ fun SequelDetailSheet(
     // authoritative, because it carries the border and shadow the copy does not
     // and it scrolls with the page.
     val coverFlight = rememberDetailCoverFlight(listOf(posterUrl, media.posterUrl))
+    // The page and the copy leave on the same frame.
+    //
+    // The copy is decoded before the flight starts, and the page's entrance is
+    // held until then: without the gate the page faded in over a rectangle that
+    // was still downloading, and the poster popped into it halfway through the
+    // open. A page with no flight open - no press behind it, or a cover that will
+    // not decode - reads `true` immediately and keeps its own entrance.
+    val entrance = rememberSheetEntrance(released = coverFlight.entranceGate)
     val handleDismiss = rememberSheetClose(
         entrance = entrance,
         onDismissed = finishDismiss,

@@ -118,7 +118,13 @@ fun ProfileHomeTab(
                 modifier = Modifier.testTag("profile_header_card"),
                 bannerShape = layout.bannerShape,
                 bannerAnchor = layout.bannerAnchor,
-                bannerDrift = layout.bannerDrift
+                bannerDrift = layout.bannerDrift,
+                // The header is this list's first item, so its scroll offset is
+                // the distance the header itself has travelled. The header reads
+                // this in the draw phase - see `ProfileHeaderCard.scrollOffset` -
+                // which is what lets the banner lag the page and the identity
+                // block leave sideways without a recomposition per frame.
+                scrollOffset = { listState.firstVisibleItemScrollOffset.toFloat() }
             )
         }
 

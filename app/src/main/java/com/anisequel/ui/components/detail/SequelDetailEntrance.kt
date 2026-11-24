@@ -46,11 +46,25 @@ private const val SCRIM_ALPHA = 0.6f
  * state was recreated and the page fell back to alpha 0 for a frame before
  * replaying the whole entrance - the list flashed through the window and the
  * related title arrived twice.
+ *
+ * ## Why the entrance can be held back
+ *
+ * A cover flight is drawn over a page the reader can still see through, which is
+ * what makes the copy look like the card lifting off the list. If the page starts
+ * fading in before the copy has its picture, the two halves arrive at different
+ * times: the page settles over a rectangle that is still decoding, and then the
+ * picture pops into it. [released] lets the sheet hold the entrance until the
+ * flight is either ready to draw or given up on - one frame for both, or no
+ * flight at all. It is a plain flag rather than a spring delay so a flight that
+ * is abandoned (a text page, a cover that will not decode) still opens at once.
  */
 @Composable
-internal fun rememberSheetEntrance(): Animatable<Float, AnimationVector1D> {
+internal fun rememberSheetEntrance(
+    released: Boolean = true
+): Animatable<Float, AnimationVector1D> {
     val entrance = remember { Animatable(0f) }
-    LaunchedEffect(entrance) {
+    LaunchedEffect(entrance, released) {
+        if (!released) return@LaunchedEffect
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
     }
     return entrance

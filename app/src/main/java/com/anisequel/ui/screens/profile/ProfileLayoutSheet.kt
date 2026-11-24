@@ -44,6 +44,11 @@ import com.anisequel.ui.components.expressive.SegmentedOption
  * edits. Changes are written on each tap rather than on a Save button: the page
  * behind the sheet is live, and a Save/Cancel pair would mean a preview that lies
  * until confirmed.
+ *
+ * Opened from every profile, not only the reader's own: the order and visibility
+ * are the reader's view of a profile, stored on this device, so they follow the
+ * reader from their own page to somebody else's rather than being a setting that
+ * only applies where it was set.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,8 +82,9 @@ internal fun ProfileLayoutSheet(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Reorder, hide or show the blocks on your own profile. " +
-                    "The header stays - it is the page, not a block.",
+                text = "Reorder, hide or show the blocks on a profile. " +
+                    "Your arrangement follows you to every profile; the header " +
+                    "stays - it is the page, not a block.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
