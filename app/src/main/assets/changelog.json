@@ -18,6 +18,14 @@
         {
           "title": "The flying cover is carried, not resized",
           "detail": "The flying cover now rides on a shadow: none over the card, because there the copy is the card's flat artwork, lifting through the middle of the flight, and settling into the page's own poster elevation at the landing, so both hand-offs are between two pictures carrying the same shadow instead of a shadow that appears or vanishes with the copy. A shrinking rectangle reads as a resize; a poster with a shadow under it reads as something being carried across the list and set back down."
+        },
+        {
+          "title": "The profile banner can be moved left, centre or right",
+          "detail": "A banner wider than the card is cropped by definition, and which part survived used to be decided by the transform's centre - the reader's own artwork was the one thing the header never let them position. The layout sheet now offers Left, Center and Right: the crop moves to that side of the picture, on the settle spring rather than in a jump, so the banner slides there instead of flickering. A picture that already fits the width has no crop to move and the control leaves it alone. The choice is stored with the banner's shape, and Reset clears it with everything else."
+        },
+        {
+          "title": "The profile banner can drift like a moving still",
+          "detail": "Drift sweeps the banner slowly sideways while the page sits still, so the whole picture reaches both of its own edges - the only way a cover crop can show the artwork it hides. It is off by default, and the position control dims and stops answering while it runs, because the sweep owns the horizontal position while it is moving. Nothing is composed when the picture has no sideways slack, when the page is off screen, or when the reader has zoomed in and taken the gesture, so an idle profile does not keep redrawing a banner nobody can see."
         }
       ]
     },

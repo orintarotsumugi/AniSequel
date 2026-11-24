@@ -57,7 +57,23 @@ data class ProfileLayout(
      * the same page the editor is arranging - and because the editor can then show
      * it next to the order instead of in a different settings screen.
      */
-    val bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT
+    val bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT,
+    /**
+     * Which side of a banner wider than the card the header holds. Meaningless when
+     * the picture already fits the width - there is nothing to choose between.
+     *
+     * Stored with the shape because it is the other half of the same question: the
+     * shape decides how much of the header the banner gets, this decides what is
+     * inside it once the crop is inevitable.
+     */
+    val bannerAnchor: ProfileBannerAnchor = ProfileBannerAnchor.DEFAULT,
+    /**
+     * Sweep the banner slowly sideways at rest instead of holding one crop.
+     *
+     * Off by default: it is an animation that never stops, so it is the reader's
+     * choice rather than something an update turns on for every profile.
+     */
+    val bannerDrift: Boolean = false
 ) {
     /** Stored order, de-duplicated, unknown entries dropped, missing ones appended. */
     val resolvedOrder: List<ProfileSection>

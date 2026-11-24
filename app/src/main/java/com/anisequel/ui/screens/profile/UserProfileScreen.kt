@@ -625,6 +625,16 @@ fun UserProfileScreen(
                                         layoutPreferences.setBannerShape(shape)
                                     }
                                 },
+                                onBannerAnchor = { anchor ->
+                                    layoutScope.launch {
+                                        layoutPreferences.setBannerAnchor(anchor)
+                                    }
+                                },
+                                onBannerDrift = { drift ->
+                                    layoutScope.launch {
+                                        layoutPreferences.setBannerDrift(drift)
+                                    }
+                                },
                                 onReset = {
                                     layoutScope.launch { layoutPreferences.reset() }
                                 },

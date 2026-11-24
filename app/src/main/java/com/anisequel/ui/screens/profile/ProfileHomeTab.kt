@@ -116,7 +116,9 @@ fun ProfileHomeTab(
             ProfileHeaderCard(
                 state = state,
                 modifier = Modifier.testTag("profile_header_card"),
-                bannerShape = layout.bannerShape
+                bannerShape = layout.bannerShape,
+                bannerAnchor = layout.bannerAnchor,
+                bannerDrift = layout.bannerDrift
             )
         }
 

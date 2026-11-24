@@ -3,6 +3,7 @@ package com.anisequel.ui.screens.profile
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,6 +53,7 @@ import coil.request.ImageRequest
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.PannableBackdrop
 import com.anisequel.ui.components.SavedCopyPill
+import com.anisequel.domain.profile.ProfileBannerAnchor
 import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileBannerSizing
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -93,7 +95,11 @@ fun ProfileHeaderCard(
     modifier: Modifier = Modifier,
     maxWidth: Dp = ProfileMaxContentWidth,
     /** How tall the banner is; see [ProfileBannerShape]. */
-    bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT
+    bannerShape: ProfileBannerShape = ProfileBannerShape.DEFAULT,
+    /** Which side of a wider-than-the-card banner the header keeps; see [ProfileBannerAnchor]. */
+    bannerAnchor: ProfileBannerAnchor = ProfileBannerAnchor.DEFAULT,
+    /** Sweep the banner slowly sideways instead of holding one crop. */
+    bannerDrift: Boolean = false
 ) {
     val context = LocalContext.current
     // One request for one portrait, built once per URL rather than on every
@@ -129,7 +135,12 @@ fun ProfileHeaderCard(
                 // a little air before the username.
                 .padding(bottom = 46.dp)
         ) {
-            Banner(state = state, shape = bannerShape)
+            Banner(
+                state = state,
+                shape = bannerShape,
+                anchor = bannerAnchor,
+                drift = bannerDrift
+            )
 
             AsyncImage(
                 model = avatarRequest,
@@ -325,12 +336,20 @@ private fun SummaryDivider() {
  * the component holding the decoded painter. Until it arrives - and for the
  * gradient fallback, which has no picture at all - the height is the landscape
  * ratio, so the first frame is a header rather than a collapsed strip, and the
- * settle from that to a portrait banner is the one animation here.
+ * settle from that to a portrait banner is the first of the header's two
+ * animations.
+ *
+ * The other is the crop. A banner wider than the card is cropped by the cover fit,
+ * and which part survives used to be decided by the transform's centre origin -
+ * the reader's choice in the layout sheet now moves it (see [ProfileBannerAnchor]),
+ * on [ExpressiveMotion.SettleSpatial] so the artwork slides rather than jumps.
  */
 @Composable
 private fun Banner(
     state: UserOverviewUiState.Success,
     shape: ProfileBannerShape,
+    anchor: ProfileBannerAnchor,
+    drift: Boolean,
     modifier: Modifier = Modifier
 ) {
     val banner = state.bannerUrl?.takeIf { it.isNotBlank() }
@@ -402,9 +421,27 @@ private fun Banner(
             BannerFallback()
 
             if (bannerRequest != null) {
+                // The anchor is animated rather than snapped: the picture is the
+                // page's largest thing, and a crop that jumps between three
+                // positions reads as a broken layout, while a slide reads as the
+                // artwork being moved - which is what the setting does.
+                //
+                // Read in the draw phase by the backdrop (see its `anchor`), so this
+                // spring never recomposes the header while it runs.
+                val anchorFraction = animateFloatAsState(
+                    targetValue = anchor.fraction,
+                    animationSpec = ExpressiveMotion.SettleSpatial,
+                    label = "profile_banner_anchor"
+                )
                 PannableBackdrop(
                     model = bannerRequest,
                     contentDescription = "Profile Banner",
+                    drift = drift,
+                    // The sweep owns the horizontal position while it runs: holding
+                    // a side at the same time would push the sweep's centre off to
+                    // one edge and it would spend half of every period clamped
+                    // there. Turning drift off restores the side, already settled.
+                    anchor = { if (drift) 0.5f else anchorFraction.value },
                     onImageSize = { measured ->
                         imageSize = measured
                         BannerAspectMemory.remember(banner, measured)

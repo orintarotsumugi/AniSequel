@@ -293,4 +293,78 @@ class BackdropTransformTest {
         backdropTransform(
             boxWidth, boxHeight, bannerWidth, bannerHeight, zoom, x, y, fit = fit
         )
+
+    // --- The crop anchor ------------------------------------------------------
+    //
+    // The cover fit crops a wide banner, and until the profile header grew a
+    // position the only part that survived was the middle band: the transform
+    // origin decides the crop for every reader alike. The anchor moves that resting
+    // crop to one side - and it is the same picture, so it may not become a way to
+    // pull the artwork off its own edge.
+
+    private fun anchored(anchor: Float, x: Float = 0f, drift: Float = 0f) =
+        backdropTransform(
+            boxWidth, boxHeight, bannerWidth, bannerHeight,
+            zoom = 1f, offsetX = x, offsetY = 0f, drift = drift, anchor = anchor
+        )
+
+    @Test
+    fun `left, centre and right hold the three parts of a wide banner`() {
+        val limit = (bannerWidth * cover() - boxWidth) / 2f
+
+        // A positive translation moves the picture right, which reveals its *left*
+        // part - so the fraction and the offset run in opposite directions.
+        assertEquals(limit, anchored(anchor = 0f).offsetX, 0.0001f)
+        assertEquals(0f, anchored(anchor = 0.5f).offsetX, 0.0001f)
+        assertEquals(-limit, anchored(anchor = 1f).offsetX, 0.0001f)
+    }
+
+    @Test
+    fun `an anchor on a picture that already fits the width changes nothing`() {
+        // A 360x280 image in a 360x280 box: no horizontal overflow, so there is no
+        // crop to move and all three positions are the same picture. This is the
+        // common case for an adaptive banner at its own ratio, and it must not read
+        // as a broken control.
+        listOf(0f, 0.5f, 1f).forEach { anchor ->
+            val t = backdropTransform(
+                360f, 280f, 360f, 280f, zoom = 1f, offsetX = 0f, offsetY = 0f,
+                anchor = anchor
+            )
+            assertEquals(0f, t.offsetX, 0.0001f)
+        }
+    }
+
+    @Test
+    fun `the anchor cannot pull the picture past its own edge`() {
+        // Out-of-range input is clamped, not trusted: the value comes from an
+        // animated fraction, and a caller's arithmetic error must not show the bare
+        // background this component exists to keep covered.
+        val limit = (bannerWidth * cover() - boxWidth) / 2f
+
+        assertEquals(-limit, anchored(anchor = 2f).offsetX, 0.0001f)
+        assertEquals(limit, anchored(anchor = -1f).offsetX, 0.0001f)
+    }
+
+    @Test
+    fun `the anchor and a drift cannot add up past the edge`() {
+        // Drift sweeps the whole range on its own. An anchor added under it is
+        // still clamped inside the same bound - the sweep may start off-centre,
+        // but it can never show a gap at either end.
+        val limit = (bannerWidth * cover() - boxWidth) / 2f
+
+        listOf(0f, 0.5f, 1f).forEach { anchor ->
+            assertEquals(limit, anchored(anchor = anchor, drift = 1f).offsetX, 0.0001f)
+            assertEquals(-limit, anchored(anchor = anchor, drift = -1f).offsetX, 0.0001f)
+        }
+    }
+
+    @Test
+    fun `a panned offset is clamped from the anchored position too`() {
+        val limit = (bannerWidth * cover() - boxWidth) / 2f
+
+        // Dragged past the right edge while held at the left: the clamp is
+        // symmetric, so it lands on the limit rather than at anchor + drag.
+        assertEquals(limit, anchored(anchor = 0f, x = 9999f).offsetX, 0.0001f)
+        assertEquals(-limit, anchored(anchor = 1f, x = -9999f).offsetX, 0.0001f)
+    }
 }
