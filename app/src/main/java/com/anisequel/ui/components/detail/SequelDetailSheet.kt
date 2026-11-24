@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -59,9 +60,6 @@ import com.anisequel.data.model.isManga
 import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.CoverColorRepository
-import com.anisequel.data.repository.InfoBackdropBlur
-import com.anisequel.data.repository.InfoBackdropSource
-import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.domain.color.ArgbHex
@@ -74,9 +72,9 @@ import com.anisequel.ui.components.cards.LocalBetterPosters
 import com.anisequel.ui.components.cards.LocalPosterOverlays
 import com.anisequel.ui.components.cards.LocalPosterSource
 import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
+import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
-import com.anisequel.ui.components.detail.info.InfoAppearanceEditor
 import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
@@ -404,7 +402,29 @@ fun SequelDetailSheet(
         }
         onDismiss()
     }
-    val handleDismiss = rememberSheetClose(entrance, finishDismiss)
+    // The copy that flies between the card and the page.
+    //
+    // The rectangle is taken once, on the sheet's first composition: the press
+    // that opened it recorded it in the list's window a frame earlier, and by now
+    // it is the only thing that remembers where the reader's finger was. Taken,
+    // not peeked at, so a following title cannot reuse it.
+    //
+    // `cardPosterUrl` here rather than the effect's `shownPoster`: this is the URL
+    // the hero draws, and the copy has to land as the same picture. It may still
+    // be the AniList cover for a frame or two while btttr answers, which is why
+    // `DetailCoverFlight.take` also accepts a rectangle recorded under the
+    // AniList cover - see its fallback.
+    val posterUrl = cardPosterUrl(media) ?: media.posterUrl
+    // The copy is on stage only while it travels: at rest the page's own poster is
+    // authoritative, because it carries the border and shadow the copy does not
+    // and it scrolls with the page.
+    val coverFlight = rememberDetailCoverFlight(listOf(posterUrl, media.posterUrl))
+    val handleDismiss = rememberSheetClose(
+        entrance = entrance,
+        onDismissed = finishDismiss,
+        travel = coverFlight.travel,
+        onTravelStart = coverFlight::begin
+    )
 
     // The palette's destination, hoisted above the dialog so the dialog's own
     // dismiss request can see it. It used to live inside the dialog content,
@@ -504,12 +524,19 @@ fun SequelDetailSheet(
         //
         // The scrim sits in the same Box so it is drawn behind the page and can
         // follow the same spring; see `SheetScrim`.
+        CompositionLocalProvider(
+            LocalDetailCoverReveal provides coverFlight.reveal,
+            LocalDetailCoverTarget provides coverFlight.pageTarget
+        ) {
         Box(modifier = Modifier.fillMaxSize()) {
         SheetScrim(entrance)
         Surface(
             modifier = modifier
                 .fillMaxSize()
-                .sheetEntrance(entrance)
+                // The page does not scale or rise while a poster flies: the copy
+                // lands on the poster's measured window rectangle, and moving the
+                // page under it would move the target.
+                .sheetEntrance(entrance, travels = !coverFlight.travels)
                 .testTag("sequel_detail_sheet"),
             color = MaterialTheme.colorScheme.surface
         ) {
@@ -841,31 +868,18 @@ fun SequelDetailSheet(
             // in front of it at the same time. That is the live preview: it is
             // the page, not a copy of it.
             if (showAppearance) {
-                InfoAppearanceEditor(
+                DetailAppearanceLayer(
                     media = media,
-                    source = themeSettings.infoBackdropSource,
-                    blur = themeSettings.infoBackdropBlur,
-                    tint = themeSettings.infoBackdropTint,
-                    onSelectSource = { chosen ->
-                        scope.launch { themePreferences.setInfoBackdropSource(chosen) }
-                    },
-                    onSelectBlur = { chosen ->
-                        scope.launch { themePreferences.setInfoBackdropBlur(chosen) }
-                    },
-                    onSelectTint = { chosen ->
-                        scope.launch { themePreferences.setInfoBackdropTint(chosen) }
-                    },
-                    onReset = {
-                        scope.launch {
-                            themePreferences.setInfoBackdropSource(InfoBackdropSource.DEFAULT)
-                            themePreferences.setInfoBackdropBlur(InfoBackdropBlur.DEFAULT)
-                            themePreferences.setInfoBackdropTint(InfoBackdropTint.DEFAULT)
-                        }
-                    },
-                    onClose = { showAppearance = false },
-                    modifier = Modifier.fillMaxSize()
+                    preferences = themePreferences,
+                    settings = themeSettings,
+                    scope = scope,
+                    onClose = { showAppearance = false }
                 )
             }
+        }
+            // Last child of the root Box, so the copy is drawn above the page
+            // and its scrim and is never clipped by either.
+            coverFlight.Overlay(posterUrl.orEmpty())
         }
         }
         }

@@ -3,8 +3,10 @@ package com.anisequel.ui.screens.settings
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,9 +30,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,14 +44,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -234,13 +242,15 @@ internal fun settingsDecorativeShape(seed: String): Shape =
  * worth opening, so the reader has to expand it to find out. Two lines carry the
  * subject of the sentence, which is what makes the rest optional.
  *
- * The toggle appears only once the collapsed text has actually overflowed, so a
- * one-line note gains no "Show more" that would reveal nothing - and it is
- * latched, not live: `hasVisualOverflow` goes false the moment the text is
- * expanded, and a live toggle would delete its own "Show less" as it was pressed.
- * The collapse is its own state keyed on the text, so a paragraph that changes
- * underneath the reader (a switch flips, a count updates) starts collapsed again
- * rather than showing the new sentence at an old length.
+ * Not every overflow earns a toggle. A paragraph that ended a line past the
+ * preview - the last words of the sentence wrapped onto a third line - used to
+ * get a control that revealed exactly those words, so the reader paid a tap and
+ * a layout jump to finish a sentence they could already almost read. Expanding
+ * has to buy at least one whole line, which [hasFullLineToReveal] decides from a
+ * count taken before the text is drawn; a paragraph with less is shown in full.
+ * The collapse is still its own state keyed on the text, so a paragraph that
+ * changes underneath the reader (a switch flips, a count updates) starts
+ * collapsed again rather than showing the new sentence at an old length.
  */
 @Composable
 fun CollapsibleText(
@@ -251,24 +261,65 @@ fun CollapsibleText(
     collapsedLines: Int = 2
 ) {
     val expanded = rememberSaveable(text) { mutableStateOf(false) }
-    val overflowed = remember(text) { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier.animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
-    ) {
-        CollapsedTextBody(
-            text = text,
-            expanded = expanded.value,
-            style = style,
-            color = color,
-            collapsedLines = collapsedLines,
-            overflowed = overflowed
-        )
-        if (overflowed.value) {
-            ExpandToggle(
+    BoxWithConstraints(modifier = modifier) {
+        val canCollapse = rememberHasFullLineToReveal(text, style, collapsedLines, maxWidth)
+        Column(
+            modifier = Modifier.animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
+        ) {
+            CollapsedTextBody(
+                text = text,
                 expanded = expanded.value,
-                onToggle = { expanded.value = !expanded.value }
+                style = style,
+                color = color,
+                collapsedLines = collapsedLines,
+                collapsed = canCollapse
             )
+            if (canCollapse) {
+                ExpandToggle(
+                    expanded = expanded.value,
+                    onToggle = { expanded.value = !expanded.value }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Line-count measurement behind [CollapsibleText] and [SwitchRow].
+ *
+ * Measured with the real style at the width the composable was given, before
+ * the text draws, so the decision and the first frame agree. `onTextLayout`
+ * could answer the same question only after laying the clamped text out, which
+ * meant a paragraph the rule now shows in full spent a frame clipped first -
+ * the jump this change exists to remove.
+ *
+ * [maxWidth] is the *container's* width, not the text's own column. For
+ * [SwitchRow] that is the whole row, a switch's width wider than the text, and
+ * deliberate: a wider measure can only under-count lines, so a paragraph is
+ * more likely to be shown in full than collapsed. Under-counting never hides a
+ * full line behind a toggle, which is the one mistake that would put the old
+ * two-word "Show more" back.
+ */
+@Composable
+private fun rememberHasFullLineToReveal(
+    text: String,
+    style: TextStyle,
+    collapsedLines: Int,
+    maxWidth: Dp
+): Boolean {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(text, style, collapsedLines, maxWidth, density, measurer) {
+        if (maxWidth.value == Float.POSITIVE_INFINITY) {
+            false
+        } else {
+            val layout = measurer.measure(
+                text = AnnotatedString(text),
+                style = style,
+                constraints = Constraints(maxWidth = with(density) { maxWidth.roundToPx() })
+            )
+            hasFullLineToReveal(collapsedLines, layout.lineCount)
         }
     }
 }
@@ -281,6 +332,9 @@ fun CollapsibleText(
  * row that is one big switch would be swallowed by the row's merged semantics,
  * so the one thing a screen reader user could not reach is the rest of the
  * explanation.
+ *
+ * [collapsed] is the decision, not a latch: when the paragraph is too short to
+ * earn a toggle, the text is drawn in full from the first frame.
  */
 @Composable
 private fun CollapsedTextBody(
@@ -289,20 +343,15 @@ private fun CollapsedTextBody(
     style: TextStyle,
     color: Color,
     collapsedLines: Int,
-    overflowed: MutableState<Boolean>,
+    collapsed: Boolean,
     modifier: Modifier = Modifier
 ) {
     Text(
         text = text,
         style = style,
         color = color,
-        maxLines = if (expanded) Int.MAX_VALUE else collapsedLines,
+        maxLines = if (collapsed && !expanded) collapsedLines else Int.MAX_VALUE,
         overflow = TextOverflow.Ellipsis,
-        // A latch, not a mirror: once the collapsed preview has overflowed, the
-        // toggle stays for good, including while the text is expanded.
-        onTextLayout = { layout ->
-            if (!expanded && layout.hasVisualOverflow) overflowed.value = true
-        },
         modifier = modifier
     )
 }
@@ -310,11 +359,14 @@ private fun CollapsedTextBody(
 /**
  * "Show more" / "Show less" under a collapsed paragraph.
  *
- * Full width and 48dp tall rather than a 24dp link: the whole strip is the
- * target, so the control that reveals the rest of the text is not the smallest
- * thing on the card, and it meets the same 48dp floor as every other control on
- * the page. The chevron points at the direction the text will move, and the
- * label carries the meaning for a reader who does not use the glyph.
+ * The control is the capsule around the words, not the strip the row used to
+ * fill. That strip was the bug: a press lit a rounded bar across the whole card
+ * and left the label looking like a caption under it, while most of the bar was
+ * a target that looked like nothing. The ink, the ripple and the press spring
+ * now all sit inside the capsule, which keeps the platform's 48dp interactive
+ * floor without pretending the empty width beside it is part of the control.
+ * The chevron points at the direction the text will move, and the label carries
+ * the meaning for a reader who does not use the glyph.
  */
 @Composable
 private fun ExpandToggle(
@@ -322,43 +374,53 @@ private fun ExpandToggle(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
-            .fillMaxWidth()
-            // Back to 48dp. The 36 that replaced 40 made this the only control on
-            // a Settings card under the platform's own touch-target minimum; the
-            // strip is only visible while a paragraph overflows and its height is
-            // what a thumb aims at, not a decoration.
-            .heightIn(min = 48.dp)
-            .clip(MaterialTheme.shapes.small)
-            .bouncyPress(pressedScale = 0.97f)
-            .clickable(
-                role = Role.Button,
-                onClickLabel = if (expanded) {
-                    "Collapse this explanation"
-                } else {
-                    "Read the whole explanation"
-                },
-                onClick = onToggle
-            ),
+            // The floor is the platform's, and it is what a thumb aims at, not a
+            // decoration: at the label's own height this was the smallest control
+            // on a Settings card.
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = if (expanded) "Show less" else "Show more",
-            // The smallest step of the scale, not the caption's: this sits under a
-            // body paragraph nobody is reading twice, and at labelMedium it was the
-            // loudest thing in the card.
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(2.dp))
-        Icon(
-            imageVector = if (expanded) AppVectorIcons.ExpandLess else AppVectorIcons.ExpandMore,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp)
-        )
+        Row(
+            modifier = Modifier
+                // The 48dp interactive size wraps the capsule before the clip, so
+                // the ink is a pill around the words rather than a band across the
+                // card, and the pill still meets the same floor as every control.
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(percent = 50))
+                .bouncyPress(pressedScale = 0.97f, interactionSource = interaction)
+                .clickable(
+                    interactionSource = interaction,
+                    role = Role.Button,
+                    onClickLabel = if (expanded) {
+                        "Collapse this explanation"
+                    } else {
+                        "Read the whole explanation"
+                    },
+                    onClick = onToggle
+                )
+                .padding(horizontal = 10.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (expanded) "Show less" else "Show more",
+                // The smallest step of the scale, not the caption's: this sits under
+                // a body paragraph nobody is reading twice, and at labelMedium it
+                // was the loudest thing in the card.
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Icon(
+                imageVector = if (expanded) AppVectorIcons.ExpandLess else AppVectorIcons.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
 }
 
@@ -391,7 +453,6 @@ fun SwitchRow(
 ) {
     val haptics = LocalHapticFeedback.current
     val subtitleExpanded = rememberSaveable(subtitle) { mutableStateOf(false) }
-    val subtitleOverflowed = remember(subtitle) { mutableStateOf(false) }
     // The checked row's wash, as an opaque tone rather than a 28% tint.
     //
     // Two bugs in one line: `secondaryContainer` at 0.28 alpha over a card is a
@@ -416,34 +477,48 @@ fun SwitchRow(
         animationSpec = ExpressiveMotion.FastEffects,
         label = "settings_switch_row_container"
     )
-    Column(modifier = modifier.fillMaxWidth()
-        .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().clip(ExpressiveShapes.large).background(rowContainer)
-                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { next ->
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onCheckedChange(next)
-                })
-                .semantics(mergeDescendants = true) {}
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(modifier = Modifier.height(2.dp))
-                CollapsedTextBody(text = subtitle, expanded = subtitleExpanded.value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    collapsedLines = 2, overflowed = subtitleOverflowed)
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        // Measured against the row, not the text column: the switch and its
+        // spacer sit beside the text, so this width is a switch wider than the
+        // text itself. A wider measure can only under-count lines, which shows a
+        // paragraph in full where collapsing would have revealed one line - the
+        // safe direction, and the one that never brings the two-word "Show more"
+        // back. See `rememberHasFullLineToReveal`.
+        val canCollapse = rememberHasFullLineToReveal(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            collapsedLines = 2,
+            maxWidth = maxWidth
+        )
+        Column(modifier = Modifier.fillMaxWidth()
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clip(ExpressiveShapes.large).background(rowContainer)
+                    .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = { next ->
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onCheckedChange(next)
+                    })
+                    .semantics(mergeDescendants = true) {}
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = title, style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    CollapsedTextBody(text = subtitle, expanded = subtitleExpanded.value,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        collapsedLines = 2, collapsed = canCollapse)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(checked = checked, onCheckedChange = null, enabled = enabled)
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(checked = checked, onCheckedChange = null, enabled = enabled)
-        }
-        if (subtitleOverflowed.value) {
-            ExpandToggle(expanded = subtitleExpanded.value, onToggle = { subtitleExpanded.value = !subtitleExpanded.value })
+            if (canCollapse) {
+                ExpandToggle(expanded = subtitleExpanded.value, onToggle = { subtitleExpanded.value = !subtitleExpanded.value })
+            }
         }
     }
 }

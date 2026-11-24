@@ -57,7 +57,7 @@ class DetailSheetEntranceTest {
         )
         assertTrue(
             "the page does not take the shared close",
-            page.contains("rememberSheetClose(entrance, finishDismiss)")
+            page.contains("rememberSheetClose(") && page.contains("onDismissed = finishDismiss")
         )
         assertTrue("the scrim is not composed behind the page", page.contains("SheetScrim(entrance)"))
         assertFalse(
@@ -69,6 +69,23 @@ class DetailSheetEntranceTest {
             "the close is not keyed by its own flag, so a relation tapped during " +
                 "the exit can cancel it",
             source(entrance).contains("LaunchedEffect(closing)")
+        )
+    }
+
+    @Test
+    fun `the page's entrance stands aside while a poster flies`() {
+        val page = source(sheet)
+
+        assertTrue(
+            "the page still scales and rises under the flying poster, so the " +
+                "copy lands on a rectangle that has moved",
+            page.contains("sheetEntrance(entrance, travels = !coverFlight.travels)")
+        )
+        assertTrue(
+            "the close does not reverse the flight, so closing cuts instead of " +
+                "putting the cover back where it came from",
+            page.contains("travel = coverFlight.travel") &&
+                page.contains("onTravelStart = coverFlight::begin")
         )
     }
 

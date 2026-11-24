@@ -87,6 +87,7 @@ import com.anisequel.ui.components.nova.NovaSurface
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.components.detail.AnimeDetailSubject
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.detail.SequelDetailSheet
 import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.rememberPlanningAddHost
@@ -648,6 +649,7 @@ private fun CatalogueSearchBody(
 private fun SearchResultCard(media: MediaNode, onOpen: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val coverColor = media.posterColor.toCoverColorOrNull() ?: MaterialTheme.colorScheme.surfaceContainerHigh
+    val posterUrl = cardPosterUrl(media)
     val metadata = listOfNotNull(
         media.type?.lowercase(Locale.ROOT)?.replaceFirstChar { it.uppercase(Locale.ROOT) },
         media.format?.takeIf { it.isNotBlank() },
@@ -673,9 +675,10 @@ private fun SearchResultCard(media: MediaNode, onOpen: () -> Unit) {
                     .fillMaxWidth()
                     .aspectRatio(0.68f)
                     .background(coverColor)
+                    .detailCoverPressOrigin(posterUrl)
             ) {
                 AsyncImage(
-                    model = cardPosterUrl(media),
+                    model = posterUrl,
                     contentDescription = media.displayName,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

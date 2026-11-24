@@ -51,6 +51,7 @@ import com.anisequel.data.model.posterColor
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaSurface
@@ -206,6 +207,10 @@ internal fun NovaSequelShelfCard(
                 modifier = Modifier
                     .size(width = 82.dp, height = 110.dp)
                     .clip(RoundedCornerShape(13.dp))
+                    // The page opens on this picture. Only the portrait covers fly:
+                    // a full-width banner is a different crop of the same poster, and
+                    // scaling it into a portrait would stretch it on the way in.
+                    .detailCoverPressOrigin(sequel.sequelCoverUrl)
             ) {
                 PosterPlaceholder(
                     title = sequel.sequelTitle,
@@ -310,6 +315,7 @@ internal fun NovaSequelTicket(
                     .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
                     .size(width = 76.dp, height = 108.dp)
                     .clip(RoundedCornerShape(10.dp))
+                    .detailCoverPressOrigin(sequel.sequelCoverUrl)
             ) {
                 PosterPlaceholder(
                     title = sequel.sequelTitle,
@@ -448,7 +454,7 @@ internal fun NovaSequelPolaroid(
                     .background(paper)
                     .padding(8.dp)
             ) {
-                Box {
+                Box(modifier = Modifier.detailCoverPressOrigin(sequel.sequelCoverUrl)) {
                     AsyncImage(
                         model = sequel.sequelCoverUrl,
                         contentDescription = sequel.sequelTitle,

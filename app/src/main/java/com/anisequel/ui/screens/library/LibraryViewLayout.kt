@@ -44,6 +44,7 @@ import com.anisequel.ui.components.cards.libraryRating
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.domain.ui.LibraryViewMode
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.screens.profile.libraryProgressLabel
@@ -116,6 +117,7 @@ internal fun LibraryListRow(
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
     val coverColor = media.posterColor.toCoverColorOrNull()
+    val posterUrl = cardPosterUrl(media)
     val progress = libraryProgressLabel(entry)
     val design = LocalCardDesign.current
     val score = libraryRating(entry, owner)?.takeIf { design.showScores }
@@ -144,9 +146,10 @@ internal fun LibraryListRow(
                 .height(56.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(coverColor ?: MaterialTheme.colorScheme.surfaceContainerHighest)
+                .detailCoverPressOrigin(posterUrl)
         ) {
             AsyncImage(
-                model = cardPosterUrl(media),
+                model = posterUrl,
                 // The title below is the row's accessible name; a description on
                 // the thumbnail makes TalkBack announce every title twice.
                 contentDescription = null,

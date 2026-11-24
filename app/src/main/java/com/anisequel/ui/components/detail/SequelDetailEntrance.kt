@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * The title page's open and close choreography.
@@ -61,16 +63,34 @@ internal fun rememberSheetEntrance(): Animatable<Float, AnimationVector1D> {
  * while the page is already fading cannot cancel the exit and leave the sheet at
  * whatever alpha the interruption caught. A second tap on Close is a no-op
  * instead of restarting the spring.
+ *
+ * ## The poster has to go back before the window does
+ *
+ * [travel] is the flying copy's progress, when there is one. It runs *with* the
+ * page rather than after it: the copy returns to the list while the page fades,
+ * which is one motion instead of a page leaving and then a poster sliding out of
+ * an already empty screen. The window may only be removed once both have
+ * settled, so this waits on the slower of the two - and [onTravelStart] is where
+ * the page puts the copy back on screen, a frame before it starts moving, so the
+ * copy is drawn at 1:1 over the page's own poster instead of appearing mid-flight.
  */
 @Composable
 internal fun rememberSheetClose(
     entrance: Animatable<Float, AnimationVector1D>,
-    onDismissed: () -> Unit
+    onDismissed: () -> Unit,
+    travel: Animatable<Float, AnimationVector1D>? = null,
+    onTravelStart: () -> Unit = {}
 ): () -> Unit {
     var closing by remember { mutableStateOf(false) }
     LaunchedEffect(closing) {
         if (!closing) return@LaunchedEffect
-        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        onTravelStart()
+        coroutineScope {
+            launch { entrance.animateTo(0f, ExpressiveMotion.SettleSpatial) }
+            if (travel != null) {
+                launch { travel.animateTo(0f, ExpressiveMotion.SettleSpatial) }
+            }
+        }
         onDismissed()
     }
     return remember { { closing = true } }
@@ -102,14 +122,24 @@ internal fun SheetScrim(entrance: Animatable<Float, AnimationVector1D>) {
  *
  * Same numbers the Surface applied inline before this moved out: a hair of scale
  * and a short rise, so the page settles in rather than appearing.
+ *
+ * [travels] is false while a poster is flying in. The flight lands on the page's
+ * poster rectangle, which is measured in window coordinates; scaling and lifting
+ * the page moves that rectangle while the copy is still travelling, so the copy
+ * would arrive a few pixels off its own landing spot and the hand-off would
+ * twitch. The page still fades, which is the part that covers the list appearing
+ * behind it.
  */
 internal fun Modifier.sheetEntrance(
-    entrance: Animatable<Float, AnimationVector1D>
+    entrance: Animatable<Float, AnimationVector1D>,
+    travels: Boolean = true
 ): Modifier = graphicsLayer {
     val progress = entrance.value
     alpha = progress
-    val scale = 0.985f + (0.015f * progress)
-    scaleX = scale
-    scaleY = scale
-    translationY = (1f - progress) * 22.dp.toPx()
+    if (travels) {
+        val scale = 0.985f + (0.015f * progress)
+        scaleX = scale
+        scaleY = scale
+        translationY = (1f - progress) * 22.dp.toPx()
+    }
 }

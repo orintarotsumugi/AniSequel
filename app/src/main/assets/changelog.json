@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.6.2",
+      "entries": [
+        {
+          "title": "The cover travels between the card and the title page",
+          "detail": "Opening a title used to cut from the card to a page that faded in over it. The card now records its poster's rectangle on the press itself - the press, not the click, because the page is already composing by then - and the title page takes that rectangle once, draws one copy of the cover above itself, and springs it from the card's size and place to the hero poster's. The page's own poster is hidden until the copy lands, so the hand-off is between two identical pictures rather than a seam. Closing runs the same spring backwards and the cover goes back to the card it came from, then the page dismisses. It works from the Library grid, list and table, Home's rails and sequel cards, search, the schedule, a studio shelf and profile activity; a deep link or a notification has no press behind it, and those opens keep the page's own entrance. The page no longer scales or rises during a flight, because the copy lands on a measured rectangle and moving the page under it would move the target."
+        },
+        {
+          "title": "Show more only appears when it has a whole line to show",
+          "detail": "Every Settings paragraph that did not fit offered Show more, including the ones whose only hidden line was a short last line: tapping it opened the row by that line, which read as a flicker rather than a reveal. A paragraph now collapses only when at least a whole line stays hidden - measured against the width the row actually gives the text - and otherwise prints in full with no button at all. The button is also the control it claimed to be: a pill with a full 48dp press target and the page's press spring, instead of a bare text line that TalkBack could not tell from a caption."
+        }
+      ]
+    },
+    {
       "version": "2.6.1",
       "entries": [
         {
