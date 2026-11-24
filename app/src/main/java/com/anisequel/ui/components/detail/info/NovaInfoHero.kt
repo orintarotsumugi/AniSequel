@@ -87,6 +87,7 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
 import com.anisequel.ui.components.detail.LocalDetailCoverReveal
 import com.anisequel.ui.components.detail.LocalDetailCoverTarget
 import com.anisequel.ui.components.cards.cardPosterUrl
@@ -432,7 +433,7 @@ private fun HeroLockup(
                 .graphicsLayer { alpha = coverReveal() }
                 .bouncyPress(pressedScale = 0.97f, interactionSource = posterInteraction)
                 .shadow(
-                    elevation = 18.dp,
+                    elevation = HERO_POSTER_ELEVATION,
                     shape = posterShape,
                     ambientColor = coverColor,
                     spotColor = Color.Black
@@ -449,7 +450,7 @@ private fun HeroLockup(
                     onPosterBounds(rect)
                     // Where the copy lands. Plain fields in the holder, not state:
                     // this runs on every scroll frame.
-                    coverTarget?.record(rect, posterShape, coverColor)
+                    coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
                 }
                 .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
                 .semantics {

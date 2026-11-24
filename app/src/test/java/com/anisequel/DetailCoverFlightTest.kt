@@ -73,6 +73,11 @@ class DetailCoverFlightTest {
                 "the page's size while the copy is still small",
             source.contains(".clip(target.shape)")
         )
+        assertTrue(
+            "the copy carries the page's own poster shadow at the landing, so the " +
+                "hand-off drops a halo off a poster that had one a frame earlier",
+            source.contains("target.elevation.toPx() * p + 6.dp.toPx() * sin(p * PI).toFloat()")
+        )
     }
 
     @Test
@@ -109,6 +114,39 @@ class DetailCoverFlightTest {
             "the copy outlives the page the reader is closing, or it cannot be " +
                 "put back where it came from",
             page.contains("coverFlight.Overlay(posterUrl.orEmpty())")
+        )
+        // The copy ends the flight at the page's own shadow, so both heroes have
+        // to hand it the number their own poster is drawn with - spelled once.
+        assertTrue(
+            "a hero draws its poster's shadow with a literal the copy never sees, " +
+                "so the landing swaps a shadowed poster for a flat one",
+            source(novaHero).contains("elevation = HERO_POSTER_ELEVATION") &&
+                source(animeHero).contains("elevation = HERO_POSTER_ELEVATION")
+        )
+    }
+
+    /**
+     * A flight that never measured a landing must leave the page's poster alone.
+     *
+     * The hero reports its rectangle once, and the copy waits a bounded number of
+     * frames for it. If it never arrives there is no copy to land, so the page has
+     * to keep drawing its own poster: hiding it for a copy that never comes puts a
+     * hole where the picture should be for as long as the page is open, which is a
+     * worse failure than not animating at all.
+     */
+    @Test
+    fun `a flight that cannot start gives the page its poster back`() {
+        val text = source(flight)
+
+        assertTrue(
+            "the reveal keeps the page's poster hidden even when no copy will ever " +
+                "land, so a page that never measured one shows a hole",
+            text.contains("abandoned.value")
+        )
+        assertTrue(
+            "the four-frame wait gives up without telling the page, so the poster " +
+                "it was hiding is never drawn again",
+            text.contains("state.abandon()")
         )
     }
 

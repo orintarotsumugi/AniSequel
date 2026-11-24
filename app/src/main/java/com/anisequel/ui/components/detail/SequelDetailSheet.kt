@@ -75,6 +75,7 @@ import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
+import com.anisequel.ui.components.detail.info.DetailAppearanceLayer
 import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar

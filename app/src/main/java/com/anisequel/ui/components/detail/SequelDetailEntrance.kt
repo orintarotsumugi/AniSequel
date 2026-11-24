@@ -73,6 +73,15 @@ internal fun rememberSheetEntrance(): Animatable<Float, AnimationVector1D> {
  * settled, so this waits on the slower of the two - and [onTravelStart] is where
  * the page puts the copy back on screen, a frame before it starts moving, so the
  * copy is drawn at 1:1 over the page's own poster instead of appearing mid-flight.
+ *
+ * ## The page and the dim clear out from under the copy
+ *
+ * With a copy on its way home the cover is the transition, so the page exits on
+ * [ExpressiveMotion.FastSpatial] instead of matching the flight: the dim has to
+ * be gone by the time the poster is over the list, or the poster lands on a
+ * screen that is still dark and then the list brightens after it has already
+ * stopped - the dim becomes the thing the eye follows instead of the cover. The
+ * copy keeps the slower spring and the window waits for it.
  */
 @Composable
 internal fun rememberSheetClose(
@@ -85,8 +94,10 @@ internal fun rememberSheetClose(
     LaunchedEffect(closing) {
         if (!closing) return@LaunchedEffect
         onTravelStart()
+        val exit =
+            if (travel != null) ExpressiveMotion.FastSpatial else ExpressiveMotion.SettleSpatial
         coroutineScope {
-            launch { entrance.animateTo(0f, ExpressiveMotion.SettleSpatial) }
+            launch { entrance.animateTo(0f, exit) }
             if (travel != null) {
                 launch { travel.animateTo(0f, ExpressiveMotion.SettleSpatial) }
             }
@@ -112,8 +123,15 @@ internal fun SheetScrim(entrance: Animatable<Float, AnimationVector1D>) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            // The layer has to wrap the ink, and that means it comes *first* in
+            // the chain: a draw modifier before a `graphicsLayer` paints outside
+            // it. Reversed - which this was - the black rectangle was drawn at
+            // full strength and the alpha only ever reached an empty Box, so the
+            // dim never followed the page at all: it sat at 60% for the whole
+            // open and close and vanished when the window was removed, which is
+            // the cut this scrim exists to remove, only moved to the other end.
             .graphicsLayer { alpha = SCRIM_ALPHA * entrance.value }
+            .background(Color.Black)
     )
 }
 

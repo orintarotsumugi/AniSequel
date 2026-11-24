@@ -75,6 +75,7 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
 import com.anisequel.ui.components.detail.LocalDetailCoverReveal
 import com.anisequel.ui.components.detail.LocalDetailCoverTarget
 import com.anisequel.ui.components.openExternalUrlOrCopy
@@ -518,7 +519,7 @@ fun InfoHero(
                     // phase so a flight does not recompose the hero.
                     .graphicsLayer { alpha = coverReveal() }
                     .shadow(
-                        elevation = 18.dp,
+                        elevation = HERO_POSTER_ELEVATION,
                         shape = posterShape,
                         ambientColor = coverColor,
                         spotColor = Color.Black
@@ -536,7 +537,7 @@ fun InfoHero(
                         posterBounds = rect
                         // Where the copy lands. Plain fields in the holder, not
                         // state: this runs on every scroll frame.
-                        coverTarget?.record(rect, posterShape, coverColor)
+                        coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
                     }
                     .expressiveHoldGesture(onHold = openCover, onClick = openCover)
                     // The hold gesture is a raw `pointerInput`, which TalkBack

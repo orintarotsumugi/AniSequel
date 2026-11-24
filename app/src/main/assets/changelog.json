@@ -10,6 +10,14 @@
         {
           "title": "Show more only appears when it has a whole line to show",
           "detail": "Every Settings paragraph that did not fit offered Show more, including the ones whose only hidden line was a short last line: tapping it opened the row by that line, which read as a flicker rather than a reveal. A paragraph now collapses only when at least a whole line stays hidden - measured against the width the row actually gives the text - and otherwise prints in full with no button at all. The button is also the control it claimed to be: a pill with a full 48dp press target and the page's press spring, instead of a bare text line that TalkBack could not tell from a caption."
+        },
+        {
+          "title": "The title page's dim finally leaves with the page",
+          "detail": "The scrim that replaced the platform's dim was drawn outside its own alpha layer - a background placed before a graphicsLayer paints under it rather than in it - so the 60% black never followed the page at all: it sat over the list for the page's whole life and went when the window did, which is the cut it was built to remove, moved to the close. The layer now wraps the ink, so the dim rises with the page on open, and a close that has a cover coming home clears it on the faster spring: the poster arrives on a list the reader can already see, instead of one that brightens after the poster has stopped."
+        },
+        {
+          "title": "The flying cover is carried, not resized",
+          "detail": "The flying cover now rides on a shadow: none over the card, because there the copy is the card's flat artwork, lifting through the middle of the flight, and settling into the page's own poster elevation at the landing, so both hand-offs are between two pictures carrying the same shadow instead of a shadow that appears or vanishes with the copy. A shrinking rectangle reads as a resize; a poster with a shadow under it reads as something being carried across the list and set back down."
         }
       ]
     },

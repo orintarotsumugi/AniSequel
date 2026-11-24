@@ -32,14 +32,18 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * The poster rectangle a press started from, remembered across the window gap.
@@ -118,6 +122,14 @@ internal object DetailCoverFlight {
 }
 
 /**
+ * The page's poster shadow, shared with the copy so the hand-off at the landing
+ * does not change it. The two heroes used to spell the same 18dp literal twice;
+ * a copy carrying a different number by accident is invisible in review and
+ * visible on every open.
+ */
+internal val HERO_POSTER_ELEVATION = 18.dp
+
+/**
  * The page's poster place, written by whichever hero is on screen.
  *
  * Plain fields rather than `mutableStateOf` on purpose: [record] is called from
@@ -134,12 +146,19 @@ internal class DetailCoverTarget {
         private set
     var tint: Color = Color.Transparent
         private set
+    // The page's poster shadow, carried by the copy so both ends of the flight
+    // hand over between two posters that look the same. Without it the landing
+    // swaps a shadowed poster for a flat copy and back again, which reads as a
+    // flicker at exactly the moment the flight is supposed to disappear.
+    var elevation: Dp = 0.dp
+        private set
 
-    fun record(rect: Rect, shape: Shape, tint: Color) {
+    fun record(rect: Rect, shape: Shape, tint: Color, elevation: Dp) {
         if (rect.width <= 0f || rect.height <= 0f) return
         this.rect = rect
         this.shape = shape
         this.tint = tint
+        this.elevation = elevation
         filled = true
     }
 }
@@ -249,6 +268,14 @@ internal fun SheetCoverFlight(
                 // on one axis, and a top-left anchor would hang it off the corner.
                 translationX = lerp(origin.center.x - (targetWidth * startScale / 2f) - left, 0f, p)
                 translationY = lerp(origin.center.y - (targetHeight * startScale / 2f) - top, 0f, p)
+                // The shadow ends at the page's own elevation and starts at the
+                // card's, so neither hand-off changes it; the extra lift in the
+                // middle is what reads as carried rather than resized. Zero over
+                // the card is correct - the card's artwork is flat, and the copy
+                // is that artwork, not an object hovering above it.
+                shadowElevation =
+                    target.elevation.toPx() * p + 6.dp.toPx() * sin(p * PI).toFloat()
+                shape = target.shape
             }
             .clip(target.shape)
             .background(target.tint)
@@ -288,6 +315,13 @@ internal class DetailCoverFlightState(
 ) {
     private val onStage = mutableStateOf(false)
 
+    // Set when the page never measured a poster for this open - a text page, a
+    // cover that failed to decode, or a hero that was more than four frames
+    // late. There is no copy to land, so the page has to keep drawing its own
+    // poster; [reveal] would otherwise hold it hidden for the page's whole life
+    // and the flight's seam would be a missing picture instead of a smooth one.
+    private val abandoned = mutableStateOf(false)
+
     /** No rectangle means nothing to fly, and the page keeps its own entrance. */
     val travels: Boolean get() = origin != null
 
@@ -305,11 +339,16 @@ internal class DetailCoverFlightState(
      * on; hiding it until then is what makes the hand-off seamless, since both
      * sides show the same picture over the same rectangle.
      */
-    val reveal: () -> Float = { if (progress.value >= 1f) 1f else 0f }
+    val reveal: () -> Float = { if (progress.value >= 1f || abandoned.value) 1f else 0f }
 
     /** Puts the copy on stage before either side starts moving. */
     fun begin() {
-        if (origin != null && target.filled) onStage.value = true
+        if (origin != null && target.filled && !abandoned.value) onStage.value = true
+    }
+
+    /** Gives the page its poster back when there is no copy to stand in for it. */
+    fun abandon() {
+        abandoned.value = true
     }
 
     /**
@@ -358,7 +397,10 @@ internal fun rememberDetailCoverFlight(urls: List<String?>): DetailCoverFlightSt
             withFrameNanos { }
             waited++
         }
-        if (!target.filled) return@LaunchedEffect
+        if (!target.filled) {
+            state.abandon()
+            return@LaunchedEffect
+        }
         state.begin()
         progress.animateTo(1f, ExpressiveMotion.SettleSpatial)
         state.land()
