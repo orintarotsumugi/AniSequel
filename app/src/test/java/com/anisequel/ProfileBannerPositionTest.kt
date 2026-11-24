@@ -141,7 +141,12 @@ class ProfileBannerPositionTest {
         assertTrue(
             "the position is read during composition instead of in the draw phase, " +
                 "so the slide recomposes the header on every frame",
-            header.contains("anchor = { if (drift) 0.5f else anchorFraction.value }")
+            header.contains("anchor = { anchorFraction.value }")
+        )
+        assertTrue(
+            "drift overrides the settled anchor outside the spring, so switching it " +
+                "on snaps the crop to the centre before the sweep starts",
+            header.contains("targetValue = if (drift) 0.5f else anchor.fraction")
         )
         assertTrue(
             "the drift is never handed to the backdrop, so the switch is a no-op",

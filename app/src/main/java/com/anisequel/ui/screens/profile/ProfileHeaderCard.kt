@@ -426,10 +426,17 @@ private fun Banner(
                 // positions reads as a broken layout, while a slide reads as the
                 // artwork being moved - which is what the setting does.
                 //
+                // Drift moves the *target* to the centre instead of overriding the
+                // anchor afterwards: the sweep is drawn around the anchor, so a side
+                // left in place would push the middle of every period onto that edge
+                // and spend half of it clamped there - and switching drift on would
+                // snap the picture sideways before it ever started moving. Aiming the
+                // spring at the centre slides the crop in and back out again.
+                //
                 // Read in the draw phase by the backdrop (see its `anchor`), so this
                 // spring never recomposes the header while it runs.
                 val anchorFraction = animateFloatAsState(
-                    targetValue = anchor.fraction,
+                    targetValue = if (drift) 0.5f else anchor.fraction,
                     animationSpec = ExpressiveMotion.SettleSpatial,
                     label = "profile_banner_anchor"
                 )
@@ -437,11 +444,7 @@ private fun Banner(
                     model = bannerRequest,
                     contentDescription = "Profile Banner",
                     drift = drift,
-                    // The sweep owns the horizontal position while it runs: holding
-                    // a side at the same time would push the sweep's centre off to
-                    // one edge and it would spend half of every period clamped
-                    // there. Turning drift off restores the side, already settled.
-                    anchor = { if (drift) 0.5f else anchorFraction.value },
+                    anchor = { anchorFraction.value },
                     onImageSize = { measured ->
                         imageSize = measured
                         BannerAspectMemory.remember(banner, measured)
