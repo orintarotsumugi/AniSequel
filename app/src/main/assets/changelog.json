@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "2.6.3",
+      "entries": [
+        {
+          "title": "The cover's flight waits for its own picture",
+          "detail": "Opening a title flies one copy of the poster from the card to the page, and the page hides its own poster until that copy lands. The copy used to be composed only once the flight had already started, so a cover that took a few frames to decode appeared halfway through the open and left the hero as a flat tint until it arrived. The copy is now composed invisibly as soon as the page's poster is measured, given a bounded moment to decode, and only then do the page and the copy leave together. A request that never lands calls the flight off instead of sliding a tinted rectangle across the screen, and the page opens on its own artwork."
+        },
+        {
+          "title": "The cover goes home without a ghost",
+          "detail": "The page's own poster stayed drawn while the flying copy travelled back to the card on close, so the hero kept a second copy of the picture at its own place while the visible one shrank away - a ghost that outlived the thing it stood in for. The poster now hides exactly while the copy is on stage, in both directions: from the frame the copy covers it on the way in to the frame it leaves on the way out. Closing is one poster moving back to the card over a page that is already clearing, instead of two posters and one of them fading."
+        },
+        {
+          "title": "The profile banner moves with the list",
+          "detail": "The banner art now lags the page as a profile scrolls and grows just enough to keep covering the box it is pulled out of, so the header reads as a picture the page moves over rather than a sticker attached to it. The identity block - name, avatar, counters and summary - sweeps out to the right as it reaches the top of the viewport and fades with it, the handover the reference clients use for a collapsed profile header. Both are draw-phase transforms: scrolling never recomposes the header, its artwork or its avatar request. It runs on every profile, not only your own, and follows the banner's position and drift settings."
+        },
+        {
+          "title": "The layout editor works on every profile",
+          "detail": "The profile arrangement was applied only to the signed-in reader's own page, so reordering or hiding a block and then opening a follower's profile drew the shipped order back - the preference looked like it had done nothing. The arrangement is the reader's view of a profile and now follows them to every one, and the tune button and the sheet are offered everywhere. Nothing about somebody else's profile is changed: the order lives on this device and only affects what this reader sees."
+        }
+      ]
+    },
+    {
       "version": "2.6.2",
       "entries": [
         {

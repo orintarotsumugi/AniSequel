@@ -463,18 +463,24 @@ fun UserProfileScreen(
                     // The layout editor lives on the page's own bar: the palette
                     // used to float over the header card, where the cover artwork
                     // and the avatar competed with it.
-                    if (isOwnProfile) {
-                        IconButton(
-                            onClick = { layoutEditorOpen = true },
-                            modifier = Modifier
-                                .testTag("profile_layout_edit")
-                                .bouncyPress(pressedScale = 0.9f)
-                        ) {
-                            Icon(
-                                imageVector = AppVectorIcons.Tune,
-                                contentDescription = "Edit profile layout"
-                            )
-                        }
+                    //
+                    // It is offered on every profile, not only the viewer's own.
+                    // The arrangement is a reading preference stored on this
+                    // device - which blocks a reader wants to see, in what order -
+                    // and a page you can arrange only when it belongs to you is a
+                    // page you read the way its owner left it. The header stays
+                    // outside the arrangement either way (see `ProfileLayout`), so
+                    // an unfamiliar profile still leads with its name and face.
+                    IconButton(
+                        onClick = { layoutEditorOpen = true },
+                        modifier = Modifier
+                            .testTag("profile_layout_edit")
+                            .bouncyPress(pressedScale = 0.9f)
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Tune,
+                            contentDescription = "Edit profile layout"
+                        )
                     }
 
                     val siteUrl = (uiState as? UserOverviewUiState.Success)?.siteUrl
@@ -589,13 +595,14 @@ fun UserProfileScreen(
                                 // AniList page.
                                 onOpenCharacter = profiles.onOpenCharacter,
                                 onOpenStaff = profiles.onOpenStaff,
-                                // Only the viewer's own page is theirs to arrange;
-                                // somebody else's draws the shipped layout.
-                                profileLayout = if (isOwnProfile) {
-                                    profileLayout
-                                } else {
-                                    com.anisequel.domain.profile.ProfileLayout()
-                                },
+                                // The reader's arrangement follows them to every
+                                // profile. It was applied only to their own page,
+                                // which made the editor's promise - "this is how you
+                                // read a profile" - true on exactly one route; a
+                                // follower's page then drew every block back in the
+                                // shipped order the reader had just rearranged
+                                // away.
+                                profileLayout = profileLayout,
                             )
                         }
 

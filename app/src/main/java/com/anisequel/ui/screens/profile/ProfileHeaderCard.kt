@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,9 +38,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -99,9 +102,45 @@ fun ProfileHeaderCard(
     /** Which side of a wider-than-the-card banner the header keeps; see [ProfileBannerAnchor]. */
     bannerAnchor: ProfileBannerAnchor = ProfileBannerAnchor.DEFAULT,
     /** Sweep the banner slowly sideways instead of holding one crop. */
-    bannerDrift: Boolean = false
+    bannerDrift: Boolean = false,
+    /**
+     * How far the list under this header has scrolled, in pixels.
+     *
+     * A lambda rather than a value because it is read inside `graphicsLayer`:
+     * the banner's parallax and the identity block's sweep are draw-phase
+     * transforms, and a value would recompose the header - and its artwork, its
+     * avatar request and its stat tiles - on every scrolled frame. Passed in
+     * rather than read here because the header is one item of a list it does not
+     * own; the tab's `LazyListState` is the only thing that knows the answer.
+     *
+     * Zero at rest and in every preview/test that does not care, which is why the
+     * motion is invisible until the page is actually scrolled. See [collapse] and
+     * the banner's `PARALLAX_*` constants for what the number does.
+     */
+    scrollOffset: () -> Float = { 0f }
 ) {
     val context = LocalContext.current
+    // The header's own height, in pixels, measured rather than assumed: the banner
+    // takes its height from the picture (see `ProfileBannerSizing`), so the
+    // fraction of the header that has scrolled out is only known after layout.
+    // Written once per size change and read in the draw phase by both animations.
+    var headerHeightPx by remember { mutableFloatStateOf(0f) }
+    var headerWidthPx by remember { mutableFloatStateOf(0f) }
+    // 0 when the header is at rest, 1 once its own height has scrolled away.
+    val collapse: () -> Float = {
+        val measured = headerHeightPx
+        if (measured <= 0f) 0f else (scrollOffset() / measured).coerceIn(0f, 1f)
+    }
+    // The last stretch of the collapse, remapped to 0..1. The identity block is
+    // below the banner, so by the time 55% of the header has gone it is at the top
+    // of the viewport - which is where a sweep to the right is visible, and ends
+    // just as the block itself leaves (see SWEEP_START).
+    val sweep: () -> Float = {
+        ((collapse() - SWEEP_START) / (1f - SWEEP_START)).coerceIn(0f, 1f)
+    }
+    // A width, not a fixed dp: the header is centered in a capped column on a
+    // tablet, and a sweep measured in phone widths would stop halfway across it.
+    val sweepShift: () -> Float = { sweep() * headerWidthPx * SWEEP_TRAVEL }
     // One request for one portrait, built once per URL rather than on every
     // recomposition.
     //
@@ -126,6 +165,10 @@ fun ProfileHeaderCard(
         modifier = modifier
             .widthIn(max = maxWidth)
             .fillMaxWidth()
+            .onSizeChanged {
+                headerHeightPx = it.height.toFloat()
+                headerWidthPx = it.width.toFloat()
+            }
             .testTag("profile_header")
     ) {
         Box(
@@ -139,7 +182,8 @@ fun ProfileHeaderCard(
                 state = state,
                 shape = bannerShape,
                 anchor = bannerAnchor,
-                drift = bannerDrift
+                drift = bannerDrift,
+                scrollOffset = scrollOffset
             )
 
             AsyncImage(
@@ -154,6 +198,14 @@ fun ProfileHeaderCard(
                     .offset(y = 22.dp)
                     .padding(start = 16.dp)
                     .size(92.dp)
+                    // The portrait leaves with the identity block rather than
+                    // staying pinned to a banner that is already sliding away. The
+                    // layer is inside `size`, so the 92dp box is what moves; the
+                    // banner behind it keeps its own parallax.
+                    .graphicsLayer {
+                        translationX = sweepShift()
+                        alpha = 1f - sweep()
+                    }
                     // Not on the corner scale, and deliberately so.
                     //
                     // The sweep that put every surface radius onto
@@ -178,9 +230,24 @@ fun ProfileHeaderCard(
         // exactly as the reference clients draw one: a 16dp gutter around a
         // picture the reader chose made it a card among cards. Everything that
         // identifies the account stays on the 16dp grid below it.
+        //
+        // The whole identity block leaves sideways as the header scrolls away -
+        // the motion the reference client uses for its collapsed profile header,
+        // where the name, avatar and counters sweep off to the right instead of
+        // simply being scrolled under the bar. Here the block is inside the list's
+        // header item, so the sweep is tied to the last stretch of the item's own
+        // scroll (`sweep`) rather than to a pinned toolbar: it starts when the
+        // block reaches the top of the viewport and finishes as it leaves, which
+        // is the only part of the scroll where a horizontal exit can be seen at
+        // all. Both reads are in the draw phase, so scrolling still never
+        // recomposes the header.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .graphicsLayer {
+                    translationX = sweepShift()
+                    alpha = 1f - sweep()
+                }
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(4.dp))
@@ -350,6 +417,8 @@ private fun Banner(
     shape: ProfileBannerShape,
     anchor: ProfileBannerAnchor,
     drift: Boolean,
+    /** How far the list has scrolled, in pixels; see [ProfileHeaderCard]. */
+    scrollOffset: () -> Float,
     modifier: Modifier = Modifier
 ) {
     val banner = state.bannerUrl?.takeIf { it.isNotBlank() }
@@ -448,6 +517,31 @@ private fun Banner(
                     onImageSize = { measured ->
                         imageSize = measured
                         BannerAspectMemory.remember(banner, measured)
+                    },
+                    // The artwork lags the page and grows just enough to keep
+                    // covering the box it is being pulled out of - the same
+                    // bargain the title page's hero makes, and the reason the
+                    // banner reads as a picture the page moves over rather than
+                    // a sticker scrolling with it.
+                    //
+                    // Read in the draw phase: the list can scroll at 120Hz over
+                    // an image the layout has not touched. The zoom is derived
+                    // from the lag rather than animated separately, so the top
+                    // edge of the picture stays pinned to the top of the box at
+                    // every scroll position: scaling by `1 + 2*lag/height` about
+                    // the centre lifts the top edge by exactly `lag`, and the
+                    // translation puts it back. No gap can open, and there is no
+                    // second number to drift out of step with the first.
+                    modifier = Modifier.graphicsLayer {
+                        val boxHeight = size.height
+                        if (boxHeight > 0f) {
+                            val lag = (scrollOffset() * PARALLAX_FOLLOW)
+                                .coerceIn(0f, boxHeight * PARALLAX_MAX_LAG)
+                            translationY = lag
+                            val zoom = 1f + 2f * lag / boxHeight
+                            scaleX = zoom
+                            scaleY = zoom
+                        }
                     }
                 )
                 // Weighted toward the bottom so the artwork stays visible at the top
@@ -690,3 +784,38 @@ internal object BannerAspectMemory {
         sizes.clear()
     }
 }
+
+/**
+ * Where in the header's collapse the identity block starts leaving to the right.
+ *
+ * The banner is above the block, so the block only reaches the top of the viewport
+ * once roughly the banner's height of the header has gone. Starting the sweep
+ * before that would move a row that is still halfway down the page; starting it
+ * at 1.0 would draw it off screen, where nobody can see it. 0.55 - about where the
+ * block's top meets the top of the viewport on an ordinary landscape banner - and
+ * the last 0.45 of the collapse is the stretch the block spends as the top row.
+ */
+private const val SWEEP_START = 0.55f
+
+/** How far across its own width the identity block travels by the end of the sweep. */
+private const val SWEEP_TRAVEL = 0.55f
+
+/**
+ * How fast the banner artwork follows the scroll.
+ *
+ * 0.16 is a sixteenth of a pixel of lag per pixel scrolled, capped by
+ * [PARALLAX_MAX_LAG] below. At 0.5 the picture would look welded to the screen; at
+ * 0 it would simply scroll with the page, which is what the header already did.
+ */
+private const val PARALLAX_FOLLOW = 0.16f
+
+/**
+ * The largest fraction of the banner's own height the artwork can lag by.
+ *
+ * The zoom that keeps the box covered grows with the lag (`1 + 2 * lag / height`),
+ * so this is also the cap on the crop the motion adds: 0.08 is a 16% zoom at the
+ * end of the first half-screen of scroll, which is a depth cue rather than a
+ * second animation competing with the drift. It also bounds the artwork's
+ * horizontal crop, which a reader never chose and should not have to notice.
+ */
+private const val PARALLAX_MAX_LAG = 0.08f

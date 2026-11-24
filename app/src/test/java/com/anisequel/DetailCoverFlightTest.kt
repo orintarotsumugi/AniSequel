@@ -126,6 +126,50 @@ class DetailCoverFlightTest {
     }
 
     /**
+     * The page may not move until the copy can actually draw its picture.
+     *
+     * Two failures shared one cause - the copy was only composed once the flight
+     * had already started. A poster that took a few frames to decode therefore
+     * appeared halfway through the open, and the page had already hidden its own
+     * poster for it, so the hero was a flat tint until the image landed. The copy
+     * is composed invisibly first, its picture is given a bounded moment to
+     * arrive, and only then do the page and the copy leave together. A request
+     * that never lands calls the flight off and the page opens on its own poster.
+     */
+    @Test
+    fun `the open waits for the copy's picture before the page moves`() {
+        val text = source(flight)
+        val page = source(sheet)
+
+        assertTrue(
+            "the copy is only composed once it is already meant to be visible, so " +
+                "its picture has no frame to decode before the flight starts",
+            text.contains("private val showable") && text.contains("armed.value")
+        )
+        assertTrue(
+            "the page's own poster is hidden from the first frame, before there is a " +
+                "copy to cover it - a slow decode leaves a hole where the artwork is",
+            text.contains("if (onStage.value && !abandoned.value) 0f else 1f")
+        )
+        assertTrue(
+            "the flight never waits for the copy's picture",
+            text.contains("while (!state.copyIsReady") &&
+                text.contains("COPY_WAIT_FRAMES")
+        )
+        assertTrue(
+            "a copy that never gets a picture still starts the flight and slides a " +
+                "tinted rectangle across the page",
+            text.contains("if (!state.copyIsReady) {") &&
+                text.contains("state.abandon()")
+        )
+        assertTrue(
+            "the page's entrance is not held for the flight, so it fades in behind " +
+                "a rectangle that is still decoding",
+            page.contains("rememberSheetEntrance(released = coverFlight.entranceGate)")
+        )
+    }
+
+    /**
      * A flight that never measured a landing must leave the page's poster alone.
      *
      * The hero reports its rectangle once, and the copy waits a bounded number of

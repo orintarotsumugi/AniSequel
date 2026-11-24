@@ -79,7 +79,7 @@ class DetailSheetEntranceTest {
 
         assertTrue(
             "the page does not take the shared entrance",
-            page.contains("rememberSheetEntrance()")
+            page.contains("rememberSheetEntrance(")
         )
         assertTrue(
             "the page does not take the shared close",
@@ -102,6 +102,11 @@ class DetailSheetEntranceTest {
     fun `the page's entrance stands aside while a poster flies`() {
         val page = source(sheet)
 
+        assertTrue(
+            "the page starts fading in before the copy has its picture, so the two " +
+                "halves of the open arrive at different times",
+            page.contains("rememberSheetEntrance(released = coverFlight.entranceGate)")
+        )
         assertTrue(
             "the page still scales and rises under the flying poster, so the " +
                 "copy lands on a rectangle that has moved",

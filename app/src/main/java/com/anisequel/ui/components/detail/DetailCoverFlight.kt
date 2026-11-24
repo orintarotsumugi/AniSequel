@@ -36,7 +36,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
-import coil.compose.AsyncImage
+import androidx.compose.foundation.Image
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -65,6 +67,17 @@ import kotlin.math.sin
  * tapped a minute ago is worse than no flight at all - it would fly in from
  * wherever that poster used to be.
  */
+/**
+ * How long the copy gets to decode its picture before the flight is called off.
+ *
+ * A poster the reader just tapped is usually in Coil's disk cache, so this is a
+ * handful of frames; the cap exists for the cold case - a first open after a
+ * process start, or a slow disk - where waiting would turn "the cover flies" into
+ * "the page takes a moment to open". Six frames at 60Hz is 100ms, which is below
+ * the threshold where a tap starts to feel unanswered.
+ */
+private const val COPY_WAIT_FRAMES = 6
+
 internal object DetailCoverFlight {
     private const val FRESH_MILLIS = 2_000L
     // Narrower than [FRESH_MILLIS]: this window has to contain the press that
@@ -232,6 +245,19 @@ internal fun SheetCoverFlight(
     url: String,
     origin: Rect,
     target: DetailCoverTarget,
+    /**
+     * False while the copy is only warming its picture up.
+     *
+     * The copy is composed as soon as the page's poster is measured, because that
+     * is the only way its `AsyncImage` has time to decode before the flight starts.
+     * It is drawn at alpha zero until then, so a request that never lands is an
+     * invisible one rather than a tinted rectangle sitting on the list.
+     */
+    visible: Boolean,
+    /** The copy's picture is on screen; the flight may start. */
+    onReady: () -> Unit,
+    /** The copy has no picture to draw; the page keeps its own entrance. */
+    onFailed: () -> Unit,
     progress: () -> Float
 ) {
     if (!target.filled || target.rect.width <= 0f || target.rect.height <= 0f) return
@@ -259,6 +285,7 @@ internal fun SheetCoverFlight(
                 // corner, and the translation below puts that corner where the
                 // scaled picture has to start.
                 transformOrigin = TransformOrigin(0f, 0f)
+                alpha = if (visible) 1f else 0f
                 val p = progress().coerceIn(0f, 1f)
                 val scale = lerp(startScale, 1f, p)
                 scaleX = scale
@@ -282,7 +309,7 @@ internal fun SheetCoverFlight(
             .testTag("detail_cover_flight")
     ) {
         if (url.isNotBlank()) {
-            AsyncImage(
+            val painter = rememberAsyncImagePainter(
                 model = remember(url, context) {
                     ImageRequest.Builder(context)
                         .data(url)
@@ -290,7 +317,25 @@ internal fun SheetCoverFlight(
                         // arrive with a second, half-faded copy of the poster.
                         .crossfade(false)
                         .build()
-                },
+                }
+            )
+            // The painter's state, observed from an effect rather than through
+            // `AsyncImage`'s `onSuccess`/`onError`. Coil 2 invokes those during
+            // composition, and both callbacks here write the flight's state - one
+            // of them (`onStage`) is read by this very composition. Writing a
+            // snapshot state that the same composition is reading is how a
+            // callback turns into a recomposition loop, so the answer is taken
+            // after the composition instead.
+            val painterState = painter.state
+            LaunchedEffect(painterState) {
+                when (painterState) {
+                    is AsyncImagePainter.State.Success -> onReady()
+                    is AsyncImagePainter.State.Error -> onFailed()
+                    else -> Unit
+                }
+            }
+            Image(
+                painter = painter,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().unseamedCover()
@@ -322,8 +367,24 @@ internal class DetailCoverFlightState(
     // and the flight's seam would be a missing picture instead of a smooth one.
     private val abandoned = mutableStateOf(false)
 
+    // The copy has decoded its picture. The flight cannot start before this: the
+    // copy is drawn at the page's poster size, and a page that faded in behind a
+    // still-loading rectangle showed the tint sliding across the screen instead of
+    // a poster.
+    private val copyReady = mutableStateOf(false)
+
+    // The page may start its own entrance. Latched on purpose - it must never fall
+    // back to false when the copy lands, or the entrance spring would be cancelled
+    // halfway and the page would stay half-transparent for the rest of its life.
+    private val entranceReleased = mutableStateOf(origin == null)
+
+    // The copy is composed, invisibly, as soon as the page's poster is measured -
+    // which is the only way its picture can decode before the flight starts. See
+    // [SheetCoverFlight]'s `visible`.
+    private val armed = mutableStateOf(false)
+
     /** No rectangle means nothing to fly, and the page keeps its own entrance. */
-    val travels: Boolean get() = origin != null
+    val travels: Boolean get() = origin != null && !abandoned.value
 
     /** The page's poster place, or null when this open has no copy to land. */
     val pageTarget: DetailCoverTarget? get() = target.takeIf { travels }
@@ -331,24 +392,65 @@ internal class DetailCoverFlightState(
     /** The progress spring, or null when this open has no flight to reverse. */
     val travel: Animatable<Float, AnimationVector1D>? get() = progress.takeIf { travels }
 
+    /** True once the page may start its entrance; see [entranceReleased]. */
+    val entranceGate: Boolean get() = entranceReleased.value
+
+    /** Whether the copy has its picture; polled by the flight's launcher. */
+    val copyIsReady: Boolean get() = copyReady.value
+
+    /** Whether the copy should be composed at all, visible or not. */
+    private val showable: Boolean get() = origin != null && armed.value && !abandoned.value
+
     /**
-     * 1 once the copy has landed, 0 while it is still in charge.
+     * 1 while the page's own poster is the one on screen, 0 while the copy is.
      *
      * Read in the draw phase by the hero, so this changes no layout. The page
      * draws its poster from its first frame because that is what the copy lands
-     * on; hiding it until then is what makes the hand-off seamless, since both
-     * sides show the same picture over the same rectangle.
+     * on; hiding it while the copy is on stage is what makes the hand-off
+     * seamless, since both sides show the same picture over the same rectangle.
+     *
+     * It is tied to [onStage] rather than to the flight's progress, and that is the
+     * fix for two holes at once. Before, the poster was hidden from the first frame
+     * of the open - before the copy had a picture to cover it with - so a slow
+     * decode showed the page's background where its artwork should be. On the way
+     * out the poster stayed drawn until the flight ended, so the page kept a copy
+     * of the poster at the hero's place while the flying copy shrank away from it:
+     * a ghost that outlived the thing it was standing in for. Both are the same
+     * question - is the copy the picture now? - and [onStage] is the answer.
      */
-    val reveal: () -> Float = { if (progress.value >= 1f || abandoned.value) 1f else 0f }
+    val reveal: () -> Float = { if (onStage.value && !abandoned.value) 0f else 1f }
 
     /** Puts the copy on stage before either side starts moving. */
     fun begin() {
-        if (origin != null && target.filled && !abandoned.value) onStage.value = true
+        if (origin != null && target.filled && copyReady.value && !abandoned.value) {
+            onStage.value = true
+        }
+    }
+
+    /** Composes the copy invisibly so its picture can decode before anything moves. */
+    fun arm() {
+        if (origin != null && target.filled && !abandoned.value) armed.value = true
+    }
+
+    /** The copy's picture is on screen: the flight may start. */
+    fun onCopyReady() {
+        if (origin == null || abandoned.value) return
+        copyReady.value = true
+        entranceReleased.value = true
+        begin()
+    }
+
+    /** The copy has no picture to draw: no flight, and the page opens normally. */
+    fun onCopyFailed() {
+        abandoned.value = true
+        onStage.value = false
+        entranceReleased.value = true
     }
 
     /** Gives the page its poster back when there is no copy to stand in for it. */
     fun abandon() {
         abandoned.value = true
+        entranceReleased.value = true
     }
 
     /**
@@ -356,18 +458,23 @@ internal class DetailCoverFlightState(
      *
      * It lives in the dialog's root Box rather than in the page, because the page
      * clips its content and would cut the copy off on the first half of the way
-     * in.
+     * in. Composed as soon as [arm] is called - not when the flight starts - so
+     * its picture has the whole wait to decode; [SheetCoverFlight]'s `visible`
+     * keeps it off screen until then.
      */
     @Composable
     fun Overlay(url: String) {
-        if (origin != null && onStage.value) {
-            SheetCoverFlight(
-                url = url,
-                origin = origin,
-                target = target,
-                progress = { progress.value }
-            )
-        }
+        val start = origin ?: return
+        if (!showable) return
+        SheetCoverFlight(
+            url = url,
+            origin = start,
+            target = target,
+            visible = onStage.value,
+            onReady = ::onCopyReady,
+            onFailed = ::onCopyFailed,
+            progress = { progress.value }
+        )
     }
 
     fun land() {
@@ -401,7 +508,20 @@ internal fun rememberDetailCoverFlight(urls: List<String?>): DetailCoverFlightSt
             state.abandon()
             return@LaunchedEffect
         }
-        state.begin()
+        // The copy is composed first and given a moment to decode. Starting the
+        // flight on a request that has not landed yet slid the page's tint across
+        // the screen for the whole animation and then popped the poster in at the
+        // end - the one frame the flight exists to avoid.
+        state.arm()
+        waited = 0
+        while (!state.copyIsReady && waited < COPY_WAIT_FRAMES) {
+            withFrameNanos { }
+            waited++
+        }
+        if (!state.copyIsReady) {
+            state.abandon()
+            return@LaunchedEffect
+        }
         progress.animateTo(1f, ExpressiveMotion.SettleSpatial)
         state.land()
     }
