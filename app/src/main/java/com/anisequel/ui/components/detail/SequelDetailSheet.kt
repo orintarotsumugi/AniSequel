@@ -387,13 +387,14 @@ fun SequelDetailSheet(
     // process-scoped job in `ThemePreferences`, and it ends the in-memory layer
     // rather than a stored flag, so a colour on a timer cannot survive a restart
     // the way the stored one did.
+
     // One progress value drives both directions, so Back and the close control
     // settle the page out instead of removing the dialog in the middle of a frame.
-    val entrance = remember(subject.mediaId, subject.media.type) { Animatable(0f) }
-    var isClosing by remember(subject.mediaId, subject.media.type) { mutableStateOf(false) }
-    LaunchedEffect(subject.mediaId, subject.media.type) {
-        entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
-    }
+    // The entrance and the close are the sheet's, not the title's: following a
+    // relation replaces what the page shows without replacing the page, and
+    // keying either animation by the subject made the new title replay the open
+    // over a transparent window (or cancel an exit already in flight).
+    val entrance = rememberSheetEntrance()
 
     val finishDismiss: () -> Unit = {
         if (themeSettings.animeThemeRetainColor) {
@@ -403,19 +404,7 @@ fun SequelDetailSheet(
         }
         onDismiss()
     }
-    val handleDismiss: () -> Unit = {
-        if (!isClosing) isClosing = true
-    }
-
-    // The exit belongs to this media identity, not to the composition-wide scope.
-    // If a relation replaces the subject while the page is animating out, this
-    // effect is cancelled with the old id/type and cannot call the old host's
-    // onDismiss against the newly opened title.
-    LaunchedEffect(subject.mediaId, subject.media.type, isClosing) {
-        if (!isClosing) return@LaunchedEffect
-        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
-        finishDismiss()
-    }
+    val handleDismiss = rememberSheetClose(entrance, finishDismiss)
 
     // The palette's destination, hoisted above the dialog so the dialog's own
     // dismiss request can see it. It used to live inside the dialog content,
@@ -505,23 +494,22 @@ fun SequelDetailSheet(
         // A dialog is its own window, so the activity's immersive setting has to be
         // applied here too - see `DialogImmersiveEffect`.
         DialogImmersiveEffect()
+        // The entrance belongs to the Surface, not to the content inside it. The
+        // Surface is what paints the page's background, so fading and scaling only
+        // its children left an opaque flat rectangle of app colour on screen for
+        // the first and last frames of every open and close - the page appeared to
+        // flash a blank sheet before it arrived, and again after it left. Fading
+        // the whole window is what makes it read as the page settling in over the
+        // list.
+        //
+        // The scrim sits in the same Box so it is drawn behind the page and can
+        // follow the same spring; see `SheetScrim`.
+        Box(modifier = Modifier.fillMaxSize()) {
+        SheetScrim(entrance)
         Surface(
             modifier = modifier
                 .fillMaxSize()
-                // The entrance belongs to the Surface, not to the content inside
-                // it. The Surface is what paints the page's background, so fading
-                // and scaling only its children left an opaque flat rectangle of
-                // app colour on screen for the first and last frames of every open
-                // and close - the page appeared to flash a blank sheet before it
-                // arrived, and again after it left. Fading the whole window is what
-                // makes it read as the page settling in over the list.
-                .graphicsLayer {
-                    alpha = entrance.value
-                    val scale = 0.985f + (0.015f * entrance.value)
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = (1f - entrance.value) * 22.dp.toPx()
-                }
+                .sheetEntrance(entrance)
                 .testTag("sequel_detail_sheet"),
             color = MaterialTheme.colorScheme.surface
         ) {
@@ -880,32 +868,8 @@ fun SequelDetailSheet(
             }
         }
         }
+        }
     }
-
-/**
- * A theme write, where a failure is cosmetic rather than a screen.
- *
- * Opening a title writes the cover's colour into the theme preferences, and
- * closing it schedules the revert. Both are `DataStore` round trips inside a
- * coroutine the sheet owns - and a `DataStore` write answers a full disk or a
- * corrupted file by *throwing*. An uncaught throw there does not fail the colour;
- * it kills the coroutine, reaches the thread's handler and closes the app, which
- * was the reported force-stop on opening a title. The accent is not worth that:
- * a colour that could not be saved leaves the app looking like it did before the
- * sheet opened, which is a quiet, survivable outcome.
- *
- * Cancellation is rethrown: it means the sheet is gone, not that the write
- * failed.
- */
-private suspend fun themeWrite(block: suspend () -> Unit) {
-    try {
-        block()
-    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-        throw cancelled
-    } catch (_: Exception) {
-        // Deliberately swallowed: see above.
-    }
-}
 
 /**
  * The gap between the floating capsule and the last card that can scroll under it.
