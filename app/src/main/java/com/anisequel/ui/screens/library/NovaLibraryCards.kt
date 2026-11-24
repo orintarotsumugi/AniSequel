@@ -540,6 +540,19 @@ private fun LibraryGridPoster(
 }
 
 /**
+ * Which picture the page's cover flight may start from, if any.
+ *
+ * A mosaic hero and a spotlight still are one landscape crop of the artwork, while
+ * the page opens on the portrait cover - a flight from either would start on a
+ * picture the reader never sees at that size, so those two keep the page's own
+ * fade. Named rather than inlined because [NovaPoster] is already the densest
+ * function on this screen, and a branch in it is a branch to hold while reading
+ * geometry.
+ */
+private fun tileCoverOrigin(hero: Boolean, wide: Boolean, posterUrl: String?): String? =
+    if (hero || wide) null else posterUrl
+
+/**
  * One cover in the new grid.
  *
  * The progress capsule is on the cover, top-left, exactly as the reference draws
@@ -607,10 +620,7 @@ private fun NovaPoster(
                     }
                 )
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
-                // The page opens on this picture. A mosaic hero or a spotlight
-                // still is a landscape crop, not the portrait poster the page
-                // shows, so those two keep the page's own fade instead.
-                .detailCoverPressOrigin(if (hero || wide) null else posterUrl)
+                .detailCoverPressOrigin(tileCoverOrigin(hero, wide, posterUrl))
         ) {
             // The grid is what a cold start opens on, and `Color.Transparent` meant a
             // poster with no dominant colour in its data had nothing at all behind it
