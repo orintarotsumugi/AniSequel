@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -179,7 +180,9 @@ fun OAuthCard(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    // The label is two words plus an icon; at the app's 175% Text
+                    // size a fixed 50dp clipped it. The button grows instead.
+                    .heightIn(min = 50.dp)
                     .bouncyPress(pressedScale = 0.96f, interactionSource = connectButtonSource)
                     .testTag("connect_anilist_button"),
                 shape = MaterialTheme.shapes.small,

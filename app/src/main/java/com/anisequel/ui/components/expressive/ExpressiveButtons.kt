@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -95,7 +96,14 @@ fun ExpressivePrimaryButton(
         // content swap was animated, and the animation only made it obvious.
         enabled = enabled && !loading,
         modifier = modifier
-            .height(48.dp)
+            // A floor of 48dp, not a fixed height. This is the app's primary
+            // action and its label is `labelLarge`, which the reader's Text size
+            // setting scales to 175%; at that size the label plus the button's
+            // content padding is taller than 48dp, and the fixed height cut the
+            // words rather than growing. The pressed capsule radius is half of
+            // 48, so on a grown button the press reads as a soft pill instead of
+            // a true capsule - the trade for not losing the label.
+            .heightIn(min = 48.dp)
             .bouncyPress(pressedScale = 0.96f, interactionSource = interactionSource)
             .testTag(testTag),
         shape = RoundedCornerShape(cornerRadius),

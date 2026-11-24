@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
@@ -589,7 +591,12 @@ private fun QuickAddButtonFace(isBusy: Boolean, isHolding: Boolean) {
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onPrimary,
-                maxLines = 1
+                maxLines = 1,
+                // The button is a fixed 44dp face, and the longer state
+                // ("Hold for Watching...") is the one that has to give when the
+                // reader's Text size setting widens it: an ellipsis says the
+                // label is shortened, a clipped glyph reads as a layout bug.
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -606,7 +613,11 @@ private fun WatchingCompletedBadge(
         enabled = false,
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            // `heightIn`, not `height`: the label is scaled by the reader's Text
+            // size setting, and a Material button adds 8dp of padding above and
+            // below it. At 175% that is taller than 44dp, and the fixed box cut
+            // the label rather than growing to hold it.
+            .heightIn(min = 44.dp)
             .clearAndSetSemantics { contentDescription = "Currently Watching" }
             .testTag("watching_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
@@ -624,7 +635,9 @@ private fun WatchingCompletedBadge(
         Text(
             text = "Currently Watching",
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -640,7 +653,9 @@ private fun PlanningCompletedBadge(
         enabled = false,
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            // Same reason as `WatchingCompletedBadge`: a floor, so the label can
+            // still be read when the reader has enlarged the app's text.
+            .heightIn(min = 44.dp)
             .clearAndSetSemantics { contentDescription = "On Planning list" }
             .testTag("planned_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),
@@ -658,7 +673,9 @@ private fun PlanningCompletedBadge(
         Text(
             text = "On Planning List",
             style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

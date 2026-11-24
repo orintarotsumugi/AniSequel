@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.Instant
 import com.anisequel.data.model.ActivityReply
@@ -463,7 +464,11 @@ internal fun RefreshErrorBanner(message: String, onRetry: () -> Unit) {
                     text = message,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    maxLines = 2
+                    maxLines = 2,
+                    // The failure text is the only line that says what went
+                    // wrong; two clipped lines of it could lose the sentence
+                    // that named the reason.
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             TextButton(onClick = onRetry) {

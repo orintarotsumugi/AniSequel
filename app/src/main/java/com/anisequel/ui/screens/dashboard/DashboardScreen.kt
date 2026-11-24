@@ -26,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -160,12 +161,17 @@ fun DashboardScreen(
         initialValue = com.anisequel.data.repository.QuickAddPreferences.QuickAddSettings()
     )
 
-    var showFilterSheet by remember { mutableStateOf(false) }
-    var selectedSequelKey by remember { mutableStateOf<String?>(null) }
+    // `rememberSaveable` for the three pieces of state a rotation has to keep.
+    // The ViewModel survives a configuration change, so the list and the viewer
+    // come back — but the ids of the sheet that was open did not, and rotating
+    // the phone closed the title the reader was reading and (worse) the filter
+    // sheet over a list whose filters were still applied.
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var selectedSequelKey by rememberSaveable { mutableStateOf<String?>(null) }
     // An arriving row is not a sequel, so it is tracked by its own namespaced
     // key and resolved to a plain media subject below. One nullable key per
     // source keeps "what is open" unambiguous without a second sheet.
-    var selectedArrivingKey by remember { mutableStateOf<String?>(null) }
+    var selectedArrivingKey by rememberSaveable { mutableStateOf<String?>(null) }
     val loadingDetailIds by dashboardViewModel.loadingDetailIds.collectAsStateWithLifecycle()
     val detailNodes by dashboardViewModel.detailNodes.collectAsStateWithLifecycle()
     val detailFriends by dashboardViewModel.friends.collectAsStateWithLifecycle()
@@ -209,7 +215,10 @@ fun DashboardScreen(
         if (appResumed) dashboardViewModel.onForegrounded() else dashboardViewModel.onBackgrounded()
     }
 
-    LaunchedEffect(Unit) {
+    // Keyed on the ViewModel, not `Unit`: the collector holds the instance it
+    // started with, so a different ViewModel kept publishing into a coroutine
+    // that had been launched for the old one.
+    LaunchedEffect(dashboardViewModel) {
         dashboardViewModel.eventFlow.collectLatest { event ->
             when (event) {
                 is DashboardEvent.ShowSnackbar -> {

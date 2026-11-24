@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -350,7 +351,13 @@ fun UserProfileScreen(
                             Text(
                                 text = title,
                                 fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
+                                maxLines = 1,
+                                // `maxLines` alone is `TextOverflow.Clip`, so a
+                                // long display name was cut through a glyph
+                                // instead of ending in an ellipsis. The bar has
+                                // a trophy beside it on the reader's own page,
+                                // which leaves less room than the name assumes.
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         // Only on the reader's own profile: the tier list is their

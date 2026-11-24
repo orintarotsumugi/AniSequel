@@ -350,6 +350,16 @@ fun NovaHomeScreen(
                             swipeEnabled = quickAddSettings.swipeEnabled,
                             modifier = entryModifier
                         )
+                        HomeSequelStyle.SPOTLIGHT -> NovaSequelSpotlight(
+                            sequel = sequel,
+                            onOpen = { onOpenSequel(sequel) },
+                            onAddToPlanning = { onAddToPlanning(sequel) },
+                            onAddToWatching = { onAddToWatching(sequel) },
+                            onHide = { onHide(sequel) },
+                            holdDurationSeconds = quickAddSettings.holdDurationSeconds,
+                            swipeEnabled = quickAddSettings.swipeEnabled,
+                            modifier = entryModifier
+                        )
                         HomeSequelStyle.SHELF -> NovaSequelShelfCard(
                             sequel = sequel,
                             onOpen = { onOpenSequel(sequel) },

@@ -45,6 +45,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +55,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -441,6 +445,11 @@ private fun CatalogueSearchField(
     activeType: MediaSearchType?,
     isSearching: Boolean
 ) {
+    // The catalogue searches as the reader types, on a debounce. The action key
+    // therefore has no request to start - its useful job is to close the
+    // keyboard so the results it produced are not hidden behind it.
+    val focusManager = LocalFocusManager.current
+
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -448,6 +457,8 @@ private fun CatalogueSearchField(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp)
             .testTag("nova_search_input"),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
         placeholder = {
             Text(
                 text = when (activeType) {

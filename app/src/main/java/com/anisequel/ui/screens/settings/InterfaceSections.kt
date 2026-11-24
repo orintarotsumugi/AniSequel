@@ -295,6 +295,18 @@ internal fun InterfaceLibrarySection(
             icon = AppVectorIcons.ViewGrid,
             subtitle = interfaceSettings.libraryView.blurb
         ) {
+            // The preview comes first, as it does on Home sequels: the reader sees
+            // the shape the current choice produces before a wall of other names
+            // asks them to compare it. It also stops the card's own subtitle
+            // - which is the chosen mode's blurb - from being repeated a second time
+            // in the paragraph below the chips.
+            val mode = interfaceSettings.libraryView
+            LibraryViewPreview(
+                mode = mode,
+                entries = previewEntries
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -319,14 +331,13 @@ internal fun InterfaceLibrarySection(
                 }
             }
 
-            // What the chosen view actually promises, in the reader's words - and
-            // the one thing it does not share with the card design. The two used to
-            // fight: card size added a column to this grid, so "Big cards" picked
-            // here could draw three across. The view owns the columns and the caption
-            // policy now, and saying so here is cheaper than discovering it.
-            val mode = interfaceSettings.libraryView
+            // What the chosen view does *not* share with the card design. The two
+            // used to fight: card size added a column to this grid, so "Big cards"
+            // picked here could draw three across. The view owns the columns and the
+            // caption policy now, and saying so here is cheaper than discovering it.
+            // The mode's blurb is the card's subtitle, so it is not repeated here.
             CollapsibleText(
-                text = mode.blurb + " " + when (mode) {
+                text = when (mode) {
                     LibraryViewMode.LIST,
                     LibraryViewMode.GROUPED,
                     LibraryViewMode.TABLE ->
@@ -347,12 +358,6 @@ internal fun InterfaceLibrarySection(
                 } + " The choice follows the cards onto a profile's list too.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-            LibraryViewPreview(
-                mode = mode,
-                entries = previewEntries
             )
         }
 

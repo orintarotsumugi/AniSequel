@@ -490,6 +490,16 @@ internal const val MOSAIC_HERO_EVERY = 3
 internal const val MOSAIC_HERO_ASPECT = 1.55f
 
 /**
+ * Width over height of a Spotlight cover.
+ *
+ * The mode's whole claim is "one title, seen properly", so the cover is the shape a
+ * still is rather than the 2:3 shape of a poster. It is part of the mode's
+ * arrangement, like [MOSAIC_HERO_ASPECT], and both the grid and the skeleton read
+ * this constant so the page and the wait before it agree.
+ */
+internal const val SPOTLIGHT_ASPECT = 1.55f
+
+/**
  * One poster cell, with the caption and shape the view mode asks for.
  *
  * Extracted because the grouped-covers arm and the flat grid draw the same cell, and
@@ -520,8 +530,9 @@ private fun LibraryGridPoster(
         // The mode answers this, not the surface: the two Settings previews read
         // the same property, so a preview cannot print a caption the grid drops.
         showTitle = viewMode.showsCaption,
-        large = viewMode == LibraryViewMode.CARDS || hero,
+        large = viewMode == LibraryViewMode.CARDS || hero || viewMode.usesWideStill,
         hero = hero,
+        wide = viewMode.usesWideStill,
         onClick = onClick,
         modifier = modifier
     )
@@ -546,7 +557,9 @@ private fun NovaPoster(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     /** Mosaic's full-width cell: a landscape crop rather than a poster. */
-    hero: Boolean = false
+    hero: Boolean = false,
+    /** Spotlight's full-width cell: one landscape still per row. */
+    wide: Boolean = false
 ) {
     val media = entry.media
     val interactionSource = remember { MutableInteractionSource() }
@@ -582,10 +595,10 @@ private fun NovaPoster(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(
-                    if (hero) {
-                        MOSAIC_HERO_ASPECT
-                    } else {
-                        cardCoverAspect(if (large) 0.74f else 0.68f, design)
+                    when {
+                        hero -> MOSAIC_HERO_ASPECT
+                        wide -> SPOTLIGHT_ASPECT
+                        else -> cardCoverAspect(if (large) 0.74f else 0.68f, design)
                     }
                 )
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))

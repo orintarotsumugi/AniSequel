@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -120,7 +121,9 @@ fun UsernameScanCard(
                 enabled = username.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    // Grows with the label at large Text sizes instead of clipping
+                    // it; 50dp is the resting size, not a ceiling.
+                    .heightIn(min = 50.dp)
                     .bouncyPress(pressedScale = 0.96f, interactionSource = scanButtonSource)
                     .testTag("scan_username_button"),
                 shape = MaterialTheme.shapes.small,

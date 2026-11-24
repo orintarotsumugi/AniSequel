@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -184,7 +185,12 @@ fun LoginScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        // A minimum, not a height. The app's own Text size setting
+                        // goes to 175%, and this button's label plus the button's
+                        // vertical content padding is already within a couple of
+                        // dp of 48 at that size — a fixed height clips the words
+                        // on the screen a first-time reader sees.
+                        .heightIn(min = 48.dp)
                         .testTag("explore_demo_button")
                         .bouncyPress(pressedScale = 0.97f, interactionSource = demoButtonSource),
                     shape = MaterialTheme.shapes.small,

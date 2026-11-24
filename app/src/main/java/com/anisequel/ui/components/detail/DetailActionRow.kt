@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -375,7 +376,11 @@ private fun TrackedStatusBadge(
         enabled = false,
         modifier = modifier
             .fillMaxWidth()
-            .height(44.dp)
+            // A floor, not a fixed height: the status label is text the reader
+            // can enlarge, and a Material button's own vertical padding already
+            // spends 16dp of the 44. Pinning the box clipped the label at large
+            // Text sizes instead of letting the badge grow with it.
+            .heightIn(min = 44.dp)
             .clearAndSetSemantics { contentDescription = label }
             .testTag("tracked_status_button_$mediaId"),
         shape = RoundedCornerShape(ExpressiveShapes.SmallCorner),

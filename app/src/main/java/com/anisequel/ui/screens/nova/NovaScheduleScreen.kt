@@ -489,7 +489,11 @@ private fun ScheduleDatePill(entry: ArrivingEntry) {
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = content,
-            maxLines = 1
+            maxLines = 1,
+            // The pill is sized from its text, but the reader's Text size
+            // setting can push it past the width the row has left. Without an
+            // ellipsis that last resort is a glyph cut in half.
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

@@ -28,6 +28,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.anisequel.domain.tier.TIER_LIST_NAME_MAX_LENGTH
 import com.anisequel.domain.tier.TierListDocument
@@ -554,6 +557,12 @@ private fun TierListNameDialog(
                 value = text,
                 onValueChange = { text = it.take(TIER_LIST_NAME_MAX_LENGTH) },
                 singleLine = true,
+                // The keyboard already has a Done key in a one-line dialog field;
+                // it now does what the confirm button does instead of nothing.
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(
+                    onDone = { if (text.isNotBlank()) onConfirm(text) }
+                ),
                 shape = ExpressiveShapes.pill,
                 supportingText = { Text("${text.length}/$TIER_LIST_NAME_MAX_LENGTH") },
                 colors = OutlinedTextFieldDefaults.colors(
