@@ -62,6 +62,18 @@ enum class RefreshInterval(
 
     ONE_HOUR("one_hour", "1 hour", 60 * 60 * 1000L),
 
+    /**
+     * A day, and [ONE_WEEK] below it, are for a list that is read once a day or
+     * once a week: someone who opens AniSequel to check a single season should
+     * not spend a request every hour on the way there. They are deliberately
+     * past the point where the timer is the common path - the resume check is
+     * what usually notices - so they are the two stops where "on its own while
+     * the app stays open" is the exception rather than the rule.
+     */
+    ONE_DAY("one_day", "1 day", 24L * 60 * 60 * 1000),
+
+    ONE_WEEK("one_week", "1 week", 7L * 24 * 60 * 60 * 1000),
+
     /** Never automatically. The refresh gesture is the only route to fresh data. */
     MANUAL_ONLY("manual_only", "Manual", NEVER_STALE_MILLIS);
 

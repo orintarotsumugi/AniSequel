@@ -429,7 +429,8 @@ internal object SettingsSearch {
                 eyebrow = "Library & dashboard",
                 icon = AppVectorIcons.Refresh,
                 keywords = "refresh interval sync update cache list stale age always " +
-                    "fifteen thirty minutes hourly manual only data requests",
+                    "fifteen thirty minutes hourly daily weekly day week manual only " +
+                    "data requests slider cadence",
                 priority = 25
             )
         )

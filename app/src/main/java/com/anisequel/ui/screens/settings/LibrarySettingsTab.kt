@@ -5,10 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -479,20 +475,19 @@ private fun LibraryViewCard(libraryPreferences: LibraryPreferences) {
  * Finishing something on AniList in another app changed nothing until an hour
  * had passed or the refresh button was tapped.
  *
- * ## Why chips and not `ExpressivePolygonSegmentedBar`
+ * ## Why the control is somewhere else
  *
- * The segmented bar is how the Theme tab picks one of two or three values. There
- * are five here, and every one of them is short but not equally short - "Always",
- * "15 min", "30 min", "1 hour", "Manual" - squeezed into equal halves of a
- * phone-width row. A wrapping [FlowRow] of pills is the same interaction with a
- * layout that cannot clip a label, which is what `PaletteSwatch` does for the
- * same reason.
+ * [RefreshIntervalPicker] draws the slider, and first-run setup mounts the same
+ * composable: one question about cadence should not have two spellings. What
+ * stays on this card is the paragraph above the control and the reset below it,
+ * because those are the parts that talk about the *saved* interval - the picker
+ * only knows the value it was handed and the one the reader picked.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferences) {
     val scope = rememberCoroutineScope()
     val interval by refreshIntervalPreferences.interval.collectAsStateWithLifecycle(initialValue = null)
+    val selectedInterval = interval ?: RefreshInterval.DEFAULT
 
     SectionCard(
         title = "List refresh",
@@ -500,13 +495,14 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
         subtitle = "How fresh your scan stays"
     ) {
         CollapsibleText(
-            text = "AniSequel re-reads your list when you come back to the app if it is " +
-                "older than this, and on its own while it stays open. Pull down or " +
-                "use the refresh button any time to check immediately.",
+            text = "AniSequel keeps a copy of your list and re-reads it in the " +
+                "background. The interval below is how old that copy may get before " +
+                "the app asks AniList again. Pull down or use the refresh button any " +
+                "time to check immediately.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         if (interval == null) {
             Text(
@@ -515,29 +511,21 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            val selectedInterval = interval ?: RefreshInterval.DEFAULT
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.testTag("refresh_interval_row")
-            ) {
-                RefreshInterval.entries.forEach { option ->
-                    SettingsChoiceChip(
-                        label = option.displayName,
-                        selected = option == selectedInterval,
-                        onClick = {
-                            scope.launch { refreshIntervalPreferences.setInterval(option) }
-                        },
-                        testTag = "refresh_interval_${option.storageValue}",
-                        onClickLabel = "Refresh every ${option.displayName}"
-                    )
+            RefreshIntervalPicker(
+                selected = selectedInterval,
+                onSelect = { chosen ->
+                    scope.launch { refreshIntervalPreferences.setInterval(chosen) }
                 }
-            }
+            )
 
-            // Shown only once the interval is something other than the default, so the
-            // card grows a button the moment a chip is chosen. A bare `if` did that by
-            // appearing fully drawn on the next frame and shoving the card's bottom edge
-            // down instantly; the spring expansion makes the row the thing that moves.
+            // Shown only once the stored interval is something other than the
+            // default. The draft between a drag and its write lives inside the
+            // picker, so this reads the stored value rather than the thumb: the
+            // button appears when the choice has actually landed, and not for a
+            // stop the reader slid across on the way to another. A bare `if` did
+            // that by appearing fully drawn on the next frame and shoving the
+            // card's bottom edge down instantly; the spring expansion makes the
+            // row the thing that moves.
             // `FastSpatialSize` rather than the `Int` token: `expandVertically` is typed
             // on `FiniteAnimationSpec<IntSize>`, because what it animates is the row's
             // measured height rather than a count. The `Int` token looks like the closer
@@ -554,7 +542,7 @@ private fun ListRefreshCard(refreshIntervalPreferences: RefreshIntervalPreferenc
                     SettingsButton(
                         // Named from the enum rather than typed: "Use AniSequel's
                         // default" made the reader go and find out what the default was,
-                        // and it appeared right under the chip that already said it.
+                        // and it appeared right under the control that already said it.
                         text = "Reset to ${RefreshInterval.DEFAULT.displayName}",
                         onClick = { scope.launch { refreshIntervalPreferences.reset() } },
                         icon = AppVectorIcons.Restore,
