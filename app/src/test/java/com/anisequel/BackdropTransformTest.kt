@@ -346,16 +346,25 @@ class BackdropTransformTest {
     }
 
     @Test
-    fun `the anchor and a drift cannot add up past the edge`() {
-        // Drift sweeps the whole range on its own. An anchor added under it is
-        // still clamped inside the same bound - the sweep may start off-centre,
-        // but it can never show a gap at either end.
+    fun `the anchor only shifts where the sweep runs, and never past the edge`() {
+        // The header aims drift at a centred anchor, so the pair below is the
+        // sweep this app actually draws. The side-anchored cases are the
+        // transform's algebra, and they are the ones that would show bare
+        // background if the clamp were applied after the sum instead of inside it:
+        // a side plus a sweep toward the far edge would be *two* limits of travel.
         val limit = (bannerWidth * cover() - boxWidth) / 2f
 
-        listOf(0f, 0.5f, 1f).forEach { anchor ->
-            assertEquals(limit, anchored(anchor = anchor, drift = 1f).offsetX, 0.0001f)
-            assertEquals(-limit, anchored(anchor = anchor, drift = -1f).offsetX, 0.0001f)
-        }
+        // Centred: the sweep is the whole range, and both ends land on an edge.
+        assertEquals(limit, anchored(anchor = 0.5f, drift = 1f).offsetX, 0.0001f)
+        assertEquals(-limit, anchored(anchor = 0.5f, drift = -1f).offsetX, 0.0001f)
+
+        // Held to a side, the sweep runs inward from that edge: the end that would
+        // leave the picture is clamped to the edge it is already on, and the other
+        // end stops short of the far one by that same limit.
+        assertEquals(limit, anchored(anchor = 0f, drift = 1f).offsetX, 0.0001f)
+        assertEquals(0f, anchored(anchor = 0f, drift = -1f).offsetX, 0.0001f)
+        assertEquals(-limit, anchored(anchor = 1f, drift = -1f).offsetX, 0.0001f)
+        assertEquals(0f, anchored(anchor = 1f, drift = 1f).offsetX, 0.0001f)
     }
 
     @Test
