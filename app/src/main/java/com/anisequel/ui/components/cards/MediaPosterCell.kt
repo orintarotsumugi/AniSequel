@@ -41,6 +41,7 @@ import com.anisequel.domain.card.scoreCornerOf
 import com.anisequel.domain.card.CardTitlePlacement
 import com.anisequel.domain.card.MediaCardStyle
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.theme.AniSequelTheme
@@ -355,6 +356,11 @@ private fun PosterArtwork(
     val imageUrl = coverUrl?.takeIf { it.isNotBlank() }
     Box(
         modifier = posterModifier
+            // The card is the only place that knows which picture the reader
+            // pressed, so the page's flight asks here for the rectangle rather
+            // than guessing one from the grid. Inert if the card is not one that
+            // opens a title.
+            .detailCoverPressOrigin(imageUrl)
             .fillMaxWidth()
             .aspectRatio(aspect)
             .then(

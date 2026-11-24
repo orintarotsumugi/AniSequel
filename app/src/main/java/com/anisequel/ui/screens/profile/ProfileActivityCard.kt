@@ -43,6 +43,7 @@ import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.EngagementAction
 import com.anisequel.ui.components.cards.SequelInfoChip
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import java.util.Locale
@@ -311,6 +312,7 @@ private fun ActivityPoster(coverUrl: String?, isManga: Boolean) {
         model = coverUrl,
         contentDescription = null,
         modifier = Modifier
+            .detailCoverPressOrigin(coverUrl)
             .width(96.dp)
             .aspectRatio(POSTER_ASPECT)
             .clip(MaterialTheme.shapes.medium)

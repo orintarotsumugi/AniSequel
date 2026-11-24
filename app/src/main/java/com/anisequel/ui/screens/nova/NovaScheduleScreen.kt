@@ -62,6 +62,7 @@ import com.anisequel.ui.components.expressive.ExpressiveLoadingIndicator
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.icons.Icons
 import com.anisequel.ui.components.icons.automirrored.filled.ArrowBack
 import com.anisequel.ui.components.nova.NovaBackdrop
@@ -376,6 +377,9 @@ private fun ScheduleRow(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    // Resolved once: the same URL is the image and the key the page's flight
+    // looks the pressed rectangle up by.
+    val posterUrl = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title, entry.mediaType)
 
     NovaSurface(
         modifier = modifier
@@ -401,6 +405,7 @@ private fun ScheduleRow(
                     .width(84.dp)
                     .height(120.dp)
                     .clip(RoundedCornerShape(18.dp))
+                    .detailCoverPressOrigin(posterUrl)
             ) {
                 PosterPlaceholder(
                     title = entry.title,
@@ -408,7 +413,7 @@ private fun ScheduleRow(
                     modifier = Modifier.matchParentSize()
                 )
                 AsyncImage(
-                    model = cardPosterUrl(entry.mediaId, entry.coverUrl, entry.title, entry.mediaType),
+                    model = posterUrl,
                     contentDescription = entry.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

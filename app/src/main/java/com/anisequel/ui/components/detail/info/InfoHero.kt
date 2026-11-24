@@ -75,6 +75,9 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
+import com.anisequel.ui.components.detail.LocalDetailCoverReveal
+import com.anisequel.ui.components.detail.LocalDetailCoverTarget
 import com.anisequel.ui.components.openExternalUrlOrCopy
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
@@ -188,6 +191,9 @@ fun InfoHero(
     // the page because this is where the rectangle exists; the page only needs it
     // long enough to hand to the viewer.
     var posterBounds by remember(media.id, media.type) { mutableStateOf<Rect?>(null) }
+    val coverReveal = LocalDetailCoverReveal.current
+    val coverTarget = LocalDetailCoverTarget.current
+    val posterShape = MaterialTheme.shapes.medium
     val openCover: () -> Unit = { onOpenCover(posterBounds) }
     // Long-pressing the title is the shortcut to the one thing people do with a
     // title on this page: take it somewhere else. The full name sheet with its
@@ -507,21 +513,32 @@ fun InfoHero(
                 modifier = Modifier
                     .width(116.dp)
                     .height(174.dp)
+                    // The page's poster steps aside while the copy is in flight -
+                    // the two are the same picture at the same rectangle, so the
+                    // hand-off is a swap between identical pixels. Read in the draw
+                    // phase so a flight does not recompose the hero.
+                    .graphicsLayer { alpha = coverReveal() }
                     .shadow(
-                        elevation = 18.dp,
-                        shape = MaterialTheme.shapes.medium,
+                        elevation = HERO_POSTER_ELEVATION,
+                        shape = posterShape,
                         ambientColor = coverColor,
                         spotColor = Color.Black
                     )
-                    .clip(MaterialTheme.shapes.medium)
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
+                    .clip(posterShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), posterShape)
                     .background(coverColor)
                     // The rectangle the viewer expands out of. `boundsInWindow`
                     // rather than `boundsInRoot` because the Info page lives in
                     // the sheet's own window, and the viewer is a dialog in
                     // another one; window coordinates are the closest shared
                     // frame the two have.
-                    .onGloballyPositioned { posterBounds = it.boundsInWindow() }
+                    .onGloballyPositioned {
+                        val rect = it.boundsInWindow()
+                        posterBounds = rect
+                        // Where the copy lands. Plain fields in the holder, not
+                        // state: this runs on every scroll frame.
+                        coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
+                    }
                     .expressiveHoldGesture(onHold = openCover, onClick = openCover)
                     // The hold gesture is a raw `pointerInput`, which TalkBack
                     // cannot reach at all: the poster was the only way to open the

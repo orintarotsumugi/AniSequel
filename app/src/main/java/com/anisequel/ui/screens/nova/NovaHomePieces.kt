@@ -52,6 +52,7 @@ import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.cards.QuickAddPlanningButton
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.nova.NovaProgressPill
@@ -126,6 +127,7 @@ private fun NovaContinueCard(
     val coverTint = remember(media.coverImage?.color) {
         media.coverImage?.color.toCoverColorOrNull()
     }
+    val posterUrl = cardPosterUrl(media)
 
     Column(
         modifier = Modifier
@@ -145,6 +147,7 @@ private fun NovaContinueCard(
                 .fillMaxWidth()
                 .height(158.dp)
                 .clip(RoundedCornerShape(12.dp))
+                .detailCoverPressOrigin(posterUrl)
         ) {
             // `coverTint ?: Color.Transparent` was a hole on a cold start: the rail is
             // the first thing Home draws, its covers are a disk read (or a round trip)
@@ -156,7 +159,7 @@ private fun NovaContinueCard(
                 modifier = Modifier.matchParentSize()
             )
             AsyncImage(
-                model = cardPosterUrl(media),
+                model = posterUrl,
                 // The caption below names the card; a description on the artwork
                 // too made TalkBack read every title twice in the rail.
                 contentDescription = null,
@@ -235,6 +238,7 @@ fun NovaSequelRow(
                     .width(62.dp)
                     .height(92.dp)
                     .clip(RoundedCornerShape(10.dp))
+                    .detailCoverPressOrigin(sequel.sequelCoverUrl)
             ) {
                 PosterPlaceholder(
                     title = sequel.sequelTitle,
@@ -360,6 +364,7 @@ fun NovaSequelCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(176.dp)
+                    .detailCoverPressOrigin(sequel.sequelCoverUrl)
             ) {
                 PosterPlaceholder(
                     title = sequel.sequelTitle,

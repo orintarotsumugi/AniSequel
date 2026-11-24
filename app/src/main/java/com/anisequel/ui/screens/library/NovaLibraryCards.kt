@@ -54,6 +54,7 @@ import com.anisequel.ui.components.cards.cardRatingStyle
 import com.anisequel.ui.components.cards.cardTitleMotion
 import com.anisequel.ui.components.cards.cardTitleStyle
 import com.anisequel.ui.components.cards.libraryRating
+import com.anisequel.ui.components.detail.detailCoverPressOrigin
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveShapes
@@ -539,6 +540,19 @@ private fun LibraryGridPoster(
 }
 
 /**
+ * Which picture the page's cover flight may start from, if any.
+ *
+ * A mosaic hero and a spotlight still are one landscape crop of the artwork, while
+ * the page opens on the portrait cover - a flight from either would start on a
+ * picture the reader never sees at that size, so those two keep the page's own
+ * fade. Named rather than inlined because [NovaPoster] is already the densest
+ * function on this screen, and a branch in it is a branch to hold while reading
+ * geometry.
+ */
+private fun tileCoverOrigin(hero: Boolean, wide: Boolean, posterUrl: String?): String? =
+    if (hero || wide) null else posterUrl
+
+/**
  * One cover in the new grid.
  *
  * The progress capsule is on the cover, top-left, exactly as the reference draws
@@ -580,6 +594,10 @@ private fun NovaPoster(
     val coverTint = remember(media.coverImage?.color) {
         media.coverImage?.color.toCoverColorOrNull()
     }
+    // Resolved once: the page's flight asks for the rectangle under this URL, and
+    // a second `cardPosterUrl(media)` call here would start a second lookup for
+    // the same title.
+    val posterUrl = cardPosterUrl(media)
 
     Column(
         modifier = modifier
@@ -602,6 +620,7 @@ private fun NovaPoster(
                     }
                 )
                 .clip(RoundedCornerShape(if (compact) 12.dp else 16.dp))
+                .detailCoverPressOrigin(tileCoverOrigin(hero, wide, posterUrl))
         ) {
             // The grid is what a cold start opens on, and `Color.Transparent` meant a
             // poster with no dominant colour in its data had nothing at all behind it
@@ -613,7 +632,7 @@ private fun NovaPoster(
                 modifier = Modifier.matchParentSize()
             )
             AsyncImage(
-                model = cardPosterUrl(media),
+                model = posterUrl,
                 contentDescription = media.displayName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -739,6 +758,7 @@ private fun NovaLibraryRow(
     val coverTint = remember(media.coverImage?.color) {
         media.coverImage?.color.toCoverColorOrNull()
     }
+    val posterUrl = cardPosterUrl(media)
 
     NovaSurface(
         modifier = modifier
@@ -764,6 +784,7 @@ private fun NovaLibraryRow(
                     .width(48.dp)
                     .height(68.dp)
                     .clip(RoundedCornerShape(11.dp))
+                    .detailCoverPressOrigin(posterUrl)
             ) {
                 PosterPlaceholder(
                     title = media.displayName,
@@ -771,7 +792,7 @@ private fun NovaLibraryRow(
                     modifier = Modifier.matchParentSize()
                 )
                 AsyncImage(
-                    model = cardPosterUrl(media),
+                    model = posterUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

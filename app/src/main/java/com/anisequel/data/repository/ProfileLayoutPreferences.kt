@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anisequel.domain.profile.ProfileBannerAnchor
 import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileLayout
 import com.anisequel.domain.profile.ProfileSection
@@ -38,6 +39,8 @@ class ProfileLayoutPreferences(context: Context) {
         val HIDDEN = stringSetPreferencesKey("profile_hidden_sections")
         val CHARACTERS_TWO_COLUMN = booleanPreferencesKey("profile_characters_two_column")
         val BANNER_SHAPE = stringPreferencesKey("profile_banner_shape")
+        val BANNER_ANCHOR = stringPreferencesKey("profile_banner_anchor")
+        val BANNER_DRIFT = booleanPreferencesKey("profile_banner_drift")
     }
 
     val layout: Flow<ProfileLayout> = appContext.profileLayoutDataStore.data.map { preferences ->
@@ -53,7 +56,9 @@ class ProfileLayoutPreferences(context: Context) {
                 .ifEmpty { ProfileSection.entries.toList() },
             hidden = ProfileSection.fromStorage(preferences[Keys.HIDDEN] ?: emptySet()),
             charactersTwoColumn = preferences[Keys.CHARACTERS_TWO_COLUMN] ?: false,
-            bannerShape = ProfileBannerShape.fromStorage(preferences[Keys.BANNER_SHAPE])
+            bannerShape = ProfileBannerShape.fromStorage(preferences[Keys.BANNER_SHAPE]),
+            bannerAnchor = ProfileBannerAnchor.fromStorage(preferences[Keys.BANNER_ANCHOR]),
+            bannerDrift = preferences[Keys.BANNER_DRIFT] ?: false
         )
     }
 
@@ -81,6 +86,18 @@ class ProfileLayoutPreferences(context: Context) {
         }
     }
 
+    suspend fun setBannerAnchor(anchor: ProfileBannerAnchor) {
+        appContext.profileLayoutDataStore.edit { preferences ->
+            preferences[Keys.BANNER_ANCHOR] = anchor.storageValue
+        }
+    }
+
+    suspend fun setBannerDrift(drift: Boolean) {
+        appContext.profileLayoutDataStore.edit { preferences ->
+            preferences[Keys.BANNER_DRIFT] = drift
+        }
+    }
+
     /** Back to the shipped arrangement, which is every section, in declared order. */
     suspend fun reset() {
         appContext.profileLayoutDataStore.edit { preferences ->
@@ -88,6 +105,8 @@ class ProfileLayoutPreferences(context: Context) {
             preferences.remove(Keys.HIDDEN)
             preferences.remove(Keys.CHARACTERS_TWO_COLUMN)
             preferences.remove(Keys.BANNER_SHAPE)
+            preferences.remove(Keys.BANNER_ANCHOR)
+            preferences.remove(Keys.BANNER_DRIFT)
         }
     }
 }

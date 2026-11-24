@@ -21,10 +21,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.anisequel.domain.profile.ProfileBannerAnchor
 import com.anisequel.domain.profile.ProfileBannerShape
 import com.anisequel.domain.profile.ProfileLayout
 import com.anisequel.domain.profile.ProfileSection
@@ -33,8 +35,8 @@ import com.anisequel.ui.components.expressive.ExpressivePolygonSegmentedBar
 import com.anisequel.ui.components.expressive.SegmentedOption
 
 /**
- * The profile's layout editor: the banner's shape, order, visibility and the
- * two-column characters.
+ * The profile's layout editor: the banner's shape, crop and drift, the section
+ * order and visibility, and the two-column characters.
  *
  * A sheet rather than a settings page, because the thing being edited is the page
  * behind it - the reader can dismiss it and see the result immediately, and the
@@ -51,6 +53,8 @@ internal fun ProfileLayoutSheet(
     onToggle: (ProfileSection) -> Unit,
     onCharactersTwoColumn: (Boolean) -> Unit,
     onBannerShape: (ProfileBannerShape) -> Unit,
+    onBannerAnchor: (ProfileBannerAnchor) -> Unit,
+    onBannerDrift: (Boolean) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -107,6 +111,75 @@ internal fun ProfileLayoutSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            // The other half of "the banner is the reader's artwork": the shape
+            // decides how much of the header the picture gets, the position decides
+            // what survives the crop that a wide banner cannot avoid. Both live
+            // here, over the page they change, rather than in Settings.
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Banner position",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            ExpressivePolygonSegmentedBar(
+                options = ProfileBannerAnchor.entries.map {
+                    SegmentedOption(label = it.displayName)
+                },
+                selectedIndex = ProfileBannerAnchor.entries.indexOf(layout.bannerAnchor),
+                onSelect = { index ->
+                    ProfileBannerAnchor.entries.getOrNull(index)?.let(onBannerAnchor)
+                },
+                // Dimmed *and* disabled while drifting: a segment that still answers
+                // a tap would look like it worked and change nothing visible,
+                // because the sweep is drawing over the side it selected.
+                enabled = !layout.bannerDrift,
+                modifier = Modifier
+                    .alpha(if (layout.bannerDrift) 0.4f else 1f)
+                    .testTag("profile_layout_banner_anchor")
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = if (layout.bannerDrift) {
+                    "Drift is on, so the whole banner is swept. Turn it off to hold " +
+                        "one side."
+                } else {
+                    "Which part of a banner wider than the card the header keeps. " +
+                        "The picture slides to the side you pick."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Drift",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Sweep the banner slowly sideways while the page sits " +
+                            "still, like a moving still.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = layout.bannerDrift,
+                    onCheckedChange = onBannerDrift,
+                    modifier = Modifier
+                        .testTag("profile_layout_banner_drift")
+                        .semantics {
+                            contentDescription = "Drift"
+                        }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)

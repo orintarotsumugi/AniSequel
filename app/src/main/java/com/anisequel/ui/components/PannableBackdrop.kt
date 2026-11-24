@@ -124,6 +124,19 @@ fun PannableBackdrop(
      */
     drift: Boolean = false,
     /**
+     * Which part of a horizontally overflowing picture the box holds at rest.
+     *
+     * 0 keeps the picture's left edge, 1 its right, 0.5 centres it. Only meaningful
+     * on the axis that actually overflows: a picture that already fits the width has
+     * no crop to move, and the value is then an identity.
+     *
+     * A lambda, not a value, for the same reason the drift phase is a `State`: the
+     * profile banner animates between its three positions, and reading the anchor in
+     * the draw phase invalidates the layer instead of recomposing the backdrop on
+     * every frame of that slide.
+     */
+    anchor: () -> Float = { 0.5f },
+    /**
      * Reports the source picture's own pixel size once it is known, and
      * `Size.Zero` when the painter cannot measure it.
      *
@@ -322,6 +335,7 @@ fun PannableBackdrop(
                             offsetX = offsetX,
                             offsetY = offsetY,
                             drift = driftPhase?.value ?: 0f,
+                            anchor = anchor(),
                             fit = fit
                         )
                         transformOrigin = TransformOrigin(0.5f, 0.5f)
@@ -536,6 +550,7 @@ internal fun backdropTransform(
     offsetX: Float,
     offsetY: Float,
     drift: Float = 0f,
+    anchor: Float = 0.5f,
     fit: BackdropFit = BackdropFit.COVER
 ): BackdropTransform {
     // Nothing measured, nothing to place. Without this the cover scale reads 1 and
@@ -558,6 +573,14 @@ internal fun backdropTransform(
     val limitX = if (overflowX > 0f) overflowX / 2f else 0f
     val limitY = if (overflowY > 0f) overflowY / 2f else 0f
 
+    // The anchor is the resting crop: 0 asks for the picture's left edge, 1 for its
+    // right. A positive translation moves the picture right, which *reveals* its
+    // left part, so the sign is flipped relative to the fraction the caller picks.
+    // It is added before the clamp for the same reason the drift is - it only ever
+    // asks for a position the bounds already allow, so the clamp stays a guard
+    // rather than the answer.
+    val anchoredX = (0.5f - anchor.coerceIn(0f, 1f)) * 2f * limitX
+
     // The drift is added *before* the clamp, not after: a sweep that could push the
     // picture past its own limit would show bare background at one edge, which is
     // the one failure this component was written to make impossible. A drift of
@@ -565,7 +588,8 @@ internal fun backdropTransform(
     // beyond that is a caller's arithmetic error rather than a bigger picture.
     return BackdropTransform(
         scale = scale,
-        offsetX = (offsetX + limitX * drift.coerceIn(-1f, 1f)).coerceIn(-limitX, limitX),
+        offsetX = (offsetX + anchoredX + limitX * drift.coerceIn(-1f, 1f))
+            .coerceIn(-limitX, limitX),
         offsetY = offsetY.coerceIn(-limitY, limitY)
     )
 }

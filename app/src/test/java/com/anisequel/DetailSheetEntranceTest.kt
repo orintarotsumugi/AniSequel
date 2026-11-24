@@ -47,6 +47,32 @@ class DetailSheetEntranceTest {
         )
     }
 
+    /**
+     * The scrim's black has to be *inside* its alpha layer.
+     *
+     * `background` and `graphicsLayer` are both draw modifiers, and the chain's
+     * order is the direction: a background placed before the layer paints under
+     * it, outside the alpha. The scrim was written that way round, so the 60%
+     * never followed the page at all - it sat over the list for the page's whole
+     * life and vanished when the window was removed, which is the cut it replaced,
+     * moved to the close. Order is the entire fix, and the entire check.
+     */
+    @Test
+    fun `the scrim's alpha layer wraps the black it fades`() {
+        val scrim = source(entrance)
+            .substringAfter("fun SheetScrim(")
+            .substringBefore("fun Modifier.sheetEntrance(")
+        val layer = scrim.indexOf(".graphicsLayer")
+        val ink = scrim.indexOf(".background(")
+
+        assertTrue("the scrim lost its alpha layer or its ink:\n$scrim", layer >= 0 && ink >= 0)
+        assertTrue(
+            "the black is painted outside the alpha layer, so the dim never fades " +
+                "and the close ends with it switching off",
+            layer < ink
+        )
+    }
+
     @Test
     fun `the entrance and the close belong to the sheet, not the subject`() {
         val page = source(sheet)
@@ -57,7 +83,7 @@ class DetailSheetEntranceTest {
         )
         assertTrue(
             "the page does not take the shared close",
-            page.contains("rememberSheetClose(entrance, finishDismiss)")
+            page.contains("rememberSheetClose(") && page.contains("onDismissed = finishDismiss")
         )
         assertTrue("the scrim is not composed behind the page", page.contains("SheetScrim(entrance)"))
         assertFalse(
@@ -69,6 +95,23 @@ class DetailSheetEntranceTest {
             "the close is not keyed by its own flag, so a relation tapped during " +
                 "the exit can cancel it",
             source(entrance).contains("LaunchedEffect(closing)")
+        )
+    }
+
+    @Test
+    fun `the page's entrance stands aside while a poster flies`() {
+        val page = source(sheet)
+
+        assertTrue(
+            "the page still scales and rises under the flying poster, so the " +
+                "copy lands on a rectangle that has moved",
+            page.contains("sheetEntrance(entrance, travels = !coverFlight.travels)")
+        )
+        assertTrue(
+            "the close does not reverse the flight, so closing cuts instead of " +
+                "putting the cover back where it came from",
+            page.contains("travel = coverFlight.travel") &&
+                page.contains("onTravelStart = coverFlight::begin")
         )
     }
 

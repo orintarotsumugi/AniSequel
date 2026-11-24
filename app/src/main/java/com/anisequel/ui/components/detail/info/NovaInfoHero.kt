@@ -87,6 +87,9 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
+import com.anisequel.ui.components.detail.LocalDetailCoverReveal
+import com.anisequel.ui.components.detail.LocalDetailCoverTarget
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
@@ -414,27 +417,41 @@ private fun HeroLockup(
     onCopyTitle: () -> Unit,
     onOpenStudio: (Int, String?) -> Unit
 ) {
+    val coverReveal = LocalDetailCoverReveal.current
+    val coverTarget = LocalDetailCoverTarget.current
+    val posterShape = MaterialTheme.shapes.large
     Row(verticalAlignment = Alignment.Bottom) {
         val posterInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
                 .width(116.dp)
                 .height(174.dp)
+                // The page's poster steps aside while the copy is in flight - the
+                // two are the same picture at the same rectangle, so the hand-off
+                // is a swap between identical pixels. Read in the draw phase so a
+                // flight does not recompose the hero.
+                .graphicsLayer { alpha = coverReveal() }
                 .bouncyPress(pressedScale = 0.97f, interactionSource = posterInteraction)
                 .shadow(
-                    elevation = 18.dp,
-                    shape = MaterialTheme.shapes.large,
+                    elevation = HERO_POSTER_ELEVATION,
+                    shape = posterShape,
                     ambientColor = coverColor,
                     spotColor = Color.Black
                 )
-                .clip(MaterialTheme.shapes.large)
+                .clip(posterShape)
                 .border(
                     1.dp,
                     Color.White.copy(alpha = 0.24f),
-                    MaterialTheme.shapes.large
+                    posterShape
                 )
                 .background(coverColor)
-                .onGloballyPositioned { onPosterBounds(it.boundsInWindow()) }
+                .onGloballyPositioned {
+                    val rect = it.boundsInWindow()
+                    onPosterBounds(rect)
+                    // Where the copy lands. Plain fields in the holder, not state:
+                    // this runs on every scroll frame.
+                    coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
+                }
                 .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
                 .semantics {
                     role = Role.Button
