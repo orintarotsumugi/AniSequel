@@ -31,6 +31,8 @@ import com.anisequel.data.model.SaveMediaListEntryData
 import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.StudioData
 import com.anisequel.data.model.StaffProfileData
+import com.anisequel.data.model.ThreadCommentsData
+import com.anisequel.data.model.ThreadDetailData
 import com.anisequel.data.model.ToggleLikeData
 import com.anisequel.data.model.UserByNameData
 import com.anisequel.data.model.UserOverviewData
@@ -267,6 +269,20 @@ interface AniListApiService {
     suspend fun getActivityReplyWindow(
         @Body request: GraphQLRequest
     ): GraphQLResponse<ActivityReplyWindowData>
+
+    /** One forum thread's opening post. Opened from a thread notification. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getThread(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ThreadDetailData>
+
+    /** One page of a forum thread's comments. */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getThreadComments(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<ThreadCommentsData>
 
     /** The people who liked one comment. Opened from a comment's heart. */
     @POST("/")

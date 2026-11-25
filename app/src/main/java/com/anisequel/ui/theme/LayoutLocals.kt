@@ -147,6 +147,15 @@ val LocalSearchMangaEnabled = staticCompositionLocalOf { true }
 val LocalTierTopBarShortcut = staticCompositionLocalOf { false }
 
 /**
+ * Whether the inbox bell is drawn in the dashboard's top bar.
+ *
+ * Defaults to true because the bell predates the switch and is the only door
+ * into the inbox. Settings > Library > Top bar turns it off without disabling
+ * the inbox page itself.
+ */
+val LocalNotificationsTopBarShortcut = staticCompositionLocalOf { true }
+
+/**
  * Whether the app is drawing its dark scheme right now.
  *
  * Not the same question as `isSystemInDarkTheme()`, and the difference is a real

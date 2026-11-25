@@ -1,6 +1,47 @@
 {
   "versions": [
     {
+      "version": "2.6.6",
+      "entries": [
+        {
+          "title": "Every notification opens inside the app",
+          "detail": "A media notification now opens the real title sheet, an activity opens the comment thread the profile already uses, and a forum thread opens a read-only page with its opening post, the comment the notification is about, and its newest comments. The inbox no longer hands those targets to a browser."
+        },
+        {
+          "title": "The Android permission is asked for where it belongs",
+          "detail": "Settings > Notifications shows whether POST_NOTIFICATIONS is granted on Android 13 and later, offers to ask there, sends a test notification, and opens the system page for the app switch or a silenced channel. Nothing is requested at launch, and no background or push worker was added."
+        },
+        {
+          "title": "The bell can disappear without losing the inbox",
+          "detail": "Settings > Library > Top bar can hide the notification bell from Home. The top bar is not the only door: Settings > Notifications keeps an Open notification centre button, so a hidden shortcut is still recoverable."
+        },
+        {
+          "title": "Reopening the inbox is not a reload",
+          "detail": "The inbox now reuses its cached first page when you come back, preserves the older pages already loaded, and offers an explicit Refresh action beside pull-to-refresh. A refresh still asks AniList and replaces the snapshot; opening the tab no longer forces that request."
+        },
+        {
+          "title": "A backup you can scope, and a restore that restarts cleanly",
+          "detail": "Device management now writes one .zip containing the parts you tick: settings and local data, offline snapshots, or the large cover cache. Restore reads the manifest and stages every file before touching storage, then restarts the app so DataStore reads what was written. The AniList session and first-run answer are deliberately left alone, because the session key does not travel between installs."
+        },
+        {
+          "title": "The app file manager shows where the space goes",
+          "detail": "A new App files & cache card measures the app's own private folders and splits them into kept data, replaceable artwork and temporary files, each with a proportional bar. Clearing temporary files is a separate action, so a cache clear cannot take list snapshots or settings with it."
+        },
+        {
+          "title": "Covers stay put across updates, and clearing shows its progress",
+          "detail": "The cover cache now lives in the app's private no-backup files instead of Android's disposable cache, and an older cache directory is moved over on first launch rather than downloaded again. The cover-cache control in Device management draws how full the chosen ceiling is before you clear it."
+        },
+        {
+          "title": "First-run setup ends with backup and a smoother finish",
+          "detail": "Setup gains a final Backup & restore page, so a new phone can be restored before the app opens. Page changes now scale and slide on the shared spring tokens, and the final action says what it does instead of a bare Finish."
+        },
+        {
+          "title": "The two Info page styles now share one contract",
+          "detail": "The classic and Nova title pages take the same InfoPageArgs and draw through one host, and the duplication between their section lists and the detail page's two calls is gone. Behaviour is unchanged; adding a callback no longer means editing two parameter lists in lockstep."
+        }
+      ]
+    },
+    {
       "version": "2.6.5",
       "entries": [
         {

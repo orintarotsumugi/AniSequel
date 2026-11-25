@@ -75,6 +75,7 @@ import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.theme.LocalSearchAnimeEnabled
 import com.anisequel.ui.theme.LocalSearchMangaEnabled
+import com.anisequel.ui.theme.LocalNotificationsTopBarShortcut
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
@@ -98,6 +99,14 @@ object AppRoutes {
     const val SETTINGS = "settings"
     const val SETTINGS_NOTIFICATIONS = "settings/notifications"
     const val NOTIFICATIONS = "notifications"
+    const val NOTIFICATION_MEDIA = "notifications/media/{mediaId}?type={type}"
+    const val NOTIFICATION_ACTIVITY = "notifications/activity/{activityId}"
+    const val NOTIFICATION_THREAD = "notifications/thread/{threadId}?comment={comment}"
+    const val NOTIFICATION_MEDIA_ID_ARG = "mediaId"
+    const val NOTIFICATION_MEDIA_TYPE_ARG = "type"
+    const val NOTIFICATION_ACTIVITY_ID_ARG = "activityId"
+    const val NOTIFICATION_THREAD_ID_ARG = "threadId"
+    const val NOTIFICATION_THREAD_COMMENT_ARG = "comment"
     const val TIER_LIST = "tier_list"
 
     /** The new look's feature hub. Hidden from the classic bar by design. */
@@ -116,6 +125,25 @@ object AppRoutes {
      * `NavType.StringType`, so the screen still receives the name as typed.
      */
     fun userDashboard(username: String) = "dashboard_user/${Uri.encode(username)}"
+
+    /** One title's detail sheet, opened from a notification row. */
+    fun notificationMedia(mediaId: Int, type: String?) =
+        "notifications/media/$mediaId?type=${Uri.encode(type.orEmpty())}"
+
+    /** One activity's comment thread, opened from a notification row. */
+    fun notificationActivity(activityId: Int) =
+        "notifications/activity/$activityId"
+
+    /**
+     * One forum thread, optionally pointed at the comment the notification named.
+     *
+     * `-1` is the "no comment" value rather than an empty query parameter: a
+     * `NavType.IntType` argument cannot parse an empty string, and the destination
+     * would silently fall back to its default only if the parameter were absent,
+     * not if it were present and blank.
+     */
+    fun notificationThread(threadId: Int, commentId: Int?) =
+        "notifications/thread/$threadId?comment=${commentId ?: -1}"
 }
 
 /** A state that never emits a real dashboard, for when there is no session VM. */
@@ -158,6 +186,51 @@ private fun drawRestoringPlaceholder(
     return true
 }
 
+/**
+ * Honours an inbound widget or notification tap once the app knows who is signed in.
+ *
+ * Both requests are deferred rather than fired on arrival. A profile needs an
+ * identity: the widget's `PendingIntent` can only start the Activity, and at that
+ * moment the stored session may still be restoring, or may not exist at all. The
+ * test notification has the same problem and opens the real inbox rather than a
+ * second toast.
+ *
+ * `Authenticated` is the token, not an identity. Firing on the token alone put the
+ * profile through its demo fallback, so the reader landed on somebody else's
+ * fixture for one round trip, or for good when that query failed. `viewerId`
+ * keeps the request pending until the dashboard has answered.
+ */
+@Composable
+private fun LaunchRequestEffects(
+    navController: NavHostController,
+    authState: AuthUiState,
+    viewerId: Int?,
+    openProfileActivityOnLaunch: Boolean,
+    onProfileActivityOpened: () -> Unit,
+    openNotificationsOnLaunch: Boolean,
+    onNotificationsOpened: () -> Unit
+) {
+    LaunchedEffect(openProfileActivityOnLaunch, authState, viewerId) {
+        if (openProfileActivityOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            viewerId != null
+        ) {
+            navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
+            onProfileActivityOpened()
+        }
+    }
+
+    LaunchedEffect(openNotificationsOnLaunch, authState, viewerId) {
+        if (openNotificationsOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            viewerId != null
+        ) {
+            navController.navigateSingle(AppRoutes.NOTIFICATIONS)
+            onNotificationsOpened()
+        }
+    }
+}
+
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -180,6 +253,10 @@ fun AppNavigation(
     openProfileActivityOnLaunch: Boolean = false,
     /** Called once the request has been navigated to, so it is not replayed. */
     onProfileActivityOpened: () -> Unit = {},
+    /** The test notification's tap asked for the inbox. */
+    openNotificationsOnLaunch: Boolean = false,
+    /** Called once the inbox request has been navigated to, so it is not replayed. */
+    onNotificationsOpened: () -> Unit = {},
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
@@ -278,6 +355,9 @@ fun AppNavigation(
     )
     val tierTopBar by mainTabPreferences.tierTopBar.collectAsStateWithLifecycle(
         initialValue = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    )
+    val notificationsTopBar by mainTabPreferences.notificationsTopBar.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_NOTIFICATIONS_TOP_BAR
     )
 
     val onboardingPreferences = remember(context) {
@@ -596,6 +676,12 @@ fun AppNavigation(
         }
     }
 
+    // One handoff for the inbox's thread destination. It is intentionally not
+    // saved: a process death still has the ids and can fetch the thread's newest
+    // page, while the body the row already downloaded is the part worth keeping
+    // across the navigation call itself.
+    val notificationThreadSeedStore = remember { NotificationThreadSeedStore() }
+
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
         when (authState) {
@@ -655,28 +741,15 @@ fun AppNavigation(
         }
     }
 
-    // The widget's tap, honoured once the app knows who is signed in.
-    //
-    // Deferred rather than fired on arrival because a profile needs an identity:
-    // the widget's `PendingIntent` can only start the Activity, and at that moment
-    // the stored session may still be being restored - or may not exist, in which
-    // case the request has to stay pending until a sign-in resolves it instead of
-    // being spent on a login screen.
-    //
-    // `Authenticated` is not yet an identity: it is the token, and the viewer id
-    // and name arrive one query later. Firing on the token alone put the profile
-    // route through its demo fallback, so the reader landed on "OtakuExplorer"'s
-    // fixture - somebody else's invented list - for the length of a round trip,
-    // and for good if that query failed.
-    LaunchedEffect(openProfileActivityOnLaunch, authState, signedInViewer) {
-        if (openProfileActivityOnLaunch &&
-            authState is AuthUiState.Authenticated &&
-            signedInViewer != null
-        ) {
-            navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
-            onProfileActivityOpened()
-        }
-    }
+    LaunchRequestEffects(
+        navController = navController,
+        authState = authState,
+        viewerId = signedInViewer?.id,
+        openProfileActivityOnLaunch = openProfileActivityOnLaunch,
+        onProfileActivityOpened = onProfileActivityOpened,
+        openNotificationsOnLaunch = openNotificationsOnLaunch,
+        onNotificationsOpened = onNotificationsOpened
+    )
 
     // Keeps the home-screen widgets in step with the live dashboard counts.
     //
@@ -753,6 +826,7 @@ fun AppNavigation(
                 searchMangaEnabled = searchMangaEnabled
             ),
             LocalTierTopBarShortcut provides tierTopBar,
+            LocalNotificationsTopBarShortcut provides notificationsTopBar,
             LocalSearchAnimeEnabled provides searchAnimeEnabled,
             LocalSearchMangaEnabled provides searchMangaEnabled
         ) {
@@ -922,7 +996,10 @@ fun AppNavigation(
                         navController = navController,
                         aniListRepository = aniListRepository,
                         notificationPreferencesStore = notificationPreferencesStore,
-                        notificationReadStore = notificationReadStore
+                        notificationReadStore = notificationReadStore,
+                        viewerId = signedInViewer?.id,
+                        entryEditor = sharedEntryEditor,
+                        threadSeedStore = notificationThreadSeedStore
                     )
                 }
 

@@ -4143,3 +4143,71 @@ replies. Thread taps use the API's canonical `siteUrl`; the old guessed
 Nothing here polls. The page loads on entry and on an explicit pull, Settings
 only edits local switches, and no new permission, channel, worker or service was
 added. The app's existing `GET_RECEIVED_MESSAGES` path is unchanged.
+
+## 2.6.6: notification targets open inside the app, and a permission you can find
+
+The 2.6.5 inbox could only carry an id for a media row, an activity or a thread,
+so three of its targets left for `anilist.co`. That was a limitation of the old
+navigation graph, not of the data. 2.6.6 gives each one a real route: the media
+row fetches the title and opens `SequelDetailSheet`, the activity row fetches its
+root and opens the profile comment sheet, and the thread row fetches the post and
+one page of comments into a read-only screen. The same inbox row also carries the
+`comment` object, so its body and author are shown before the thread's pages and
+remain readable when the target lies beyond AniList's page depth. A thread opens
+on the page that contains its newest comments, because comment pages ascend by
+id, and Older walks backwards; the page is clamped to the API's 5000-entry limit,
+which rejects the true last page of a very old thread. The API's `siteUrl` is the
+only part of the row now ignored, because the app no longer needs the site to show
+the target.
+
+Android notifications are still optional and still do not imply a worker. The
+manifest declares `POST_NOTIFICATIONS`, but the runtime dialog is requested only
+from Settings > Notifications, never at launch. That section reports the runtime
+permission, the app switch and this app's channel separately, sends one deliberate
+test post, and falls back from the per-app notification page to app details when a
+re-skin drops the direct route. Returning from either system page re-reads the
+answer in `onResume`; there is no polling.
+
+Re-entering the inbox is no longer a forced read. The repository's epoch-keyed
+page cache answers while it is fresh, and the view model keeps older pages that
+were already on screen instead of collapsing a long inbox to page one. Pull-to-
+refresh and the top-bar action remain the explicit replacement: they clear the
+page cache, fence in-flight pages and start again from page one. The bell in the
+dashboard's top bar is now a preference, but hiding it does not disable the
+inbox; Settings > Notifications always has an Open notification centre button.
+The existing `GET_RECEIVED_MESSAGES` path is unchanged.
+
+The cover cache moved from `cacheDir` to `noBackupFilesDir`. The old directory
+was disposable by contract, so Android could reclaim it between launches and
+every poster went back to its placeholder; the new directory survives an update
+and a system cache wipe. On first launch after the move, an older
+`cacheDir/anilist_cover_cache` is renamed into place when the target does not
+exist yet, which is atomic and copies no bytes. The backup artwork option reads
+the same directory, so a reader who chooses it does not create a second copy.
+
+Backup is one zip with a plain-text manifest first. The reader chooses settings
+and local data, offline snapshots, and the large cover cache independently.
+Restore reads and validates the manifest, rejects entries that escape the staging
+directory, and stages the whole archive under `cacheDir` before replacing any
+file with an atomic sibling rename. It then restarts the process, because
+DataStore holds its parsed files in memory and would otherwise write the old
+values back. `anisequel_auth_prefs.preferences_pb` and
+`anisequel_onboarding_prefs.preferences_pb` are never backed up or restored: the
+session key is sealed by a per-install Android keystore key, and onboarding is
+current-device state. Restoring during first-run marks setup complete before the
+restart so the reader is not sent through it again.
+
+`AppStorageManager` measures the app's private folders directly rather than
+asking Android for a device-wide number: DataStore, fonts, snapshots, Coil's disk
+cache, widget covers and `cacheDir`. The card separates kept data from
+replaceable artwork and temporary files, and its clear action deletes only
+`cacheDir`, so a cache clear cannot take snapshots or settings with it. The cover
+cache control draws its fill against the chosen ceiling before clearing.
+
+The two Info pages now take one `InfoPageArgs` and draw through `InfoPageHost`.
+That is a structural change, not a visual one: the classic and Nova pages still
+compose their own bodies, but the host and the sheet build the argument value
+once, so a new callback cannot be wired into one style and forgotten in the
+other. The sheet's cover-palette effect, live-refresh loop and entry-overlay
+motion moved into `SequelDetailEffects.kt` for the same reason - they are effects
+with their own failure history, not branches of the page.

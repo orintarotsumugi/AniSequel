@@ -55,6 +55,7 @@ class MainTabPreferences(private val context: Context) {
         val SEARCH_MANGA = booleanPreferencesKey("search_manga")
         val SEARCH_TOP_BAR = booleanPreferencesKey("search_top_bar")
         val TIER_TOP_BAR = booleanPreferencesKey("tier_top_bar")
+        val NOTIFICATIONS_TOP_BAR = booleanPreferencesKey("notifications_top_bar")
     }
 
     /**
@@ -150,7 +151,24 @@ class MainTabPreferences(private val context: Context) {
         }
     }
 
-    /** Back to the shipped default, which is "hidden". */
+    /**
+     * Whether the inbox bell sits in the dashboard's top bar.
+     *
+     * On by default, unlike the two shortcuts above: the bell shipped before this
+     * switch and is the only door into the notification centre. Hiding it is a
+     * choice to declutter the bar, not a choice to discover the feature.
+     */
+    val notificationsTopBar: Flow<Boolean> = context.mainTabsDataStore.data.map { preferences ->
+        preferences[Keys.NOTIFICATIONS_TOP_BAR] ?: DEFAULT_NOTIFICATIONS_TOP_BAR
+    }
+
+    suspend fun setNotificationsTopBar(enabled: Boolean) {
+        context.mainTabsDataStore.edit { preferences ->
+            preferences[Keys.NOTIFICATIONS_TOP_BAR] = enabled
+        }
+    }
+
+    /** Back to the shipped defaults: the inbox bell shown, the optional shortcuts hidden. */
     suspend fun reset() {
         context.mainTabsDataStore.edit { preferences ->
             preferences.remove(Keys.TIER_LIST_TAB)
@@ -159,6 +177,7 @@ class MainTabPreferences(private val context: Context) {
             preferences.remove(Keys.SEARCH_MANGA)
             preferences.remove(Keys.SEARCH_TOP_BAR)
             preferences.remove(Keys.TIER_TOP_BAR)
+            preferences.remove(Keys.NOTIFICATIONS_TOP_BAR)
         }
     }
 
@@ -171,5 +190,6 @@ class MainTabPreferences(private val context: Context) {
         const val DEFAULT_SEARCH_MANGA = true
         const val DEFAULT_SEARCH_TOP_BAR = false
         const val DEFAULT_TIER_TOP_BAR = false
+        const val DEFAULT_NOTIFICATIONS_TOP_BAR = true
     }
 }

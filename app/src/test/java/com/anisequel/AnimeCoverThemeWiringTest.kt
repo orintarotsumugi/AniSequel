@@ -31,8 +31,12 @@ class AnimeCoverThemeWiringTest {
 
     @Test
     fun `the detail sheet reads the cover pixels instead of only AniList's field`() {
+        // The palette effect lives beside the sheet rather than inside it. The
+        // requirement is that the sheet is wired to it, so both files are source.
         val sheet = source(
             "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+        ) + source(
+            "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailEffects.kt"
         )
 
         assertTrue(
@@ -57,11 +61,11 @@ class AnimeCoverThemeWiringTest {
 
     @Test
     fun `the anime theme waits for the stored preferences before applying`() {
-        val sheet = source(
-            "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+        val effects = source(
+            "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailEffects.kt"
         )
-        val effect = sheet.substringAfter("LaunchedEffect(")
-            .substringBefore("val handleDismiss")
+        val effect = effects.substringAfter("@Composable\ninternal fun DetailPaletteEffect(")
+            .substringBefore("@Composable\ninternal fun DetailRefreshEffect(")
 
         assertTrue(
             "the effect has to be keyed on isLoaded, or a sheet opened while " +

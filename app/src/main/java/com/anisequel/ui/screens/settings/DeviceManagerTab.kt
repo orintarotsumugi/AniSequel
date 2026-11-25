@@ -139,6 +139,10 @@ fun DeviceManagerTab(
             }
         )
 
+        AppStorageCard()
+
+        BackupRestoreCard()
+
         DisplaySection(
             themePreferences = themePreferences,
             settings = themeSettings,

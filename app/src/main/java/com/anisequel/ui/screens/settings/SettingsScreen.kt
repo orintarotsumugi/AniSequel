@@ -332,6 +332,8 @@ fun SettingsScreen(
     },
     viewer: ViewerProfile?,
     onNavigateBack: () -> Unit,
+    /** Opens the inbox from Notification settings, when its bell is hidden. */
+    onOpenNotifications: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     totalWatchedCount: Int? = null,
     totalMissedCount: Int? = null,
@@ -506,6 +508,7 @@ fun SettingsScreen(
                                     notificationPreferencesStore = notificationPreferencesStore,
                                     notificationReadStore = notificationReadStore,
                                     viewer = viewer,
+                                    onOpenNotifications = onOpenNotifications,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
                                     totalMissedCount = totalMissedCount,
@@ -888,6 +891,7 @@ private fun SettingsPageContent(
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
     viewer: ViewerProfile?,
+    onOpenNotifications: () -> Unit,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
     totalMissedCount: Int?,
@@ -975,7 +979,8 @@ private fun SettingsPageContent(
         SettingsPage.NOTIFICATIONS -> NotificationSettingsPage(
             preferencesStore = notificationPreferencesStore,
             readStore = notificationReadStore,
-            viewer = viewer
+            viewer = viewer,
+            onOpenInbox = onOpenNotifications
         )
         SettingsPage.UPDATES -> UpdatesSettingsTab(changelogRepository = changelogRepository)
         SettingsPage.ABOUT -> InfoSettingsTab(

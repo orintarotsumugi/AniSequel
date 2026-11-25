@@ -101,16 +101,17 @@ class NotificationViewModel(
     /**
      * Called when the screen enters composition.
      *
-     * Every entry asks AniList. A ViewModel can be recreated by popping and
-     * pushing this route long after the app-scoped page cache was written, so
-     * choosing "no force" for an empty state would show that cached page without
-     * a request - the stale inbox this screen exists to avoid. A start while the
-     * previous request is still running is ignored rather than queued.
+     * This used to force a network read on every entry, which made re-opening
+     * the tab feel like a reload even when AniList had answered moments earlier.
+     * The page cache is epoch-keyed and short-lived, so an unforced read is still
+     * fresh rather than permanently stale; pull-to-refresh remains the explicit
+     * way to ask the server now. A start while the previous request is running is
+     * ignored rather than queued.
      */
     fun start() {
         val snapshot = _state.value
         if (snapshot.loading || snapshot.refreshing) return
-        load()
+        load(forceRefresh = false)
     }
 
     fun selectFilter(filter: NotificationFilter) {
@@ -124,7 +125,7 @@ class NotificationViewModel(
         val snapshot = _state.value
         if (snapshot.loading || snapshot.refreshing) return
         if (pauseForRateLimit()) return
-        load()
+        load(forceRefresh = true)
     }
 
     fun dismissNotice() {
@@ -144,7 +145,7 @@ class NotificationViewModel(
         val snapshot = _state.value
         if (snapshot.loading || snapshot.refreshing || snapshot.loadingMore) return
         if (snapshot.items.isEmpty()) {
-            if (!pauseForRateLimit()) load()
+            if (!pauseForRateLimit()) load(forceRefresh = true)
         } else {
             loadMore()
         }
@@ -185,7 +186,7 @@ class NotificationViewModel(
      * anchored read state, a refresh does not re-seed it: rows that were read
      * must not become new because the server count happened to grow.
      */
-    private fun load() {
+    private fun load(forceRefresh: Boolean) {
         var generation = ++loadGeneration
         _state.update {
             it.copy(
@@ -214,7 +215,7 @@ class NotificationViewModel(
             }
             if (generation != loadGeneration) return@launch
 
-            aniListRepository.getNotifications(page = 1, forceRefresh = true)
+            aniListRepository.getNotifications(page = 1, forceRefresh = forceRefresh)
                 .onSuccess { page ->
                     if (generation != loadGeneration) return@onSuccess
                     // A reset in Settings can land after this request began. Re-read
@@ -240,15 +241,22 @@ class NotificationViewModel(
                         if (generation != loadGeneration) return@onSuccess
                     }
                     nextPage = 2
-                    // Page one is a replacement, not a merge. Keeping rows from
-                    // older pages here left a deleted or read-through row on
-                    // screen forever, while the repository had already dropped
-                    // those cached pages for the same freshness reason.
+                    // A cached page-one read keeps the older pages already on
+                    // screen, or opening the tab would silently collapse a long
+                    // inbox back to its first page. A pull-to-refresh is the
+                    // deliberate replacement: the repository cleared every page,
+                    // so keeping rows from the old snapshot could leave a deleted
+                    // row on screen with no cache behind it.
+                    val keptOlder = if (forceRefresh) {
+                        emptyList()
+                    } else {
+                        olderRowsThan(page.notifications, _state.value.items)
+                    }
                     _state.update {
                         it.copy(
                             loading = false,
                             refreshing = false,
-                            items = merge(page.notifications, emptyList()),
+                            items = merge(page.notifications, keptOlder),
                             hasMore = page.hasMore,
                             error = null
                         )
@@ -269,10 +277,11 @@ class NotificationViewModel(
                 loading = false,
                 refreshing = false,
                 loadingMore = false,
-                // The refresh cleared the repository page cache, so the old
-                // `nextPage` no longer points at a contiguous page of this
-                // snapshot. Stop paging until a page-one success resets the
-                // cursor; pulling again is the only safe way forward.
+                // A page-one failure leaves the cursor ambiguous: a forced
+                // refresh has cleared the repository's pages, and even an
+                // unforced read can have moved the boundary the old `nextPage`
+                // was measured against. Stop paging until a page-one success
+                // resets the cursor; pulling again is the only safe way forward.
                 hasMore = false,
                 error = if (it.items.isEmpty()) message else null,
                 notice = if (it.items.isEmpty()) null else message
@@ -408,6 +417,33 @@ class NotificationViewModel(
             compareByDescending<InboxNotification> { it.createdAt ?: 0 }
                 .thenByDescending { it.id }
         )
+
+    /**
+     * Rows from [existing] that are older than everything in [page].
+     *
+     * Page one is not guaranteed to reach the same boundary twice: new rows can
+     * push its oldest row down, and a deleted row can pull it up. The oldest
+     * row's `(createdAt, id)` is therefore the boundary the older snapshot is
+     * measured against, not a timestamp guessed from the page length. An empty
+     * page keeps whatever was there rather than blanking the inbox on a strange
+     * response.
+     */
+    private fun olderRowsThan(
+        page: List<InboxNotification>,
+        existing: List<InboxNotification>
+    ): List<InboxNotification> {
+        if (page.isEmpty()) return existing
+        val pageIds = page.mapTo(HashSet<Int>(page.size)) { it.id }
+        val boundary = page.minWith(
+            compareBy<InboxNotification> { it.createdAt ?: 0 }.thenBy { it.id }
+        )
+        val boundaryTime = boundary.createdAt ?: 0
+        return existing.filter { row ->
+            if (row.id in pageIds) return@filter false
+            val time = row.createdAt ?: 0
+            time < boundaryTime || (time == boundaryTime && row.id < boundary.id)
+        }
+    }
 
     companion object {
         fun factory(

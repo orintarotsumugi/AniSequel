@@ -98,6 +98,7 @@ fun NavGraphBuilder.settingsDestinations(
             totalMissedCount = totalMissedCount,
             cardPreviewEntries = cardPreview,
             onNavigateBack = { navController.popBackStack() },
+            onOpenNotifications = { navController.navigateSingle(AppRoutes.NOTIFICATIONS) },
             onNavigateToLogin = {
                 navController.navigate(AppRoutes.LOGIN) {
                     popUpTo(navController.graph.id) { inclusive = true }

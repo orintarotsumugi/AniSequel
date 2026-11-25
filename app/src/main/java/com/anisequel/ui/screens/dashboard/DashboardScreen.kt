@@ -79,6 +79,7 @@ import com.anisequel.ui.screens.nova.NovaHomeSkeleton
 import com.anisequel.ui.screens.profile.LibraryType
 import com.anisequel.ui.theme.LocalAppLayout
 import com.anisequel.ui.theme.LocalMainBarLift
+import com.anisequel.ui.theme.LocalNotificationsTopBarShortcut
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.viewmodel.DashboardEvent
@@ -850,7 +851,7 @@ private fun DashboardTopBar(
             avatarUrl = viewer?.avatar?.medium,
             onOpenProfile = onOpenProfile,
             onOpenSettings = onOpenSettings,
-            onOpenNotifications = onOpenNotifications,
+            onOpenNotifications = onOpenNotifications.takeIf { LocalNotificationsTopBarShortcut.current },
             onOpenSearch = onOpenSearch.takeIf { LocalSearchTopBarShortcut.current },
             onOpenTiers = onOpenTiers.takeIf { LocalTierTopBarShortcut.current }
         )
@@ -861,7 +862,7 @@ private fun DashboardTopBar(
             onOpenFilter = onOpenFilter,
             onRefresh = onRefresh,
             onOpenSettings = onOpenSettings,
-            onOpenNotifications = onOpenNotifications,
+            onOpenNotifications = onOpenNotifications.takeIf { LocalNotificationsTopBarShortcut.current },
             onOpenProfile = onOpenProfile,
             isRefreshing = isRefreshing,
             hasActiveFilters = hasActiveFilters,

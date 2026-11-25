@@ -208,13 +208,15 @@ private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
     val scope = rememberCoroutineScope()
     val searchTopBar by mainTabPreferences.searchTopBar.collectAsStateWithLifecycle(initialValue = null)
     val tierTopBar by mainTabPreferences.tierTopBar.collectAsStateWithLifecycle(initialValue = null)
+    val notificationsTopBar by mainTabPreferences.notificationsTopBar
+        .collectAsStateWithLifecycle(initialValue = null)
 
     SectionCard(
         title = "Top bar",
         icon = AppVectorIcons.Tune,
         subtitle = "Shortcuts beside Settings and Profile"
     ) {
-        if (searchTopBar == null || tierTopBar == null) {
+        if (searchTopBar == null || tierTopBar == null || notificationsTopBar == null) {
             Text(
                 text = "Reading your top bar shortcuts.",
                 style = MaterialTheme.typography.bodySmall,
@@ -243,6 +245,20 @@ private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
                     scope.launch { mainTabPreferences.setSearchTopBar(enabled) }
                 },
                 modifier = Modifier.testTag("search_top_bar_switch")
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SwitchRow(
+                title = "Notification bell",
+                subtitle = "Show the inbox bell in the top bar in both layouts. Turning it" +
+                    " off does not disable the inbox; the notification centre is still" +
+                    " reachable from Notification settings.",
+                checked = notificationsTopBar == true,
+                onCheckedChange = { enabled ->
+                    scope.launch { mainTabPreferences.setNotificationsTopBar(enabled) }
+                },
+                modifier = Modifier.testTag("notification_top_bar_switch")
             )
         }
     }

@@ -13,6 +13,10 @@
     <!-- Requests the install permission only when the user asks to update. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Runtime permission on Android 13+. Asked only from Notification settings,
+         never at launch or before the reader has chosen to allow alerts. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".AniSequelApplication"
         android:allowBackup="true"

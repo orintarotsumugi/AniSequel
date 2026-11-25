@@ -33,6 +33,7 @@ import com.anisequel.data.network.RateLimitNotice
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.friendlyCopy
 import com.anisequel.data.network.SystemNotices
+import com.anisequel.data.notifications.SystemNotifications
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
@@ -168,6 +169,15 @@ class MainActivity : ComponentActivity() {
     private var openProfileActivityRequest by mutableStateOf(false)
 
     /**
+     * Set when the test notification was tapped.
+     *
+     * The same three arrival moments as the widget request above, and the same
+     * Compose field: a plain Boolean would not wake the graph for a tap that
+     * lands while the app is already composed.
+     */
+    private var openNotificationsRequest by mutableStateOf(false)
+
+    /**
      * Held so [onResume] can reach the updater.
      *
      * The controller is process-wide and created inside the composition, so it
@@ -253,6 +263,11 @@ class MainActivity : ComponentActivity() {
             intent?.getBooleanExtra(EXTRA_WIDGET_OPEN_ACTIVITY, false) == true
         ) {
             openProfileActivityRequest = true
+        }
+        if (savedInstanceState == null &&
+            intent?.getBooleanExtra(SystemNotifications.EXTRA_OPEN_NOTIFICATIONS, false) == true
+        ) {
+            openNotificationsRequest = true
         }
 
         setContent {
@@ -485,7 +500,9 @@ class MainActivity : ComponentActivity() {
                                         themePreferences = themePreferences,
                                         appLockPreferences = appLockPreferences,
                                         openProfileActivityOnLaunch = openProfileActivityRequest,
-                                        onProfileActivityOpened = { openProfileActivityRequest = false }
+                                        onProfileActivityOpened = { openProfileActivityRequest = false },
+                                        openNotificationsOnLaunch = openNotificationsRequest,
+                                        onNotificationsOpened = { openNotificationsRequest = false }
                                     )
 
                                     // A dialog is its own window, so it would draw *over*
@@ -673,6 +690,9 @@ class MainActivity : ComponentActivity() {
         // reaches `onCreate`.
         if (intent.getBooleanExtra(EXTRA_WIDGET_OPEN_ACTIVITY, false)) {
             openProfileActivityRequest = true
+        }
+        if (intent.getBooleanExtra(SystemNotifications.EXTRA_OPEN_NOTIFICATIONS, false)) {
+            openNotificationsRequest = true
         }
     }
 

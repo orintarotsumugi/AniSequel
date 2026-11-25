@@ -35,12 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.anisequel.data.backup.AppBackupManager
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.MainTabPreferences
@@ -59,6 +61,7 @@ import com.anisequel.domain.ui.UiSize
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.screens.settings.AppLayoutPreviews
+import com.anisequel.ui.screens.settings.BackupRestoreCard
 import com.anisequel.ui.screens.settings.MotionSample
 import com.anisequel.ui.screens.settings.RefreshIntervalPicker
 import com.anisequel.ui.screens.settings.SectionCard
@@ -184,6 +187,13 @@ internal val SETUP_STEPS = listOf(
         subtitle = "Add the catalogue search and tier lists to the bar, or keep it to " +
             "Home, Library and Profile.",
         icon = AppVectorIcons.Search
+    ),
+    SetupStep(
+        label = "Backup",
+        title = "Keep your setup safe",
+        subtitle = "Save the parts of AniSequel you want to keep, or restore a backup " +
+            "you made before. You can do this again from Device management.",
+        icon = AppVectorIcons.Restore
     )
 )
 
@@ -223,6 +233,7 @@ fun FirstRunSetupDialog(
     refreshIntervalPreferences: RefreshIntervalPreferences
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     // Shared with the Back button's own interaction source so the press spring
     // reads the platform's press state rather than a second pointer loop, and the
     // same spring the primary button beside it uses.
@@ -352,6 +363,12 @@ fun FirstRunSetupDialog(
                     stepIndex = stepIndex,
                     draft = draft,
                     onDraftChange = onDraftChange,
+                    onBackupRestored = {
+                        scope.launch {
+                            onboardingPreferences.setCompleted(true)
+                            AppBackupManager.restart(context)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -382,7 +399,8 @@ fun FirstRunSetupDialog(
 internal fun SetupStepChoices(
     index: Int,
     draft: SetupDraft,
-    onDraftChange: (SetupDraft) -> Unit
+    onDraftChange: (SetupDraft) -> Unit,
+    onBackupRestored: (() -> Unit)? = null
 ) {
     when (index) {
         0 -> WelcomePerks()
@@ -589,7 +607,7 @@ internal fun SetupStepChoices(
                 }
             )
         }
-        else -> SectionCard(
+        9 -> SectionCard(
             title = "Top-bar shortcuts",
             icon = AppVectorIcons.Search
         ) {
@@ -611,6 +629,7 @@ internal fun SetupStepChoices(
                 modifier = Modifier.testTag("onboarding_tiers_shortcut")
             )
         }
+        10 -> BackupRestoreCard(onRestoreApplied = onBackupRestored)
     }
 }
 

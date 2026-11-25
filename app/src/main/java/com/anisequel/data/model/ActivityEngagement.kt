@@ -57,7 +57,24 @@ data class ActivityDetail(
     val isLiked: Boolean? = null,
     val likeCount: Int? = null,
     val replyCount: Int? = null,
-    val replies: List<ActivityReply>? = null
+    val replies: List<ActivityReply>? = null,
+    /**
+     * The activity's own body, when the union member carries one.
+     *
+     * A notification can open the comment sheet for an activity the reader has
+     * never seen in a feed. The sheet used to have the tapped row to draw at the
+     * top; this route has only an id, so the root is fetched rather than left as
+     * a conversation with no opening post.
+     */
+    val createdAt: Int? = null,
+    val text: String? = null,
+    /** `ListActivity`'s verb - watched, read, rewatching and so on. */
+    val status: String? = null,
+    /** `ListActivity`'s progress, as the string AniList sends. */
+    val progress: String? = null,
+    val user: FollowUser? = null,
+    /** The title a `ListActivity` is about, for the head's sentence. */
+    val media: MediaNode? = null
 )
 
 /**

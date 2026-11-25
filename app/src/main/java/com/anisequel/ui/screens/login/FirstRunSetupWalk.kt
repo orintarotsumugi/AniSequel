@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -34,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
@@ -120,13 +123,15 @@ internal fun SetupProgressBar(step: Int) {
         label = "onboarding_progress"
     )
 
-    // Capsule track rather than a `LinearProgressIndicator`: this is a six-page
-    // walk, not a download, and the shape is the app's own.
+    // Capsule track rather than a `LinearProgressIndicator`: this is a walk, not
+    // a download, and the shape is the app's own. The fill carries the page's
+    // primary-to-tertiary pair so the bar reads as part of the expressive frame
+    // rather than as a generic progress meter.
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .height(4.dp)
+            .height(5.dp)
             .clip(ExpressiveShapes.pill)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
     ) {
@@ -139,7 +144,14 @@ internal fun SetupProgressBar(step: Int) {
                     scaleX = progress.coerceIn(0f, 1f)
                 }
                 .clip(ExpressiveShapes.pill)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.tertiary
+                        )
+                    )
+                )
         )
     }
 }
@@ -159,6 +171,7 @@ internal fun SetupPage(
     stepIndex: Int,
     draft: SetupDraft,
     onDraftChange: (SetupDraft) -> Unit,
+    onBackupRestored: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     AnimatedContent(
@@ -168,10 +181,18 @@ internal fun SetupPage(
             val enter = slideInHorizontally(
                 animationSpec = ExpressiveMotion.DefaultSpatialOffset
             ) { width -> if (forward) width / 4 else -width / 4 } +
+                scaleIn(
+                    animationSpec = ExpressiveMotion.DefaultSpatial,
+                    initialScale = 0.94f
+                ) +
                 fadeIn(animationSpec = ExpressiveMotion.FastEffects)
             val exit = slideOutHorizontally(
                 animationSpec = ExpressiveMotion.DefaultSpatialOffset
             ) { width -> if (forward) -width / 4 else width / 4 } +
+                scaleOut(
+                    animationSpec = ExpressiveMotion.FastSpatial,
+                    targetScale = 0.98f
+                ) +
                 fadeOut(animationSpec = ExpressiveMotion.FastEffects)
             enter togetherWith exit using null
         },
@@ -218,7 +239,8 @@ internal fun SetupPage(
             SetupStepChoices(
                 index = index,
                 draft = draft,
-                onDraftChange = onDraftChange
+                onDraftChange = onDraftChange,
+                onBackupRestored = onBackupRestored
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -269,7 +291,7 @@ internal fun SetupFooter(
             }
         }
         ExpressivePrimaryButton(
-            text = if (isLast) "Finish" else "Next",
+            text = if (isLast) "Save setup" else "Next",
             onClick = onContinue,
             modifier = Modifier.weight(1.4f),
             icon = if (isLast) AppVectorIcons.CheckCircle else AppVectorIcons.SequelArrow,

@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -174,6 +176,17 @@ internal fun DeviceCard(
                 text = cacheReport(ceiling, usedBytes),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = {
+                    if (ceiling.bytes <= 0L) 0f
+                    else (usedBytes.toFloat() / ceiling.bytes.toFloat()).coerceIn(0f, 1f)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .testTag("device_cache_progress")
             )
             Spacer(modifier = Modifier.height(4.dp))
             CollapsibleText(

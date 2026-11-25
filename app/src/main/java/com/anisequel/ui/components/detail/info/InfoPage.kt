@@ -89,64 +89,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun AnimeInfoPage(
-    subject: AnimeDetailSubject,
-    isDetailLoading: Boolean,
-    isFriendsLoading: Boolean = false,
-    canWriteToAniList: Boolean,
-    holdDurationSeconds: Int,
-    swipeEnabled: Boolean,
-    onAddToPlanning: (MissedSequel) -> Unit,
-    onAddToWatching: (MissedSequel) -> Unit,
-    /**
-     * This title's quick-add state for the action row.
-     *
-     * Only used for a title that is not a dashboard recommendation; see
-     * [DetailActionRow]. Defaulted so the page still draws for a host that has
-     * no [com.anisequel.ui.viewmodel.PlanningAddHost].
-     */
-    quickAddStatus: QuickAddStatus = QuickAddStatus(),
-    onAddMediaToPlanning: (MediaNode) -> Unit = {},
-    onAddMediaToWatching: (MediaNode) -> Unit = {},
-    /**
-     * The followed users who have this title on their list, best rating first.
-     *
-     * Defaulted so the page still draws for a host with no friends request; see
-     * `SequelDetailSheet`. Empty means the card is not added at all.
-     */
-    friends: List<MediaFriend> = emptyList(),
-    onClose: () -> Unit,
-    /**
-     * Opens a related title in place of this one.
-     *
-     * Replaces rather than stacks: the page is already inside a sheet, and a sheet
-     * opened from a sheet has no back control the reader can see. The host swaps its
-     * own subject and the same page renders the new title.
-     */
-    onOpenMedia: (MediaNode) -> Unit = {},
-    /**
-     * Opens the page for one of the studios credited on this title.
-     *
-     * Takes the studio's AniList **id** as well as its name: the page it opens is
-     * fetched by id, and the name is only there so the destination's bar has a
-     * title on its first frame instead of an empty space. A credit AniList gave no
-     * id for is drawn as plain text rather than as a button that cannot work.
-     */
-    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
-    /**
-     * Opens the profile sheet for a character, by AniList id.
-     *
-     * The cast used to hand its tap to the browser, which was the one thing on this
-     * page that did - a studio credit opens a studio page inside the app, so a
-     * character credit now opens a character page inside the app.
-     *
-     * Defaulted to a no-op so a host that has not wired the store still renders the
-     * page; the card gates its own `clickable` on this being meaningful, so a host that
-     * wires nothing draws captions rather than dead buttons.
-     */
-    onOpenCharacter: ((Int) -> Unit)? = null,
-    /** The same, for the crew row. See [onOpenCharacter]. */
-    onOpenStaff: ((Int) -> Unit)? = null,
-    onEditEntry: (() -> Unit)? = null,
+    args: InfoPageArgs,
     modifier: Modifier = Modifier,
     /**
      * Hoisted by the sheet, because the capsule's other destination disposes this
@@ -169,6 +112,7 @@ fun AnimeInfoPage(
     infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
     infoBackdropTint: InfoBackdropTint = InfoBackdropTint.DEFAULT
 ) {
+    with(args) {
     val media = subject.media
     val context = LocalContext.current
     val immersive = LocalImmersiveMode.current
@@ -259,25 +203,10 @@ fun AnimeInfoPage(
             }
 
             infoPageItems(
-                subject = subject,
+                args = args,
                 sections = sections,
                 themeSongs = themeSongs,
-                isDetailLoading = isDetailLoading,
-                isFriendsLoading = isFriendsLoading,
-                canWriteToAniList = canWriteToAniList,
-                holdDurationSeconds = holdDurationSeconds,
-                swipeEnabled = swipeEnabled,
                 context = context,
-                quickAddStatus = quickAddStatus,
-                onAddMediaToPlanning = onAddMediaToPlanning,
-                onAddMediaToWatching = onAddMediaToWatching,
-                friends = friends,
-                onAddToPlanning = onAddToPlanning,
-                onAddToWatching = onAddToWatching,
-                onOpenMedia = onOpenMedia,
-                onOpenStudio = onOpenStudio,
-                onOpenCharacter = onOpenCharacter,
-                onOpenStaff = onOpenStaff,
                 onOpenCover = {
                     // The Extras card is not the poster, so there is no rectangle
                     // to grow out of. Clearing the last one matters: following a
@@ -285,8 +214,7 @@ fun AnimeInfoPage(
                     // must not expand from where the previous title's poster was.
                     coverOrigin = null
                     showCover = true
-                },
-                onEditEntry = onEditEntry
+                }
             )
         }
 
@@ -312,6 +240,7 @@ fun AnimeInfoPage(
                 // shrinking the artwork or the list viewport.
                 .immersiveDisplayInsets(immersive)
         )
+    }
     }
 }
 

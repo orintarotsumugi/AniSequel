@@ -211,7 +211,8 @@ class NotificationMappingTest {
                             comment = NotificationCommentNode(
                                 id = 3,
                                 comment = "reply",
-                                siteUrl = commentUrl
+                                siteUrl = commentUrl,
+                                createdAt = 9
                             )
                         )
                     )
@@ -219,10 +220,10 @@ class NotificationMappingTest {
             )
         ).notifications.single() as ThreadNotification
 
-        assertEquals(
-            commentUrl,
-            (row.target as NotificationTarget.Thread).siteUrl
-        )
+        val target = row.target as NotificationTarget.Thread
+        assertEquals(commentUrl, target.siteUrl)
+        assertEquals("reply", target.commentText)
+        assertEquals(9, target.commentCreatedAt ?: 0)
     }
 
     @Test
