@@ -410,6 +410,9 @@ private fun ActivityControls(
             contentDescription = if (liked) "Unlike" else "Like",
             onClick = onLike,
             onLongClick = onOpenLikers,
+            // The number is the way to the names, as it is on AniList itself. It
+            // only advertises the action when there is somebody to show.
+            onCountClick = if ((activity.likeCount ?: 0) > 0) onOpenLikers else null,
             modifier = Modifier.testTag("activity_like_button")
         )
         EngagementAction(
@@ -445,21 +448,53 @@ internal fun activityDetail(activity: ProfileActivity): String {
         val label = formatLabel(media.format)
         return if (label.isNotBlank()) label else if (isManga) "Manga" else "TV"
     }
-    val cleanProgress = if (isManga) {
-        progress.replace("Episode", "Chapter", ignoreCase = true)
-            .replace("ep", "ch", ignoreCase = true)
-    } else {
-        progress
-    }
+    // The numeral alone, with whatever marker the row arrived with taken off.
+    //
+    // The old version rewrote "Episode" to "Chapter" for manga and then ran an
+    // `"ep"` -> `"ch"` replacement over the result, which only ever matched the
+    // abbreviations: "Ep 7" became "Ch 7" and was then prefixed again, so the
+    // feed read "Chapter Ch 7". One marker is one thing to strip, and the word in
+    // front of the number is decided below from the medium.
+    val rawProgress = stripProgressMarker(progress)
     if (isManga) {
         val chapters = media.chapters?.takeIf { it > 0 }
-        val displayNum = if (cleanProgress.startsWith("Chapter", ignoreCase = true)) cleanProgress else "Chapter $cleanProgress"
-        return if (chapters != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $chapters" else displayNum
+        val displayNum = "Chapter $rawProgress"
+        return if (chapters != null && !rawProgress.contains("of", ignoreCase = true)) {
+            "$displayNum of $chapters"
+        } else {
+            displayNum
+        }
     }
     val episodes = media.episodes?.takeIf { it > 0 }
-    val displayNum = if (cleanProgress.startsWith("Episode", ignoreCase = true)) cleanProgress else "Episode $cleanProgress"
-    return if (episodes != null && !displayNum.contains("of", ignoreCase = true)) "$displayNum of $episodes" else displayNum
+    val displayNum = "Episode $rawProgress"
+    return if (episodes != null && !rawProgress.contains("of", ignoreCase = true)) {
+        "$displayNum of $episodes"
+    } else {
+        displayNum
+    }
 }
+
+/**
+ * The progress string with its leading word taken off.
+ *
+ * AniList documents `progress` as free text, and the clients filling it in use
+ * "Episode 7", "Ep. 7", "Ch 12", "Vol 3, Ch 12" or just "7". The sentence this
+ * card builds supplies the medium's own word, so a marker that is already there
+ * has to come off first; leaving it produced "Episode Ep. 7" and "Chapter Ch 12".
+ *
+ * A string that is *only* a marker is returned unchanged: that is a malformed row
+ * rather than a numeral, and dropping it would leave a bare "Chapter" with
+ * nothing behind it.
+ */
+internal fun stripProgressMarker(progress: String): String {
+    val stripped = progress.trim().replace(PROGRESS_MARKER, "").trim()
+    return stripped.ifBlank { progress.trim() }
+}
+
+private val PROGRESS_MARKER = Regex(
+    pattern = "^\\s*(?:episodes?|eps?|chapters?|chs?)\\.?\\s*[-:]?\\s*",
+    option = RegexOption.IGNORE_CASE
+)
 
 /**
  * AniList's `MediaFormat` enum, spelled the way a person writes it.
@@ -541,6 +576,9 @@ private fun ActivityStatusPill(text: String, status: String?) {
         style = MaterialTheme.typography.labelLarge,
         color = content,
         maxLines = 1,
+        // A status string comes from the server; a longer one used to be cut by
+        // the glyph edge with no cue that anything was missing.
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clip(ExpressiveShapes.pill)
             .background(container)

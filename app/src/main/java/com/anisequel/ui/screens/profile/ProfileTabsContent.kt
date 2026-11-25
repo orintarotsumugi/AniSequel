@@ -119,7 +119,15 @@ private fun profileTabs(isOwnProfile: Boolean, isDemo: Boolean): List<Navigation
 internal fun ActivityEngagementSheets(
     activityViewModel: UserActivityViewModel,
     viewerId: Int?,
-    canPost: Boolean
+    canPost: Boolean,
+    /**
+     * Opens a person from the likers tray, when this host has somewhere to go.
+     *
+     * Nullable rather than a no-op for the reason `PersonProfileHost` states: a
+     * row that looks tappable and does nothing is worse than a row that does not
+     * look tappable at all.
+     */
+    onOpenUser: ((FollowUser) -> Unit)? = null
 ) {
     val context = LocalContext.current
     // The two switches the sheet obeys and the one key it might hold. Read here,
@@ -185,7 +193,17 @@ internal fun ActivityEngagementSheets(
         ActivityLikersSheet(
             state = likers,
             onDismiss = { activityViewModel.dismissLikers() },
-            onRetry = { activityViewModel.retryLikers() }
+            onRetry = { activityViewModel.retryLikers() },
+            // The tray is closed before the walk: leaving it open would draw the
+            // previous profile's likers over the page being opened.
+            onOpenUser = if (onOpenUser != null) {
+                { user ->
+                    activityViewModel.dismissLikers()
+                    onOpenUser(user)
+                }
+            } else {
+                null
+            }
         )
     }
 }

@@ -173,68 +173,89 @@ fun ProfileActivityPage(
     // The two feeds have the same identity except for whose rows they are and
     // what the heading calls them. Built here rather than as fields on the
     // screen's state, because every one of them closes over a ViewModel.
-    val ownFeed = ActivityFeedSource(
-        state = activityState,
-        title = "Recent Activity",
-        icon = AppVectorIcons.ProfileActivity,
-        emptyMessage = "No list activity to show",
-        onLoadFirstPage = { activityViewModel.loadFirstPage() },
-        onLoadNextPage = { activityViewModel.loadNextPage() },
-        onRetry = { activityViewModel.retry() },
-        onRefresh = { activityViewModel.refresh() },
-        onLike = { activityViewModel.toggleLike(it) },
-        onOpenComments = { id, count -> activityViewModel.openComments(id, count, chatView) },
-        onOpenLikers = { activityViewModel.openLikers(it) },
-        calendar = calendar,
-        userName = userName,
-        userAvatar = userAvatar,
-        // The compose action is the viewer's own, and only on their own page:
-        // `showViewerSegments` is exactly "this is the signed-in reader's profile",
-        // and `canCompose` is the half that also refuses a session-less or demo
-        // route. A post written from a friend's page would file the reader's words
-        // under that page's heading.
-        onCompose = if (showViewerSegments && activityViewModel.canCompose) {
-            { activityViewModel.openComposer() }
-        } else {
-            null
-        }
-    )
-    val globalFeed = ActivityFeedSource(
-        state = globalState,
-        title = "Everything on AniList",
-        icon = AppVectorIcons.ProfileSocial,
-        emptyMessage = "No public activity to show",
-        onLoadFirstPage = { globalViewModel.loadFirstPage() },
-        onLoadNextPage = { globalViewModel.loadNextPage() },
-        onRetry = { globalViewModel.retry() },
-        onRefresh = { globalViewModel.refresh() },
-        onLike = { globalViewModel.toggleLike(it) },
-        onOpenComments = { id, count -> globalViewModel.openComments(id, count, chatView) },
-        onOpenLikers = { globalViewModel.openLikers(it) },
-        // Every row is a different person, and each card's author row opens their
-        // profile - the same hop the friends feed and the Social tab make.
-        onOpenAuthor = onOpenUser,
-        // The same rows carry a way to write to that person: the sheet is the
-        // inbox's own conversation view, opened on a name instead of a message.
-        onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
-    )
-    val friendsFeed = ActivityFeedSource(
-        state = followingState,
-        title = "Friends Activity",
-        icon = AppVectorIcons.ProfileSocial,
-        emptyMessage = "No activity from the people you follow",
-        onLoadFirstPage = { followingViewModel.loadFirstPage() },
-        onLoadNextPage = { followingViewModel.loadNextPage() },
-        onRetry = { followingViewModel.retry() },
-        onRefresh = { followingViewModel.refresh() },
-        onLike = { followingViewModel.toggleLike(it) },
-        onOpenComments = { id, count -> followingViewModel.openComments(id, count, chatView) },
-        onOpenLikers = { followingViewModel.openLikers(it) },
-        // Every row is a different person in this feed, and each card's
-        // author row opens their profile - the same hop the Social tab makes.
-        onOpenAuthor = onOpenUser,
-        onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
-    )
+    //
+    // Remembered, and that is a performance fix rather than a tidy-up: this page
+    // collects four flows, and one of them is the inbox, whose background check
+    // publishes a new state on a timer. Without a key every one of those
+    // publications rebuilt all three sources and recomposed the activity feed -
+    // its heatmap, its headings and its lazy list - because an unrelated segment
+    // had news. Each source is keyed on the values it actually reads, so a real
+    // change to a feed still rebuilds it.
+    val ownFeed = remember(
+        activityState,
+        calendar,
+        userName,
+        userAvatar,
+        chatView,
+        showViewerSegments
+    ) {
+        ActivityFeedSource(
+            state = activityState,
+            title = "Recent Activity",
+            icon = AppVectorIcons.ProfileActivity,
+            emptyMessage = "No list activity to show",
+            onLoadFirstPage = { activityViewModel.loadFirstPage() },
+            onLoadNextPage = { activityViewModel.loadNextPage() },
+            onRetry = { activityViewModel.retry() },
+            onRefresh = { activityViewModel.refresh() },
+            onLike = { activityViewModel.toggleLike(it) },
+            onOpenComments = { id, count -> activityViewModel.openComments(id, count, chatView) },
+            onOpenLikers = { activityViewModel.openLikers(it) },
+            calendar = calendar,
+            userName = userName,
+            userAvatar = userAvatar,
+            // The compose action is the viewer's own, and only on their own page:
+            // `showViewerSegments` is exactly "this is the signed-in reader's profile",
+            // and `canCompose` is the half that also refuses a session-less or demo
+            // route. A post written from a friend's page would file the reader's words
+            // under that page's heading.
+            onCompose = if (showViewerSegments && activityViewModel.canCompose) {
+                { activityViewModel.openComposer() }
+            } else {
+                null
+            }
+        )
+    }
+    val globalFeed = remember(globalState, chatView, onOpenUser) {
+        ActivityFeedSource(
+            state = globalState,
+            title = "Everything on AniList",
+            icon = AppVectorIcons.ProfileSocial,
+            emptyMessage = "No public activity to show",
+            onLoadFirstPage = { globalViewModel.loadFirstPage() },
+            onLoadNextPage = { globalViewModel.loadNextPage() },
+            onRetry = { globalViewModel.retry() },
+            onRefresh = { globalViewModel.refresh() },
+            onLike = { globalViewModel.toggleLike(it) },
+            onOpenComments = { id, count -> globalViewModel.openComments(id, count, chatView) },
+            onOpenLikers = { globalViewModel.openLikers(it) },
+            // Every row is a different person, and each card's author row opens their
+            // profile - the same hop the friends feed and the Social tab make.
+            onOpenAuthor = onOpenUser,
+            // The same rows carry a way to write to that person: the sheet is the
+            // inbox's own conversation view, opened on a name instead of a message.
+            onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
+        )
+    }
+    val friendsFeed = remember(followingState, chatView, onOpenUser) {
+        ActivityFeedSource(
+            state = followingState,
+            title = "Friends Activity",
+            icon = AppVectorIcons.ProfileSocial,
+            emptyMessage = "No activity from the people you follow",
+            onLoadFirstPage = { followingViewModel.loadFirstPage() },
+            onLoadNextPage = { followingViewModel.loadNextPage() },
+            onRetry = { followingViewModel.retry() },
+            onRefresh = { followingViewModel.refresh() },
+            onLike = { followingViewModel.toggleLike(it) },
+            onOpenComments = { id, count -> followingViewModel.openComments(id, count, chatView) },
+            onOpenLikers = { followingViewModel.openLikers(it) },
+            // Every row is a different person in this feed, and each card's
+            // author row opens their profile - the same hop the Social tab makes.
+            onOpenAuthor = onOpenUser,
+            onMessageAuthor = { author -> messagesViewModel.openConversation(author) }
+        )
+    }
 
     // Centred so the segment capsule keeps the content column's width on a
     // tablet instead of hugging the left edge while every card sits centred.

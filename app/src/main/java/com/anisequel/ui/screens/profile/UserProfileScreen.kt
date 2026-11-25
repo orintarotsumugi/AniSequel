@@ -725,7 +725,8 @@ fun UserProfileScreen(
         // profile (which is not the demo) was shown a composer whose every
         // submission could only fail with an auth error. The demo is covered too:
         // it has no viewer id.
-        canPost = viewerId != null
+        canPost = viewerId != null,
+        onOpenUser = onOpenUser
     )
 
     // The new-activity composer. A sibling of the tab content for the same reason
@@ -743,13 +744,15 @@ fun UserProfileScreen(
     ActivityEngagementSheets(
         activityViewModel = globalViewModel,
         viewerId = viewerId,
-        canPost = viewerId != null
+        canPost = viewerId != null,
+        onOpenUser = onOpenUser
     )
 
     ActivityEngagementSheets(
         activityViewModel = followingViewModel,
         viewerId = viewerId,
-        canPost = viewerId != null
+        canPost = viewerId != null,
+        onOpenUser = onOpenUser
     )
 
     // The inbox's message sheet, on the same terms as the two above: a sibling of

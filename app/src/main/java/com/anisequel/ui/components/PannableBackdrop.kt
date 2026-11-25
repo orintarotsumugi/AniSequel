@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
@@ -263,6 +264,15 @@ fun PannableBackdrop(
     Box(
         modifier = modifier
             .fillMaxSize()
+            // The picture is drawn larger than this box on purpose - the cover fit
+            // scales it up and the pinch scales it further - and every pixel of that
+            // overflow used to escape the banner and paint over whatever was beside
+            // it. The profile header's rounded clip hid the symptom at the bottom of
+            // the artwork and nowhere else, so an anchored or drifting banner could
+            // sit on top of the name block and the page margin. The clip belongs to
+            // the backdrop: a hero picture is only ever allowed to show inside its
+            // own viewport.
+            .clipToBounds()
             .onGloballyPositioned { coordinates ->
                 if (!coordinates.isAttached || hostView.width <= 0 || hostView.height <= 0) {
                     return@onGloballyPositioned
@@ -355,17 +365,34 @@ fun PannableBackdrop(
                         canPan = { hasOverflow(containerWidth, containerHeight, imageSize, zoom, fit) },
                         lockRotationOnZoomPan = true
                     ),
-                // `FitBounds` because the transform above owns the fit. Crop here
-                // would fight the scale and the two would disagree about what is on
-                // screen the moment the picture was panned or zoomed.
+                // `None` because the transform above owns the fit - and because
+                // the transform's numbers are in the *picture's* pixels.
+                //
+                // This was `FillBounds`, which is not "draw the bitmap at its own
+                // size": it stretches the bitmap to the layout's bounds. The layer
+                // then scaled that already-stretched picture by the cover scale,
+                // which is below 1 for every real banner, so a 1920px artwork was
+                // drawn into a 738px box and then shrunk to about a third of it,
+                // centred, with the caller's fallback showing around the edges. The
+                // anchor and the drift translate by fractions of the picture's
+                // *overflow*, computed from the intrinsic size, so on the shrunken
+                // picture those translations were several times too large: choosing
+                // "Left" or turning drift on slid the artwork clean out of the
+                // banner and left the bare fallback behind it - the bug that reads
+                // as the banner going outside its own viewpoint.
+                //
+                // `None` draws the bitmap at its intrinsic pixel size (centred),
+                // which is the coordinate space `backdropTransform` has always
+                // assumed. The cover scale then fits it to the box exactly, and an
+                // offset can only ever move it across its own overflow.
                 //
                 // Until the picture reports a usable intrinsic size the transform
-                // is an identity, and `FillBounds` would stretch it to the box's
-                // shape. `Crop` is the cover fit for that one frame, so the first
-                // drawn frame is already the picture's own aspect rather than a
-                // stretched version of it.
+                // is an identity and `None` would leave a small picture floating in
+                // a large box. `Crop` is the cover fit for that one frame, so the
+                // first drawn frame is already the picture's own aspect rather than
+                // a stretched version of it.
                 contentScale = if (imageSize.isUsableBackdropSize()) {
-                    ContentScale.FillBounds
+                    ContentScale.None
                 } else {
                     ContentScale.Crop
                 },

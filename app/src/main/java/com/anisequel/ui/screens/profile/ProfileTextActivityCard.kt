@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -204,11 +205,16 @@ internal fun ActivityTextCard(
 ) {
     val text = activity.text ?: return
     val interactionSource = remember { MutableInteractionSource() }
-    var expanded by remember(activity.id) { mutableStateOf(false) }
+    // Saveable, and keyed on the post: `remember` dropped the expansion on the
+    // first configuration change, so rotating the phone closed a long post the
+    // reader had just opened and threw them back to the top of the feed's layout.
+    var expanded by rememberSaveable(activity.id) { mutableStateOf(false) }
     // Latched rather than read live: `onOverflowChange` describes the *collapsed*
     // render, so an expanded card reports `false` - and a control bound to the
     // live value would delete its own "Show less" the moment it was pressed.
-    var everOverflowed by remember(activity.id) { mutableStateOf(false) }
+    // Saveable with it, or a rotation would leave an open card with no way to
+    // close it again.
+    var everOverflowed by rememberSaveable(activity.id) { mutableStateOf(false) }
 
     Card(
         modifier = modifier
@@ -259,7 +265,17 @@ internal fun ActivityTextCard(
                     modifier = Modifier
                         .padding(top = 6.dp)
                         .clip(MaterialTheme.shapes.small)
-                        .clickable { expanded = !expanded }
+                        // The visible label changes, and a screen reader that only
+                        // heard "Read more" on an already-open card had no idea the
+                        // same control now closes it.
+                        .clickable(
+                            onClickLabel = if (expanded) {
+                                "Show less of this post"
+                            } else {
+                                "Read the rest of this post"
+                            },
+                            onClick = { expanded = !expanded }
+                        )
                         .defaultMinSize(minHeight = 48.dp)
                         .padding(horizontal = 4.dp, vertical = 6.dp)
                         .testTag("activity_read_more")
@@ -287,6 +303,9 @@ internal fun ActivityTextCard(
                     contentDescription = if (activity.isLiked == true) "Unlike" else "Like",
                     onClick = onLike,
                     onLongClick = onOpenLikers,
+                    // The count opens the people who liked it; see
+                    // `EngagementAction.onCountClick`. Only when there are any.
+                    onCountClick = if ((activity.likeCount ?: 0) > 0) onOpenLikers else null,
                     modifier = Modifier.testTag("activity_like_button")
                 )
                 EngagementAction(
