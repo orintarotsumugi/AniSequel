@@ -164,6 +164,9 @@ private fun CommentPressActions(
             // The hold asks whose. A comment's like count used to be the only answer
             // the row had, while the card above it had always offered the names.
             onLongClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
+            // And so does the number, which is the discoverable half of the same
+            // question - nothing on the row announces a long press.
+            onCountClick = if ((reply.likeCount ?: 0) > 0) onShowLikers else null,
             modifier = Modifier.testTag("activity_reply_like_button")
         )
         if (canReply || canQuote) Spacer(modifier = Modifier.width(4.dp))

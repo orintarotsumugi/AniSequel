@@ -1,6 +1,8 @@
 package com.anisequel.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.anisequel.data.model.FollowUser
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
+import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberFullHeightSheetState
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.UserActivityViewModel
@@ -70,7 +74,17 @@ fun ActivityLikersSheet(
      * liked something is a read that fails for the ordinary reasons - a dropped
      * connection, a rate limit - and the retry that would succeed is one tap.
      */
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    /**
+     * Opens the profile of somebody in the list, or null where there is no profile
+     * to open.
+     *
+     * A "Liked by" tray is a list of people, and every other list of people in
+     * this app - the friends feed, a cast row, the Social tab - opens a profile on
+     * a tap. These rows were inert, so the one thing a reader wants from a face was
+     * the one thing the tray could not do.
+     */
+    onOpenUser: ((FollowUser) -> Unit)? = null
 ) {
     val sheetState = rememberFullHeightSheetState()
 
@@ -129,12 +143,25 @@ fun ActivityLikersSheet(
                 }
 
                 likers.isEmpty() -> item(key = "empty") {
-                    Text(
-                        text = "No likes yet.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
-                    )
+                    // The same empty state the thread and the feed use, rather than
+                    // one grey sentence: an empty tray and a broken one looked
+                    // identical, and the orb is how this app says "nothing here"
+                    // everywhere else.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        ExpressiveEmptyOrb(icon = AppVectorIcons.ActivityLiked)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No likes yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                 }
 
                 else -> items(
@@ -142,7 +169,10 @@ fun ActivityLikersSheet(
                     key = { it.id },
                     contentType = { "liker" }
                 ) { liker ->
-                    LikerRow(liker = liker)
+                    LikerRow(
+                        liker = liker,
+                        onOpen = onOpenUser?.let { open -> { open(liker) } }
+                    )
                 }
             }
         }
@@ -199,13 +229,30 @@ private fun LikersHeader(count: Int, isLoading: Boolean) {
 }
 
 @Composable
-private fun LikerRow(liker: FollowUser) {
+private fun LikerRow(liker: FollowUser, onOpen: (() -> Unit)? = null) {
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 3.dp)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(
+                if (onOpen != null) {
+                    Modifier
+                        // The row already has the family's press spring; sharing
+                        // one interaction source keeps the two from fighting, the
+                        // rule `AniTopAppBar` documents.
+                        .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            onClickLabel = "Open ${liker.name}'s profile",
+                            onClick = onOpen
+                        )
+                } else {
+                    Modifier
+                }
+            )
             .testTag("liker_row")
     ) {
         // Their own cover, behind the row. A "Liked by" list is forty names, and

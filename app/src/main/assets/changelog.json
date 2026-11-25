@@ -1,6 +1,35 @@
 {
   "versions": [
     {
+      "version": "2.6.4",
+      "entries": [
+        {
+          "title": "The profile banner stays inside its own frame",
+          "detail": "The banner's picture was drawn stretched to the card and then scaled again by the cover transform, which is measured in the picture's own pixels - so the two disagreed about how big the artwork was, and the bare fallback showed around and behind it. Choosing Left or Right, or turning Drift on, translated the picture by a fraction of an overflow it did not have, and slid it clean out of the banner. The backdrop now draws the picture at its own size and clips to its own box, so the crop, the position and the drift can only ever move the artwork across the artwork."
+        },
+        {
+          "title": "A long activity title stays inside its card",
+          "detail": "The feed scrolls a title that does not fit rather than truncating it, and the scrolling line was painted with visible overflow - so a long name was drawn past the card's rounded edge and into the page margin, which read as a card that had grown wider than the screen. The marquee is clipped to the row that owns it."
+        },
+        {
+          "title": "The activity feed spells progress once",
+          "detail": "AniList's progress field is free text, and the card added the medium's own word to whatever arrived: \"Ep. 7\" became \"Episode Ep. 7\" and \"Ch 12\" became \"Chapter Ch 12\". The marker a row already carries is now stripped before the sentence is built, and a status pill longer than its row ellipsizes instead of being cut at the glyph's edge."
+        },
+        {
+          "title": "The comment composer keeps its reply target",
+          "detail": "Removing the \"replying to\" chip cleared the name but not the comment id behind it, so an editor that was no longer answering anybody still lit a comment further up the thread - and that highlight is how the reader knows which of a person's many comments the box is under. Clearing the mention now clears the row. A text post's open or closed state also survives rotation instead of folding back up, and the control is announced as closing the post rather than only as \"Read more\"."
+        },
+        {
+          "title": "The activity heatmap holds the reader's place",
+          "detail": "The calendar scrolled itself to the newest week whenever the feed rebuilt, so every refresh pulled a reader who had walked back through the year to the right-hand edge. It now opens at the newest week once and stays where it is put. A tap in the gap between two cells no longer answers about a neighbouring day, tapping the selected day clears it, and the Week view's bars say their day and count to a screen reader."
+        },
+        {
+          "title": "A like lands in one place",
+          "detail": "A like the server refused put the whole pre-tap row back - including the text and counts of a row a refresh had replaced while the request was out - and the comment thread's heart had the same rollback. Both now undo only their own like on the row that is on screen. The number beside a heart opens the list of people who liked it (a hold still does too), those rows open a profile, an empty tray draws the app's own empty state, and a like that lands gets one short pop."
+        }
+      ]
+    },
+    {
       "version": "2.6.3",
       "entries": [
         {

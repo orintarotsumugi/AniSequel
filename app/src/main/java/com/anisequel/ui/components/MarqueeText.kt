@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +81,14 @@ fun MarqueeText(
     Text(
         text = text,
         modifier = modifier
+            // `softWrap = false` plus `TextOverflow.Visible` is what lets the
+            // marquee measure the line at its full width instead of ellipsizing
+            // it - and it also let the travelling text paint past the row that
+            // owns it. In the activity feed a long title was drawn over the
+            // card's rounded edge and into the page margin, which read as a card
+            // that had grown wider than the screen. The clip is the row's own
+            // bounds, so the title stays inside the card while it scrolls.
+            .clipToBounds()
             .basicMarquee(
                 // Continuous rather than a fixed number of passes: a reader who
                 // lingers should still be able to read the end of a title, and a

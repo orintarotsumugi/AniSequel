@@ -402,7 +402,15 @@ fun ActivityCommentsSheet(
                     draft = draft,
                     onDraftChange = { draft = clipDraft(it) },
                     replyToName = replyToName,
-                    onClearReplyTo = { replyToName = null },
+                    // Clearing the mention clears the row it pointed at too.
+                    // Before, the chip went and the highlight stayed: a composer
+                    // with no "replying to" line on it still lit a comment further
+                    // up the thread, which read as the wrong comment being
+                    // answered.
+                    onClearReplyTo = {
+                        replyToName = null
+                        replyTargetId = null
+                    },
                     isPosting = state.isPosting,
                     postError = state.postError,
                     photo = photo,

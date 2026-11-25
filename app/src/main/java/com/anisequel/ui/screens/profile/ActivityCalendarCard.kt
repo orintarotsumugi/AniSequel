@@ -234,7 +234,16 @@ private fun WeekBreakdown(week: List<ActivityDay>) {
         week.forEach { day ->
             val label = LocalDate.ofEpochDay(day.epochDay).dayOfWeek
                 .getDisplayName(TextStyle.SHORT, locale)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.semantics {
+                    // The bar is a length and a shade of one colour, and a screen
+                    // reader got neither - the row was three bare strings. The
+                    // sentence is the day and its count.
+                    contentDescription = "$label: " +
+                        if (day.inRange) formatActivityChanges(day.count) else "not yet"
+                },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
@@ -304,17 +313,26 @@ private fun CalendarRangeToggle(showWeek: Boolean, onChange: (Boolean) -> Unit) 
 private fun CalendarGrid(
     calendar: ActivityCalendar,
     selectedEpochDay: Long?,
-    onSelectDay: (Long) -> Unit
+    onSelectDay: (Long?) -> Unit
 ) {
     val scrollState = rememberScrollState()
+    // One placement per composition of this card, not one per calendar object.
+    //
+    // The effect used to be keyed on `calendar`, and the Activity tab rebuilds that
+    // object whenever the feed changes - so every refresh yanked a reader who had
+    // scrolled back through the year to the newest column. Saveable so a rotation
+    // keeps the place too, and set only once the scroll has actually landed.
+    var openedAtNewest by rememberSaveable { mutableStateOf(false) }
 
     // Opened at the newest column: the grid runs oldest to newest and the end is
     // the interesting part. Waiting for a non-zero `maxValue` rather than
     // scrolling to it directly, because a scroll to a zero maximum happens before
     // the grid has been measured and lands at the left of the oldest column.
-    LaunchedEffect(calendar) {
+    LaunchedEffect(calendar.columns.size) {
+        if (openedAtNewest || calendar.columns.isEmpty()) return@LaunchedEffect
         snapshotFlow { scrollState.maxValue }.first { it > 0 }
         scrollState.scrollTo(scrollState.maxValue)
+        openedAtNewest = true
     }
 
     Column(modifier = Modifier.horizontalScroll(scrollState)) {
@@ -408,7 +426,7 @@ private const val DAYS_PER_WEEK = 7
 private fun ActivityCellsCanvas(
     calendar: ActivityCalendar,
     selectedEpochDay: Long?,
-    onSelectDay: (Long) -> Unit
+    onSelectDay: (Long?) -> Unit
 ) {
     val base = MaterialTheme.colorScheme.primary
     val empty = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -421,13 +439,26 @@ private fun ActivityCellsCanvas(
         modifier = Modifier
             .size(width = totalWidth, height = totalHeight)
             .testTag("activity_calendar_cells")
-            .pointerInput(calendar) {
+            // Keyed on the selection as well as the calendar: the handler reads it
+            // to decide whether this tap selects or clears, and a lambda captured
+            // once would keep answering with the selection it was built with.
+            .pointerInput(calendar, selectedEpochDay) {
                 val pitchPx = (CellSize + CellGap).toPx()
+                val cellPx = CellSize.toPx()
                 detectTapGestures { offset ->
                     val column = (offset.x / pitchPx).toInt()
                     val row = (offset.y / pitchPx).toInt()
+                    // A tap in the 3dp gutter between two cells used to select the
+                    // cell after it, so aiming at a gap answered about a day the
+                    // reader did not touch. The gutter is not a target.
+                    if (offset.x - column * pitchPx > cellPx) return@detectTapGestures
+                    if (offset.y - row * pitchPx > cellPx) return@detectTapGestures
                     val day = calendar.columns.getOrNull(column)?.days?.getOrNull(row)
-                    if (day?.inRange == true) onSelectDay(day.epochDay)
+                    if (day?.inRange == true) {
+                        // Tapping the selected day again clears it: the summary row
+                        // otherwise had no way back to the invitation it opens as.
+                        onSelectDay(day.epochDay.takeIf { it != selectedEpochDay })
+                    }
                 }
             }
             .semantics {

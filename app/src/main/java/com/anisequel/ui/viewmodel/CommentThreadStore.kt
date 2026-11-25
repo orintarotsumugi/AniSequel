@@ -451,7 +451,20 @@ class CommentThreadStore(
                     write(result.isLiked, result.likeCount, pending = false)
                 },
                 onFailure = {
-                    write(wasLiked, reply.likeCount ?: 0, pending = false)
+                    // Undo our own optimistic move on the row that is on screen now.
+                    // Writing the pre-tap snapshot's count back also rolled back a
+                    // background check that had refreshed the thread while this
+                    // request was out - the exact hazard the success path above was
+                    // fixed for, left in the failure path.
+                    val liveCount = _state.value
+                        ?.replies
+                        ?.firstOrNull { it.id == replyId }
+                        ?.likeCount ?: 0
+                    write(
+                        wasLiked,
+                        (liveCount + if (wasLiked) 1 else -1).coerceAtLeast(0),
+                        pending = false
+                    )
                 }
             )
         }

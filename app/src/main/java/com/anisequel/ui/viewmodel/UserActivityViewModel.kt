@@ -615,7 +615,13 @@ class UserActivityViewModel(
                     )
                 },
                 onFailure = {
-                    replaceActivity(activity, removePending = activityId)
+                    // Only the heart is put back, and it is undone on the row that
+                    // is on screen *now*. Restoring the whole snapshot taken before
+                    // the tap also restored the comment text, the counts and the
+                    // media of a row a refresh had replaced while the request was
+                    // out - the same failure the comment store's heart had, fixed
+                    // there and left here.
+                    restoreLike(activityId, wasLiked)
                 }
             )
         }
@@ -754,6 +760,33 @@ class UserActivityViewModel(
             pendingLikes = current.pendingLikes
                 .let { if (addPending != null) it + addPending else it }
                 .let { if (removePending != null) it - removePending else it }
+        )
+    }
+
+    /**
+     * Puts a like back after the server refused it, touching only the like state.
+     *
+     * The optimistic move is undone rather than a snapshot written back: a refresh
+     * that landed while the request was out may have changed anything else on the
+     * row, and the count it refetched is the truthful one to undo *our* delta from.
+     */
+    private fun restoreLike(activityId: Int, liked: Boolean) {
+        val current = _state.value as? ActivityState.Success ?: return
+        _state.value = current.copy(
+            activities = current.activities.map { row ->
+                if (row.id != activityId) {
+                    row
+                } else {
+                    row.copy(
+                        isLiked = liked,
+                        // The row currently shows the optimistic count; the inverse
+                        // of the move that was applied gives the original back.
+                        likeCount = ((row.likeCount ?: 0) + if (liked) 1 else -1)
+                            .coerceAtLeast(0)
+                    )
+                }
+            },
+            pendingLikes = current.pendingLikes - activityId
         )
     }
 
