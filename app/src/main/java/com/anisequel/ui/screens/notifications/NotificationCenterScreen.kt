@@ -131,8 +131,10 @@ fun NotificationCenterScreen(
                 // the request has not given yet.
                 unreadCount = state.unreadCount.takeIf { !state.loading && state.error == null },
                 trackingEnabled = state.preferences.trackingEnabled,
+                busy = state.loading || state.refreshing,
                 scrollBehavior = scrollBehavior,
                 onNavigateBack = onNavigateBack,
+                onRefresh = viewModel::refresh,
                 onOpenSettings = onOpenSettings
             )
         },
@@ -175,8 +177,10 @@ fun NotificationCenterScreen(
 private fun InboxTopBar(
     unreadCount: Int?,
     trackingEnabled: Boolean,
+    busy: Boolean,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
     onNavigateBack: () -> Unit,
+    onRefresh: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
     MediumTopAppBar(
@@ -210,6 +214,16 @@ private fun InboxTopBar(
         },
         actions = {
             if (trackingEnabled && unreadCount != null) UnreadPill(unreadCount)
+            IconButton(
+                onClick = onRefresh,
+                enabled = !busy,
+                modifier = Modifier.bouncyPress(pressedScale = 0.9f)
+            ) {
+                Icon(
+                    imageVector = AppVectorIcons.Refresh,
+                    contentDescription = "Refresh inbox"
+                )
+            }
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.bouncyPress(pressedScale = 0.9f)

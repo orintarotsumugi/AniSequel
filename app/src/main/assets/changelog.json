@@ -1,6 +1,27 @@
 {
   "versions": [
     {
+      "version": "2.6.6",
+      "entries": [
+        {
+          "title": "Every notification opens inside the app",
+          "detail": "A media notification now opens the real title sheet, an activity opens the comment thread the profile already uses, and a forum thread opens a read-only page with its opening post and newest comments. The inbox no longer hands those targets to a browser."
+        },
+        {
+          "title": "The Android permission is asked for where it belongs",
+          "detail": "Settings > Notifications shows whether POST_NOTIFICATIONS is granted on Android 13 and later, offers to ask there, sends a test notification, and opens the system page for the app switch or a silenced channel. Nothing is requested at launch, and no background or push worker was added."
+        },
+        {
+          "title": "The bell can disappear without losing the inbox",
+          "detail": "Settings > Library > Top bar can hide the notification bell from Home. The top bar is not the only door: Settings > Notifications keeps an Open notification centre button, so a hidden shortcut is still recoverable."
+        },
+        {
+          "title": "Reopening the inbox is not a reload",
+          "detail": "The inbox now reuses its cached first page when you come back, preserves the older pages already loaded, and offers an explicit Refresh action beside pull-to-refresh. A refresh still asks AniList and replaces the snapshot; opening the tab no longer forces that request."
+        }
+      ]
+    },
+    {
       "version": "2.6.5",
       "entries": [
         {

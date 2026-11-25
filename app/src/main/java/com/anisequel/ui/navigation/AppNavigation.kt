@@ -75,6 +75,7 @@ import com.anisequel.ui.theme.LocalMainBarLift
 import com.anisequel.ui.theme.LocalShowContinueRail
 import com.anisequel.ui.theme.LocalSearchAnimeEnabled
 import com.anisequel.ui.theme.LocalSearchMangaEnabled
+import com.anisequel.ui.theme.LocalNotificationsTopBarShortcut
 import com.anisequel.ui.theme.LocalSearchTopBarShortcut
 import com.anisequel.ui.theme.LocalTierTopBarShortcut
 import com.anisequel.ui.screens.profile.rememberLibrarySelection
@@ -98,6 +99,14 @@ object AppRoutes {
     const val SETTINGS = "settings"
     const val SETTINGS_NOTIFICATIONS = "settings/notifications"
     const val NOTIFICATIONS = "notifications"
+    const val NOTIFICATION_MEDIA = "notifications/media/{mediaId}?type={type}"
+    const val NOTIFICATION_ACTIVITY = "notifications/activity/{activityId}"
+    const val NOTIFICATION_THREAD = "notifications/thread/{threadId}?comment={comment}"
+    const val NOTIFICATION_MEDIA_ID_ARG = "mediaId"
+    const val NOTIFICATION_MEDIA_TYPE_ARG = "type"
+    const val NOTIFICATION_ACTIVITY_ID_ARG = "activityId"
+    const val NOTIFICATION_THREAD_ID_ARG = "threadId"
+    const val NOTIFICATION_THREAD_COMMENT_ARG = "comment"
     const val TIER_LIST = "tier_list"
 
     /** The new look's feature hub. Hidden from the classic bar by design. */
@@ -116,6 +125,25 @@ object AppRoutes {
      * `NavType.StringType`, so the screen still receives the name as typed.
      */
     fun userDashboard(username: String) = "dashboard_user/${Uri.encode(username)}"
+
+    /** One title's detail sheet, opened from a notification row. */
+    fun notificationMedia(mediaId: Int, type: String?) =
+        "notifications/media/$mediaId?type=${Uri.encode(type.orEmpty())}"
+
+    /** One activity's comment thread, opened from a notification row. */
+    fun notificationActivity(activityId: Int) =
+        "notifications/activity/$activityId"
+
+    /**
+     * One forum thread, optionally pointed at the comment the notification named.
+     *
+     * `-1` is the "no comment" value rather than an empty query parameter: a
+     * `NavType.IntType` argument cannot parse an empty string, and the destination
+     * would silently fall back to its default only if the parameter were absent,
+     * not if it were present and blank.
+     */
+    fun notificationThread(threadId: Int, commentId: Int?) =
+        "notifications/thread/$threadId?comment=${commentId ?: -1}"
 }
 
 /** A state that never emits a real dashboard, for when there is no session VM. */
@@ -180,6 +208,10 @@ fun AppNavigation(
     openProfileActivityOnLaunch: Boolean = false,
     /** Called once the request has been navigated to, so it is not replayed. */
     onProfileActivityOpened: () -> Unit = {},
+    /** The test notification's tap asked for the inbox. */
+    openNotificationsOnLaunch: Boolean = false,
+    /** Called once the inbox request has been navigated to, so it is not replayed. */
+    onNotificationsOpened: () -> Unit = {},
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
@@ -278,6 +310,9 @@ fun AppNavigation(
     )
     val tierTopBar by mainTabPreferences.tierTopBar.collectAsStateWithLifecycle(
         initialValue = MainTabPreferences.DEFAULT_TIER_TOP_BAR
+    )
+    val notificationsTopBar by mainTabPreferences.notificationsTopBar.collectAsStateWithLifecycle(
+        initialValue = MainTabPreferences.DEFAULT_NOTIFICATIONS_TOP_BAR
     )
 
     val onboardingPreferences = remember(context) {
@@ -678,6 +713,20 @@ fun AppNavigation(
         }
     }
 
+    // The test notification's tap, deferred for the same identity reason as the
+    // widget's. It opens the real inbox rather than a second toast: a notification
+    // that says "tap to open your inbox" and then does nothing is worse than one
+    // with no tap target at all.
+    LaunchedEffect(openNotificationsOnLaunch, authState, signedInViewer) {
+        if (openNotificationsOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            signedInViewer != null
+        ) {
+            navController.navigateSingle(NOTIFICATIONS)
+            onNotificationsOpened()
+        }
+    }
+
     // Keeps the home-screen widgets in step with the live dashboard counts.
     //
     // Called rather than inlined because nothing in this body may read the
@@ -753,6 +802,7 @@ fun AppNavigation(
                 searchMangaEnabled = searchMangaEnabled
             ),
             LocalTierTopBarShortcut provides tierTopBar,
+            LocalNotificationsTopBarShortcut provides notificationsTopBar,
             LocalSearchAnimeEnabled provides searchAnimeEnabled,
             LocalSearchMangaEnabled provides searchMangaEnabled
         ) {
@@ -922,7 +972,9 @@ fun AppNavigation(
                         navController = navController,
                         aniListRepository = aniListRepository,
                         notificationPreferencesStore = notificationPreferencesStore,
-                        notificationReadStore = notificationReadStore
+                        notificationReadStore = notificationReadStore,
+                        viewerId = signedInViewer?.id,
+                        entryEditor = sharedEntryEditor
                     )
                 }
 

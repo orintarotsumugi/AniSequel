@@ -3,6 +3,7 @@ package com.anisequel.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.FollowUser
 import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.UserActivityPage
@@ -634,8 +635,12 @@ class UserActivityViewModel(
      * windowed thread at its newest end; [chatView] is the reader's Settings switch,
      * handed in at the door so this class stays out of where preferences come from.
      */
-    fun openComments(activityId: Int, knownReplyCount: Int = 0, chatView: Boolean = true) =
-        commentThread.open(activityId, knownReplyCount, chatView)
+    fun openComments(
+        activityId: Int,
+        knownReplyCount: Int = 0,
+        chatView: Boolean = true,
+        head: ActivityReply? = null
+    ) = commentThread.open(activityId, knownReplyCount, chatView, head)
 
     /** Likes or un-likes one comment. */
     fun toggleReplyLike(replyId: Int) = commentThread.toggleReplyLike(replyId)

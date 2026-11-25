@@ -1450,6 +1450,68 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * One forum thread's opening post.
+     *
+     * The notification carries a thread id and, sometimes, a comment id. It does
+     * not carry the title, body or author, and the inbox had no way to supply
+     * them - which is why the tap used to leave for `anilist.co`. `Thread(id:)`
+     * is the public read that fills that gap without a session.
+     */
+    val GET_THREAD = """
+        query GetThread(${'$'}threadId: Int) {
+          Thread(id: ${'$'}threadId) {
+            id
+            title
+            body
+            createdAt
+            replyCount
+            viewCount
+            likeCount
+            isLiked
+            user {
+              id
+              name
+              avatar { large medium }
+              bannerImage
+            }
+            categories { id name }
+          }
+        }
+    """.trimIndent()
+
+    /**
+     * A page of one thread's comments, ascending id within the page.
+     *
+     * `Page.threadComments` is the only threaded read AniList exposes. Its pages
+     * ascend, so page one is the oldest and the last page is the newest; the
+     * notification destination therefore asks for `ceil(replyCount / perPage)`
+     * and walks backwards, rather than opening a conversation at its first
+     * screen. The sort argument is deliberately omitted because the order is
+     * stable, and the client orders rows by id so a comment added mid-read does
+     * not move rows already on screen.
+     */
+    val GET_THREAD_COMMENTS = """
+        query GetThreadComments(${'$'}threadId: Int, ${'$'}page: Int, ${'$'}perPage: Int) {
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            threadComments(threadId: ${'$'}threadId) {
+              id
+              threadId
+              comment
+              createdAt
+              likeCount
+              isLiked
+              user {
+                id
+                name
+                avatar { large medium }
+              }
+            }
+          }
+        }
+    """.trimIndent()
+
+    /**
      * One activity and its comment thread.
      *
      * Its own request rather than a `replies` selection on the feed query: a
@@ -1480,6 +1542,20 @@ object GraphQLQueries {
               isLiked
               likeCount
               replyCount
+              createdAt
+              status
+              progress
+              user {
+                id
+                name
+                avatar { large medium }
+                bannerImage
+              }
+              media {
+                id
+                type
+                title { userPreferred }
+              }
               replies {
                 id
                 text
@@ -1499,6 +1575,14 @@ object GraphQLQueries {
               isLiked
               likeCount
               replyCount
+              createdAt
+              text
+              user {
+                id
+                name
+                avatar { large medium }
+                bannerImage
+              }
               replies {
                 id
                 text

@@ -1,5 +1,6 @@
 package com.anisequel.data.repository
 
+import com.anisequel.data.model.ActivityDetail
 import com.anisequel.data.model.ActivityLikeState
 import com.anisequel.data.model.ActivityReply
 import com.anisequel.data.model.ActivityReplyWindow
@@ -20,6 +21,8 @@ import com.anisequel.data.model.NotificationPage
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.ThreadCommentPage
+import com.anisequel.data.model.ThreadNode
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.model.UserOverview
@@ -413,6 +416,24 @@ interface AniListRepository {
      */
     suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
         unsupported("getActivityReplies")
+
+    /**
+     * One activity's root body, for opening a notification's activity by id.
+     *
+     * The comment sheet already knows how to draw replies; it does not know what
+     * was replied to. Notification taps have no feed row to pass as the head, so
+     * this read fills the opening post the same query already returns.
+     */
+    suspend fun getActivityDetail(activityId: Int): Result<ActivityDetail?> =
+        unsupported("getActivityDetail")
+
+    /** One forum thread's opening post, for a thread notification. */
+    suspend fun getThread(threadId: Int): Result<ThreadNode> =
+        unsupported("getThread")
+
+    /** One page of a forum thread's comments, for the in-app thread page. */
+    suspend fun getThreadComments(threadId: Int, page: Int): Result<ThreadCommentPage> =
+        unsupported("getThreadComments")
 
     /**
      * One page of an activity's comment thread, oldest first within the page, with

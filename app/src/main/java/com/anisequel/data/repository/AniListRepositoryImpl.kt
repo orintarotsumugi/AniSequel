@@ -2,6 +2,7 @@ package com.anisequel.data.repository
 
 import android.util.Log
 import com.anisequel.data.model.ActivityLikeState
+import com.anisequel.data.model.ActivityDetail
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.PersonKind
 import com.anisequel.data.model.StaffProfile
@@ -31,6 +32,9 @@ import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StudioNode
+import com.anisequel.data.model.THREAD_COMMENTS_PER_PAGE
+import com.anisequel.data.model.ThreadCommentPage
+import com.anisequel.data.model.ThreadNode
 import com.anisequel.data.model.UserActivityPage
 import com.anisequel.data.model.UserMessagesPage
 import com.anisequel.data.model.UserOverview
@@ -2228,6 +2232,9 @@ class AniListRepositoryImpl(
     }
 
     override suspend fun getActivityReplies(activityId: Int): Result<List<ActivityReply>> =
+        getActivityDetail(activityId).map { detail -> detail?.replies.orEmpty() }
+
+    override suspend fun getActivityDetail(activityId: Int): Result<ActivityDetail?> =
         execute(
             GraphQLRequest(
                 query = GraphQLQueries.GET_ACTIVITY_REPLIES,
@@ -2239,7 +2246,40 @@ class AniListRepositoryImpl(
             // fields, and an id that no longer exists as null. Both are an empty
             // thread: the sheet opens and says there are no comments, rather than
             // refusing to open at all.
-            data.activity?.replies.orEmpty()
+            data.activity
+        }
+
+    override suspend fun getThread(threadId: Int): Result<ThreadNode> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_THREAD,
+                variables = mapOf("threadId" to threadId)
+            ),
+            apiService::getThread
+        ).mapRequire { data ->
+            data.thread.require("That thread is no longer available on AniList.")
+        }
+
+    override suspend fun getThreadComments(
+        threadId: Int,
+        page: Int
+    ): Result<ThreadCommentPage> =
+        execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_THREAD_COMMENTS,
+                variables = mapOf(
+                    "threadId" to threadId,
+                    "page" to page,
+                    "perPage" to THREAD_COMMENTS_PER_PAGE
+                )
+            ),
+            apiService::getThreadComments
+        ).mapRequire { data ->
+            val payload = data.page
+            ThreadCommentPage(
+                comments = payload?.threadComments.orEmpty(),
+                hasMore = payload?.pageInfo?.hasNextPage == true
+            )
         }
 
     override suspend fun getActivityLikes(activityId: Int): Result<List<FollowUser>> =

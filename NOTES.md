@@ -4143,3 +4143,33 @@ replies. Thread taps use the API's canonical `siteUrl`; the old guessed
 Nothing here polls. The page loads on entry and on an explicit pull, Settings
 only edits local switches, and no new permission, channel, worker or service was
 added. The app's existing `GET_RECEIVED_MESSAGES` path is unchanged.
+
+## 2.6.6: notification targets open inside the app, and a permission you can find
+
+The 2.6.5 inbox could only carry an id for a media row, an activity or a thread,
+so three of its targets left for `anilist.co`. That was a limitation of the old
+navigation graph, not of the data. 2.6.6 gives each one a real route: the media
+row fetches the title and opens `SequelDetailSheet`, the activity row fetches its
+root and opens the profile comment sheet, and the thread row fetches the post and
+one page of comments into a read-only screen. A thread opens on the page that
+contains its newest comments, because comment pages ascend by id, and Older walks
+backwards; the page is clamped to AniList's 5000-entry depth limit, which rejects
+the true last page of a very old thread. Only the API's `siteUrl` is ignored now,
+because the app no longer needs the site to show the target.
+
+Android notifications are still optional and still do not imply a worker. The
+manifest declares `POST_NOTIFICATIONS`, but the runtime dialog is requested only
+from Settings > Notifications, never at launch. That section reports the runtime
+permission, the app switch and this app's channel separately, sends one deliberate
+test post, and falls back from the per-app notification page to app details when a
+re-skin drops the direct route. Returning from either system page re-reads the
+answer in `onResume`; there is no polling.
+
+Re-entering the inbox is no longer a forced read. The repository's epoch-keyed
+page cache answers while it is fresh, and the view model keeps older pages that
+were already on screen instead of collapsing a long inbox to page one. Pull-to-
+refresh and the top-bar action remain the explicit replacement: they clear the
+page cache, fence in-flight pages and start again from page one. The bell in the
+dashboard's top bar is now a preference, but hiding it does not disable the
+inbox; Settings > Notifications always has an Open notification centre button.
+The existing `GET_RECEIVED_MESSAGES` path is unchanged.
