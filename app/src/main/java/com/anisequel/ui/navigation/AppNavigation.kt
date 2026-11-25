@@ -225,7 +225,7 @@ private fun LaunchRequestEffects(
             authState is AuthUiState.Authenticated &&
             viewerId != null
         ) {
-            navController.navigateSingle(NOTIFICATIONS)
+            navController.navigateSingle(AppRoutes.NOTIFICATIONS)
             onNotificationsOpened()
         }
     }
