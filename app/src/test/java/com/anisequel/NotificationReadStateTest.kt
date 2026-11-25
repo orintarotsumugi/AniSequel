@@ -103,6 +103,21 @@ class NotificationReadStateTest {
     }
 
     @Test
+    fun `mark all read keeps a read mark above the loaded page`() {
+        val state = NotificationReadState(
+            anchored = true,
+            readThroughId = 100,
+            readIds = setOf(105)
+        )
+
+        val read = state.markAllRead(104)
+
+        assertFalse(read.isUnread(105))
+        assertFalse(read.isUnread(100))
+        assertTrue(read.isUnread(106))
+    }
+
+    @Test
     fun `mark all read never moves the watermark backwards`() {
         val state = NotificationReadState(anchored = true, readThroughId = 100)
         val read = state.markAllRead(50)
@@ -118,5 +133,42 @@ class NotificationReadStateTest {
         assertFalse(firstTwo.isUnread(100))
         assertFalse(firstTwo.isUnread(99))
         assertTrue(firstTwo.isUnread(98))
+    }
+
+    @Test
+    fun `a late DataStore snapshot cannot undo a row just read`() {
+        val anchored = NotificationReadState.anchorFor(listOf(100, 99), 2)
+            .copy(resetGeneration = 4)
+        val locallyRead = anchored.markRead(100)
+
+        val reconciled = locallyRead.reconcile(anchored)
+
+        assertEquals(locallyRead, reconciled)
+        assertFalse(reconciled.isUnread(100))
+        assertTrue(reconciled.isUnread(99))
+    }
+
+    @Test
+    fun `a reset from Settings wins over a mark already on screen`() {
+        val marked = NotificationReadState(
+            anchored = true,
+            readThroughId = 100,
+            resetGeneration = 2
+        )
+        val reset = NotificationReadState(resetGeneration = 3)
+
+        assertEquals(reset, marked.reconcile(reset))
+    }
+
+    @Test
+    fun `an older generation cannot clear a newer read mark`() {
+        val current = NotificationReadState(
+            anchored = true,
+            readThroughId = 100,
+            resetGeneration = 5
+        )
+        val stale = NotificationReadState(resetGeneration = 4)
+
+        assertEquals(current, current.reconcile(stale))
     }
 }

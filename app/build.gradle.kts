@@ -92,7 +92,7 @@ android {
     // stale - and gradle.properties is the file that actually gets updated, so
     // the copy is what a local build falls back to.
     versionCode =
-      (project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: BASELINE_VERSION_CODE)
+      project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: BASELINE_VERSION_CODE
     versionName = project.findProperty("anisequelVersionName")?.toString() ?: BASELINE_VERSION_NAME
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

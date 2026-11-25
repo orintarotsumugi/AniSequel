@@ -22,7 +22,17 @@ data class NotificationReadState(
     /** Every notification with an id at or below this is read. */
     val readThroughId: Int? = null,
     /** Individually read notifications above [readThroughId]. */
-    val readIds: Set<Int> = emptySet()
+    val readIds: Set<Int> = emptySet(),
+    /**
+     * Moves only when the reader resets this account's history in Settings.
+     *
+     * DataStore emits on a background dispatcher, so a snapshot written before
+     * a local mark can arrive after it. Without a writer generation the inbox
+     * treated that late snapshot as newer and brought the row back as unread.
+     * Equal generations are reconciled by unioning reads; a larger generation
+     * is a real reset and wins; a smaller one is stale and is ignored.
+     */
+    val resetGeneration: Int = 0
 ) {
     fun isUnread(id: Int): Boolean {
         if (!anchored) return false
@@ -43,7 +53,36 @@ data class NotificationReadState(
         return copy(
             anchored = true,
             readThroughId = watermark,
-            readIds = emptySet()
+            // Keep marks above the watermark. They belong to rows this page did
+            // not load (or a row AniList briefly dropped); clearing them made a
+            // returning row look unread again.
+            readIds = readIds.filterTo(mutableSetOf()) { it > watermark }
+        )
+    }
+
+    /**
+     * Folds one DataStore emission into the in-memory mark without losing a
+     * read this screen has already drawn optimistically.
+     *
+     * The reset generation is the fence. A reset from Settings moves it
+     * forward and must clear the inbox; an older emission must never do so.
+     */
+    fun reconcile(stored: NotificationReadState): NotificationReadState {
+        if (stored.resetGeneration > resetGeneration) return stored
+        if (stored.resetGeneration < resetGeneration) return this
+        val local = readThroughId
+        val other = stored.readThroughId
+        val watermark = when {
+            local == null -> other
+            other == null -> local
+            else -> maxOf(local, other)
+        }
+        val mergedIds = (readIds + stored.readIds)
+            .filterTo(mutableSetOf()) { id -> watermark == null || id > watermark }
+        return copy(
+            anchored = anchored || stored.anchored,
+            readThroughId = watermark,
+            readIds = mergedIds
         )
     }
 

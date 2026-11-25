@@ -139,4 +139,22 @@ class NotificationReadStoreTest {
         assertFalse(store.load(905).anchored)
         assertTrue(store.load(906).anchored)
     }
+
+    @Test
+    fun `resetting advances the generation and anchoring keeps it`() = runTest {
+        val account = 907
+        val store = NotificationReadStore(context)
+        store.reset(account)
+        val generation = store.load(account).resetGeneration
+        store.anchor(account, NotificationReadState.anchorFor(listOf(100), 0))
+
+        val anchored = store.load(account)
+        assertTrue(anchored.anchored)
+        assertEquals(generation, anchored.resetGeneration)
+
+        store.reset(account)
+        val reset = store.load(account)
+        assertFalse(reset.anchored)
+        assertEquals(generation + 1, reset.resetGeneration)
+    }
 }

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
 /**
  * Everything the inbox draws, in one snapshot.
  *
@@ -43,7 +44,6 @@ data class NotificationUiState(
     val notice: String? = null
 ) {
     val filters: List<NotificationFilter> get() = preferences.visibleFilters()
-    val isEmpty: Boolean get() = !loading && groups.isEmpty()
 }
 
 /**
@@ -55,10 +55,10 @@ data class NotificationUiState(
  * used exactly once, to seed the first baseline; after that the watermark and
  * the individually-read set are the only things that decide a dot.
  *
- * Stale work is fenced with [loadGeneration]. A refresh, a filter change and an
- * in-flight page can all finish out of order; only the generation that owns the
- * current state may write it. The filter itself never reaches the network: pages
- * are fetched unfiltered so every chip is a local slice.
+ * Stale work is fenced with [loadGeneration]. A refresh, an account change and
+ * an in-flight page can all finish out of order; only the generation that owns
+ * the current state may write it. The filter itself never reaches the network:
+ * pages are fetched unfiltered so every chip is a local slice.
  */
 class NotificationViewModel(
     private val aniListRepository: AniListRepository,
@@ -76,10 +76,6 @@ class NotificationViewModel(
     private var loadGeneration = 0
     private var revision = 0
     private var rateLimitedUntilMillis = 0L
-    // False while the first page has neither anchored nor failed on this account.
-    // It distinguishes the anchor write racing the DataStore flow from a reset
-    // the reader performs later, which is allowed to clear the local mark.
-    private var baselineResolved = false
     private val filterCache = mutableMapOf<NotificationFilter, Pair<Int, List<NotificationGroup>>>()
 
     init {
@@ -114,7 +110,7 @@ class NotificationViewModel(
     fun start() {
         val snapshot = _state.value
         if (snapshot.loading || snapshot.refreshing) return
-        load(forceRefresh = true)
+        load()
     }
 
     fun selectFilter(filter: NotificationFilter) {
@@ -125,22 +121,30 @@ class NotificationViewModel(
     }
 
     fun refresh() {
-        val now = System.currentTimeMillis()
-        if (now < rateLimitedUntilMillis) {
-            val seconds = ((rateLimitedUntilMillis - now) / 1000L).coerceAtLeast(1L)
-            _state.update { it.copy(notice = "AniList asked for a pause. Try again in ${seconds}s.") }
-            return
-        }
-        load(forceRefresh = true)
+        val snapshot = _state.value
+        if (snapshot.loading || snapshot.refreshing) return
+        if (pauseForRateLimit()) return
+        load()
     }
 
     fun dismissNotice() {
         _state.update { it.copy(notice = null) }
     }
 
+    /** One policy for pull, retry and the next page, so none of them bypass a 429. */
+    private fun pauseForRateLimit(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now >= rateLimitedUntilMillis) return false
+        val seconds = ((rateLimitedUntilMillis - now) / 1000L).coerceAtLeast(1L)
+        _state.update { it.copy(notice = "AniList asked for a pause. Try again in ${seconds}s.") }
+        return true
+    }
+
     fun retry() {
-        if (_state.value.items.isEmpty()) {
-            load(forceRefresh = true)
+        val snapshot = _state.value
+        if (snapshot.loading || snapshot.refreshing || snapshot.loadingMore) return
+        if (snapshot.items.isEmpty()) {
+            if (!pauseForRateLimit()) load()
         } else {
             loadMore()
         }
@@ -153,7 +157,6 @@ class NotificationViewModel(
         val ids = group.ids
         if (ids.isEmpty()) return
         readState = ids.fold(readState) { state, id -> state.markRead(id) }
-        _state.update { it.copy() }
         invalidate()
         val account = accountId ?: return
         viewModelScope.launch { readStore.markRead(account, ids) }
@@ -170,7 +173,6 @@ class NotificationViewModel(
     fun markAllRead() {
         val throughId = _state.value.items.maxOfOrNull { it.id } ?: return
         readState = readState.markAllRead(throughId)
-        _state.update { it.copy() }
         invalidate()
         val account = accountId ?: return
         viewModelScope.launch { readStore.markAllRead(account, throughId) }
@@ -183,7 +185,7 @@ class NotificationViewModel(
      * anchored read state, a refresh does not re-seed it: rows that were read
      * must not become new because the server count happened to grow.
      */
-    private fun load(forceRefresh: Boolean) {
+    private fun load() {
         var generation = ++loadGeneration
         _state.update {
             it.copy(
@@ -210,27 +212,43 @@ class NotificationViewModel(
                 // fence even though the refresh that replaced them has the same route.
                 generation = ++loadGeneration
             }
+            if (generation != loadGeneration) return@launch
 
-            aniListRepository.getNotifications(page = 1, forceRefresh = forceRefresh)
+            aniListRepository.getNotifications(page = 1, forceRefresh = true)
                 .onSuccess { page ->
                     if (generation != loadGeneration) return@onSuccess
-                    val current = _state.value.items
-                    val merged = merge(page.notifications, current)
+                    // A reset in Settings can land after this request began. Re-read
+                    // the fence before deciding whether to seed, or the page would
+                    // treat the old anchored mark as current and leave the reset
+                    // half-applied until the next entry. Equal generations union
+                    // optimistic reads instead of replacing them.
+                    val stored = readStore.load(viewer.id)
+                    if (generation != loadGeneration) return@onSuccess
+                    readState = readState.reconcile(stored)
                     if (!readState.anchored) {
                         val anchored = NotificationReadState.anchorFor(
                             ids = page.notifications.map { it.id },
                             serverUnreadCount = page.serverUnreadCount
+                        ).copy(
+                            resetGeneration = readState.resetGeneration,
+                            // Keep a row the reader opened after a Settings reset
+                            // but before this page re-seeded the baseline.
+                            readIds = readState.readIds
                         )
                         readState = anchored
                         readStore.anchor(viewer.id, anchored)
+                        if (generation != loadGeneration) return@onSuccess
                     }
-                    baselineResolved = true
                     nextPage = 2
+                    // Page one is a replacement, not a merge. Keeping rows from
+                    // older pages here left a deleted or read-through row on
+                    // screen forever, while the repository had already dropped
+                    // those cached pages for the same freshness reason.
                     _state.update {
                         it.copy(
                             loading = false,
                             refreshing = false,
-                            items = merged,
+                            items = merge(page.notifications, emptyList()),
                             hasMore = page.hasMore,
                             error = null
                         )
@@ -246,12 +264,16 @@ class NotificationViewModel(
         val message = failure.toInboxMessage()
         val limitedUntil = failure.rateLimitWaitMillis()
         if (limitedUntil != null) rateLimitedUntilMillis = System.currentTimeMillis() + limitedUntil
-        baselineResolved = true
         _state.update {
             it.copy(
                 loading = false,
                 refreshing = false,
                 loadingMore = false,
+                // The refresh cleared the repository page cache, so the old
+                // `nextPage` no longer points at a contiguous page of this
+                // snapshot. Stop paging until a page-one success resets the
+                // cursor; pulling again is the only safe way forward.
+                hasMore = false,
                 error = if (it.items.isEmpty()) message else null,
                 notice = if (it.items.isEmpty()) null else message
             )
@@ -262,6 +284,7 @@ class NotificationViewModel(
     fun loadMore() {
         val snapshot = _state.value
         if (!snapshot.hasMore || snapshot.loading || snapshot.loadingMore || snapshot.refreshing) return
+        if (pauseForRateLimit()) return
         val generation = loadGeneration
         val page = nextPage
         _state.update { it.copy(loadingMore = true, loadMoreError = null) }
@@ -310,19 +333,30 @@ class NotificationViewModel(
         accountCollector?.cancel()
         accountId = id
         readState = readStore.load(id)
-        baselineResolved = readState.anchored
         filterCache.clear()
-        _state.update { it.copy(items = emptyList(), groups = emptyList(), unreadCount = 0) }
+        _state.update {
+            it.copy(
+                // The old account's rows are gone, so this is an initial load
+                // even when the caller started from a pull-to-refresh state.
+                loading = true,
+                refreshing = false,
+                items = emptyList(),
+                groups = emptyList(),
+                unreadCount = 0,
+                hasMore = false,
+                loadMoreError = null
+            )
+        }
         invalidate()
         accountCollector = viewModelScope.launch {
             readStore.state(id).collect { stored ->
                 if (accountId != id) return@collect
-                // The anchor write and this Flow both run around the first page.
-                // A stored "not anchored" emission must not undo an anchor the
-                // current request just established; the write will follow.
-                if (!baselineResolved && readState.anchored && !stored.anchored) return@collect
-                if (readState != stored) {
-                    readState = stored
+                // Equal generations are unioned, so a Flow emission queued
+                // before an optimistic mark cannot resurrect the row. A newer
+                // generation is the Settings reset and is allowed to clear it.
+                val reconciled = readState.reconcile(stored)
+                if (reconciled != readState) {
+                    readState = reconciled
                     invalidate()
                 }
             }

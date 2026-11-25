@@ -84,7 +84,9 @@ middleman server.
 - **Stats and social.** Score distribution, heatmaps, weekly charts, favourites,
   followers, and a comment thread you can quote, attach photos to, and search GIFs
   in - with an inbox you can reply from or dismiss a row out of, and what arrived
-  since you last read marked as new.
+  since you last read marked as new. A local-first notification centre collects
+  likes, replies, mentions, follows, airing episodes, media changes, submissions
+  and messages, with its own read mark on this device.
 
 ### Make it yours
 
@@ -113,8 +115,10 @@ middleman server.
 ### Deliberate non-goals
 
 No offline-first database (a stale list gives confidently wrong answers) and no
-notifications (a sideloaded app does not need a background poller). More, with
-reasoning, in [NOTES.md](NOTES.md#deliberate-non-goals).
+background or push notifications. The in-app notification centre refreshes when
+it is opened or pulled, with no poller, WorkManager job, Firebase path, channel
+or new permission. More, with reasoning, in
+[NOTES.md](NOTES.md#deliberate-non-goals).
 
 ---
 

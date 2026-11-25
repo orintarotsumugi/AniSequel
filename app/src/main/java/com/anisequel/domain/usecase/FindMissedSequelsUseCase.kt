@@ -51,33 +51,26 @@ class FindMissedSequelsUseCase {
         val otherListMediaIds = mutableSetOf<Int>()
 
         for (entry in allUserEntries) {
-            val mediaId = entry.media.id
-            val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
-            when {
-                entryStatus.equals("PLANNING", ignoreCase = true) -> plannedMediaIds.add(mediaId)
-                entryStatus.equals("CURRENT", ignoreCase = true) || entryStatus.equals("WATCHING", ignoreCase = true) -> watchingMediaIds.add(mediaId)
-                isWatched(entryStatus, entry.media.episodes, entry.progress) -> completedMediaIds.add(mediaId)
-                else -> otherListMediaIds.add(mediaId)
-            }
+            addListBucket(
+                mediaId = entry.media.id,
+                status = entry.status ?: entry.media.mediaListEntry?.status,
+                episodes = entry.media.episodes,
+                progress = entry.progress,
+                completed = completedMediaIds,
+                watching = watchingMediaIds,
+                planned = plannedMediaIds,
+                other = otherListMediaIds
+            )
         }
 
-        val includedRelations = filterCriteria.includedRelations
         val missedSequels = mutableListOf<MissedSequel>()
         // Performance optimization: prevent duplicate candidate allocations during discovery
         val seenSequelIds = mutableSetOf<Int>()
 
         for (entry in allUserEntries) {
             val entryStatus = entry.status ?: entry.media.mediaListEntry?.status
-            val isParentWatched = isWatched(entryStatus, entry.media.episodes, entry.progress)
-            val isParentWatching = entryStatus.equals("CURRENT", ignoreCase = true) || entryStatus.equals("WATCHING", ignoreCase = true)
-            val isParentOther = !isParentWatched && !isParentWatching && !entryStatus.equals("PLANNING", ignoreCase = true)
-
             // Can this entry serve as a parent from which to explore franchise edges?
-            val canExploreFromParent = isParentWatched ||
-                (filterCriteria.includeCurrentlyWatching && isParentWatching) ||
-                (filterCriteria.includeInList && (isParentWatching || isParentOther))
-
-            if (!canExploreFromParent) continue
+            if (!canExploreFromParent(entryStatus, entry.media.episodes, entry.progress, filterCriteria)) continue
 
             val parentMedia = entry.media
             val parentTitle = parentMedia.title?.displayTitle ?: "Anime #${parentMedia.id}"
@@ -88,41 +81,20 @@ class FindMissedSequelsUseCase {
 
                 // Matched case-insensitively against the handful of included
                 // kinds rather than by uppercasing the value first.
-                val relationKind = includedRelations.firstOrNull {
-                    it.apiValue.equals(relationType, ignoreCase = true)
-                } ?: continue
+                val relationKind = includedRelationApiValue(relationType, filterCriteria) ?: continue
 
                 val sequelNode = edge.node
                 val sequelId = sequelNode.id
 
-                val isWatching = watchingMediaIds.contains(sequelId) ||
-                    sequelNode.mediaListEntry?.status.equals("CURRENT", ignoreCase = true) ||
-                    sequelNode.mediaListEntry?.status.equals("WATCHING", ignoreCase = true)
-
-                val isCompleted = completedMediaIds.contains(sequelId) ||
-                    sequelNode.mediaListEntry?.status.equals("COMPLETED", ignoreCase = true)
-
-                val isOtherList = otherListMediaIds.contains(sequelId)
-
-                val isPlanned = plannedMediaIds.contains(sequelId) ||
-                    sequelNode.mediaListEntry?.status.equals("PLANNING", ignoreCase = true)
-
-                // Skip rules based on toggles:
-                // 1. If currently watching: only keep if includeCurrentlyWatching or includeInList is on
-                if (isWatching && !filterCriteria.includeCurrentlyWatching && !filterCriteria.includeInList) {
-                    continue
-                }
-                // 2. If already completed or in other list (paused/dropped): only keep if includeInList is on
-                if ((isCompleted || isOtherList) && !filterCriteria.includeInList) {
-                    continue
-                }
-                // 3. If in planning: respect hideAlreadyPlanned (unless includeInList is on)
-                if (isPlanned && filterCriteria.hideAlreadyPlanned && !filterCriteria.includeInList) {
-                    continue
-                }
-
-                // The user's own "do not remind me about this one again".
-                if (!includeHidden && filterCriteria.hiddenMediaIds.contains(sequelId)) continue
+                val flags = listFlagsFor(
+                    sequelId = sequelId,
+                    listStatus = sequelNode.mediaListEntry?.status,
+                    completed = completedMediaIds,
+                    watching = watchingMediaIds,
+                    planned = plannedMediaIds,
+                    other = otherListMediaIds
+                )
+                if (shouldSkipSequel(flags, sequelId, filterCriteria, includeHidden)) continue
 
                 // Dedup on the fly: the same sequel reachable from two parents is one gap
                 if (!seenSequelIds.add(sequelId)) continue
@@ -139,9 +111,9 @@ class FindMissedSequelsUseCase {
                         parentCoverColor = parentMedia.coverImage?.color,
                         parentCompletedYear = parentCompletedYear,
                         sequelMedia = sequelNode,
-                        relationType = relationKind.apiValue,
-                        isAddedToPlanning = isPlanned,
-                        isAddedToWatching = isWatching
+                        relationType = relationKind,
+                        isAddedToPlanning = flags.planned,
+                        isAddedToWatching = flags.watching
                     )
                 )
             }
@@ -149,6 +121,90 @@ class FindMissedSequelsUseCase {
 
         return missedSequels
     }
+
+
+private data class SequelListFlags(
+    val watching: Boolean,
+    val completed: Boolean,
+    val other: Boolean,
+    val planned: Boolean
+)
+
+/** Which bucket an entry belongs to; the same answer [discover] uses later. */
+private fun addListBucket(
+    mediaId: Int,
+    status: String?,
+    episodes: Int?,
+    progress: Int?,
+    completed: MutableSet<Int>,
+    watching: MutableSet<Int>,
+    planned: MutableSet<Int>,
+    other: MutableSet<Int>
+) {
+    when {
+        status.equals("PLANNING", ignoreCase = true) -> planned.add(mediaId)
+        status.equals("CURRENT", ignoreCase = true) ||
+            status.equals("WATCHING", ignoreCase = true) -> watching.add(mediaId)
+        isWatched(status, episodes, progress) -> completed.add(mediaId)
+        else -> other.add(mediaId)
+    }
+}
+
+private fun canExploreFromParent(
+    status: String?,
+    episodes: Int?,
+    progress: Int?,
+    criteria: FilterCriteria
+): Boolean {
+    val watched = isWatched(status, episodes, progress)
+    val watching = status.equals("CURRENT", ignoreCase = true) ||
+        status.equals("WATCHING", ignoreCase = true)
+    val other = !watched && !watching && !status.equals("PLANNING", ignoreCase = true)
+    return watched ||
+        (criteria.includeCurrentlyWatching && watching) ||
+        (criteria.includeInList && (watching || other))
+}
+
+private fun includedRelationApiValue(
+    relationType: String,
+    criteria: FilterCriteria
+): String? = criteria.includedRelations.firstOrNull {
+    it.apiValue.equals(relationType, ignoreCase = true)
+}?.apiValue
+
+private fun listFlagsFor(
+    sequelId: Int,
+    listStatus: String?,
+    completed: Set<Int>,
+    watching: Set<Int>,
+    planned: Set<Int>,
+    other: Set<Int>
+): SequelListFlags = SequelListFlags(
+    watching = watching.contains(sequelId) ||
+        listStatus.equals("CURRENT", ignoreCase = true) ||
+        listStatus.equals("WATCHING", ignoreCase = true),
+    completed = completed.contains(sequelId) ||
+        listStatus.equals("COMPLETED", ignoreCase = true),
+    other = other.contains(sequelId),
+    planned = planned.contains(sequelId) ||
+        listStatus.equals("PLANNING", ignoreCase = true)
+)
+
+private fun shouldSkipSequel(
+    flags: SequelListFlags,
+    sequelId: Int,
+    criteria: FilterCriteria,
+    includeHidden: Boolean
+): Boolean {
+    // 1. If currently watching: only keep if includeCurrentlyWatching or includeInList is on
+    if (flags.watching && !criteria.includeCurrentlyWatching && !criteria.includeInList) return true
+    // 2. If already completed or in other list (paused/dropped): only keep if includeInList is on
+    if ((flags.completed || flags.other) && !criteria.includeInList) return true
+    // 3. If in planning: respect hideAlreadyPlanned (unless includeInList is on)
+    if (flags.planned && criteria.hideAlreadyPlanned && !criteria.includeInList) return true
+    // The user's own "do not remind me about this one again".
+    return !includeHidden && criteria.hiddenMediaIds.contains(sequelId)
+}
 
     /**
      * Filters and orders candidates. Cheap enough to re-run on every keystroke,

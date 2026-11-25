@@ -13,6 +13,7 @@ import com.anisequel.domain.notifications.ActivityNotification
 import com.anisequel.domain.notifications.AiringNotification
 import com.anisequel.domain.notifications.MessageNotification
 import com.anisequel.domain.notifications.NotificationKind
+import com.anisequel.domain.notifications.NotificationTarget
 import com.anisequel.domain.notifications.ThreadNotification
 import com.anisequel.domain.notifications.UnknownNotification
 import com.squareup.moshi.Moshi
@@ -188,6 +189,40 @@ class NotificationMappingTest {
         assertEquals(listOf(5, 9), page.notifications.map { it.id })
         assertTrue(page.notifications[1] is ThreadNotification)
         assertNull(page.notifications[1].createdAt)
+    }
+
+    @Test
+    fun `a thread comment uses the canonical URL instead of a guessed anchor`() {
+        val commentUrl = "https://anilist.co/forum/thread/2/comment/3"
+        val row = parseNotifications(
+            NotificationsData(
+                page = NotificationsPage(
+                    notifications = listOf(
+                        NotificationNode(
+                            id = 10,
+                            typename = "ThreadCommentReplyNotification",
+                            type = "THREAD_COMMENT_REPLY",
+                            createdAt = 10,
+                            thread = NotificationThreadNode(
+                                id = 2,
+                                title = "thread",
+                                siteUrl = "https://anilist.co/forum/thread/2"
+                            ),
+                            comment = NotificationCommentNode(
+                                id = 3,
+                                comment = "reply",
+                                siteUrl = commentUrl
+                            )
+                        )
+                    )
+                )
+            )
+        ).notifications.single() as ThreadNotification
+
+        assertEquals(
+            commentUrl,
+            (row.target as NotificationTarget.Thread).siteUrl
+        )
     }
 
     @Test

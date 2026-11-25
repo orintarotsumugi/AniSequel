@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -50,12 +49,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -79,6 +78,7 @@ import com.anisequel.ui.viewmodel.NotificationUiState
 import com.anisequel.ui.viewmodel.NotificationViewModel
 import kotlinx.coroutines.delay
 import java.time.Instant
+import java.util.Locale
 
 /**
  * The notification inbox.
@@ -102,7 +102,9 @@ fun NotificationCenterScreen(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     // One clock for the whole visible page. Calling Instant.now() inside every
     // timestamp is the same value 40 times and a recomposition hazard besides.
-    val now = remember(state.items.size) { Instant.now() }
+    // Keying on the list and the refresh flag, not its size, also refreshes
+    // the clock when a pull returns the same page it already showed.
+    val now = remember(state.items, state.refreshing) { Instant.now() }
 
     BackHandler(onBack = onNavigateBack)
     LaunchedEffect(Unit) { viewModel.start() }
@@ -186,7 +188,7 @@ private fun InboxTopBar(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Likes, replies, follows and airing episodes",
+                    text = "Your AniList activity, in one place",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -228,6 +230,11 @@ private fun InboxTopBar(
 
 @Composable
 private fun UnreadPill(unreadCount: Int) {
+    val description = when {
+        unreadCount <= 0 -> "All notifications read"
+        unreadCount == 1 -> "1 unread notification"
+        else -> "$unreadCount unread notifications"
+    }
     Surface(
         shape = CircleShape,
         color = if (unreadCount > 0) {
@@ -235,7 +242,10 @@ private fun UnreadPill(unreadCount: Int) {
         } else {
             MaterialTheme.colorScheme.surfaceContainerHigh
         },
-        modifier = Modifier.padding(end = 2.dp)
+        modifier = Modifier
+            .padding(end = 2.dp)
+            .clearAndSetSemantics { contentDescription = description }
+            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
     ) {
         AnimatedContent(
             targetState = unreadCount,
@@ -246,7 +256,11 @@ private fun UnreadPill(unreadCount: Int) {
             label = "unread_pill_count"
         ) { count ->
             Text(
-                text = if (count <= 0) "All read" else "$count new",
+                text = when {
+                    count <= 0 -> "All read"
+                    count > 99 -> "99+ new"
+                    else -> "$count new"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (count > 0) {
@@ -254,6 +268,8 @@ private fun UnreadPill(unreadCount: Int) {
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
+                maxLines = 1,
+                softWrap = false,
                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
             )
         }
@@ -281,9 +297,9 @@ private fun FilterRow(
                     label = filter.label,
                     selected = selected == filter,
                     onClick = { onSelect(filter) },
-                    minTouchTargetHeight = 44.dp,
+                    minTouchTargetHeight = 48.dp,
                     role = androidx.compose.ui.semantics.Role.RadioButton,
-                    onClickLabel = "Show ${filter.label.lowercase()}"
+                    onClickLabel = "Show ${filter.label.lowercase(Locale.ROOT)}"
                 )
             }
         }
@@ -312,15 +328,17 @@ private fun InboxContent(
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
             val count = latestState.value
-            // The unfiltered item count is deliberately absent: a filter can have
-            // no rows in the first page while older pages still hold matches,
-            // and gating on that count hid the case behind a permanent empty state.
+            // One page is requested at a time. A failed page also stops the
+            // trigger; without that it went false on failure and true again on
+            // the next frame, retrying a rate-limited inbox in a loop.
             //
-            // A failed page also stops the trigger. Without it the effect went
-            // false on failure and true again on the next frame, retrying a
-            // rate-limited inbox in a loop.
-            count.hasMore && !count.loadingMore && count.loadMoreError == null &&
-                last >= info.totalItemsCount - 4
+            // An empty filtered view loads nothing automatically. Otherwise a
+            // chip with no match on page one walked the entire notification
+            // history while the reader watched a spinner. The empty state
+            // offers one explicit "Load older" instead.
+            count.groups.isNotEmpty() && count.hasMore &&
+                !count.loading && !count.refreshing && !count.loadingMore &&
+                count.loadMoreError == null && last >= info.totalItemsCount - 4
         }
     }
     LaunchedEffect(shouldLoadMore) {
@@ -361,94 +379,98 @@ private fun InboxContent(
                     top = 4.dp,
                     bottom = 28.dp
                 ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            when {
-                state.loading && state.items.isEmpty() -> {
-                    items(5, key = { "skeleton_$it" }) { index ->
-                        // The branch above guarantees the phase was created.
-                        SkeletonCard(media = index % 3 == 0, phase = skeletonPhase!!)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                when {
+                    state.loading && state.items.isEmpty() -> {
+                        items(5, key = { "skeleton_$it" }) { index ->
+                            // The branch above guarantees the phase was created.
+                            SkeletonCard(media = index % 3 == 0, phase = skeletonPhase!!)
+                        }
                     }
-                }
 
-                state.error != null && state.items.isEmpty() -> {
-                    item(key = "error") {
-                        ErrorState(
-                            message = state.error,
-                            onRetry = onRetry,
-                            modifier = Modifier.fillParentMaxSize()
-                        )
+                    state.error != null && state.items.isEmpty() -> {
+                        item(key = "error") {
+                            ErrorState(
+                                message = state.error,
+                                onRetry = onRetry,
+                                modifier = Modifier.fillParentMaxSize()
+                            )
+                        }
                     }
-                }
 
-                state.groups.isEmpty() -> {
-                    item(key = "empty") {
-                        EmptyState(
-                            filtered = state.items.isNotEmpty(),
-                            allCategoriesOff = state.preferences.allCategoriesOff,
-                            onResetFilter = onResetFilter,
-                            onOpenSettings = onOpenSettings,
-                            modifier = Modifier.fillParentMaxSize()
-                        )
+                    state.groups.isEmpty() -> {
+                        item(key = "empty") {
+                            EmptyState(
+                                filtered = state.items.isNotEmpty(),
+                                allCategoriesOff = state.preferences.allCategoriesOff,
+                                hasMore = state.hasMore,
+                                loadingMore = state.loadingMore,
+                                loadMoreError = state.loadMoreError,
+                                onResetFilter = onResetFilter,
+                                onLoadMore = onLoadMore,
+                                onOpenSettings = onOpenSettings,
+                                modifier = Modifier.fillParentMaxSize()
+                            )
+                        }
                     }
-                }
 
-                else -> {
-                    if (unread.isNotEmpty()) {
-                        item(key = "new_header") {
-                            SectionHeader(
-                                title = "New",
-                                count = unread.sumOf { it.members.size },
-                                onMarkAllRead = onMarkAllRead,
-                                showMarkAll = state.preferences.trackingEnabled
-                            )
-                        }
-                        itemsIndexed(unread, key = { _, group -> group.key }) { index, group ->
-                            NotificationEntrance(
-                                group = group,
-                                index = index,
-                                now = now,
-                                onOpen = { onOpenGroup(group) },
-                                modifier = Modifier.animateItem()
-                            )
-                        }
-                    }
-                    if (earlier.isNotEmpty()) {
-                        item(key = "earlier_header") {
-                            SectionHeader(
-                                title = "Earlier",
-                                count = earlier.sumOf { it.members.size },
-                                onMarkAllRead = onMarkAllRead,
-                                showMarkAll = state.preferences.trackingEnabled && unread.isEmpty()
-                            )
-                        }
-                        itemsIndexed(earlier, key = { _, group -> group.key }) { index, group ->
-                            NotificationEntrance(
-                                group = group,
-                                index = index + unread.size,
-                                now = now,
-                                onOpen = { onOpenGroup(group) },
-                                modifier = Modifier.animateItem()
-                            )
-                        }
-                    }
-                    if (state.loadingMore) {
-                        item(key = "loading_more") {
-                            Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    else -> {
+                        if (unread.isNotEmpty()) {
+                            item(key = "new_header") {
+                                SectionHeader(
+                                    title = "New",
+                                    count = unread.sumOf { it.unreadMemberCount },
+                                    onMarkAllRead = onMarkAllRead,
+                                    showMarkAll = state.preferences.trackingEnabled
+                                )
+                            }
+                            itemsIndexed(unread, key = { _, group -> group.key }) { index, group ->
+                                NotificationEntrance(
+                                    group = group,
+                                    index = index,
+                                    now = now,
+                                    onOpen = { onOpenGroup(group) },
+                                    modifier = Modifier.animateItem()
+                                )
                             }
                         }
-                    }
-                    if (state.loadMoreError != null) {
-                        // A failed page does not replace the rows already read; it
-                        // gets one line under them with its own retry.
-                        item(key = "load_more_error") {
-                            LoadMoreError(state.loadMoreError, onRetry)
+                        if (earlier.isNotEmpty()) {
+                            item(key = "earlier_header") {
+                                SectionHeader(
+                                    title = "Earlier",
+                                    count = earlier.sumOf { it.members.size },
+                                    onMarkAllRead = onMarkAllRead,
+                                    showMarkAll = state.preferences.trackingEnabled && unread.isEmpty()
+                                )
+                            }
+                            itemsIndexed(earlier, key = { _, group -> group.key }) { index, group ->
+                                NotificationEntrance(
+                                    group = group,
+                                    index = index + unread.size,
+                                    now = now,
+                                    onOpen = { onOpenGroup(group) },
+                                    modifier = Modifier.animateItem()
+                                )
+                            }
+                        }
+                        if (state.loadingMore) {
+                            item(key = "loading_more") {
+                                Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                }
+                            }
+                        }
+                        if (state.loadMoreError != null) {
+                            // A failed page does not replace the rows already read; it
+                            // gets one line under them with its own retry.
+                            item(key = "load_more_error") {
+                                LoadMoreError(state.loadMoreError, onRetry)
+                            }
                         }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -501,7 +523,7 @@ private fun SectionHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = title.uppercase(),
+            text = title.uppercase(Locale.ROOT),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -537,10 +559,17 @@ private fun SectionHeader(
 private fun EmptyState(
     filtered: Boolean,
     allCategoriesOff: Boolean,
+    hasMore: Boolean,
+    loadingMore: Boolean,
+    loadMoreError: String?,
     onResetFilter: () -> Unit,
+    onLoadMore: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A filtered page can be empty while older pages still contain a match. Do
+    // not walk those pages automatically; offer one deliberate step instead.
+    val canLoadOlder = filtered && !allCategoriesOff && hasMore
     Column(
         modifier = modifier.padding(horizontal = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -559,7 +588,8 @@ private fun EmptyState(
         Text(
             text = when {
                 allCategoriesOff -> "Your categories are off."
-                filtered -> "Nothing here yet."
+                filtered && canLoadOlder -> "No matches in these pages."
+                filtered -> "No matches in this inbox."
                 else -> "You're all caught up."
             },
             style = MaterialTheme.typography.headlineSmall,
@@ -571,10 +601,12 @@ private fun EmptyState(
             text = when {
                 allCategoriesOff ->
                     "Every category is switched off in Notification settings, so there is nothing to show here. Turn one back on to see your inbox."
+                canLoadOlder ->
+                    "No loaded notification matches this filter. Older notifications may still have one, or you can switch back to everything."
                 filtered ->
                     "No notifications match this filter. Switch back to everything to see the rest of your inbox."
                 else ->
-                    "Likes, replies, follows and airing episodes will land here when they need you. There is no background checking, so this page refreshes when you open it or pull down."
+                    "Likes, replies, follows, messages and title updates will land here when they need you. There is no background checking, so this page refreshes when you open it or pull down."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -589,6 +621,26 @@ private fun EmptyState(
             },
             onClick = if (filtered && !allCategoriesOff) onResetFilter else onOpenSettings
         )
+        if (canLoadOlder) {
+            if (loadMoreError != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = loadMoreError,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+            TextButton(onClick = onLoadMore, enabled = !loadingMore) {
+                if (loadingMore) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (loadMoreError == null) "Loading older notifications" else "Retrying")
+                } else {
+                    Text(if (loadMoreError == null) "Load older notifications" else "Retry older notifications")
+                }
+            }
+        }
     }
 }
 

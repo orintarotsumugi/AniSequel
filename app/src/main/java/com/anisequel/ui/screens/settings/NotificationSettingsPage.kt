@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +46,10 @@ internal fun NotificationSettingsPage(
         initialValue = NotificationPreferences()
     )
     val scope = rememberCoroutineScope()
-    var reset by rememberSaveable { mutableStateOf(false) }
+    // Keyed by account: a confirmation must not follow the reader into a
+    // different profile after switching accounts.
+    var confirmReset by rememberSaveable(viewer?.id) { mutableStateOf(false) }
+    var didReset by rememberSaveable(viewer?.id) { mutableStateOf(false) }
 
     SettingsScrollColumn(modifier = modifier) {
         SectionCard(
@@ -84,24 +88,25 @@ internal fun NotificationSettingsPage(
                     text = if (viewer == null) {
                         "Sign in to reset your own read history. The demo has none to reset."
                     } else {
-                        "Forget every read mark and baseline for this account. Rows will be treated as unread again, based on the server count at the next inbox load."
+                        "Forget every read mark and baseline for this account. The next inbox load re-seeds which rows are new from the server count."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 TextButton(
-                    onClick = {
-                        val account = viewer?.id ?: return@TextButton
-                        scope.launch {
-                            readStore.reset(account)
-                            reset = true
-                        }
-                    },
+                    onClick = { confirmReset = true },
                     enabled = viewer != null,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                     modifier = Modifier.testTag("notification_reset_read")
                 ) {
-                    Text(if (reset) "Read history reset" else "Reset read history")
+                    Text("Reset read history")
+                }
+                if (didReset) {
+                    Text(
+                        text = "Read history reset. The next inbox load seeds a fresh baseline.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -190,6 +195,38 @@ internal fun NotificationSettingsPage(
             text = "These are inbox filters, not Android notifications. The app does not poll in the background; the inbox refreshes when you open it or pull down.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    if (confirmReset && viewer != null) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Reset local read history?") },
+            text = {
+                Text(
+                    "This clears every local read marker for ${viewer.name}. The next inbox " +
+                        "load starts again from the server count. AniList itself is not changed."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmReset = false
+                        scope.launch {
+                            readStore.reset(viewer.id)
+                            didReset = true
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Reset")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

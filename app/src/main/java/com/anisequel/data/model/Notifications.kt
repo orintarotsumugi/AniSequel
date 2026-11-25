@@ -45,13 +45,15 @@ data class NotificationNode(
 @JsonClass(generateAdapter = true)
 data class NotificationThreadNode(
     val id: Int,
-    val title: String? = null
+    val title: String? = null,
+    val siteUrl: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class NotificationCommentNode(
     val id: Int,
-    val comment: String? = null
+    val comment: String? = null,
+    val siteUrl: String? = null
 )
 
 @JsonClass(generateAdapter = true)

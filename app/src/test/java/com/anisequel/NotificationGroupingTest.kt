@@ -134,6 +134,7 @@ class NotificationGroupingTest {
         val groups = groupNotifications(notifications) { it.id == 29 }
 
         assertTrue(groups.single().isUnread)
+        assertEquals(1, groups.single().unreadMemberCount)
     }
 
     @Test

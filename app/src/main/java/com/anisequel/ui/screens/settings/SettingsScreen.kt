@@ -395,7 +395,11 @@ fun SettingsScreen(
 
     BackHandler {
         when {
-            page != null -> {
+            // The inbox opens this route directly on Notifications. Back there
+            // should return to the inbox, not reveal a Settings hub the reader
+            // never visited; a page they navigated to from that hub still steps
+            // back to the hub as usual.
+            page != null && !(startOnNotifications && page == SettingsPage.NOTIFICATIONS) -> {
                 page = null
                 targetSection = null
             }
@@ -465,8 +469,17 @@ fun SettingsScreen(
                                     title = destination.title,
                                     subtitle = destination.subtitle,
                                     onBack = {
-                                        page = null
-                                        targetSection = null
+                                        // The inbox opened this route on
+                                        // Notifications directly. Its own
+                                        // back button must agree with system
+                                        // Back and return there, not reveal
+                                        // an unvisited Settings hub.
+                                        if (startOnNotifications && destination == SettingsPage.NOTIFICATIONS) {
+                                            onNavigateBack()
+                                        } else {
+                                            page = null
+                                            targetSection = null
+                                        }
                                     }
                                 )
                             }

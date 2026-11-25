@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -556,24 +557,11 @@ internal fun TierBoardScreen(
             // children, and a ghost clipped to a shrinking tray would be cut off
             // mid-gesture. The ghost is only non-null while a drag is live, so
             // this costs nothing when the pool is empty.
-            val draggingId = trayDrag.mediaId
-            val ghostCandidate = unranked.firstOrNull { it.mediaId == draggingId }
-            if (ghostCandidate != null) {
-                TierTrayGhost(
-                    candidate = ghostCandidate,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .graphicsLayer {
-                            // The drag tracks the finger in *window* pixels and
-                            // this box is laid out from the viewport's own top-left,
-                            // so the difference between the two is the whole
-                            // translation. Read in the draw phase, so moving the
-                            // ghost costs a repaint rather than a recomposition.
-                            translationX = trayDrag.posterX - viewport.viewportLeft
-                            translationY = trayDrag.liftedY - viewport.viewportTop
-                        }
-                )
-            }
+            TierTrayGhostOverlay(
+                trayDrag = trayDrag,
+                unranked = unranked,
+                viewport = viewport
+            )
         }
     }
 
@@ -609,6 +597,34 @@ internal fun TierBoardScreen(
             onClearPlacements = onClearPlacements
         )
     )
+}
+
+
+/**
+ * The pool poster that follows the finger.
+ *
+ * A sibling of the tray rather than a child, because the tray clips its content
+ * while it expands. The drag position is read in the draw phase, so moving the
+ * ghost costs a repaint instead of a recomposition of the board.
+ */
+@Composable
+private fun BoxScope.TierTrayGhostOverlay(
+    trayDrag: TierTrayDrag,
+    unranked: List<TierCandidate>,
+    viewport: TierBoardViewport
+) {
+    val ghostCandidate = unranked.firstOrNull { it.mediaId == trayDrag.mediaId }
+    if (ghostCandidate != null) {
+        TierTrayGhost(
+            candidate = ghostCandidate,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .graphicsLayer {
+                    translationX = trayDrag.posterX - viewport.viewportLeft
+                    translationY = trayDrag.liftedY - viewport.viewportTop
+                }
+        )
+    }
 }
 
 /**

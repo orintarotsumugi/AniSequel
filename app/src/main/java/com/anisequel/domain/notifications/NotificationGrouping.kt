@@ -14,7 +14,13 @@ data class NotificationGroup(
     val key: String,
     val members: List<InboxNotification>,
     val representative: InboxNotification,
-    val isUnread: Boolean
+    val isUnread: Boolean,
+    /**
+     * Unread members, which is not [members].size: a folded like row can still
+     * be "new" because one person is unread while the other two were opened.
+     * The New heading counts this, so it agrees with the pill.
+     */
+    val unreadMemberCount: Int
 ) {
     val ids: List<Int> get() = members.map { it.id }
     val actorCount: Int get() = actors.size
@@ -42,11 +48,13 @@ fun groupNotifications(
     for (notification in notifications) {
         val key = notification.groupKey
         if (key == null) {
+            val unread = isUnread(notification)
             singles += NotificationGroup(
                 key = "single:${notification.id}",
                 members = listOf(notification),
                 representative = notification,
-                isUnread = isUnread(notification)
+                isUnread = unread,
+                unreadMemberCount = if (unread) 1 else 0
             )
         } else {
             groups.getOrPut(key) { mutableListOf() } += notification
@@ -54,11 +62,13 @@ fun groupNotifications(
     }
 
     val folded = groups.map { (key, members) ->
+        val unread = members.count(isUnread)
         NotificationGroup(
             key = key,
             members = members,
             representative = members.first(),
-            isUnread = members.any(isUnread)
+            isUnread = unread > 0,
+            unreadMemberCount = unread
         )
     }
     return (singles + folded).sortedWith(

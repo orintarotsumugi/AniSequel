@@ -37,6 +37,140 @@ import com.anisequel.ui.theme.LocalAppDarkTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
+
+/** The live swatch card, or nothing before a colour has been borrowed. */
+@Composable
+private fun AnimeColourSwatch(
+    ramp: List<Color>?,
+    layerIsLive: Boolean,
+    liveHex: String?,
+    retained: Boolean
+) {
+    if (ramp == null) return
+    Surface(
+        shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner),
+                color = Color.Transparent,
+                border = BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant
+                ),
+                modifier = Modifier.size(30.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.linearGradient(ramp))
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (layerIsLive) "Now matching this anime" else "Keeping this show's colour",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = if (layerIsLive) {
+                        liveHex ?: "cover colour"
+                    } else {
+                        "Accent and background, kept"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = if (retained) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHighest
+                }
+            ) {
+                Text(
+                    text = if (retained) "Retained" else "Temporary",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (retained) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+}
+
+
+/** The "revert after closing" picker, dimmed while retention is on. */
+@Composable
+private fun AnimeColourRevert(
+    themePreferences: ThemePreferences,
+    settings: ThemePreferences.ThemeSettings,
+    scope: CoroutineScope
+) {
+Spacer(modifier = Modifier.height(14.dp))
+SettingsFieldLabel(text = "Revert after closing the anime")
+Spacer(modifier = Modifier.height(6.dp))
+val revertOptions = listOf("Immediately", "5 minutes", "10 minutes")
+val revertValues = listOf(0, 300, 600)
+// An unknown stored value falls back to "5 minutes", but a real 0
+// must survive: the previous `.coerceAtLeast(1)` clamped 0 up to 1, so
+// "Immediately" could never be shown, and picking it snapped straight
+// back to "5 minutes". Index -1 (a value not in the list) is the only
+// case the fallback is for.
+val storedRevertIndex = revertValues.indexOf(settings.animeThemeRevertDuration)
+val currentRevertIndex = if (storedRevertIndex >= 0) storedRevertIndex else 1
+// While retaining, there is no revert to configure: the colour is kept,
+// so the picker is shown dimmed rather than silently ignored.
+val revertEnabled = settings.animeThemeEnabled && !settings.animeThemeRetainColor
+ExpressivePolygonSegmentedBar(
+    // No icons: the same `Restore` glyph three times over is three
+    // identical pictures next to three different answers, so it decorated
+    // the choice instead of helping it.
+    options = revertOptions.map { SegmentedOption(label = it) },
+    selectedIndex = currentRevertIndex,
+    onSelect = { index ->
+        if (revertEnabled) {
+            scope.launch { themePreferences.setAnimeThemeRevertDuration(revertValues[index]) }
+        }
+    },
+    modifier = Modifier
+        .alpha(if (revertEnabled) 1f else 0.4f)
+        .testTag("anime_theme_revert_duration_row"),
+    enabled = revertEnabled
+)
+Spacer(modifier = Modifier.height(8.dp))
+CollapsibleText(
+    text = when {
+        !settings.animeThemeEnabled ->
+            "Anime dynamic theme is off, so no colour is borrowed and there " +
+                "is nothing to revert. Turn it on above to set this."
+        settings.animeThemeRetainColor ->
+            "Being kept: the colour survives the sheet and the next launch, tinted " +
+                "background included. Pick a palette, a hue, or Reset appearance to " +
+                "take it back."
+        else ->
+            "Return to your usual theme the moment the sheet closes, or after a set time."
+    },
+    style = MaterialTheme.typography.bodySmall,
+    color = MaterialTheme.colorScheme.onSurfaceVariant
+)
+}
+
 /**
  * Anime colour matching — content-based dynamic colour.
  *
@@ -94,73 +228,12 @@ internal fun AnimeColourSection(
     ) {
         // A live snapshot of the colour currently driving the scheme, so the
         // feature is never a mystery while it is active.
-        if (swatchRamp != null) {
-            Surface(
-                shape = RoundedCornerShape(ExpressiveShapes.MediumCorner),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(ExpressiveShapes.ExtraSmallCorner),
-                        color = Color.Transparent,
-                        border = BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.outlineVariant
-                        ),
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Brush.linearGradient(swatchRamp))
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (layerIsLive) "Now matching this anime" else "Keeping this show's colour",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (layerIsLive) {
-                                liveHex ?: "cover colour"
-                            } else {
-                                "Accent and background, kept"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(percent = 50),
-                        color = if (settings.animeThemeRetainColor) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        }
-                    ) {
-                        Text(
-                            text = if (settings.animeThemeRetainColor) "Retained" else "Temporary",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (settings.animeThemeRetainColor) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-        }
+        AnimeColourSwatch(
+            ramp = swatchRamp,
+            layerIsLive = layerIsLive,
+            liveHex = liveHex,
+            retained = settings.animeThemeRetainColor
+        )
 
         SwitchRow(
             title = "Anime dynamic theme",
@@ -239,52 +312,6 @@ internal fun AnimeColourSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
-        SettingsFieldLabel(text = "Revert after closing the anime")
-        Spacer(modifier = Modifier.height(6.dp))
-        val revertOptions = listOf("Immediately", "5 minutes", "10 minutes")
-        val revertValues = listOf(0, 300, 600)
-        // An unknown stored value falls back to "5 minutes", but a real 0
-        // must survive: the previous `.coerceAtLeast(1)` clamped 0 up to 1, so
-        // "Immediately" could never be shown, and picking it snapped straight
-        // back to "5 minutes". Index -1 (a value not in the list) is the only
-        // case the fallback is for.
-        val storedRevertIndex = revertValues.indexOf(settings.animeThemeRevertDuration)
-        val currentRevertIndex = if (storedRevertIndex >= 0) storedRevertIndex else 1
-        // While retaining, there is no revert to configure: the colour is kept,
-        // so the picker is shown dimmed rather than silently ignored.
-        val revertEnabled = settings.animeThemeEnabled && !settings.animeThemeRetainColor
-        ExpressivePolygonSegmentedBar(
-            // No icons: the same `Restore` glyph three times over is three
-            // identical pictures next to three different answers, so it decorated
-            // the choice instead of helping it.
-            options = revertOptions.map { SegmentedOption(label = it) },
-            selectedIndex = currentRevertIndex,
-            onSelect = { index ->
-                if (revertEnabled) {
-                    scope.launch { themePreferences.setAnimeThemeRevertDuration(revertValues[index]) }
-                }
-            },
-            modifier = Modifier
-                .alpha(if (revertEnabled) 1f else 0.4f)
-                .testTag("anime_theme_revert_duration_row"),
-            enabled = revertEnabled
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        CollapsibleText(
-            text = when {
-                !settings.animeThemeEnabled ->
-                    "Anime dynamic theme is off, so no colour is borrowed and there " +
-                        "is nothing to revert. Turn it on above to set this."
-                settings.animeThemeRetainColor ->
-                    "Being kept: the colour survives the sheet and the next launch, tinted " +
-                        "background included. Pick a palette, a hue, or Reset appearance to " +
-                        "take it back."
-                else ->
-                    "Return to your usual theme the moment the sheet closes, or after a set time."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        AnimeColourRevert(themePreferences, settings, scope)
     }
 }

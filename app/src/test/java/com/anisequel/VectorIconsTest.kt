@@ -134,7 +134,8 @@ class VectorIconsTest {
             .filter { it.isIconGetter() }
             .map { method ->
                 val property = method.name.removePrefix("get")
-                property to (method.invoke(container) as ImageVector)
+                val icon = method.invoke(container) as ImageVector
+                property to icon
             }
 
     private fun Method.isIconGetter(): Boolean =

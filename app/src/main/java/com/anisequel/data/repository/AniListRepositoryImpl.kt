@@ -1349,7 +1349,7 @@ class AniListRepositoryImpl(
                 }
                 if (existingGroupIndex >= 0) {
                     val existingGroup = allLists[existingGroupIndex]
-                    val mergedEntries = ((existingGroup.entries ?: emptyList()) + (nextGroup.entries ?: emptyList()))
+                    val mergedEntries = (existingGroup.entries ?: emptyList()) + (nextGroup.entries ?: emptyList())
                     allLists[existingGroupIndex] = existingGroup.copy(entries = mergedEntries)
                 } else {
                     allLists.add(nextGroup)
@@ -2922,8 +2922,8 @@ internal fun NotificationNode.toInboxNotification(): InboxNotification? {
                 kind = kind ?: NotificationKind.THREAD_COMMENT_REPLY,
                 createdAt = createdAt,
                 actor = actor,
-                thread = thread?.let { NotificationThread(it.id, it.title) },
-                comment = comment?.let { NotificationComment(it.id, it.comment) },
+                thread = thread?.let { NotificationThread(it.id, it.title, it.siteUrl) },
+                comment = comment?.let { NotificationComment(it.id, it.comment, it.siteUrl) },
                 context = context
             )
 

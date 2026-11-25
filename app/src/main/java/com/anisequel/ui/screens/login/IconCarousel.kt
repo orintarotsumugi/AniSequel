@@ -136,17 +136,13 @@ fun IconCarousel(
                     // way in - springs come from the app's ExpressiveMotion
                     // tokens because this runs continuously rather than in
                     // response to a user action.
-                    (
-                        fadeIn(ExpressiveMotion.DefaultEffects) + scaleIn(
-                            initialScale = 0.72f,
-                            animationSpec = ExpressiveMotion.BouncySpatial
-                        )
-                        ) togetherWith (
-                        fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
-                            targetScale = 0.82f,
-                            animationSpec = ExpressiveMotion.FastSpatial
-                        )
-                        ) using null
+                    fadeIn(ExpressiveMotion.DefaultEffects) + scaleIn(
+                        initialScale = 0.72f,
+                        animationSpec = ExpressiveMotion.BouncySpatial
+                    ) togetherWith fadeOut(ExpressiveMotion.FastEffects) + scaleOut(
+                        targetScale = 0.82f,
+                        animationSpec = ExpressiveMotion.FastSpatial
+                    ) using null
                 },
                 label = "login_icon_carousel"
             ) { current ->

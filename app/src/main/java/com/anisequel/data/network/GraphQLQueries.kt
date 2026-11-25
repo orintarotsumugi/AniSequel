@@ -376,6 +376,51 @@ object GraphQLQueries {
     """.trimIndent()
 
     /**
+     * The union selection shared by the two feeds that ask for every activity
+     * type, not one profile's slice.
+     *
+     * The two documents used to carry byte-identical copies. They are the same
+     * feed with one server filter between them, so a field added to one card has
+     * to reach the other; keeping the copy was a promise the next edit would
+     * break silently.
+     */
+    private val ACTIVITY_FEED_SELECTION = """
+        ... on ListActivity {
+          id
+          status
+          progress
+          createdAt
+          likeCount
+          replyCount
+          isLiked
+          siteUrl
+          user { id name avatar { medium large } }
+          media {
+            id
+            type
+            format
+            episodes
+            chapters
+            volumes
+            title { english romaji native }
+            coverImage { extraLarge large color }
+            bannerImage
+            siteUrl
+          }
+        }
+        ... on TextActivity {
+          id
+          text
+          createdAt
+          likeCount
+          replyCount
+          isLiked
+          siteUrl
+          user { id name avatar { medium large } }
+        }
+    """.trimIndent()
+
+    /**
      * The activity feed of everyone the viewer follows.
      *
      * A separate document rather than `GET_USER_ACTIVITY` with the id dropped:
@@ -398,39 +443,7 @@ object GraphQLQueries {
           Page(page: ${'$'}page, perPage: ${'$'}perPage) {
             pageInfo { hasNextPage }
             activities(isFollowing: true, type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
-              ... on ListActivity {
-                id
-                status
-                progress
-                createdAt
-                likeCount
-                replyCount
-                isLiked
-                siteUrl
-                user { id name avatar { medium large } }
-                media {
-                  id
-                  type
-                  format
-                  episodes
-                  chapters
-                  volumes
-                  title { english romaji native }
-                  coverImage { extraLarge large color }
-                  bannerImage
-                  siteUrl
-                }
-              }
-              ... on TextActivity {
-                id
-                text
-                createdAt
-                likeCount
-                replyCount
-                isLiked
-                siteUrl
-                user { id name avatar { medium large } }
-              }
+              ${ACTIVITY_FEED_SELECTION}
             }
           }
         }
@@ -445,9 +458,9 @@ object GraphQLQueries {
      * so an unfiltered, newest-first page is what the site's own "All activity"
      * page shows. It is a *pull* feed - there is no subscription and no cursor
      * beyond the page number - and it is the same union the two sibling feeds
-     * select, which is why the two fragments are copied here rather than shared:
-     * every feed document in this file lists its own selection so a change to one
-     * card cannot silently change another.
+     * select, so both interpolate [ACTIVITY_FEED_SELECTION]: the documents are
+     * the same feed with one server filter between them, and a field added to
+     * one card has to reach the other.
      *
      * Behind a setting and off by default. A profile tab that shows strangers is
      * not what this app is for, and AniList's request budget is shared: the
@@ -459,39 +472,7 @@ object GraphQLQueries {
           Page(page: ${'$'}page, perPage: ${'$'}perPage) {
             pageInfo { hasNextPage }
             activities(type_in: [ANIME_LIST, MANGA_LIST, TEXT], sort: [ID_DESC]) {
-              ... on ListActivity {
-                id
-                status
-                progress
-                createdAt
-                likeCount
-                replyCount
-                isLiked
-                siteUrl
-                user { id name avatar { medium large } }
-                media {
-                  id
-                  type
-                  format
-                  episodes
-                  chapters
-                  volumes
-                  title { english romaji native }
-                  coverImage { extraLarge large color }
-                  bannerImage
-                  siteUrl
-                }
-              }
-              ... on TextActivity {
-                id
-                text
-                createdAt
-                likeCount
-                replyCount
-                isLiked
-                siteUrl
-                user { id name avatar { medium large } }
-              }
+              ${ACTIVITY_FEED_SELECTION}
             }
           }
         }
@@ -2203,31 +2184,31 @@ object GraphQLQueries {
               ... on ThreadCommentReplyNotification {
                 id type context createdAt
                 user { id name avatar { medium large } }
-                thread { id title }
-                comment { id comment }
+                thread { id title siteUrl }
+                comment { id comment siteUrl }
               }
               ... on ThreadCommentSubscribedNotification {
                 id type context createdAt
                 user { id name avatar { medium large } }
-                thread { id title }
-                comment { id comment }
+                thread { id title siteUrl }
+                comment { id comment siteUrl }
               }
               ... on ThreadCommentMentionNotification {
                 id type context createdAt
                 user { id name avatar { medium large } }
-                thread { id title }
-                comment { id comment }
+                thread { id title siteUrl }
+                comment { id comment siteUrl }
               }
               ... on ThreadCommentLikeNotification {
                 id type context createdAt
                 user { id name avatar { medium large } }
-                thread { id title }
-                comment { id comment }
+                thread { id title siteUrl }
+                comment { id comment siteUrl }
               }
               ... on ThreadLikeNotification {
                 id type context createdAt
                 user { id name avatar { medium large } }
-                thread { id title }
+                thread { id title siteUrl }
               }
               ... on RelatedMediaAdditionNotification {
                 id type mediaId context createdAt

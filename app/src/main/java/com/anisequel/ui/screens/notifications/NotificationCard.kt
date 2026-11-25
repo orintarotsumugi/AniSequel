@@ -4,7 +4,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -25,8 +23,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +54,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import java.time.Instant
+import java.util.Locale
 
 /** One inbox row: a media row, a social row, or the grouped-like variant. */
 @Composable
@@ -77,14 +79,53 @@ internal fun NotificationCard(
     // and still expand, but a press must not promise an open that goes nowhere.
     val hasTarget = group.representative.target != NotificationTarget.None
     val contextText = group.contextLine()
-    val canExpand = contextText != null &&
-        (contextText.length > 150 || contextText.count { it == 10.toChar() } > 2)
+    // Text overflow is a layout fact, not a character count. The child measures
+    // the collapsed preview and reports back, so a wide tablet does not get a
+    // Show more action for a sentence it already fits on three lines.
+    var contextCanExpand by remember(group.key, contextText) { mutableStateOf(false) }
+    val canExpand = contextText != null && contextCanExpand
+    val relative = group.representative.relativeTime(now)
+    // A screen reader should hear the gist, not a copied ten-line message. The
+    // row itself still shows and expands the full text.
+    val contextSummary = contextText
+        ?.replace('\n', ' ')
+        ?.let { if (it.length > 240) it.take(240).trimEnd() + "..." else it }
+    val headline = group.headline()
+    val description = buildString {
+        append(group.representative.kind.categoryLabel())
+        append(". ")
+        append(headline)
+        // An airing headline already names the title; repeating it made the
+        // row read the same show twice. A media-only activity card has no title
+        // in its headline, so it still gets one here.
+        group.mediaTitle()
+            ?.takeIf { it.isNotBlank() && !headline.contains(it, ignoreCase = true) }
+            ?.let { title ->
+                append(". ")
+                append(title)
+            }
+        if (group.actorCount > 1) {
+            append(". ")
+            append(group.actorCount)
+            append(" people")
+        }
+        if (!contextSummary.isNullOrBlank()) {
+            append(". ")
+            append(contextSummary)
+        }
+        if (relative.isNotBlank()) {
+            append(". ")
+            append(relative)
+        }
+        if (group.isUnread) append(". Unread")
+    }
+    val press = if (hasTarget) Modifier.bouncyPress(pressedScale = 0.985f) else Modifier
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
-            .bouncyPress(pressedScale = 0.985f)
             .clip(ExpressiveShapes.extraLarge)
+            .then(press)
             .then(
                 if (hasTarget) {
                     Modifier.clickable(
@@ -97,15 +138,12 @@ internal fun NotificationCard(
                 }
             )
             .semantics {
-                contentDescription = if (group.isUnread) {
-                    "${group.headline()}, unread notification"
-                } else {
-                    group.headline()
-                }
-                // The card merges its descendants, so the nested Show more button
-                // is not a separate stop for a screen reader. The same action is
-                // exposed here instead of being unreachable.
-                if (canExpand) {
+                contentDescription = description
+                // A clickable card merges its descendants, so the nested Show
+                // more button is not a separate stop. Expose the same action on
+                // the card there; a card with no destination is not clickable,
+                // so its real button stays reachable and must not be duplicated.
+                if (hasTarget && canExpand) {
                     customActions = listOf(
                         CustomAccessibilityAction(if (expanded) "Show less" else "Show more") {
                             expanded = !expanded
@@ -123,9 +161,21 @@ internal fun NotificationCard(
         border = border
     ) {
         if (mediaFocused) {
-            MediaNotificationBody(group, expanded, now) { expanded = !expanded }
+            MediaNotificationBody(
+                group = group,
+                expanded = expanded,
+                now = now,
+                onToggleExpanded = { expanded = !expanded },
+                onContextOverflow = { contextCanExpand = it }
+            )
         } else {
-            SocialNotificationBody(group, expanded, now) { expanded = !expanded }
+            SocialNotificationBody(
+                group = group,
+                expanded = expanded,
+                now = now,
+                onToggleExpanded = { expanded = !expanded },
+                onContextOverflow = { contextCanExpand = it }
+            )
         }
     }
 }
@@ -135,12 +185,14 @@ private fun MediaNotificationBody(
     group: NotificationGroup,
     expanded: Boolean,
     now: Instant,
-    onToggleExpanded: () -> Unit
+    onToggleExpanded: () -> Unit,
+    onContextOverflow: (Boolean) -> Unit
 ) {
     val media = when (val n = group.representative) {
         is com.anisequel.domain.notifications.AiringNotification -> n.media
         is com.anisequel.domain.notifications.MediaUpdateNotification -> n.media
         is com.anisequel.domain.notifications.SubmissionNotification -> n.media
+        is com.anisequel.domain.notifications.ActivityNotification -> n.media
         else -> null
     }
     Row(
@@ -154,7 +206,7 @@ private fun MediaNotificationBody(
                 TypeGlyph(group.representative.kind, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(7.dp))
                 Text(
-                    text = group.representative.kind.categoryLabel().uppercase(),
+                    text = group.representative.kind.categoryLabel().uppercase(Locale.ROOT),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -185,7 +237,12 @@ private fun MediaNotificationBody(
             val context = group.contextLine()
             if (!context.isNullOrBlank()) {
                 Spacer(Modifier.height(8.dp))
-                ExpandableText(context, expanded, onToggleExpanded)
+                ExpandableText(
+                    text = context,
+                    expanded = expanded,
+                    onToggle = onToggleExpanded,
+                    onOverflowChange = onContextOverflow
+                )
             }
             Spacer(Modifier.height(8.dp))
             Timestamp(group.representative.relativeTime(now))
@@ -198,7 +255,8 @@ private fun SocialNotificationBody(
     group: NotificationGroup,
     expanded: Boolean,
     now: Instant,
-    onToggleExpanded: () -> Unit
+    onToggleExpanded: () -> Unit,
+    onContextOverflow: (Boolean) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -207,7 +265,7 @@ private fun SocialNotificationBody(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = group.representative.kind.categoryLabel().uppercase(),
+                        text = group.representative.kind.categoryLabel().uppercase(Locale.ROOT),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -242,7 +300,13 @@ private fun SocialNotificationBody(
         val context = group.contextLine()
         if (!context.isNullOrBlank()) {
             Spacer(Modifier.height(10.dp))
-            ExpandableText(context, expanded, onToggleExpanded, preview = true)
+            ExpandableText(
+                text = context,
+                expanded = expanded,
+                onToggle = onToggleExpanded,
+                preview = true,
+                onOverflowChange = onContextOverflow
+            )
         }
         Spacer(Modifier.height(9.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -261,17 +325,28 @@ private fun ExpandableText(
     text: String,
     expanded: Boolean,
     onToggle: () -> Unit,
-    preview: Boolean = false
+    preview: Boolean = false,
+    onOverflowChange: (Boolean) -> Unit = {}
 ) {
-    val newlines = text.count { it == 10.toChar() }
-    val isLong = text.length > 150 || newlines > 2
+    var overflowing by remember(text) { mutableStateOf(false) }
+    val report = rememberUpdatedState(onOverflowChange)
+    // Report the measured fact instead of a guess based on character count. The
+    // expanded state also counts as overflow so the card keeps its Show less
+    // accessibility action after a configuration change.
+    LaunchedEffect(expanded, overflowing) { report.value(expanded || overflowing) }
     Column {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = if (expanded || !isLong) Int.MAX_VALUE else 3,
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout ->
+                if (!expanded) {
+                    val measured = layout.hasVisualOverflow
+                    if (measured != overflowing) overflowing = measured
+                }
+            },
             modifier = if (preview && !expanded) {
                 Modifier
                     .fillMaxWidth()
@@ -282,11 +357,10 @@ private fun ExpandableText(
                 Modifier.fillMaxWidth()
             }
         )
-        if (isLong) {
+        if (expanded || overflowing) {
             TextButton(
                 onClick = onToggle,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp),
-                modifier = Modifier.height(38.dp)
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp)
             ) {
                 Text(
                     text = if (expanded) "Show less" else "Show more",
@@ -301,6 +375,8 @@ private fun ExpandableText(
 @Composable
 private fun MediaContextStrip(group: NotificationGroup, title: String) {
     val media = (group.representative as? com.anisequel.domain.notifications.ActivityNotification)?.media
+    val cover = media?.coverUrl
+    var failed by remember(cover) { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -309,15 +385,34 @@ private fun MediaContextStrip(group: NotificationGroup, title: String) {
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = media?.coverUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
+        Box(
             modifier = Modifier
                 .size(width = 34.dp, height = 46.dp)
                 .clip(RoundedCornerShape(9.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-        )
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!cover.isNullOrBlank() && !failed) {
+                AsyncImage(
+                    model = cover,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onError = { failed = true },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = if (media?.type?.equals("MANGA", ignoreCase = true) == true) {
+                        AppVectorIcons.FavouriteManga
+                    } else {
+                        AppVectorIcons.Movie
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -327,7 +422,7 @@ private fun MediaContextStrip(group: NotificationGroup, title: String) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            val type = media?.type?.lowercase()?.replaceFirstChar { it.uppercase() }
+            val type = media?.type?.lowercase(Locale.ROOT)?.replaceFirstChar { it.uppercase() }
             if (!type.isNullOrBlank()) {
                 Text(
                     text = type,
@@ -341,6 +436,7 @@ private fun MediaContextStrip(group: NotificationGroup, title: String) {
 
 @Composable
 private fun MediaPoster(coverUrl: String?, type: String?) {
+    var failed by remember(coverUrl) { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .width(66.dp)
@@ -349,13 +445,15 @@ private fun MediaPoster(coverUrl: String?, type: String?) {
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center
     ) {
-        AsyncImage(
-            model = coverUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-        if (coverUrl.isNullOrBlank()) {
+        if (!coverUrl.isNullOrBlank() && !failed) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onError = { failed = true },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
             Icon(
                 imageVector = if (type?.equals("MANGA", ignoreCase = true) == true) {
                     AppVectorIcons.FavouriteManga
@@ -408,6 +506,7 @@ internal fun ActorAvatar(
     modifier: Modifier = Modifier
 ) {
     val ringColor = MaterialTheme.colorScheme.surfaceContainerLow
+    var failed by remember(url) { mutableStateOf(false) }
     Box(
         modifier = modifier
             .size(size)
@@ -418,16 +517,19 @@ internal fun ActorAvatar(
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center
     ) {
-        if (!url.isNullOrBlank()) {
+        if (!url.isNullOrBlank() && !failed) {
             AsyncImage(
                 model = url,
-                contentDescription = name,
+                // The card's summary already names the people; a second avatar
+                // announcement made every grouped row read its actors twice.
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
+                onError = { failed = true },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
             Text(
-                text = name?.trim()?.take(1)?.uppercase().orEmpty().ifBlank { "?" },
+                text = name?.trim()?.take(1)?.uppercase(Locale.ROOT).orEmpty().ifBlank { "?" },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

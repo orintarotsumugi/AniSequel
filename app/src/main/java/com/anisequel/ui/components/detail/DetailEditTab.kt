@@ -275,72 +275,12 @@ internal fun DetailEditTab(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Status.
-            Box {
-                EditorCard(
-                    icon = statusIcon(entryState.status),
-                    title = "Status",
-                    subtitle = statusLabel(entryState.status, isManga),
-                    onClick = { state.statusMenuOpen = true },
-                    testTag = "edit_status_row",
-                    enabled = enabled
-                )
-                DropdownMenu(
-                    expanded = state.statusMenuOpen,
-                    onDismissRequest = { state.statusMenuOpen = false }
-                ) {
-                    ENTRY_STATUSES.forEach { option ->
-                        // The entry's token can be a v1 alias, so the comparison
-                        // goes through `normalize` rather than against the raw
-                        // string - otherwise a cached "ON_HOLD" entry would open
-                        // the menu with nothing marked current.
-                        val selected = ListStatuses.normalize(entryState.status) == option.apiValue
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = option.labelFor(isManga),
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = statusIcon(option.apiValue),
-                                    contentDescription = null,
-                                    tint = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            trailingIcon = if (selected) {
-                                {
-                                    Icon(
-                                        imageVector = AppVectorIcons.Done,
-                                        contentDescription = "Current status",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            onClick = {
-                                state.statusMenuOpen = false
-                                state.draft = entryState.copy(status = option.apiValue)
-                            },
-                            modifier = Modifier.testTag(
-                                "edit_status_option_${option.apiValue.lowercase(java.util.Locale.ROOT)}"
-                            )
-                        )
-                    }
-                }
-            }
+            EditStatusCard(
+                entryState = entryState,
+                state = state,
+                isManga = isManga,
+                enabled = enabled
+            )
 
             // Progress, hidden for a title that has not aired.
             //
@@ -355,91 +295,15 @@ internal fun DetailEditTab(
             // user's own `startedAt` date: someone who marks a show as started
             // before it airs has an opinion about it, and hiding the row would then
             // take away the one field they were reaching for.
-            if (!media.hasNotAired) {
-                EditorCard(
-                    icon = AppVectorIcons.BookmarkDone,
-                    title = "Progress",
-                    subtitle = if (totalUnits > 0) {
-                        "${entryState.progress} / $totalUnits"
-                    } else {
-                        "${entryState.progress}"
-                    },
-                    testTag = "edit_progress_row",
-                    onClick = { progressControlsExpanded = !progressControlsExpanded },
-                    enabled = enabled
-                ) {
-                    AnimatedVisibility(
-                        visible = progressControlsExpanded,
-                        enter = fadeIn(ExpressiveMotion.FastEffects) +
-                            expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
-                        exit = fadeOut(ExpressiveMotion.FastEffects) +
-                            shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
-                    ) {
-                    Column(modifier = Modifier.padding(top = 10.dp)) {
-                        if (totalUnits > 0) {
-                            Slider(
-                                // Bound state, because the number being dragged is a field of
-                                // the draft: a step button, a cleared date or another row's edit
-                                // moves this thumb, and a state that read only its initial value
-                                // would leave it behind.
-                                state = rememberBoundSliderState(
-                                    value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
-                                    steps = (totalUnits - 1).coerceAtLeast(0),
-                                    trackRange = 0f..totalUnits.toFloat()
-                                ),
-                                onValueChange = {
-                                    state.draft = entryState.copy(progress = it.toInt())
-                                },
-                                enabled = enabled,
-                                modifier = Modifier.testTag("edit_progress_slider")
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            StepButton(
-                                icon = AppVectorIcons.StepDown,
-                                contentDescription = "Decrease progress",
-                                testTag = "edit_progress_minus",
-                                enabled = enabled,
-                                onClick = {
-                                    state.draft = entryState.copy(
-                                        progress = (entryState.progress - 1).coerceAtLeast(0)
-                                    )
-                                }
-                            )
-                            Text(
-                                text = "${entryState.progress}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.testTag("edit_progress_value")
-                            )
-                            StepButton(
-                                icon = AppVectorIcons.StepUp,
-                                contentDescription = "Increase progress",
-                                testTag = "edit_progress_plus",
-                                enabled = enabled,
-                                onClick = {
-                                    val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
-                                    // Stop at the ceiling *before* adding. A title
-                                    // with no known total used `Int.MAX_VALUE` as
-                                    // its ceiling, and `Int.MAX_VALUE + 1` overflows
-                                    // to `Int.MIN_VALUE` - so the plus button on an
-                                    // unscheduled show stepped the count backwards
-                                    // into the negative.
-                                    if (entryState.progress < ceiling) {
-                                        state.draft = entryState.copy(progress = entryState.progress + 1)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    }
-                }
-            }
+            EditProgressCard(
+                entryState = entryState,
+                state = state,
+                totalUnits = totalUnits,
+                hasNotAired = media.hasNotAired,
+                expanded = progressControlsExpanded,
+                onToggleExpanded = { progressControlsExpanded = !progressControlsExpanded },
+                enabled = enabled
+            )
 
             // Score, in the account's own scale and sent back unchanged. See
             // `EntryDraft.score` for why it is not normalised to ten.
@@ -557,180 +421,411 @@ internal fun DetailEditTab(
         // this is rather than leaving a dead button unexplained. Tapping Save on an
         // untouched form used to send a whole entry snapshot back to AniList to
         // change nothing.
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = CardDefaults.outlinedCardBorder(),
-            modifier = Modifier.fillMaxWidth()
+        EditActionBar(
+            state = state,
+            entryState = entryState,
+            onRequestDelete = { confirmDelete = true },
+            onRequestSave = { confirmSave = true }
+        )
+    }
+
+    EditDialogs(
+        state = state,
+        entryState = entryState,
+        media = media,
+        editor = editor,
+        scope = scope,
+        confirmDelete = confirmDelete,
+        confirmSave = confirmSave,
+        onDismissDelete = { confirmDelete = false },
+        onDismissSave = { confirmSave = false },
+        onPersist = { updated -> persist(updated) }
+    )
+}
+
+/** The pinned action row; the confirmations live in [EditDialogs]. */
+@Composable
+private fun EditActionBar(
+    state: EntryEditState,
+    entryState: EntryDraft,
+    onRequestDelete: () -> Unit,
+    onRequestSave: () -> Unit
+) {
+Surface(
+    shape = MaterialTheme.shapes.medium,
+    color = MaterialTheme.colorScheme.surfaceContainerLow,
+    border = CardDefaults.outlinedCardBorder(),
+    modifier = Modifier.fillMaxWidth()
+) {
+    Column(
+        modifier = Modifier.padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        val actionHint = state.statusMessage
+            ?: if (!state.hasUnsavedChanges) "No changes to save yet" else null
+        actionHint?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("edit_status_message")
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            val deleteInteraction = remember { MutableInteractionSource() }
+            OutlinedButton(
+                // The request itself lives in the confirmation below, so a
+                // tap on Delete cannot remove an entry by itself.
+                onClick = onRequestDelete,
+                enabled = !state.isSaving && entryState.entryId != null,
+                // 48dp, the app's expressive button height, rather than the
+                // 46dp this used to be: it sits beside the primary action, and
+                // two heights half a pixel apart read as a misalignment rather
+                // than as hierarchy.
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .bouncyPress(pressedScale = 0.96f, interactionSource = deleteInteraction)
+                    .testTag("edit_delete_button"),
+                shape = MaterialTheme.shapes.medium,
+                interactionSource = deleteInteraction
             ) {
-                val actionHint = state.statusMessage
-                    ?: if (!state.hasUnsavedChanges) "No changes to save yet" else null
-                actionHint?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.testTag("edit_status_message")
+                Text("Delete")
+            }
+
+            // The app's shared primary button rather than a stock `Button`:
+            // it carries the press spring, the shape morph and the
+            // loader-on-its-own-container pairing every other busy action in
+            // the app uses. The stock pair here had it inverted -
+            // `onPrimary` container with a `primary` spinner - which was a
+            // light disc with a coloured hole rather than the button thinking.
+            ExpressivePrimaryButton(
+                text = "Save changes",
+                onClick = onRequestSave,
+                modifier = Modifier.weight(1.3f),
+                loading = state.isSaving,
+                enabled = state.hasUnsavedChanges,
+                testTag = "edit_save_button"
+            )
+        }
+    }
+}
+}
+
+/**
+ * The three confirmations this tab can open: deleting an entry, saving the
+ * staged form, and picking either date. Extracted so the editor body is a form
+ * rather than a stack of dialogs.
+ */
+@Composable
+private fun EditDialogs(
+    state: EntryEditState,
+    entryState: EntryDraft,
+    media: MediaNode,
+    editor: EntryEditor,
+    scope: CoroutineScope,
+    confirmDelete: Boolean,
+    confirmSave: Boolean,
+    onDismissDelete: () -> Unit,
+    onDismissSave: () -> Unit,
+    onPersist: (EntryDraft) -> Unit
+) {
+if (confirmDelete) {
+    val entryId = state.draft?.entryId
+    AlertDialog(
+        onDismissRequest = { onDismissDelete() },
+        icon = { Icon(AppVectorIcons.Warning, contentDescription = null) },
+        title = { Text("Delete this entry?") },
+        text = {
+            Text(
+                "This removes ${media.displayName} from your AniList list, " +
+                    "together with its progress, score, dates and private note. " +
+                    "It cannot be undone."
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismissDelete()
+                    if (entryId == null) return@TextButton
+                    state.isSaving = true
+                    state.statusMessage = null
+                    scope.launch {
+                        try {
+                            editor.delete(entryId).fold(
+                                onSuccess = {
+                                    // Back to an entry that does not exist yet, so the
+                                    // form is ready to create a fresh one rather than
+                                    // showing the values that were just removed.
+                                    state.cleared()
+                                    state.statusMessage = "Removed from your list"
+                                },
+                                onFailure = {
+                                    state.statusMessage =
+                                        it.message ?: "Couldn't remove this entry."
+                                }
+                            )
+                        } finally {
+                            state.isSaving = false
+                        }
+                    }
+                },
+                modifier = Modifier.testTag("edit_delete_confirm")
+            ) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { onDismissDelete() },
+                modifier = Modifier.testTag("edit_delete_cancel")
+            ) { Text("Keep it") }
+        }
+    )
+}
+
+if (confirmSave) {
+    AlertDialog(
+        onDismissRequest = { onDismissSave() },
+        icon = { Icon(AppVectorIcons.CheckCircle, contentDescription = null) },
+        title = { Text("Save these changes?") },
+        text = {
+            Text(
+                "This writes the status, progress, score, dates, privacy and " +
+                    "note shown here to your AniList entry for ${media.displayName}."
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismissSave()
+                    onPersist(entryState)
+                },
+                modifier = Modifier.testTag("edit_save_confirm")
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { onDismissSave() },
+                modifier = Modifier.testTag("edit_save_cancel")
+            ) { Text("Cancel") }
+        }
+    )
+}
+
+val picker = state.openDatePicker
+if (picker != null) {
+    val initial = when (picker) {
+        DateField.START -> entryState.startedAt
+        DateField.FINISH -> entryState.completedAt
+    }
+    val pickerState = rememberDatePickerState(initialSelectedDateMillis = initial.toEpochMillisUtc())
+    DatePickerDialog(
+        onDismissRequest = { state.openDatePicker = null },
+        confirmButton = {
+            TextButton(onClick = {
+                val picked = pickerState.selectedDateMillis?.toFuzzyDateUtc()
+                if (picked != null) {
+                    state.draft = when (picker) {
+                        DateField.START -> entryState.copy(startedAt = picked)
+                        DateField.FINISH -> entryState.copy(completedAt = picked)
+                    }
+                }
+                state.openDatePicker = null
+            }) { Text("Set") }
+        },
+        dismissButton = {
+            TextButton(onClick = { state.openDatePicker = null }) { Text("Cancel") }
+        }
+    ) {
+        DatePicker(state = pickerState)
+    }
+}
+}
+
+
+/**
+ * The status row and its menu. Extracted from [DetailEditTab] because every
+ * option carries its own selected/unselected colours and icon, which made the
+ * editor's main body read like a menu implementation.
+ */
+@Composable
+private fun EditStatusCard(
+    entryState: EntryDraft,
+    state: EntryEditState,
+    isManga: Boolean,
+    enabled: Boolean
+) {
+    Box {
+        EditorCard(
+            icon = statusIcon(entryState.status),
+            title = "Status",
+            subtitle = statusLabel(entryState.status, isManga),
+            onClick = { state.statusMenuOpen = true },
+            testTag = "edit_status_row",
+            enabled = enabled
+        )
+        DropdownMenu(
+            expanded = state.statusMenuOpen,
+            onDismissRequest = { state.statusMenuOpen = false }
+        ) {
+            ENTRY_STATUSES.forEach { option ->
+                // The entry's token can be a v1 alias, so the comparison
+                // goes through `normalize` rather than against the raw
+                // string - otherwise a cached "ON_HOLD" entry would open
+                // the menu with nothing marked current.
+                val selected = ListStatuses.normalize(entryState.status) == option.apiValue
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option.labelFor(isManga),
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = statusIcon(option.apiValue),
+                            contentDescription = null,
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    trailingIcon = if (selected) {
+                        {
+                            Icon(
+                                imageVector = AppVectorIcons.Done,
+                                contentDescription = "Current status",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    onClick = {
+                        state.statusMenuOpen = false
+                        state.draft = entryState.copy(status = option.apiValue)
+                    },
+                    modifier = Modifier.testTag(
+                        "edit_status_option_${option.apiValue.lowercase(java.util.Locale.ROOT)}"
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Progress and its stepper. Hidden for a title AniList has not aired: asking how
+ * many episodes somebody has seen of a show that does not exist yet is not a
+ * useful question, and the slider would open on the episode count ready to write it.
+ */
+@Composable
+private fun EditProgressCard(
+    entryState: EntryDraft,
+    state: EntryEditState,
+    totalUnits: Int,
+    hasNotAired: Boolean,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    enabled: Boolean
+) {
+    if (!hasNotAired) {
+        EditorCard(
+            icon = AppVectorIcons.BookmarkDone,
+            title = "Progress",
+            subtitle = if (totalUnits > 0) {
+                "${entryState.progress} / $totalUnits"
+            } else {
+                "${entryState.progress}"
+            },
+            testTag = "edit_progress_row",
+            onClick = onToggleExpanded,
+            enabled = enabled
+        ) {
+            AnimatedVisibility(
+                visible = expanded,
+                enter = fadeIn(ExpressiveMotion.FastEffects) +
+                    expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
+                exit = fadeOut(ExpressiveMotion.FastEffects) +
+                    shrinkVertically(animationSpec = ExpressiveMotion.FastSpatialSize)
+            ) {
+            Column(modifier = Modifier.padding(top = 10.dp)) {
+                if (totalUnits > 0) {
+                    Slider(
+                        // Bound state, because the number being dragged is a field of
+                        // the draft: a step button, a cleared date or another row's edit
+                        // moves this thumb, and a state that read only its initial value
+                        // would leave it behind.
+                        state = rememberBoundSliderState(
+                            value = entryState.progress.coerceIn(0, totalUnits).toFloat(),
+                            steps = (totalUnits - 1).coerceAtLeast(0),
+                            trackRange = 0f..totalUnits.toFloat()
+                        ),
+                        onValueChange = {
+                            state.draft = entryState.copy(progress = it.toInt())
+                        },
+                        enabled = enabled,
+                        modifier = Modifier.testTag("edit_progress_slider")
                     )
                 }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    val deleteInteraction = remember { MutableInteractionSource() }
-                    OutlinedButton(
-                        // The request itself lives in the confirmation below, so a
-                        // tap on Delete cannot remove an entry by itself.
-                        onClick = { confirmDelete = true },
-                        enabled = !state.isSaving && entryState.entryId != null,
-                        // 48dp, the app's expressive button height, rather than the
-                        // 46dp this used to be: it sits beside the primary action, and
-                        // two heights half a pixel apart read as a misalignment rather
-                        // than as hierarchy.
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .bouncyPress(pressedScale = 0.96f, interactionSource = deleteInteraction)
-                            .testTag("edit_delete_button"),
-                        shape = MaterialTheme.shapes.medium,
-                        interactionSource = deleteInteraction
-                    ) {
-                        Text("Delete")
-                    }
-
-                    // The app's shared primary button rather than a stock `Button`:
-                    // it carries the press spring, the shape morph and the
-                    // loader-on-its-own-container pairing every other busy action in
-                    // the app uses. The stock pair here had it inverted -
-                    // `onPrimary` container with a `primary` spinner - which was a
-                    // light disc with a coloured hole rather than the button thinking.
-                    ExpressivePrimaryButton(
-                        text = "Save changes",
-                        onClick = { confirmSave = true },
-                        modifier = Modifier.weight(1.3f),
-                        loading = state.isSaving,
-                        enabled = state.hasUnsavedChanges,
-                        testTag = "edit_save_button"
+                    StepButton(
+                        icon = AppVectorIcons.StepDown,
+                        contentDescription = "Decrease progress",
+                        testTag = "edit_progress_minus",
+                        enabled = enabled,
+                        onClick = {
+                            state.draft = entryState.copy(
+                                progress = (entryState.progress - 1).coerceAtLeast(0)
+                            )
+                        }
+                    )
+                    Text(
+                        text = "${entryState.progress}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.testTag("edit_progress_value")
+                    )
+                    StepButton(
+                        icon = AppVectorIcons.StepUp,
+                        contentDescription = "Increase progress",
+                        testTag = "edit_progress_plus",
+                        enabled = enabled,
+                        onClick = {
+                            val ceiling = if (totalUnits > 0) totalUnits else Int.MAX_VALUE
+                            // Stop at the ceiling *before* adding. A title
+                            // with no known total used `Int.MAX_VALUE` as
+                            // its ceiling, and `Int.MAX_VALUE + 1` overflows
+                            // to `Int.MIN_VALUE` - so the plus button on an
+                            // unscheduled show stepped the count backwards
+                            // into the negative.
+                            if (entryState.progress < ceiling) {
+                                state.draft = entryState.copy(progress = entryState.progress + 1)
+                            }
+                        }
                     )
                 }
             }
-        }
-    }
-
-    if (confirmDelete) {
-        val entryId = state.draft?.entryId
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            icon = { Icon(AppVectorIcons.Warning, contentDescription = null) },
-            title = { Text("Delete this entry?") },
-            text = {
-                Text(
-                    "This removes ${media.displayName} from your AniList list, " +
-                        "together with its progress, score, dates and private note. " +
-                        "It cannot be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmDelete = false
-                        if (entryId == null) return@TextButton
-                        state.isSaving = true
-                        state.statusMessage = null
-                        scope.launch {
-                            try {
-                                editor.delete(entryId).fold(
-                                    onSuccess = {
-                                        // Back to an entry that does not exist yet, so the
-                                        // form is ready to create a fresh one rather than
-                                        // showing the values that were just removed.
-                                        state.cleared()
-                                        state.statusMessage = "Removed from your list"
-                                    },
-                                    onFailure = {
-                                        state.statusMessage =
-                                            it.message ?: "Couldn't remove this entry."
-                                    }
-                                )
-                            } finally {
-                                state.isSaving = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.testTag("edit_delete_confirm")
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { confirmDelete = false },
-                    modifier = Modifier.testTag("edit_delete_cancel")
-                ) { Text("Keep it") }
             }
-        )
-    }
-
-    if (confirmSave) {
-        AlertDialog(
-            onDismissRequest = { confirmSave = false },
-            icon = { Icon(AppVectorIcons.CheckCircle, contentDescription = null) },
-            title = { Text("Save these changes?") },
-            text = {
-                Text(
-                    "This writes the status, progress, score, dates, privacy and " +
-                        "note shown here to your AniList entry for ${media.displayName}."
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmSave = false
-                        persist(entryState)
-                    },
-                    modifier = Modifier.testTag("edit_save_confirm")
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { confirmSave = false },
-                    modifier = Modifier.testTag("edit_save_cancel")
-                ) { Text("Cancel") }
-            }
-        )
-    }
-
-    val picker = state.openDatePicker
-    if (picker != null) {
-        val initial = when (picker) {
-            DateField.START -> entryState.startedAt
-            DateField.FINISH -> entryState.completedAt
-        }
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initial.toEpochMillisUtc())
-        DatePickerDialog(
-            onDismissRequest = { state.openDatePicker = null },
-            confirmButton = {
-                TextButton(onClick = {
-                    val picked = pickerState.selectedDateMillis?.toFuzzyDateUtc()
-                    if (picked != null) {
-                        state.draft = when (picker) {
-                            DateField.START -> entryState.copy(startedAt = picked)
-                            DateField.FINISH -> entryState.copy(completedAt = picked)
-                        }
-                    }
-                    state.openDatePicker = null
-                }) { Text("Set") }
-            },
-            dismissButton = {
-                TextButton(onClick = { state.openDatePicker = null }) { Text("Cancel") }
-            }
-        ) {
-            DatePicker(state = pickerState)
         }
     }
 }

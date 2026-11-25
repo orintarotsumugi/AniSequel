@@ -1,6 +1,7 @@
 package com.anisequel.ui.widget
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.posterUrl
 import com.anisequel.data.repository.DemoProfileProvider
@@ -179,18 +180,18 @@ object AniSequelWidgetData {
         // only non-null values left the previous snapshot in place: when the
         // missed list emptied, the widget showed its "all caught up" caption
         // under a stale "Top: ..." title from the last non-empty load.
-        if (missedCount != null) editor.putInt(KEY_MISSED_COUNT, missedCount) else editor.remove(KEY_MISSED_COUNT)
-        if (activityCount != null) editor.putInt(KEY_ACTIVITY_COUNT, activityCount) else editor.remove(KEY_ACTIVITY_COUNT)
-        if (arrivingCount != null) editor.putInt(KEY_ARRIVING_COUNT, arrivingCount) else editor.remove(KEY_ARRIVING_COUNT)
-        if (topMissedTitle != null) editor.putString(KEY_TOP_MISSED_TITLE, topMissedTitle) else editor.remove(KEY_TOP_MISSED_TITLE)
-        if (topMissedParent != null) editor.putString(KEY_TOP_MISSED_PARENT, topMissedParent) else editor.remove(KEY_TOP_MISSED_PARENT)
-        if (topMissedCover != null) editor.putString(KEY_TOP_MISSED_COVER, topMissedCover) else editor.remove(KEY_TOP_MISSED_COVER)
-        if (topMissedColor != null) editor.putString(KEY_TOP_MISSED_COLOR, topMissedColor) else editor.remove(KEY_TOP_MISSED_COLOR)
-        if (arrivingTitle != null) editor.putString(KEY_ARRIVING_TITLE, arrivingTitle) else editor.remove(KEY_ARRIVING_TITLE)
-        if (arrivingCover != null) editor.putString(KEY_ARRIVING_COVER, arrivingCover) else editor.remove(KEY_ARRIVING_COVER)
-        if (arrivingColor != null) editor.putString(KEY_ARRIVING_COLOR, arrivingColor) else editor.remove(KEY_ARRIVING_COLOR)
-        if (activityTitle != null) editor.putString(KEY_ACTIVITY_TITLE, activityTitle) else editor.remove(KEY_ACTIVITY_TITLE)
-        if (activityArt != null) editor.putString(KEY_ACTIVITY_ART, activityArt) else editor.remove(KEY_ACTIVITY_ART)
+        editor.putOrRemove(KEY_MISSED_COUNT, missedCount)
+        editor.putOrRemove(KEY_ACTIVITY_COUNT, activityCount)
+        editor.putOrRemove(KEY_ARRIVING_COUNT, arrivingCount)
+        editor.putOrRemove(KEY_TOP_MISSED_TITLE, topMissedTitle)
+        editor.putOrRemove(KEY_TOP_MISSED_PARENT, topMissedParent)
+        editor.putOrRemove(KEY_TOP_MISSED_COVER, topMissedCover)
+        editor.putOrRemove(KEY_TOP_MISSED_COLOR, topMissedColor)
+        editor.putOrRemove(KEY_ARRIVING_TITLE, arrivingTitle)
+        editor.putOrRemove(KEY_ARRIVING_COVER, arrivingCover)
+        editor.putOrRemove(KEY_ARRIVING_COLOR, arrivingColor)
+        editor.putOrRemove(KEY_ACTIVITY_TITLE, activityTitle)
+        editor.putOrRemove(KEY_ACTIVITY_ART, activityArt)
         // Never cleared by an update: the username is what marks a session as
         // synced, and removing it would flip every fallback above back to demo
         // data. [clear] is the one path that removes it, and only on sign-out.
@@ -214,4 +215,20 @@ object AniSequelWidgetData {
             .clear()
             .apply()
     }
+}
+
+/**
+ * Writes a value, or removes the key when the value is null.
+ *
+ * A null argument to [AniSequelWidgetData.updateData] means "the snapshot no
+ * longer has this", not "leave the previous snapshot's value alone". Writing
+ * only non-null values left a stale top title under an "all caught up" caption
+ * after the missed list emptied.
+ */
+private fun SharedPreferences.Editor.putOrRemove(key: String, value: Int?) {
+    if (value != null) putInt(key, value) else remove(key)
+}
+
+private fun SharedPreferences.Editor.putOrRemove(key: String, value: String?) {
+    if (value != null) putString(key, value) else remove(key)
 }

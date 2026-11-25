@@ -22,11 +22,11 @@ private val Context.notificationStateDataStore: DataStore<Preferences> by prefer
  * The reader choices from Settings > Notifications.
  *
  * One store for the category switches, one for the per-account read mark, and
- * they are separate on purpose: the switches are about what this person wants
- * to see on this device, while the read mark is about what this account has
- * already been shown. Signing into somebody else should inherit neither the last
- * person inbox contents nor their preferences quietly, so the read mark is keyed
- * by account and only the category switches are common.
+ * they are separate on purpose: the switches are about what this device wants
+ * to show, while the read mark is about what this account has already been
+ * shown. Signing into somebody else must not inherit the previous account's
+ * inbox contents or read mark, so the mark is keyed by account; the category
+ * switches remain a shared device preference.
  */
 class NotificationPreferencesStore(private val context: Context) {
 
@@ -92,9 +92,8 @@ class NotificationPreferencesStore(private val context: Context) {
  * notification already read - or, worse, make their old rows suddenly unread if
  * the id happened to be newer than the new account baseline.
  *
- * [load] returns a snapshot as well as writing it to [state], so the ViewModel
- * can anchor a page without waiting for a second Flow emission and racing the
- * first render.
+ * [load] returns a one-shot snapshot so the ViewModel can anchor a page without
+ * waiting for the Flow's first emission and racing the first render.
  */
 class NotificationReadStore(private val context: Context) {
 
@@ -102,6 +101,7 @@ class NotificationReadStore(private val context: Context) {
         fun anchored(accountId: Int) = booleanPreferencesKey("anchored_$accountId")
         fun readThrough(accountId: Int) = intPreferencesKey("read_through_$accountId")
         fun readIds(accountId: Int) = stringSetPreferencesKey("read_ids_$accountId")
+        fun resetGeneration(accountId: Int) = intPreferencesKey("reset_generation_$accountId")
     }
 
     fun state(accountId: Int): Flow<NotificationReadState> =
@@ -114,7 +114,16 @@ class NotificationReadStore(private val context: Context) {
     suspend fun anchor(accountId: Int, state: NotificationReadState) {
         context.notificationStateDataStore.edit { stored ->
             if (stored[Keys.anchored(accountId)] == true) return@edit
-            stored.writeReadState(accountId, state.copy(anchored = true))
+            // Keep the store's reset fence. The caller's snapshot was loaded
+            // before this edit and can legitimately carry an older generation.
+            val generation = maxOf(
+                stored[Keys.resetGeneration(accountId)] ?: 0,
+                state.resetGeneration
+            )
+            stored.writeReadState(
+                accountId,
+                state.copy(anchored = true, resetGeneration = generation)
+            )
         }
     }
 
@@ -146,6 +155,10 @@ class NotificationReadStore(private val context: Context) {
             stored.remove(Keys.anchored(accountId))
             stored.remove(Keys.readThrough(accountId))
             stored.remove(Keys.readIds(accountId))
+            // This fence is what lets a live inbox tell a real reset apart from
+            // a DataStore emission that was queued before the reader clicked.
+            stored[Keys.resetGeneration(accountId)] =
+                (stored[Keys.resetGeneration(accountId)] ?: 0) + 1
         }
     }
 
@@ -153,7 +166,8 @@ class NotificationReadStore(private val context: Context) {
         NotificationReadState(
             anchored = this[Keys.anchored(accountId)] ?: false,
             readThroughId = this[Keys.readThrough(accountId)],
-            readIds = this[Keys.readIds(accountId)].orEmpty().mapNotNull(String::toIntOrNull).toSet()
+            readIds = this[Keys.readIds(accountId)].orEmpty().mapNotNull(String::toIntOrNull).toSet(),
+            resetGeneration = this[Keys.resetGeneration(accountId)] ?: 0
         )
 
     private fun androidx.datastore.preferences.core.MutablePreferences.writeReadState(
@@ -161,6 +175,7 @@ class NotificationReadStore(private val context: Context) {
         state: NotificationReadState
     ) {
         this[Keys.anchored(accountId)] = state.anchored
+        this[Keys.resetGeneration(accountId)] = state.resetGeneration
         state.readThroughId?.let { this[Keys.readThrough(accountId)] = it }
             ?: remove(Keys.readThrough(accountId))
         if (state.readIds.isEmpty()) {

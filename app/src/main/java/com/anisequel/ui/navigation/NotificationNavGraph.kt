@@ -1,7 +1,6 @@
 package com.anisequel.ui.navigation
 
 import android.content.Context
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
@@ -71,8 +70,13 @@ private fun openNotification(
             )
 
         is NotificationTarget.Thread -> {
-            val anchor = target.commentId?.let { "#comment-$it" }.orEmpty()
-            openExternalUrl(context, "https://anilist.co/forum/thread/${target.threadId}$anchor")
+            // The old link guessed "#comment-<id>", which is not the anchor
+            // AniList uses, so a reply could open the thread at the top. The
+            // API now supplies the canonical comment URL; only fall back to the
+            // thread page when that field is absent or not an AniList link.
+            val canonical = target.siteUrl?.takeIf { it.startsWith("https://anilist.co/") }
+            val fallback = "https://anilist.co/forum/thread/${target.threadId}"
+            openExternalUrl(context, canonical ?: fallback)
         }
 
         is NotificationTarget.Activity ->

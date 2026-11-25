@@ -123,12 +123,16 @@ data class NotificationMedia(
 
 data class NotificationThread(
     val id: Int,
-    val title: String?
+    val title: String?,
+    /** The API's canonical page, including the site's own comment anchor. */
+    val url: String? = null
 )
 
 data class NotificationComment(
     val id: Int,
-    val text: String?
+    val text: String?,
+    /** Canonical comment link; preferred over guessing an anchor from ids. */
+    val url: String? = null
 )
 
 /** Where tapping a row should go. */
@@ -136,7 +140,12 @@ sealed interface NotificationTarget {
     data class Media(val mediaId: Int, val type: String?) : NotificationTarget
     data class User(val userId: Int, val name: String?) : NotificationTarget
     data class Message(val activityId: Int?, val peerId: Int?, val peerName: String?) : NotificationTarget
-    data class Thread(val threadId: Int, val commentId: Int?) : NotificationTarget
+    data class Thread(
+        val threadId: Int,
+        val commentId: Int?,
+        /** The API supplied link; the old synthetic anchor did not match AniList. */
+        val siteUrl: String? = null
+    ) : NotificationTarget
     data class Activity(val activityId: Int, val mediaId: Int?) : NotificationTarget
     data object None : NotificationTarget
 }
@@ -201,8 +210,13 @@ data class ThreadNotification(
         }
 
     override val target: NotificationTarget
-        get() = thread?.let { NotificationTarget.Thread(it.id, comment?.id) }
-            ?: NotificationTarget.None
+        get() = thread?.let { thread ->
+            NotificationTarget.Thread(
+                threadId = thread.id,
+                commentId = comment?.id,
+                siteUrl = comment?.url ?: thread.url
+            )
+        } ?: NotificationTarget.None
 }
 
 data class MessageNotification(

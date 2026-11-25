@@ -13,6 +13,7 @@ import com.anisequel.domain.notifications.ThreadNotification
 import com.anisequel.domain.notifications.UnknownNotification
 import com.anisequel.ui.screens.profile.formatRelativeSeconds
 import java.time.Instant
+import java.util.Locale
 
 /** The small label above a headline: what kind of event this is. */
 internal fun NotificationKind.categoryLabel(): String = when (this) {
@@ -95,7 +96,7 @@ internal fun NotificationGroup.headline(): String {
         }
 
         is SubmissionNotification -> {
-            val status = newest.status?.replace('_', ' ')?.lowercase()?.replaceFirstChar { it.uppercase() }
+            val status = newest.status?.replace('_', ' ')?.lowercase(Locale.ROOT)?.replaceFirstChar { it.uppercase() }
             if (status.isNullOrBlank()) "Your submission was updated" else "Your submission is $status"
         }
 
@@ -107,14 +108,32 @@ internal fun NotificationGroup.headline(): String {
 internal fun NotificationGroup.contextLine(): String? {
     val newest = representative
     return when (newest) {
-        is AiringNotification -> newest.contexts.firstOrNull()?.takeIf(String::isNotBlank)
+        is AiringNotification -> newest.contexts.firstOrNull()
+            ?.takeIf(String::isNotBlank)
+            // Airing context is usually just "Episode 12", which the headline
+            // already says. Repeating it made the card look like a template.
+            ?.takeUnless { context ->
+                newest.episode?.let { context.contains("Episode $it", ignoreCase = true) } == true
+            }
+
         is ActivityNotification -> (newest.context ?: newest.activityText)?.takeIf(String::isNotBlank)
-        is ThreadNotification -> (newest.thread?.title ?: newest.context)?.takeIf(String::isNotBlank)
+
+        is ThreadNotification -> {
+            val thread = newest.thread?.title?.takeIf(String::isNotBlank)
+            val comment = newest.comment?.text?.takeIf(String::isNotBlank)
+            when {
+                thread != null && comment != null -> "$thread\n$comment"
+                comment != null -> comment
+                else -> (thread ?: newest.context)?.takeIf(String::isNotBlank)
+            }
+        }
         is MessageNotification -> (newest.body ?: newest.context)?.takeIf(String::isNotBlank)
         is FollowNotification -> newest.context?.takeIf(String::isNotBlank)
         is MediaUpdateNotification -> (newest.reason ?: newest.context ?: newest.deletedTitles.joinToString())
             .takeIf(String::isNotBlank)
-        is SubmissionNotification -> (newest.notes ?: newest.submittedTitle ?: newest.contexts.firstOrNull())
+        // The submitted title is already the media row's footer; repeating it
+        // here drew the same sentence twice on a submission update.
+        is SubmissionNotification -> (newest.notes ?: newest.contexts.firstOrNull())
             ?.takeIf(String::isNotBlank)
         is UnknownNotification -> (newest.context ?: newest.typename ?: newest.type)?.takeIf(String::isNotBlank)
     }
@@ -131,10 +150,9 @@ internal fun NotificationGroup.mediaTitle(): String? = when (val newest = repres
 internal fun NotificationGroup.mediaDetail(): String? {
     val newest = representative
     return when (newest) {
-        is AiringNotification -> {
-            val episode = newest.episode?.takeIf { it > 0 }
-            if (episode != null) "Episode $episode" else "New episode"
-        }
+        // The episode is already the point of the headline; a second
+        // "Episode 12" beneath it was pure repetition.
+        is AiringNotification -> null
         is MediaUpdateNotification -> when (newest.kind) {
             NotificationKind.RELATED_MEDIA_ADDITION -> "Related title added"
             NotificationKind.MEDIA_DATA_CHANGE -> "Details changed"

@@ -378,30 +378,19 @@ internal fun selectLiveChartPoster(
     candidates.forEach { candidate ->
         val normalized = normalizeLiveChartTitle(candidate.title)
         if (normalized.isEmpty()) return@forEach
-        val candidateSeason = seasonNumberIn(normalized)
         // A season names a *specific* run. If the query names one, only that season
         // can answer; if it names none, a later season is a different show and must
         // not wear season one's name. This is what stops a search page that carries
         // both from handing a sequel's art to the original - and, more importantly,
         // the original's art to a sequel. Both are the wrong picture, and the viewer
         // would have no way to say so.
-        if (querySeason != null) {
-            if (candidateSeason != querySeason) return@forEach
-        } else if ((candidateSeason ?: 1) > 1) {
-            return@forEach
-        }
+        val candidateSeason = seasonNumberIn(normalized)
+        if (!seasonMatchesQuery(candidateSeason, querySeason)) return@forEach
         val base = withoutSeasonMarker(normalized)
         if (base.isEmpty()) return@forEach
-        val score = queryBases.maxOfOrNull { key ->
-            when {
-                base == key -> 3
-                base.startsWith(key) || key.startsWith(base) -> 2
-                base.contains(key) || key.contains(base) -> 1
-                else -> 0
-            }
-        } ?: 0
+        val score = titleMatchScore(base, queryBases)
         if (score <= 0) return@forEach
-        if (score > bestScore || (score == bestScore && normalized.length < bestLength)) {
+        if (isBetterLiveChartCandidate(score, normalized.length, bestScore, bestLength)) {
             best = candidate
             bestScore = score
             bestLength = normalized.length
@@ -409,6 +398,37 @@ internal fun selectLiveChartPoster(
     }
     return best?.let { preferLiveChartLargePoster(it.imageUrl) }
 }
+
+
+/**
+ * Whether a candidate season can answer the query's season. A query that names
+ * no season means season one, so a later season is a different show.
+ */
+private fun seasonMatchesQuery(candidateSeason: Int?, querySeason: Int?): Boolean =
+    if (querySeason != null) {
+        candidateSeason == querySeason
+    } else {
+        (candidateSeason ?: 1) <= 1
+    }
+
+/** Exact title, then prefix, then containment; unrelated titles score zero. */
+private fun titleMatchScore(base: String, queryBases: List<String>): Int =
+    queryBases.maxOfOrNull { key ->
+        when {
+            base == key -> 3
+            base.startsWith(key) || key.startsWith(base) -> 2
+            base.contains(key) || key.contains(base) -> 1
+            else -> 0
+        }
+    } ?: 0
+
+/** Higher score wins; a tie goes to the shorter title. */
+private fun isBetterLiveChartCandidate(
+    score: Int,
+    length: Int,
+    bestScore: Int,
+    bestLength: Int
+): Boolean = score > bestScore || (score == bestScore && length < bestLength)
 
 /** "Final Season" answers this, because no number describes it. */
 private const val FINAL_LIVE_CHART_SEASON = 99
