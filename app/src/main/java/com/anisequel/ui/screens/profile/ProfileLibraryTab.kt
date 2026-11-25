@@ -882,7 +882,7 @@ private fun LazyGridScope.libraryContentItems(
     isLoadingManga: Boolean,
     mangaEntries: List<MediaListEntryItem>?,
     scopedError: String?,
-    retryScopedFailure: () -> Unit,
+    retryScopedFailure: (() -> Unit)?,
     query: String,
     filter: LibraryFilter,
     onOpenDetail: (MediaNode) -> Unit
@@ -920,24 +920,16 @@ private fun LazyGridScope.libraryContentItems(
 
     if (visible.isEmpty()) {
         item(span = { GridItemSpan(maxLineSpan) }, key = "library_empty", contentType = "state") {
-            LibraryEmpty(
-                isLoading = ((type == LibraryType.MANGA || type == LibraryType.ALL) && isLoadingManga) ||
-                    (awaitingAnime && animeEntries.isEmpty()),
+            LibraryEmptyState(
+                type = type,
+                isLoadingManga = isLoadingManga,
+                awaitingAnime = awaitingAnime,
+                animeEntries = animeEntries,
                 columns = columns,
-                // A failed fetch is not an empty list. Saying "nothing here"
-                // when the truth is "we could not read it" is the false answer
-                // this whole path exists to stop.
-                failedMessage = if (scopedError != null && !awaitingAnime) {
-                    "Couldn't load this list - $scopedError"
-                } else {
-                    null
-                },
-                onRetry = retryScopedFailure,
+                scopedError = scopedError,
+                retryScopedFailure = retryScopedFailure,
                 query = query,
-                // A status or favourites chip narrows the list even when the
-                // search box is empty, so the empty state has to say that
-                // rather than claiming the whole list is empty.
-                isFiltered = filter != LibraryFilter.ALL
+                filter = filter
             )
         }
     } else {
@@ -1140,6 +1132,41 @@ private fun LazyGridScope.libraryContentItems(
             }
         }
     }
+}
+
+
+/** The list's empty, pending or failed state, with one place for its copy. */
+@Composable
+private fun LibraryEmptyState(
+    type: LibraryType,
+    isLoadingManga: Boolean,
+    awaitingAnime: Boolean,
+    animeEntries: List<MediaListEntryItem>,
+    columns: Int,
+    scopedError: String?,
+    retryScopedFailure: (() -> Unit)?,
+    query: String,
+    filter: LibraryFilter
+) {
+    LibraryEmpty(
+        isLoading = ((type == LibraryType.MANGA || type == LibraryType.ALL) && isLoadingManga) ||
+            (awaitingAnime && animeEntries.isEmpty()),
+        columns = columns,
+        // A failed fetch is not an empty list. Saying "nothing here"
+        // when the truth is "we could not read it" is the false answer
+        // this whole path exists to stop.
+        failedMessage = if (scopedError != null && !awaitingAnime) {
+            "Couldn't load this list - $scopedError"
+        } else {
+            null
+        },
+        onRetry = retryScopedFailure,
+        query = query,
+        // A status or favourites chip narrows the list even when the
+        // search box is empty, so the empty state has to say that
+        // rather than claiming the whole list is empty.
+        isFiltered = filter != LibraryFilter.ALL
+    )
 }
 
 /**

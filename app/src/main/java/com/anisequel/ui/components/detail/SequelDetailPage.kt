@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -132,6 +133,7 @@ internal fun SequelDetailPage(
     onShowAppearanceChange: (Boolean) -> Unit,
     showEntrySheet: Boolean,
     onShowEntrySheetChange: (Boolean) -> Unit,
+    onEditEntry: (() -> Unit)?,
     sheetOffset: Animatable<Float, AnimationVector1D>,
     sheetDragging: Boolean,
     onSheetDraggingChange: (Boolean) -> Unit,
@@ -140,7 +142,7 @@ internal fun SequelDetailPage(
     closeEntrySheet: () -> Unit,
     scope: CoroutineScope,
     infoListState: LazyListState,
-    posterUrl: String
+    posterUrl: String?
 ) {
     val media = subject.media
     Box(modifier = Modifier.fillMaxSize()) {
@@ -158,13 +160,8 @@ internal fun SequelDetailPage(
     // Info stays composed underneath My Entry. The editor is a real overlay,
     // not a second destination: its draft and the Info page's scroll state both
     // remain alive while the reader moves the sheet.
-    val destinations = buildList {
-        add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
-        if (entryEditor != null) {
-            add(NavigationDestination("My Entry", AppVectorIcons.EditEntry, "detail_tab_edit"))
-        }
-    }
-    val selected = if (showEntrySheet && destinations.size > 1) 1 else 0
+    val destinations = detailDestinations(entryEditor != null)
+    val selected = detailSelected(showEntrySheet, destinations.size)
 
     // The capsule's measured height is also the page's bottom clearance. It
     // travels to the sheet's top edge while My Entry is open, then settles back
@@ -174,12 +171,13 @@ internal fun SequelDetailPage(
     val navigationInset = WindowInsets.navigationBars
         .asPaddingValues()
         .calculateBottomPadding()
-    val navClearance = if (destinations.size > 1) {
-        (if (dockHeightPx > 0) dockHeight else 112.dp) + DOCK_GAP +
-            if (immersive) 12.dp else 0.dp
-    } else {
-        navigationInset + 28.dp + if (immersive) 12.dp else 0.dp
-    }
+    val navClearance = detailNavClearance(
+        hasDock = destinations.size > 1,
+        dockHeightPx = dockHeightPx,
+        dockHeight = dockHeight,
+        immersive = immersive,
+        navigationInset = navigationInset
+    )
 
     BoxWithConstraints(
         modifier = Modifier
@@ -209,7 +207,7 @@ internal fun SequelDetailPage(
                     onOpenStudio = onOpenStudio,
                     onOpenCharacter = onOpenCharacter,
                     onOpenStaff = onOpenStaff,
-                    onEditEntry = { if (entryEditor != null) onShowEntrySheetChange(true) },
+                    onEditEntry = onEditEntry,
                     onOpenAppearance = { onShowAppearanceChange(true) },
                     modifier = Modifier.fillMaxSize(),
                     listState = infoListState,
@@ -237,7 +235,7 @@ internal fun SequelDetailPage(
                     onOpenStudio = onOpenStudio,
                     onOpenCharacter = onOpenCharacter,
                     onOpenStaff = onOpenStaff,
-                    onEditEntry = { if (entryEditor != null) onShowEntrySheetChange(true) },
+                    onEditEntry = onEditEntry,
                     onOpenAppearance = { onShowAppearanceChange(true) },
                     modifier = Modifier.fillMaxSize(),
                     listState = infoListState,
@@ -259,9 +257,8 @@ internal fun SequelDetailPage(
                 dockHeightPx = dockHeightPx,
                 immersive = immersive,
                 onDockHeightChange = { dockHeightPx = it },
-                onSelect = { index ->
-                    if (index == 1) onShowEntrySheetChange(true) else closeEntrySheet()
-                }
+                onEditEntry = { onShowEntrySheetChange(true) },
+                onCloseEntry = closeEntrySheet
             )
 
             SequelDetailEntryOverlay(
@@ -309,6 +306,34 @@ internal fun SequelDetailPage(
 
 
 
+/** The page's own destinations; My Entry only exists once the editor does. */
+private fun detailDestinations(hasEditor: Boolean): List<NavigationDestination> = buildList {
+    add(NavigationDestination("Info", AppVectorIcons.Info, "detail_tab_info"))
+    if (hasEditor) {
+        add(NavigationDestination("My Entry", AppVectorIcons.EditEntry, "detail_tab_edit"))
+    }
+}
+
+/** The selected destination only moves to My Entry while its overlay is open. */
+private fun detailSelected(showEntrySheet: Boolean, destinationCount: Int): Int =
+    if (showEntrySheet && destinationCount > 1) 1 else 0
+
+/** The page's bottom clearance: the capsule's measured height, or the nav bar. */
+private fun detailNavClearance(
+    hasDock: Boolean,
+    dockHeightPx: Int,
+    dockHeight: Dp,
+    immersive: Boolean,
+    navigationInset: Dp
+): Dp {
+    val immersiveLift = if (immersive) 12.dp else 0.dp
+    return if (hasDock) {
+        (if (dockHeightPx > 0) dockHeight else 112.dp) + DOCK_GAP + immersiveLift
+    } else {
+        navigationInset + 28.dp + immersiveLift
+    }
+}
+
 /**
  * The floating capsule. It travels with My Entry and fades as the sheet covers
  * it; the page owns the measured dock height because it is also the page's
@@ -326,13 +351,14 @@ private fun BoxScope.SequelDetailDock(
     dockHeightPx: Int,
     immersive: Boolean,
     onDockHeightChange: (Int) -> Unit,
-    onSelect: (Int) -> Unit
+    onEditEntry: () -> Unit,
+    onCloseEntry: () -> Unit
 ) {
 if (destinations.size > 1) {
     ExpressiveNavigationBar(
         destinations = destinations,
         selectedIndex = selected,
-        onSelect = onSelect,
+        onSelect = { index -> if (index == 1) onEditEntry() else onCloseEntry() },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .onSizeChanged { onDockHeightChange(it.height) }

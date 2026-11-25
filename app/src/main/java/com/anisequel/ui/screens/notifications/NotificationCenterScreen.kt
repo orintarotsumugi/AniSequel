@@ -576,70 +576,100 @@ private fun EmptyState(
         verticalArrangement = Arrangement.Center
     ) {
         ExpressiveEmptyOrb(
-            icon = when {
-                allCategoriesOff -> AppVectorIcons.Tune
-                filtered -> AppVectorIcons.Filter
-                else -> AppVectorIcons.CheckCircle
-            },
+            icon = emptyStateIcon(allCategoriesOff, filtered),
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             iconTint = MaterialTheme.colorScheme.onPrimaryContainer
         )
         Spacer(Modifier.height(18.dp))
         Text(
-            text = when {
-                allCategoriesOff -> "Your categories are off."
-                filtered && canLoadOlder -> "No matches in these pages."
-                filtered -> "No matches in this inbox."
-                else -> "You're all caught up."
-            },
+            text = emptyStateTitle(allCategoriesOff, filtered, canLoadOlder),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(7.dp))
         Text(
-            text = when {
-                allCategoriesOff ->
-                    "Every category is switched off in Notification settings, so there is nothing to show here. Turn one back on to see your inbox."
-                canLoadOlder ->
-                    "No loaded notification matches this filter. Older notifications may still have one, or you can switch back to everything."
-                filtered ->
-                    "No notifications match this filter. Switch back to everything to see the rest of your inbox."
-                else ->
-                    "Likes, replies, follows, messages and title updates will land here when they need you. There is no background checking, so this page refreshes when you open it or pull down."
-            },
+            text = emptyStateBody(allCategoriesOff, filtered, canLoadOlder),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(20.dp))
         ExpressivePrimaryButton(
-            text = when {
-                allCategoriesOff -> "Open notification settings"
-                filtered -> "Show all"
-                else -> "Notification settings"
-            },
+            text = emptyStateActionLabel(allCategoriesOff, filtered),
             onClick = if (filtered && !allCategoriesOff) onResetFilter else onOpenSettings
         )
         if (canLoadOlder) {
-            if (loadMoreError != null) {
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = loadMoreError,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
-            TextButton(onClick = onLoadMore, enabled = !loadingMore) {
-                if (loadingMore) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(if (loadMoreError == null) "Loading older notifications" else "Retrying")
-                } else {
-                    Text(if (loadMoreError == null) "Load older notifications" else "Retry older notifications")
-                }
-            }
+            EmptyStateOlder(
+                loadMoreError = loadMoreError,
+                loadingMore = loadingMore,
+                onLoadMore = onLoadMore
+            )
+        }
+    }
+}
+
+
+private fun emptyStateIcon(allCategoriesOff: Boolean, filtered: Boolean) = when {
+    allCategoriesOff -> AppVectorIcons.Tune
+    filtered -> AppVectorIcons.Filter
+    else -> AppVectorIcons.CheckCircle
+}
+
+private fun emptyStateTitle(
+    allCategoriesOff: Boolean,
+    filtered: Boolean,
+    canLoadOlder: Boolean
+): String = when {
+    allCategoriesOff -> "Your categories are off."
+    filtered && canLoadOlder -> "No matches in these pages."
+    filtered -> "No matches in this inbox."
+    else -> "You're all caught up."
+}
+
+private fun emptyStateBody(
+    allCategoriesOff: Boolean,
+    filtered: Boolean,
+    canLoadOlder: Boolean
+): String = when {
+    allCategoriesOff ->
+        "Every category is switched off in Notification settings, so there is nothing to show here. Turn one back on to see your inbox."
+    canLoadOlder ->
+        "No loaded notification matches this filter. Older notifications may still have one, or you can switch back to everything."
+    filtered ->
+        "No notifications match this filter. Switch back to everything to see the rest of your inbox."
+    else ->
+        "Likes, replies, follows, messages and title updates will land here when they need you. There is no background checking, so this page refreshes when you open it or pull down."
+}
+
+private fun emptyStateActionLabel(allCategoriesOff: Boolean, filtered: Boolean): String = when {
+    allCategoriesOff -> "Open notification settings"
+    filtered -> "Show all"
+    else -> "Notification settings"
+}
+
+@Composable
+private fun EmptyStateOlder(
+    loadMoreError: String?,
+    loadingMore: Boolean,
+    onLoadMore: () -> Unit
+) {
+    if (loadMoreError != null) {
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = loadMoreError,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center
+        )
+    }
+    TextButton(onClick = onLoadMore, enabled = !loadingMore) {
+        if (loadingMore) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(if (loadMoreError == null) "Loading older notifications" else "Retrying")
+        } else {
+            Text(if (loadMoreError == null) "Load older notifications" else "Retry older notifications")
         }
     }
 }

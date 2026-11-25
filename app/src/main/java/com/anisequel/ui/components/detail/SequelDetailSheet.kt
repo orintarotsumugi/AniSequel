@@ -568,6 +568,7 @@ fun SequelDetailSheet(
             themePreferences = themePreferences,
             themeSettings = themeSettings,
             entryEditor = entryEditor,
+            onEditEntry = entryEditor?.let { { showEntrySheet = true } },
             editState = editState,
             showAppearance = showAppearance,
             onShowAppearanceChange = { showAppearance = it },

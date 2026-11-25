@@ -91,34 +91,7 @@ internal fun NotificationCard(
         ?.replace('\n', ' ')
         ?.let { if (it.length > 240) it.take(240).trimEnd() + "..." else it }
     val headline = group.headline()
-    val description = buildString {
-        append(group.representative.kind.categoryLabel())
-        append(". ")
-        append(headline)
-        // An airing headline already names the title; repeating it made the
-        // row read the same show twice. A media-only activity card has no title
-        // in its headline, so it still gets one here.
-        group.mediaTitle()
-            ?.takeIf { it.isNotBlank() && !headline.contains(it, ignoreCase = true) }
-            ?.let { title ->
-                append(". ")
-                append(title)
-            }
-        if (group.actorCount > 1) {
-            append(". ")
-            append(group.actorCount)
-            append(" people")
-        }
-        if (!contextSummary.isNullOrBlank()) {
-            append(". ")
-            append(contextSummary)
-        }
-        if (relative.isNotBlank()) {
-            append(". ")
-            append(relative)
-        }
-        if (group.isUnread) append(". Unread")
-    }
+    val description = notificationDescription(group, headline, contextSummary, relative)
     val press = if (hasTarget) Modifier.bouncyPress(pressedScale = 0.985f) else Modifier
     Surface(
         modifier = modifier
@@ -160,23 +133,79 @@ internal fun NotificationCard(
         },
         border = border
     ) {
-        if (mediaFocused) {
-            MediaNotificationBody(
-                group = group,
-                expanded = expanded,
-                now = now,
-                onToggleExpanded = { expanded = !expanded },
-                onContextOverflow = { contextCanExpand = it }
-            )
-        } else {
-            SocialNotificationBody(
-                group = group,
-                expanded = expanded,
-                now = now,
-                onToggleExpanded = { expanded = !expanded },
-                onContextOverflow = { contextCanExpand = it }
-            )
+        NotificationBody(
+            group = group,
+            mediaFocused = mediaFocused,
+            expanded = expanded,
+            now = now,
+            onToggleExpanded = { expanded = !expanded },
+            onContextOverflow = { contextCanExpand = it }
+        )
+    }
+}
+
+
+/** The spoken summary: category, headline, title, actors, preview, time, unread. */
+private fun notificationDescription(
+    group: NotificationGroup,
+    headline: String,
+    contextSummary: String?,
+    relative: String
+): String = buildString {
+    append(group.representative.kind.categoryLabel())
+    append(". ")
+    append(headline)
+    // An airing headline already names the title; repeating it made the
+    // row read the same show twice. A media-only activity card has no title
+    // in its headline, so it still gets one here.
+    group.mediaTitle()
+        ?.takeIf { it.isNotBlank() && !headline.contains(it, ignoreCase = true) }
+        ?.let { title ->
+            append(". ")
+            append(title)
         }
+    if (group.actorCount > 1) {
+        append(". ")
+        append(group.actorCount)
+        append(" people")
+    }
+    if (!contextSummary.isNullOrBlank()) {
+        append(". ")
+        append(contextSummary)
+    }
+    if (relative.isNotBlank()) {
+        append(". ")
+        append(relative)
+    }
+    if (group.isUnread) append(". Unread")
+}
+
+/** Media rows and social rows differ only in the body they draw. */
+@Composable
+private fun NotificationBody(
+    group: NotificationGroup,
+    mediaFocused: Boolean,
+    expanded: Boolean,
+    now: Instant,
+    onToggleExpanded: () -> Unit,
+    onContextOverflow: (Boolean) -> Unit
+) {
+    if (mediaFocused) {
+        MediaNotificationBody(
+            group = group,
+            expanded = expanded,
+            now = now,
+            onToggleExpanded = onToggleExpanded,
+            onContextOverflow = onContextOverflow
+        )
+    } else {
+        SocialNotificationBody(
+            group = group,
+            expanded = expanded,
+            now = now,
+            onToggleExpanded = onToggleExpanded,
+            onContextOverflow = onContextOverflow
+        )
     }
 }
 
