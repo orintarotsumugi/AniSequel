@@ -71,6 +71,15 @@ class AniListErrorMappingTest {
     private class FakeService(
         private val viewerResponse: () -> GraphQLResponse<ViewerData> = { errorGraphQL("Invalid token") }
     ) : AniListApiService {
+    override suspend fun getThread(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.ThreadDetailData> =
+        throw UnsupportedOperationException("getThread is not served by this double")
+
+    override suspend fun getThreadComments(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.ThreadCommentsData> =
+        throw UnsupportedOperationException("getThreadComments is not served by this double")
     // Not exercised here: a test that reaches one of these should fail
     // loudly with this name in the stack rather than invent an answer.
     override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> =
@@ -377,6 +386,15 @@ private fun errorGraphQL(message: String, status: Int? = null) =
 class RequestCoalescingPolicyTest {
 
     private class CountingService : AniListApiService {
+        override suspend fun getThread(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.ThreadDetailData> =
+            throw UnsupportedOperationException("getThread is not served by this double")
+
+        override suspend fun getThreadComments(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.ThreadCommentsData> =
+            throw UnsupportedOperationException("getThreadComments is not served by this double")
     // loudly with this name in the stack rather than invent an answer.
     override suspend fun getGlobalActivity(request: GraphQLRequest): GraphQLResponse<ActivityFeedData> =
         throw UnsupportedOperationException("getGlobalActivity is not served by this double")
