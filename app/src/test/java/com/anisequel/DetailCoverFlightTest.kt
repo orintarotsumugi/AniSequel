@@ -22,6 +22,11 @@ class DetailCoverFlightTest {
         "app/src/main/java/com/anisequel/ui/components/detail/DetailCoverFlight.kt"
     private val sheet =
         "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+    private val pageFile =
+        "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailPage.kt"
+
+    /** The sheet owns the state; the page file owns the layout it hands to it. */
+    private fun pageSource(): String = source(sheet) + source(pageFile)
     private val novaHero =
         "app/src/main/java/com/anisequel/ui/components/detail/info/NovaInfoHero.kt"
     private val animeHero =
@@ -97,7 +102,7 @@ class DetailCoverFlightTest {
 
     @Test
     fun `the page hides its own poster only while the copy is on stage`() {
-        val page = source(sheet)
+        val page = pageSource()
 
         assertTrue(
             "the page's poster is drawn under the copy, so the landing shows two " +
@@ -139,7 +144,7 @@ class DetailCoverFlightTest {
     @Test
     fun `the open waits for the copy's picture before the page moves`() {
         val text = source(flight)
-        val page = source(sheet)
+        val page = pageSource()
 
         assertTrue(
             "the copy is only composed once it is already meant to be visible, so " +
