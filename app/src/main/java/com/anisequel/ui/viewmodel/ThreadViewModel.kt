@@ -29,8 +29,10 @@ import kotlinx.coroutines.launch
  * This page is reached from a notification, not from a forum index: opening at
  * the start would leave the comment the reader tapped far below the screen. The
  * first read therefore starts on `ceil(replyCount / perPage)` - the newest rows -
- * draws them newest first, and Older walks backwards from there. That also keeps
- * a named comment near the top where its highlight can be seen.
+ * draws them newest first, and Older walks backwards from there. The inbox's own
+ * copy of the target comment is kept in [UiState.seedComment] and drawn first, so
+ * an old notification is still readable even when its page is beyond the API's
+ * depth limit; a target that does land in the fetched page is highlighted in place.
  *
  * An empty last page falls back to page one once: a thread whose reply count
  * counts a deleted tail can otherwise open on a page with no rows at all. The
@@ -40,12 +42,15 @@ import kotlinx.coroutines.launch
 class ThreadViewModel(
     private val repository: AniListRepository,
     private val threadId: Int,
-    private val highlightCommentId: Int?
+    private val highlightCommentId: Int?,
+    seedComment: ThreadComment? = null
 ) : ViewModel() {
 
     data class UiState(
         val thread: ThreadNode? = null,
         val comments: List<ThreadComment> = emptyList(),
+        /** The inbox row's comment, shown even when the target page is unreachable. */
+        val seedComment: ThreadComment? = null,
         val loading: Boolean = true,
         val loadingMore: Boolean = false,
         val hasMore: Boolean = false,
@@ -56,7 +61,12 @@ class ThreadViewModel(
         val highlightCommentId: Int? = null
     )
 
-    private val _state = MutableStateFlow(UiState(highlightCommentId = highlightCommentId))
+    private val _state = MutableStateFlow(
+        UiState(
+            highlightCommentId = highlightCommentId,
+            seedComment = seedComment
+        )
+    )
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     init {
@@ -162,13 +172,15 @@ class ThreadViewModel(
     class Factory(
         private val repository: AniListRepository,
         private val threadId: Int,
-        private val commentId: Int?
+        private val commentId: Int?,
+        private val seedComment: ThreadComment? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = ThreadViewModel(
             repository = repository,
             threadId = threadId,
-            highlightCommentId = commentId
+            highlightCommentId = commentId,
+            seedComment = seedComment
         ) as T
     }
 }

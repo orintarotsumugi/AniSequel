@@ -27,7 +27,9 @@ data class NotificationNode(
     val context: String? = null,
     val contexts: List<String>? = null,
     val episode: Int? = null,
+    val animeId: Int? = null,
     val activityId: Int? = null,
+    val commentId: Int? = null,
     val user: FollowUser? = null,
     val media: MediaNode? = null,
     val activity: ProfileActivity? = null,
@@ -53,7 +55,9 @@ data class NotificationThreadNode(
 data class NotificationCommentNode(
     val id: Int,
     val comment: String? = null,
-    val siteUrl: String? = null
+    val siteUrl: String? = null,
+    val createdAt: Int? = null,
+    val user: FollowUser? = null
 )
 
 @JsonClass(generateAdapter = true)

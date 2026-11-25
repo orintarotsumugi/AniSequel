@@ -631,6 +631,12 @@ fun AppNavigation(
         }
     }
 
+    // One handoff for the inbox's thread destination. It is intentionally not
+    // saved: a process death still has the ids and can fetch the thread's newest
+    // page, while the body the row already downloaded is the part worth keeping
+    // across the navigation call itself.
+    val notificationThreadSeedStore = remember { NotificationThreadSeedStore() }
+
     // React to auth state changes to navigate automatically.
     LaunchedEffect(authState) {
         when (authState) {
@@ -974,7 +980,8 @@ fun AppNavigation(
                         notificationPreferencesStore = notificationPreferencesStore,
                         notificationReadStore = notificationReadStore,
                         viewerId = signedInViewer?.id,
-                        entryEditor = sharedEntryEditor
+                        entryEditor = sharedEntryEditor,
+                        threadSeedStore = notificationThreadSeedStore
                     )
                 }
 

@@ -5,7 +5,7 @@
       "entries": [
         {
           "title": "Every notification opens inside the app",
-          "detail": "A media notification now opens the real title sheet, an activity opens the comment thread the profile already uses, and a forum thread opens a read-only page with its opening post and newest comments. The inbox no longer hands those targets to a browser."
+          "detail": "A media notification now opens the real title sheet, an activity opens the comment thread the profile already uses, and a forum thread opens a read-only page with its opening post, the comment the notification is about, and its newest comments. The inbox no longer hands those targets to a browser."
         },
         {
           "title": "The Android permission is asked for where it belongs",

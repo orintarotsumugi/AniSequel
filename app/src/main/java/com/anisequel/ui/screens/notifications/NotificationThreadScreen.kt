@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.anisequel.data.model.ThreadComment
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.novamarkdown.NovaMarkdownWithCovers
@@ -46,12 +47,13 @@ import com.anisequel.ui.viewmodel.ThreadViewModel
 /**
  * A forum thread notification, opened as a readable page rather than a browser.
  *
- * The inbox only knows an id and a comment id. That is enough for two public
- * reads; it is not enough to draw the thread from the notification row, which is
- * why the tap used to leave the app. The page is deliberately read-only: replying
- * is a write this route has no draft state for, and a disabled-looking reply box
- * is worse than no box at all. The thread opens on the newest page AniList will
- * serve, so the target comment is normally on screen and is marked when it is.
+ * The inbox carries the thread id, the comment id and the comment body. The body
+ * is enough to show the notification's target even when AniList's 5,000-entry page
+ * depth stops before that comment; the ids are enough for the two public reads
+ * that draw the thread around it. The page is deliberately read-only: replying is
+ * a write this route has no draft state for, and a disabled-looking reply box is
+ * worse than no box at all. It opens on the newest page AniList will serve and
+ * marks the target when that page happens to contain it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,13 +61,15 @@ internal fun NotificationThreadScreen(
     threadId: Int,
     commentId: Int?,
     repository: AniListRepository,
+    seedComment: ThreadComment? = null,
     onBack: () -> Unit
 ) {
     val viewModel: ThreadViewModel = viewModel(
         factory = ThreadViewModel.Factory(
             repository = repository,
             threadId = threadId,
-            commentId = commentId
+            commentId = commentId,
+            seedComment = seedComment
         )
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -146,6 +150,23 @@ internal fun NotificationThreadScreen(
                                 message = state.threadError.orEmpty(),
                                 action = "Reload",
                                 onAction = viewModel::load
+                            )
+                        }
+                    }
+
+                    // The row already carries the comment this notification is
+                    // about. It is drawn before the page because a thread can be
+                    // deeper than AniList's 5,000-entry limit, so the target may
+                    // never appear in a page this screen is allowed to fetch.
+                    val seed = state.seedComment
+                    if (seed != null && state.comments.none { it.id == seed.id }) {
+                        item(key = "thread_seed") {
+                            CommentCard(
+                                author = seed.user?.name ?: "Someone",
+                                text = seed.comment.orEmpty(),
+                                createdAt = seed.createdAt,
+                                highlighted = true,
+                                label = "The comment this notification is about"
                             )
                         }
                     }
@@ -302,7 +323,8 @@ private fun CommentCard(
     author: String,
     text: String,
     createdAt: Int?,
-    highlighted: Boolean
+    highlighted: Boolean,
+    label: String? = null
 ) {
     Surface(
         shape = RoundedCornerShape(18.dp),
@@ -319,6 +341,15 @@ private fun CommentCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            label?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = author,

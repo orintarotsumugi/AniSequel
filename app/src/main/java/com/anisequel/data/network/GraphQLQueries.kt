@@ -2208,7 +2208,7 @@ object GraphQLQueries {
             notifications {
               __typename
               ... on AiringNotification {
-                id type episode contexts createdAt
+                id type animeId episode contexts createdAt
                 media { id type title { romaji english native } coverImage { medium large } }
               }
               ... on FollowingNotification {
@@ -2266,28 +2266,28 @@ object GraphQLQueries {
                 }
               }
               ... on ThreadCommentReplyNotification {
-                id type context createdAt
+                id type commentId context createdAt
                 user { id name avatar { medium large } }
                 thread { id title siteUrl }
-                comment { id comment siteUrl }
+                comment { id comment siteUrl createdAt user { id name avatar { medium large } } }
               }
               ... on ThreadCommentSubscribedNotification {
-                id type context createdAt
+                id type commentId context createdAt
                 user { id name avatar { medium large } }
                 thread { id title siteUrl }
-                comment { id comment siteUrl }
+                comment { id comment siteUrl createdAt user { id name avatar { medium large } } }
               }
               ... on ThreadCommentMentionNotification {
-                id type context createdAt
+                id type commentId context createdAt
                 user { id name avatar { medium large } }
                 thread { id title siteUrl }
-                comment { id comment siteUrl }
+                comment { id comment siteUrl createdAt user { id name avatar { medium large } } }
               }
               ... on ThreadCommentLikeNotification {
-                id type context createdAt
+                id type commentId context createdAt
                 user { id name avatar { medium large } }
                 thread { id title siteUrl }
-                comment { id comment siteUrl }
+                comment { id comment siteUrl createdAt user { id name avatar { medium large } } }
               }
               ... on ThreadLikeNotification {
                 id type context createdAt

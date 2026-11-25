@@ -132,7 +132,11 @@ data class NotificationComment(
     val id: Int,
     val text: String?,
     /** Canonical comment link; preferred over guessing an anchor from ids. */
-    val url: String? = null
+    val url: String? = null,
+    /** The comment's own timestamp, when the inbox selected it. */
+    val createdAt: Int? = null,
+    /** Its author, which is not always the notification's actor (a like is one case). */
+    val author: NotificationActor? = null
 )
 
 /** Where tapping a row should go. */
@@ -144,7 +148,19 @@ sealed interface NotificationTarget {
         val threadId: Int,
         val commentId: Int?,
         /** The API supplied link; the old synthetic anchor did not match AniList. */
-        val siteUrl: String? = null
+        val siteUrl: String? = null,
+        /**
+         * The comment body the inbox already paid for.
+         *
+         * A thread can be far deeper than the API's 5,000-entry page limit, so
+         * walking back to this comment after opening the newest page can take
+         * hundreds of taps. Carrying the row's own comment lets the destination
+         * show the notification's target at once; the thread's pages remain the
+         * context around it, not the only way to find it.
+         */
+        val commentText: String? = null,
+        val commentCreatedAt: Int? = null,
+        val commentAuthor: NotificationActor? = null
     ) : NotificationTarget
     data class Activity(val activityId: Int, val mediaId: Int?) : NotificationTarget
     data object None : NotificationTarget
@@ -155,10 +171,13 @@ data class AiringNotification(
     override val createdAt: Int?,
     val episode: Int?,
     val media: NotificationMedia?,
-    val contexts: List<String> = emptyList()
+    val contexts: List<String> = emptyList(),
+    /** The API's separate airing id, used when the media payload is absent. */
+    val animeId: Int? = null
 ) : InboxNotification {
     override val kind = NotificationKind.AIRING
     override val target = media?.let { NotificationTarget.Media(it.id, it.type) }
+        ?: animeId?.let { NotificationTarget.Media(it, "ANIME") }
         ?: NotificationTarget.None
 }
 
@@ -195,7 +214,9 @@ data class ThreadNotification(
     override val actor: NotificationActor?,
     val thread: NotificationThread?,
     val comment: NotificationComment?,
-    val context: String?
+    val context: String?,
+    /** The notification's own comment id, kept when the full comment is absent. */
+    val commentId: Int? = null
 ) : InboxNotification {
     override val groupKey: String?
         get() = when (kind) {
@@ -213,8 +234,11 @@ data class ThreadNotification(
         get() = thread?.let { thread ->
             NotificationTarget.Thread(
                 threadId = thread.id,
-                commentId = comment?.id,
-                siteUrl = comment?.url ?: thread.url
+                commentId = comment?.id ?: commentId,
+                siteUrl = comment?.url ?: thread.url,
+                commentText = comment?.text,
+                commentCreatedAt = comment?.createdAt,
+                commentAuthor = comment?.author
             )
         } ?: NotificationTarget.None
 }

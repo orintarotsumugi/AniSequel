@@ -4151,11 +4151,14 @@ so three of its targets left for `anilist.co`. That was a limitation of the old
 navigation graph, not of the data. 2.6.6 gives each one a real route: the media
 row fetches the title and opens `SequelDetailSheet`, the activity row fetches its
 root and opens the profile comment sheet, and the thread row fetches the post and
-one page of comments into a read-only screen. A thread opens on the page that
-contains its newest comments, because comment pages ascend by id, and Older walks
-backwards; the page is clamped to AniList's 5000-entry depth limit, which rejects
-the true last page of a very old thread. Only the API's `siteUrl` is ignored now,
-because the app no longer needs the site to show the target.
+one page of comments into a read-only screen. The same inbox row also carries the
+`comment` object, so its body and author are shown before the thread's pages and
+remain readable when the target lies beyond AniList's page depth. A thread opens
+on the page that contains its newest comments, because comment pages ascend by
+id, and Older walks backwards; the page is clamped to the API's 5000-entry limit,
+which rejects the true last page of a very old thread. The API's `siteUrl` is the
+only part of the row now ignored, because the app no longer needs the site to show
+the target.
 
 Android notifications are still optional and still do not imply a worker. The
 manifest declares `POST_NOTIFICATIONS`, but the runtime dialog is requested only

@@ -2894,13 +2894,7 @@ internal fun NotificationNode.toInboxNotification(): InboxNotification? {
     val notificationId = id ?: return null
     if (notificationId <= 0) return null
     val kind = type.toNotificationKind() ?: typename.toTypenameKind()
-    val actor = user?.let {
-        NotificationActor(
-            id = it.id,
-            name = it.name,
-            avatarUrl = it.avatar?.large ?: it.avatar?.medium
-        )
-    }
+    val actor = user?.toNotificationActor()
     val mediaValue = media?.toNotificationMedia()
 
     return when {
@@ -2910,7 +2904,8 @@ internal fun NotificationNode.toInboxNotification(): InboxNotification? {
                 createdAt = createdAt,
                 episode = episode,
                 media = mediaValue,
-                contexts = contexts.orEmpty()
+                contexts = contexts.orEmpty(),
+                animeId = animeId
             )
 
         typename == "FollowingNotification" || kind == NotificationKind.FOLLOWING ->
@@ -2963,8 +2958,17 @@ internal fun NotificationNode.toInboxNotification(): InboxNotification? {
                 createdAt = createdAt,
                 actor = actor,
                 thread = thread?.let { NotificationThread(it.id, it.title, it.siteUrl) },
-                comment = comment?.let { NotificationComment(it.id, it.comment, it.siteUrl) },
-                context = context
+                comment = comment?.let {
+                    NotificationComment(
+                        id = it.id,
+                        text = it.comment,
+                        url = it.siteUrl,
+                        createdAt = it.createdAt,
+                        author = it.user?.toNotificationActor()
+                    )
+                },
+                context = context,
+                commentId = comment?.id ?: commentId
             )
 
         (kind != null && kind.isActivityKind()) || typename in ACTIVITY_TYPENAMES ->
@@ -2989,6 +2993,12 @@ internal fun NotificationNode.toInboxNotification(): InboxNotification? {
         )
     }
 }
+
+private fun FollowUser.toNotificationActor() = NotificationActor(
+    id = id,
+    name = name,
+    avatarUrl = avatar?.large ?: avatar?.medium
+)
 
 private val ACTIVITY_TYPENAMES = setOf(
     "ActivityLikeNotification",

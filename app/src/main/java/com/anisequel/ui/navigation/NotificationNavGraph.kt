@@ -40,7 +40,8 @@ fun NavGraphBuilder.notificationDestinations(
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
     viewerId: Int?,
-    entryEditor: RepositoryEntryEditor?
+    entryEditor: RepositoryEntryEditor?,
+    threadSeedStore: NotificationThreadSeedStore
 ) {
     composable(AppRoutes.NOTIFICATIONS) {
         val viewModel: NotificationViewModel = viewModel(
@@ -55,7 +56,7 @@ fun NavGraphBuilder.notificationDestinations(
             onNavigateBack = { navController.popBackStack() },
             onOpenSettings = { navController.navigateSingle(AppRoutes.SETTINGS_NOTIFICATIONS) },
             onOpenNotification = { notification ->
-                openNotification(navController, notification)
+                openNotification(navController, notification, threadSeedStore)
             }
         )
     }
@@ -125,6 +126,7 @@ fun NavGraphBuilder.notificationDestinations(
             threadId = threadId,
             commentId = commentId,
             repository = aniListRepository,
+            seedComment = threadSeedStore.find(threadId, commentId),
             onBack = { navController.popBackStack() }
         )
     }
@@ -132,7 +134,8 @@ fun NavGraphBuilder.notificationDestinations(
 
 private fun openNotification(
     navController: NavHostController,
-    notification: InboxNotification
+    notification: InboxNotification,
+    threadSeedStore: NotificationThreadSeedStore
 ) {
     when (val target = notification.target) {
         is NotificationTarget.Media ->
@@ -148,10 +151,12 @@ private fun openNotification(
                 "${ProfileRoutes.OWN}?tab=${ProfileRoutes.TAB_ACTIVITY}&segment=${ProfileRoutes.SEGMENT_MESSAGES}"
             )
 
-        is NotificationTarget.Thread ->
+        is NotificationTarget.Thread -> {
+            threadSeedStore.record(target)
             navController.navigateSingle(
                 AppRoutes.notificationThread(target.threadId, target.commentId)
             )
+        }
 
         is NotificationTarget.Activity ->
             navController.navigateSingle(
