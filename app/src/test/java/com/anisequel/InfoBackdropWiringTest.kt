@@ -28,6 +28,8 @@ class InfoBackdropWiringTest {
         "app/src/main/java/com/anisequel/ui/components/detail/info/InfoPageBackdrop.kt"
     private val sheet =
         "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+    private val sheetPage =
+        "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailPage.kt"
     private val viewer =
         "app/src/main/java/com/anisequel/ui/components/detail/FullScreenCoverViewer.kt"
     private val reveal =
@@ -134,7 +136,7 @@ class InfoBackdropWiringTest {
 
     @Test
     fun `the sheet hands the stored backdrop to the page`() {
-        val file = source(sheet)
+        val file = source(sheet) + source(sheetPage)
 
         assertTrue(
             "SequelDetailSheet collects ThemeSettings but never passes the " +

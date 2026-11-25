@@ -1,5 +1,6 @@
 package com.anisequel.ui.navigation
 
+import androidx.compose.runtime.Composable
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -16,6 +17,8 @@ import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.DevicePreferences
 import com.anisequel.data.repository.InterfacePreferences
+import com.anisequel.data.repository.NotificationPreferencesStore
+import com.anisequel.data.repository.NotificationReadStore
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
 import com.anisequel.ui.screens.settings.SettingsScreen
@@ -48,6 +51,8 @@ fun NavGraphBuilder.settingsDestinations(
      * the cards are not drawing.
      */
     interfacePreferences: InterfacePreferences,
+    notificationPreferencesStore: NotificationPreferencesStore,
+    notificationReadStore: NotificationReadStore,
     aniListRepository: AniListRepository,
     /**
      * The two dashboard counts the Settings header shows.
@@ -68,7 +73,8 @@ fun NavGraphBuilder.settingsDestinations(
     cardPreview: List<MediaListEntryItem>,
     signedInViewer: ViewerProfile?
 ) {
-    composable(AppRoutes.SETTINGS) {
+    @Composable
+    fun SettingsDestination(startOnNotifications: Boolean) {
         SettingsScreen(
             authViewModel = authViewModel,
             themePreferences = themePreferences,
@@ -83,6 +89,9 @@ fun NavGraphBuilder.settingsDestinations(
             seasonalPreferences = seasonalPreferences,
             devicePreferences = devicePreferences,
             interfacePreferences = interfacePreferences,
+            notificationPreferencesStore = notificationPreferencesStore,
+            notificationReadStore = notificationReadStore,
+            startOnNotifications = startOnNotifications,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
             totalWatchedCount = totalWatchedCount,
@@ -96,4 +105,7 @@ fun NavGraphBuilder.settingsDestinations(
             }
         )
     }
+
+    composable(AppRoutes.SETTINGS) { SettingsDestination(startOnNotifications = false) }
+    composable(AppRoutes.SETTINGS_NOTIFICATIONS) { SettingsDestination(startOnNotifications = true) }
 }

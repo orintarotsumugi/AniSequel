@@ -175,7 +175,7 @@ fun TierListScreen(
             } else {
                 AnimatedContentTransitionScope.SlideDirection.Right
             }
-            (slideIntoContainer(
+            slideIntoContainer(
                 direction,
                 animationSpec = ExpressiveMotion.DefaultSpatialOffset,
                 // A short travel rather than a whole page: the list expands out
@@ -184,14 +184,14 @@ fun TierListScreen(
             ) + fadeIn(ExpressiveMotion.DefaultEffects) + scaleIn(
                 initialScale = 0.96f,
                 animationSpec = ExpressiveMotion.BouncySpatial
-            )) togetherWith (slideOutOfContainer(
+            ) togetherWith slideOutOfContainer(
                 direction,
                 animationSpec = ExpressiveMotion.DefaultSpatialOffset,
                 targetOffset = { fullWidth -> fullWidth / 12 }
             ) + fadeOut(ExpressiveMotion.DefaultEffects) + scaleOut(
                 targetScale = 0.98f,
                 animationSpec = ExpressiveMotion.FastSpatial
-            ))
+            )
         },
         label = "tier_library_board"
     ) { openDocument ->

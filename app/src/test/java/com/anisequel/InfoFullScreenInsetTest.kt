@@ -44,6 +44,8 @@ class InfoFullScreenInsetTest {
         )
         val sheet = source(
             "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+        ) + source(
+            "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailPage.kt"
         )
 
         assertTrue(

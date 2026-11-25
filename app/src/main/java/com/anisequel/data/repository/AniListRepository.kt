@@ -16,6 +16,7 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaSearchType
 import com.anisequel.data.model.MessageNode
+import com.anisequel.data.model.NotificationPage
 import com.anisequel.data.model.SimpleMediaListEntry
 import com.anisequel.data.model.StaffProfile
 import com.anisequel.data.model.StudioNode
@@ -372,6 +373,19 @@ interface AniListRepository {
         page: Int = 1,
         forceRefresh: Boolean = false
     ): Result<UserMessagesPage> = unsupported("getReceivedMessages")
+
+    /**
+     * One page of the viewer notification inbox, unfiltered and newest first.
+     *
+     * Newest-first is part of the contract: the local read baseline is an id
+     * watermark, and every caller relies on a page arriving in descending id
+     * order. [NotificationPage.serverUnreadCount] is the one-shot seed for that
+     * baseline on the first page and null afterwards.
+     */
+    suspend fun getNotifications(
+        page: Int = 1,
+        forceRefresh: Boolean = false
+    ): Result<NotificationPage> = unsupported("getNotifications")
 
     /**
      * The followed users who have this title on their list, best rating first.

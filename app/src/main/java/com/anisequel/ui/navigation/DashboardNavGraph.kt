@@ -68,6 +68,9 @@ fun NavGraphBuilder.dashboardDestinations(
                 onOpenSettings = {
                     navController.navigateSingle(AppRoutes.SETTINGS)
                 },
+                onOpenNotifications = {
+                    navController.navigateSingle(AppRoutes.NOTIFICATIONS)
+                },
                 // Guarded on the viewer existing rather than on the route:
                 // the button only appears on a loaded dashboard, and an
                 // avatar that can be tapped before there is a name to open

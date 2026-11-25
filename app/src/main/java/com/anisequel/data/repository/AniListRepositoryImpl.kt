@@ -24,6 +24,9 @@ import com.anisequel.data.model.MediaListCollection
 import com.anisequel.data.model.MediaName
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaSearchType
+import com.anisequel.data.model.NotificationNode
+import com.anisequel.data.model.NotificationPage
+import com.anisequel.data.model.NotificationsData
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SentMessagesData
 import com.anisequel.data.model.SimpleMediaListEntry
@@ -34,6 +37,20 @@ import com.anisequel.data.model.UserOverview
 import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.model.sortedForDisplay
 import com.anisequel.data.model.toMediaFriend
+import com.anisequel.domain.notifications.ActivityNotification
+import com.anisequel.domain.notifications.AiringNotification
+import com.anisequel.domain.notifications.FollowNotification
+import com.anisequel.domain.notifications.InboxNotification
+import com.anisequel.domain.notifications.MediaUpdateNotification
+import com.anisequel.domain.notifications.MessageNotification
+import com.anisequel.domain.notifications.NotificationActor
+import com.anisequel.domain.notifications.NotificationKind
+import com.anisequel.domain.notifications.NotificationThread
+import com.anisequel.domain.notifications.NotificationComment
+import com.anisequel.domain.notifications.NotificationMedia
+import com.anisequel.domain.notifications.SubmissionNotification
+import com.anisequel.domain.notifications.ThreadNotification
+import com.anisequel.domain.notifications.UnknownNotification
 import com.anisequel.data.network.AniListApiService
 import com.anisequel.data.network.AniListErrorKind
 import com.anisequel.data.network.AniListException
@@ -136,6 +153,16 @@ private const val ACTIVITY_PAGE_SIZE = 25
  * feed as well.
  */
 private const val MESSAGE_PAGE_SIZE = 25
+
+/**
+ * Rows requested per notification page.
+ *
+ * Kept separate from [MESSAGE_PAGE_SIZE] even while the two numbers agree: the
+ * inbox query is heavier than a message page (every union fragment, an actor and
+ * often a title), and tuning one should not silently change the other's request
+ * cost.
+ */
+private const val NOTIFICATION_PAGE_SIZE = 25
 
 /** Logcat tag for the cover batches. One line, warning level, never a UI message. */
 private const val COVER_LOG_TAG = "AniSequelCovers"
@@ -713,6 +740,28 @@ class AniListRepositoryImpl(
         ConcurrentHashMap<String, CachedValue<UserMessagesPage>>()
     private val receivedMessagesCache =
         ConcurrentHashMap<String, CachedValue<UserMessagesPage>>()
+
+    /**
+     * Notification inbox pages.
+     *
+     * Viewer-only like [receivedMessagesCache]: the request carries no account
+     * id, so the keys cannot keep two accounts apart. `clearDetailCache()` is the
+     * entire boundary.
+     */
+    private val notificationsCache =
+        ConcurrentHashMap<String, CachedValue<NotificationPage>>()
+
+    /**
+     * Which notification page generation the cache keys belong to.
+     *
+     * A refresh changes what page one contains, and a page-two request that
+     * started before the refresh may finish after it. Clearing the map alone is
+     * not enough: that late response would put the old page two back under the
+     * key the next load-more uses, leaving the seam the refresh exists to close.
+     * Bumping the epoch moves every later read to a new key space, so the stale
+     * write lands on a key nobody reads.
+     */
+    private val notificationCacheEpoch = AtomicInteger(0)
 
     /**
      * Followed users' entries per title, keyed by namespace and id.
@@ -1300,7 +1349,7 @@ class AniListRepositoryImpl(
                 }
                 if (existingGroupIndex >= 0) {
                     val existingGroup = allLists[existingGroupIndex]
-                    val mergedEntries = ((existingGroup.entries ?: emptyList()) + (nextGroup.entries ?: emptyList()))
+                    val mergedEntries = (existingGroup.entries ?: emptyList()) + (nextGroup.entries ?: emptyList())
                     allLists[existingGroupIndex] = existingGroup.copy(entries = mergedEntries)
                 } else {
                     allLists.add(nextGroup)
@@ -2080,6 +2129,38 @@ class AniListRepositoryImpl(
         }
     }
 
+    override suspend fun getNotifications(
+        page: Int,
+        forceRefresh: Boolean
+    ): Result<NotificationPage> {
+        if (forceRefresh) {
+            // A refresh changes what page one contains. Keeping page two from
+            // before the refresh leaves a hole at the seam: one new row pushes
+            // the old page-one tail onto page two, but the cached page two starts
+            // after it. Every page is refetched after a pull so the walk is
+            // contiguous, and page one still caches the result below.
+            notificationCacheEpoch.incrementAndGet()
+            notificationsCache.clear()
+        }
+        val key = "notifications:${notificationCacheEpoch.get()}:page:$page"
+        if (!forceRefresh) cachedValue(notificationsCache, key)?.let { return Result.success(it) }
+
+        return execute(
+            GraphQLRequest(
+                query = GraphQLQueries.GET_NOTIFICATIONS,
+                variables = mapOf(
+                    "page" to page,
+                    "perPage" to NOTIFICATION_PAGE_SIZE
+                )
+            ),
+            apiService::getNotifications
+        ).map { data ->
+            val pageResult = parseNotifications(data)
+            storeValue(notificationsCache, key, pageResult)
+            pageResult
+        }
+    }
+
     override suspend fun getUserFollowers(userId: Int, forceRefresh: Boolean): Result<List<FollowUser>> =
         followList(userId, forceRefresh, followersCache, "followers") { request ->
             execute(request, apiService::getUserFollowers).map { data ->
@@ -2458,6 +2539,11 @@ class AniListRepositoryImpl(
         globalActivityCache.clear()
         sentMessagesCache.clear()
         receivedMessagesCache.clear()
+        // An inbox page request that started before sign-out can finish after
+        // this clears the map. The epoch move is what keeps the previous
+        // account response from landing under the next account cache key.
+        notificationCacheEpoch.incrementAndGet()
+        notificationsCache.clear()
         // And the same again for the disk tier. This is the half that outlives
         // the process: without this, signing out would clear what the app is
         // holding and leave the list, the bio, the viewer's record and the
@@ -2721,6 +2807,261 @@ private fun parseReceivedMessages(data: ReceivedMessagesData): UserMessagesPage 
         .toList()
     val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= MESSAGE_PAGE_SIZE)
     return UserMessagesPage(messages = messages, hasMore = hasMore)
+}
+
+/**
+ * The notification inbox page, mapped and de-duplicated.
+ *
+ * Duplicate ids are possible when a notification targets content that moved
+ * between pages while the reader was scrolling, and AniList has been seen to
+ * repeat a row at a page boundary. The first occurrence after the newest-first
+ * sort wins; a second copy must not become a second card, and must not be able
+ * to restore an unread dot after its twin was opened.
+ *
+ * The sort is defensive rather than structural: AniList sends newest first, but
+ * the id watermark that backs the local read state assumes descending ids, and
+ * one unsorted response would make every older row look new again. A missing
+ * timestamp sorts last within its id order instead of crashing the page.
+ */
+internal fun parseNotifications(data: NotificationsData): NotificationPage {
+    val raw = data.page?.notifications.orEmpty()
+    val notifications = raw
+        .asSequence()
+        .mapNotNull { it.toInboxNotification() }
+        .sortedWith(
+            compareByDescending<InboxNotification> { it.createdAt ?: 0 }
+                .thenByDescending { it.id }
+        )
+        .distinctBy { it.id }
+        .toList()
+    val hasMore = data.page?.pageInfo?.hasNextPage ?: (raw.size >= NOTIFICATION_PAGE_SIZE)
+    return NotificationPage(
+        notifications = notifications,
+        hasMore = hasMore,
+        serverUnreadCount = data.viewer?.unreadNotificationCount
+    )
+}
+
+/**
+ * One union member, or null when the payload has no id at all.
+ *
+ * An id is the one field every notification shares and the only safe identity
+ * for the local read state. A member without one cannot be marked read and
+ * cannot be de-duplicated, so dropping it is better than drawing a row that
+ * comes back unread forever.
+ */
+internal fun NotificationNode.toInboxNotification(): InboxNotification? {
+    val notificationId = id ?: return null
+    if (notificationId <= 0) return null
+    val kind = type.toNotificationKind() ?: typename.toTypenameKind()
+    val actor = user?.let {
+        NotificationActor(
+            id = it.id,
+            name = it.name,
+            avatarUrl = it.avatar?.large ?: it.avatar?.medium
+        )
+    }
+    val mediaValue = media?.toNotificationMedia()
+
+    return when {
+        typename == "AiringNotification" || kind == NotificationKind.AIRING ->
+            AiringNotification(
+                id = notificationId,
+                createdAt = createdAt,
+                episode = episode,
+                media = mediaValue,
+                contexts = contexts.orEmpty()
+            )
+
+        typename == "FollowingNotification" || kind == NotificationKind.FOLLOWING ->
+            FollowNotification(
+                id = notificationId,
+                createdAt = createdAt,
+                actor = actor,
+                context = context
+            )
+
+        typename == "ActivityMessageNotification" || kind == NotificationKind.ACTIVITY_MESSAGE ->
+            MessageNotification(
+                id = notificationId,
+                createdAt = createdAt,
+                actor = actor,
+                activityId = activityId ?: message?.id,
+                peerId = actor?.id ?: message?.messengerId,
+                peerName = actor?.name ?: message?.messenger?.name,
+                body = message?.message,
+                context = context
+            )
+
+        kind == NotificationKind.MEDIA_SUBMISSION_UPDATE ||
+            typename == "MediaSubmissionUpdateNotification" ->
+            SubmissionNotification(
+                id = notificationId,
+                createdAt = createdAt,
+                media = mediaValue,
+                submittedTitle = submittedTitle,
+                status = status,
+                notes = notes,
+                contexts = contexts.orEmpty()
+            )
+
+        kind in MEDIA_CHANGE_KINDS || typename in MEDIA_CHANGE_TYPENAMES ->
+            MediaUpdateNotification(
+                id = notificationId,
+                kind = kind ?: NotificationKind.MEDIA_DATA_CHANGE,
+                createdAt = createdAt,
+                media = mediaValue,
+                reason = reason,
+                deletedTitles = deletedMediaTitles.orEmpty() + listOfNotNull(deletedMediaTitle),
+                context = context
+            )
+
+        (kind != null && kind.isThreadKind()) || typename in THREAD_TYPENAMES ->
+            ThreadNotification(
+                id = notificationId,
+                kind = kind ?: NotificationKind.THREAD_COMMENT_REPLY,
+                createdAt = createdAt,
+                actor = actor,
+                thread = thread?.let { NotificationThread(it.id, it.title, it.siteUrl) },
+                comment = comment?.let { NotificationComment(it.id, it.comment, it.siteUrl) },
+                context = context
+            )
+
+        (kind != null && kind.isActivityKind()) || typename in ACTIVITY_TYPENAMES ->
+            ActivityNotification(
+                id = notificationId,
+                kind = kind ?: NotificationKind.ACTIVITY_LIKE,
+                createdAt = createdAt,
+                actor = actor,
+                activityId = activityId ?: activity?.id,
+                context = context,
+                activityText = activity?.text,
+                activityUrl = activity?.siteUrl,
+                media = mediaValue ?: activity?.media?.toNotificationMedia()
+            )
+
+        else -> UnknownNotification(
+            id = notificationId,
+            createdAt = createdAt,
+            typename = typename,
+            type = type,
+            context = context
+        )
+    }
+}
+
+private val ACTIVITY_TYPENAMES = setOf(
+    "ActivityLikeNotification",
+    "ActivityReplyNotification",
+    "ActivityReplySubscribedNotification",
+    "ActivityReplyLikeNotification",
+    "ActivityMentionNotification"
+)
+
+private val THREAD_TYPENAMES = setOf(
+    "ThreadLikeNotification",
+    "ThreadCommentReplyNotification",
+    "ThreadCommentSubscribedNotification",
+    "ThreadCommentMentionNotification",
+    "ThreadCommentLikeNotification"
+)
+
+private val MEDIA_CHANGE_TYPENAMES = setOf(
+    "RelatedMediaAdditionNotification",
+    "MediaDataChangeNotification",
+    "MediaMergeNotification",
+    "MediaDeletionNotification"
+)
+
+private val MEDIA_CHANGE_KINDS = setOf(
+    NotificationKind.RELATED_MEDIA_ADDITION,
+    NotificationKind.MEDIA_DATA_CHANGE,
+    NotificationKind.MEDIA_MERGE,
+    NotificationKind.MEDIA_DELETION
+)
+
+private fun NotificationKind.isThreadKind(): Boolean = when (this) {
+    NotificationKind.THREAD_LIKE,
+    NotificationKind.THREAD_COMMENT_LIKE,
+    NotificationKind.THREAD_COMMENT_REPLY,
+    NotificationKind.THREAD_COMMENT_SUBSCRIBED,
+    NotificationKind.THREAD_COMMENT_MENTION -> true
+    else -> false
+}
+
+private fun NotificationKind.isActivityKind(): Boolean = when (this) {
+    NotificationKind.ACTIVITY_LIKE,
+    NotificationKind.ACTIVITY_REPLY,
+    NotificationKind.ACTIVITY_REPLY_LIKE,
+    NotificationKind.ACTIVITY_REPLY_SUBSCRIBED,
+    NotificationKind.ACTIVITY_MENTION -> true
+    else -> false
+}
+
+/**
+ * The NotificationType enum as a kind.
+ *
+ * The wire type field is the stable half of the pair: the typename names the
+ * selection set and is always present here, but a proxy or a future member can
+ * omit it, and the enum still says what happened. Unknown strings stay null so
+ * the caller can fall back to the typename or the unknown row.
+ */
+private fun String?.toNotificationKind(): NotificationKind? = when (this?.uppercase(Locale.ROOT)) {
+    "AIRING" -> NotificationKind.AIRING
+    "ACTIVITY_LIKE" -> NotificationKind.ACTIVITY_LIKE
+    "ACTIVITY_REPLY" -> NotificationKind.ACTIVITY_REPLY
+    "ACTIVITY_REPLY_LIKE" -> NotificationKind.ACTIVITY_REPLY_LIKE
+    "ACTIVITY_REPLY_SUBSCRIBED" -> NotificationKind.ACTIVITY_REPLY_SUBSCRIBED
+    "ACTIVITY_MENTION" -> NotificationKind.ACTIVITY_MENTION
+    "ACTIVITY_MESSAGE" -> NotificationKind.ACTIVITY_MESSAGE
+    "THREAD_COMMENT_REPLY" -> NotificationKind.THREAD_COMMENT_REPLY
+    "THREAD_COMMENT_SUBSCRIBED" -> NotificationKind.THREAD_COMMENT_SUBSCRIBED
+    "THREAD_COMMENT_MENTION" -> NotificationKind.THREAD_COMMENT_MENTION
+    "THREAD_LIKE" -> NotificationKind.THREAD_LIKE
+    "THREAD_COMMENT_LIKE" -> NotificationKind.THREAD_COMMENT_LIKE
+    "FOLLOWING" -> NotificationKind.FOLLOWING
+    "RELATED_MEDIA_ADDITION" -> NotificationKind.RELATED_MEDIA_ADDITION
+    "MEDIA_DATA_CHANGE" -> NotificationKind.MEDIA_DATA_CHANGE
+    "MEDIA_MERGE" -> NotificationKind.MEDIA_MERGE
+    "MEDIA_DELETION" -> NotificationKind.MEDIA_DELETION
+    "MEDIA_SUBMISSION_UPDATE" -> NotificationKind.MEDIA_SUBMISSION_UPDATE
+    else -> null
+}
+
+private fun String?.toTypenameKind(): NotificationKind? = when (this) {
+    "AiringNotification" -> NotificationKind.AIRING
+    "FollowingNotification" -> NotificationKind.FOLLOWING
+    "ActivityLikeNotification" -> NotificationKind.ACTIVITY_LIKE
+    "ActivityReplyNotification" -> NotificationKind.ACTIVITY_REPLY
+    "ActivityReplyLikeNotification" -> NotificationKind.ACTIVITY_REPLY_LIKE
+    "ActivityReplySubscribedNotification" -> NotificationKind.ACTIVITY_REPLY_SUBSCRIBED
+    "ActivityMentionNotification" -> NotificationKind.ACTIVITY_MENTION
+    "ActivityMessageNotification" -> NotificationKind.ACTIVITY_MESSAGE
+    "ThreadCommentReplyNotification" -> NotificationKind.THREAD_COMMENT_REPLY
+    "ThreadCommentSubscribedNotification" -> NotificationKind.THREAD_COMMENT_SUBSCRIBED
+    "ThreadCommentMentionNotification" -> NotificationKind.THREAD_COMMENT_MENTION
+    "ThreadLikeNotification" -> NotificationKind.THREAD_LIKE
+    "ThreadCommentLikeNotification" -> NotificationKind.THREAD_COMMENT_LIKE
+    "RelatedMediaAdditionNotification" -> NotificationKind.RELATED_MEDIA_ADDITION
+    "MediaDataChangeNotification" -> NotificationKind.MEDIA_DATA_CHANGE
+    "MediaMergeNotification" -> NotificationKind.MEDIA_MERGE
+    "MediaDeletionNotification" -> NotificationKind.MEDIA_DELETION
+    "MediaSubmissionUpdateNotification" -> NotificationKind.MEDIA_SUBMISSION_UPDATE
+    else -> null
+}
+
+private fun MediaNode.toNotificationMedia(): NotificationMedia? {
+    val display = title?.let {
+        it.english?.takeIf(String::isNotBlank)
+            ?: it.romaji?.takeIf(String::isNotBlank)
+            ?: it.native?.takeIf(String::isNotBlank)
+    }
+    return NotificationMedia(
+        id = id,
+        title = display,
+        coverUrl = coverImage?.bestUrl,
+        type = type
+    )
 }
 
 /**

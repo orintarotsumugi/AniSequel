@@ -432,6 +432,10 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
         request: GraphQLRequest
     ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
+    override suspend fun getNotifications(
+        request: GraphQLRequest
+    ): GraphQLResponse<com.anisequel.data.model.NotificationsData> = notServed("getNotifications")
+
     override suspend fun getCharacterProfile(request: GraphQLRequest): GraphQLResponse<CharacterProfileData> =
         character()
 

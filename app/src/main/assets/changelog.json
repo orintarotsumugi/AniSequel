@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "2.6.5",
+      "entries": [
+        {
+          "title": "Your inbox is now a notification center",
+          "detail": "The bell on Home opens one place for likes, replies, mentions, follows, airing episodes, media changes, submissions and AniList messages - each row drawn as a media card with its poster or a social card with the people behind it. New and Earlier sit under a collapsing header with an unread pill, and the filter chips narrow the page without asking the server again."
+        },
+        {
+          "title": "Likes on one post fold into one row",
+          "detail": "Three people liking the same activity now read as one card with their avatars, a count and the newest time, and opening it marks all three read. Replies, messages, mentions, follows and every media update stay individual, and likes on different posts or different comments under one thread never merge."
+        },
+        {
+          "title": "Read notices survive a restart",
+          "detail": "AniList has no per-item read flag, so the inbox keeps an account-keyed local mark on this device: opening a card marks it, Mark all read covers the whole inbox rather than the visible chip, and an older row cannot come back as new after a refresh. Nothing here is sent to AniList, and the number on the server is never shown as this app's unread count."
+        },
+        {
+          "title": "The inbox has its own settings, and no background work",
+          "detail": "Settings > Notifications controls local unread dots, marking on open, resetting this device's read history, and which of the eight categories are visible. These are view filters, not Android notification permission: the app still asks AniList only when the inbox opens or when you pull to refresh - there is no poller, no push service and no new permission."
+        },
+        {
+          "title": "The page arrives with skeletons instead of a spinner",
+          "detail": "The first load draws cards at their final height, a failed page keeps the rows already read and offers Retry under them, and a rate-limited refresh says how long to wait. Pull to refresh, page on scroll and the empty, filtered and all-categories-off states are all drawn with the app's own expressive components and spring motion."
+        }
+      ]
+    },
+    {
       "version": "2.6.4",
       "entries": [
         {

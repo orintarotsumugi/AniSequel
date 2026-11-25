@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.6.4"
-val BASELINE_VERSION_CODE = 699
+val BASELINE_VERSION_NAME = "2.6.5"
+val BASELINE_VERSION_CODE = 700
 
 plugins {
   alias(libs.plugins.android.application)
@@ -92,7 +92,7 @@ android {
     // stale - and gradle.properties is the file that actually gets updated, so
     // the copy is what a local build falls back to.
     versionCode =
-      (project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: BASELINE_VERSION_CODE)
+      project.findProperty("anisequelVersionCode")?.toString()?.toIntOrNull() ?: BASELINE_VERSION_CODE
     versionName = project.findProperty("anisequelVersionName")?.toString() ?: BASELINE_VERSION_NAME
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

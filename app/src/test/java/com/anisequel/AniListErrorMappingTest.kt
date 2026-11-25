@@ -168,6 +168,10 @@ class AniListErrorMappingTest {
             request: GraphQLRequest
         ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
 
+        override suspend fun getNotifications(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.NotificationsData> = notServed("getNotifications")
+
         override suspend fun getUserFollowers(
             request: GraphQLRequest
         ): GraphQLResponse<FollowersData> = notServed("getUserFollowers")
@@ -489,6 +493,10 @@ class RequestCoalescingPolicyTest {
         override suspend fun getReceivedMessages(
             request: GraphQLRequest
         ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
+
+        override suspend fun getNotifications(
+            request: GraphQLRequest
+        ): GraphQLResponse<com.anisequel.data.model.NotificationsData> = notServed("getNotifications")
 
         override suspend fun getUserFollowers(
             request: GraphQLRequest

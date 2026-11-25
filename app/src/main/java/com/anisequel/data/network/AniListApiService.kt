@@ -21,6 +21,7 @@ import com.anisequel.data.model.MediaListCollectionData
 import com.anisequel.data.model.MediaListEntryData
 import com.anisequel.data.model.MediaDetailData
 import com.anisequel.data.model.MediaSearchData
+import com.anisequel.data.model.NotificationsData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.ReceivedMessagesData
 import com.anisequel.data.model.SaveActivityReplyData
@@ -221,6 +222,18 @@ interface AniListApiService {
     suspend fun getReceivedMessages(
         @Body request: GraphQLRequest
     ): GraphQLResponse<ReceivedMessagesData>
+
+    /**
+     * One page of the viewer notification inbox.
+     *
+     * The document also carries `Viewer.unreadNotificationCount` so the first
+     * page and the seed for the local read baseline cost one request, not two.
+     */
+    @POST("/")
+    @Headers("Content-Type: application/json", "Accept: application/json")
+    suspend fun getNotifications(
+        @Body request: GraphQLRequest
+    ): GraphQLResponse<NotificationsData>
 
     /**
      * The followed users' list entries for one title.

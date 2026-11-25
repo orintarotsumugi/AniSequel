@@ -175,6 +175,7 @@ fun NovaTopBar(
     avatarUrl: String?,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenNotifications: (() -> Unit)? = null,
     onOpenSearch: (() -> Unit)? = null,
     onOpenTiers: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -268,6 +269,24 @@ fun NovaTopBar(
                             imageVector = AppVectorIcons.Trophy,
                             contentDescription = "Tier lists",
                             modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                if (onOpenNotifications != null) {
+                    val inboxSource = remember { MutableInteractionSource() }
+                    IconButton(
+                        onClick = onOpenNotifications,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .bouncyPress(pressedScale = 0.9f, interactionSource = inboxSource)
+                            .testTag("nova_top_notifications"),
+                        interactionSource = inboxSource
+                    ) {
+                        Icon(
+                            imageVector = AppVectorIcons.Notifications,
+                            contentDescription = "Notifications",
+                            modifier = Modifier.size(19.dp)
                         )
                     }
                 }

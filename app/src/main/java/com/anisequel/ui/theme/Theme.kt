@@ -565,53 +565,18 @@ fun AniSequelTheme(
         } else null
     }
 
-    val colorScheme = when {
-        // Both asserts are gated by the same condition in the branch above, and
-        // `remember` guarantees the same value a read would give - a kotlin
-        // nullable here would only re-check what the branch already proved.
-        animeColor != null -> {
-            val schemes = requireNotNull(animeSchemes)
-            if (darkTheme) schemes.second else schemes.first
-        }
-        dynamicColor -> requireNotNull(wallpaperScheme)
-        customColor != null -> {
-            val (lightDynamic, darkDynamic) = requireNotNull(customDynamicSchemes)
-            if (darkTheme) darkDynamic else lightDynamic
-        }
-        darkTheme -> palette.dark
-        else -> palette.light
-    }.let { scheme ->
-        val baseScheme = if (trueBlack && darkTheme) {
-            scheme.copy(
-                background = Color.Black,
-                surface = Color.Black,
-                surfaceContainerLowest = Color.Black,
-                surfaceContainerLow = Color(0xFF070707),
-                surfaceContainer = Color(0xFF101010),
-                surfaceContainerHigh = Color(0xFF1A1A1A),
-                surfaceContainerHighest = Color(0xFF262626),
-                // The two roles the ramp is not complete without. Sheets, menus
-                // and the tonal app-bar states read these directly, so leaving
-                // them alone kept the show's hue in the bottom and top of a
-                // ramp that was otherwise pure black - a coloured band at the
-                // foot of an OLED screen, which is the one place true black is
-                // supposed to be obvious.
-                surfaceDim = Color.Black,
-                surfaceBright = Color(0xFF2E2E2E)
-            )
-        } else {
-            scheme
-        }
-
-        // The canvas colour applies in both modes now. It used to be gated on
-        // `darkTheme` because every preset was a dark colour and applying one in
-        // light mode left the light theme's near-black `onBackground` text on a
-        // black canvas - so a picked background silently did nothing for anyone
-        // on light mode or System-on-a-light-phone. `applyCanvasColour` fixes the
-        // actual problem instead: it derives the on-roles and the surface ramp
-        // from the picked colour, whatever mode it lands in.
-        applyCanvasColour(baseScheme, bgCustomColor)
-    }
+    val colorScheme = rememberResolvedColorScheme(
+        darkTheme = darkTheme,
+        dynamicColor = dynamicColor,
+        palette = palette,
+        animeColor = animeColor,
+        animeSchemes = animeSchemes,
+        customColor = customColor,
+        customDynamicSchemes = customDynamicSchemes,
+        wallpaperScheme = wallpaperScheme,
+        trueBlack = trueBlack,
+        background = bgCustomColor
+    )
 
     // Every role eases to its new value instead of cutting. This is read after
     // the true-black and custom-background overrides so those are animated too,
@@ -686,6 +651,55 @@ fun AniSequelTheme(
             },
         )
     }
+}
+
+/**
+ * Resolves the scheme the app draws with: the title layer while one is open, the
+ * reader's live wallpaper when Material You is on, a chosen accent, or the static
+ * palette. Extracted from [AniSequelTheme] so the one long `when` that picks a
+ * colour does not also have to hold the type scale, the motion token and every
+ * composition local the theme installs.
+ */
+@Composable
+private fun rememberResolvedColorScheme(
+    darkTheme: Boolean,
+    dynamicColor: Boolean,
+    palette: ThemePalette,
+    animeColor: Color?,
+    animeSchemes: Pair<ColorScheme, ColorScheme>?,
+    customColor: Color?,
+    customDynamicSchemes: Pair<ColorScheme, ColorScheme>?,
+    wallpaperScheme: ColorScheme?,
+    trueBlack: Boolean,
+    background: Color?
+): ColorScheme {
+    val scheme = when {
+        animeColor != null -> requireNotNull(animeSchemes).let { schemes ->
+            if (darkTheme) schemes.second else schemes.first
+        }
+        dynamicColor -> requireNotNull(wallpaperScheme)
+        customColor != null -> requireNotNull(customDynamicSchemes).let { schemes ->
+            if (darkTheme) schemes.second else schemes.first
+        }
+        darkTheme -> palette.dark
+        else -> palette.light
+    }
+    val baseScheme = if (trueBlack && darkTheme) {
+        scheme.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceContainerLowest = Color.Black,
+            surfaceContainerLow = Color(0xFF070707),
+            surfaceContainer = Color(0xFF101010),
+            surfaceContainerHigh = Color(0xFF1A1A1A),
+            surfaceContainerHighest = Color(0xFF262626),
+            surfaceDim = Color.Black,
+            surfaceBright = Color(0xFF2E2E2E)
+        )
+    } else {
+        scheme
+    }
+    return applyCanvasColour(baseScheme, background)
 }
 
 /**

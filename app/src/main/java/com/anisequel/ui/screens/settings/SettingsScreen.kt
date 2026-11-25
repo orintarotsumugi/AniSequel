@@ -47,6 +47,8 @@ import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.JokePreferences
 import com.anisequel.data.repository.LibraryPreferences
 import com.anisequel.data.repository.MainTabPreferences
+import com.anisequel.data.repository.NotificationPreferencesStore
+import com.anisequel.data.repository.NotificationReadStore
 import com.anisequel.data.repository.QuickAddPreferences
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.SeasonalPreferences
@@ -194,6 +196,11 @@ internal enum class SettingsPage(
         "Display, app lock, performance limits and cover storage",
         AppVectorIcons.DevicePhone
     ),
+    NOTIFICATIONS(
+        "Notifications",
+        "Inbox read tracking and which activity, media and submission events appear",
+        AppVectorIcons.MessageReceived
+    ),
     ACCOUNT("AniList account", "Connect AniList, manage the session and sign out", AppVectorIcons.SectionAniList),
     // Updates is its own page rather than the top of About: the update check and
     // the release notes are the two cards a reader comes back to, and they were
@@ -302,6 +309,16 @@ fun SettingsScreen(
      * Library grid is not drawing. See [InterfaceTab].
      */
     interfacePreferences: InterfacePreferences,
+    notificationPreferencesStore: NotificationPreferencesStore,
+    notificationReadStore: NotificationReadStore,
+    /**
+     * Opens directly on the Notifications page.
+     *
+     * A boolean rather than a page enum because [SettingsPage] is internal and this
+     * screen is public. It exists for the bell in the app bar, whose one job is to
+     * take a reader from the inbox to the switches that shape it in one tap.
+     */
+    startOnNotifications: Boolean = false,
     /**
      * The repository's reachability probe, passed as a function so Settings does
      * not need the whole repository to ask one question.
@@ -326,7 +343,11 @@ fun SettingsScreen(
      */
     cardPreviewEntries: List<MediaListEntryItem> = emptyList()
 ) {
-    var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
+    var page by rememberSaveable {
+        mutableStateOf<SettingsPage?>(
+            if (startOnNotifications) SettingsPage.NOTIFICATIONS else null
+        )
+    }
     var showConnectionCheck by rememberSaveable { mutableStateOf(false) }
     // Search is a mode of the shelf, not a destination of its own: the field sits
     // above the shelf, a non-empty query replaces the shelf with results, and Back
@@ -356,7 +377,8 @@ fun SettingsScreen(
         refreshIntervalPreferences = refreshIntervalPreferences,
         jokePreferences = jokePreferences,
         seasonalPreferences = seasonalPreferences,
-        appLockPreferences = appLockPreferences
+        appLockPreferences = appLockPreferences,
+        notificationPreferencesStore = notificationPreferencesStore
     )
     val connectionLabel = when {
         apiUi.isChecking -> "checking"
@@ -373,7 +395,11 @@ fun SettingsScreen(
 
     BackHandler {
         when {
-            page != null -> {
+            // The inbox opens this route directly on Notifications. Back there
+            // should return to the inbox, not reveal a Settings hub the reader
+            // never visited; a page they navigated to from that hub still steps
+            // back to the hub as usual.
+            page != null && !(startOnNotifications && page == SettingsPage.NOTIFICATIONS) -> {
                 page = null
                 targetSection = null
             }
@@ -443,8 +469,17 @@ fun SettingsScreen(
                                     title = destination.title,
                                     subtitle = destination.subtitle,
                                     onBack = {
-                                        page = null
-                                        targetSection = null
+                                        // The inbox opened this route on
+                                        // Notifications directly. Its own
+                                        // back button must agree with system
+                                        // Back and return there, not reveal
+                                        // an unvisited Settings hub.
+                                        if (startOnNotifications && destination == SettingsPage.NOTIFICATIONS) {
+                                            onNavigateBack()
+                                        } else {
+                                            page = null
+                                            targetSection = null
+                                        }
                                     }
                                 )
                             }
@@ -468,6 +503,8 @@ fun SettingsScreen(
                                     seasonalPreferences = seasonalPreferences,
                                     devicePreferences = devicePreferences,
                                     interfacePreferences = interfacePreferences,
+                                    notificationPreferencesStore = notificationPreferencesStore,
+                                    notificationReadStore = notificationReadStore,
                                     viewer = viewer,
                                     onNavigateToLogin = onNavigateToLogin,
                                     totalWatchedCount = totalWatchedCount,
@@ -689,6 +726,11 @@ private fun SettingsRoot(
                                 "settings_row_seasonal",
                                 onOpen,
                                 value = summaries.seasonal
+                            ),
+                            SettingsPage.NOTIFICATIONS.entry(
+                                "settings_row_notifications",
+                                onOpen,
+                                value = summaries.notifications
                             )
                         ),
                         modifier = Modifier.padding(horizontal = 20.dp)
@@ -843,6 +885,8 @@ private fun SettingsPageContent(
     seasonalPreferences: SeasonalPreferences,
     devicePreferences: DevicePreferences,
     interfacePreferences: InterfacePreferences,
+    notificationPreferencesStore: NotificationPreferencesStore,
+    notificationReadStore: NotificationReadStore,
     viewer: ViewerProfile?,
     onNavigateToLogin: () -> Unit,
     totalWatchedCount: Int?,
@@ -927,6 +971,11 @@ private fun SettingsPageContent(
             devicePreferences = devicePreferences,
             themePreferences = themePreferences,
             appLockPreferences = appLockPreferences
+        )
+        SettingsPage.NOTIFICATIONS -> NotificationSettingsPage(
+            preferencesStore = notificationPreferencesStore,
+            readStore = notificationReadStore,
+            viewer = viewer
         )
         SettingsPage.UPDATES -> UpdatesSettingsTab(changelogRepository = changelogRepository)
         SettingsPage.ABOUT -> InfoSettingsTab(

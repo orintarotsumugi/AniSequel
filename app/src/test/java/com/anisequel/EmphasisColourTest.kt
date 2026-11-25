@@ -330,7 +330,7 @@ class EmphasisColourTest {
             "ui/components/detail/info/WavyProgressBar.kt" to "emphasis.track",
             "ui/components/detail/info/ProgressBars.kt" to "emphasis.track",
             "ui/components/detail/info/NovaStatDrawer.kt" to "emphasis.charts",
-            "ui/components/detail/SequelDetailSheet.kt" to "emphasis.muted",
+            "ui/components/detail/SequelDetailPage.kt" to "emphasis.muted",
             "ui/screens/dashboard/ArrivingCard.kt" to "emphasis.muted",
             "ui/screens/profile/CommentFormatBar.kt" to "emphasis.disabled"
         ).forEach { (path, marker) ->

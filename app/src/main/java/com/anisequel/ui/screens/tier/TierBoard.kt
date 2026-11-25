@@ -350,38 +350,7 @@ private fun TierBoard(
     // is read through `rememberUpdatedState` for the same reason (a
     // `pointerInput(Unit)` block keeps the lambda from the composition that
     // installed it).
-    val liveZoom by rememberUpdatedState(zoom)
-    val applyZoom by rememberUpdatedState(onZoomChange)
-    val pinchZoom = Modifier.pointerInput(Unit) {
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            var gestureZoom = liveZoom
-            var zooming = false
-            // `while (true)` rather than a `do/while`: a value declared in the body
-            // of a `do` block is not in scope in its condition, and the pointer
-            // event is exactly what the condition needs. The `break` is the same
-            // "every pointer is up" test `awaitEachGesture` uses between gestures.
-            while (true) {
-                val event = awaitPointerEvent()
-                val pressed = event.changes.count { it.pressed }
-                if (pressed >= 2) {
-                    val factor = event.calculateZoom()
-                    if (!factor.isNaN() && factor != 1f) {
-                        gestureZoom = clampTierZoom(gestureZoom * factor)
-                        applyZoom(gestureZoom)
-                        zooming = true
-                    }
-                    event.changes.forEach { if (it.pressed) it.consume() }
-                } else if (zooming) {
-                    // One finger lifted mid-pinch. Consume whatever is left of the
-                    // gesture so the scrollable cannot start from the second
-                    // finger and jump the board by half a screen.
-                    event.changes.forEach { if (it.pressed) it.consume() }
-                }
-                if (event.changes.none { it.pressed }) break
-            }
-        }
-    }
+    val pinchZoom = tierPinchZoom(zoom = zoom, onZoomChange = onZoomChange)
 
     // The drag handler is *removed* rather than merely disabled while the board
     // is locked. Leaving a pointer input installed that ignores its drags still
@@ -447,6 +416,47 @@ private fun TierBoard(
             display = display,
             viewport = viewport
         )
+    }
+}
+
+
+/**
+ * Two-finger pinch only; a single finger belongs to the scroll. Split out of
+ * [TierBoard] so the board's composition does not also hold the pointer loop.
+ */
+@Composable
+private fun tierPinchZoom(zoom: Float, onZoomChange: (Float) -> Unit): Modifier {
+    val liveZoom by rememberUpdatedState(zoom)
+    val applyZoom by rememberUpdatedState(onZoomChange)
+    return Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            var gestureZoom = liveZoom
+            var zooming = false
+            // `while (true)` rather than a `do/while`: a value declared in the body
+            // of a `do` block is not in scope in its condition, and the pointer
+            // event is exactly what the condition needs. The `break` is the same
+            // "every pointer is up" test `awaitEachGesture` uses between gestures.
+            while (true) {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.count { it.pressed }
+                if (pressed >= 2) {
+                    val factor = event.calculateZoom()
+                    if (!factor.isNaN() && factor != 1f) {
+                        gestureZoom = clampTierZoom(gestureZoom * factor)
+                        applyZoom(gestureZoom)
+                        zooming = true
+                    }
+                    event.changes.forEach { if (it.pressed) it.consume() }
+                } else if (zooming) {
+                    // One finger lifted mid-pinch. Consume whatever is left of the
+                    // gesture so the scrollable cannot start from the second
+                    // finger and jump the board by half a screen.
+                    event.changes.forEach { if (it.pressed) it.consume() }
+                }
+                if (event.changes.none { it.pressed }) break
+            }
+        }
     }
 }
 

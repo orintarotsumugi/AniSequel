@@ -27,6 +27,11 @@ import com.anisequel.data.model.MediaListGroup
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MediaTitle
 import com.anisequel.data.model.NextAiringEpisode
+import com.anisequel.data.model.NotificationNode
+import com.anisequel.data.model.NotificationsData
+import com.anisequel.data.model.NotificationsPage
+import com.anisequel.data.model.NotificationsViewer
+import com.anisequel.data.model.PageInfo
 import com.anisequel.data.model.DeleteActivityReplyData
 import com.anisequel.data.model.SaveActivityReplyData
 import com.anisequel.data.model.SaveTextActivityData
@@ -43,6 +48,8 @@ import com.anisequel.data.network.AniListApiService
 import com.anisequel.data.repository.AniListRepositoryImpl
 import com.anisequel.data.repository.SnapshotStore
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -328,6 +335,31 @@ class RepositorySnapshotsTest {
         assertNull(fourth.getMediaDetail(MEDIA_ID, ANIME).getOrThrow().mediaListEntry)
     }
 
+    @Test
+    fun `a page fetched before a refresh cannot repopulate the cache`() = runTest {
+        val repository = launch()
+        val gate = CompletableDeferred<Unit>()
+        val started = CompletableDeferred<Unit>()
+        service.notificationGate = gate
+        service.notificationStarted = started
+
+        // Page two is in flight when the reader pulls to refresh page one.
+        val stalePageTwo = async { repository.getNotifications(page = 2) }
+        started.await()
+        repository.getNotifications(page = 1, forceRefresh = true).getOrThrow()
+        gate.complete(Unit)
+        stalePageTwo.await().getOrThrow()
+        service.notificationGate = null
+
+        val requestsBeforeSecondPage = service.notificationRequests
+        repository.getNotifications(page = 2).getOrThrow()
+        assertEquals(
+            "the fenced response must not answer the next page-two request",
+            requestsBeforeSecondPage + 1,
+            service.notificationRequests
+        )
+    }
+
     private fun MediaListCollection.progress(): Int? =
         lists?.firstOrNull()?.entries?.firstOrNull()?.progress
 
@@ -384,9 +416,15 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     var listRequests = 0
     var detailRequests = 0
     var mutationRequests = 0
+    var notificationRequests = 0
+
+    /** Set by the cache-fence test to hold a page-two response open. */
+    var notificationGate: CompletableDeferred<Unit>? = null
+    var notificationStarted: CompletableDeferred<Unit>? = null
 
     /** Every request this service has been asked to spend, across all calls. */
-    val requests: Int get() = viewerRequests + listRequests + detailRequests + mutationRequests
+    val requests: Int
+        get() = viewerRequests + listRequests + detailRequests + mutationRequests + notificationRequests
 
     /** Whether the viewer's list currently holds an entry for the title. */
     var listHasEntry = true
@@ -520,6 +558,33 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     override suspend fun getReceivedMessages(
         request: GraphQLRequest
     ): GraphQLResponse<ReceivedMessagesData> = notServed("getReceivedMessages")
+
+    override suspend fun getNotifications(
+        request: GraphQLRequest
+    ): GraphQLResponse<NotificationsData> {
+        notificationRequests++
+        val page = request.variables["page"] as? Int ?: 1
+        if (page == 2 && notificationGate != null) {
+            notificationStarted?.complete(Unit)
+            notificationGate?.await()
+        }
+        return GraphQLResponse(
+            data = NotificationsData(
+                viewer = NotificationsViewer(unreadNotificationCount = 0),
+                page = NotificationsPage(
+                    pageInfo = PageInfo(hasNextPage = page == 1),
+                    notifications = listOf(
+                        NotificationNode(
+                            id = page * 100,
+                            typename = "FollowingNotification",
+                            type = "FOLLOWING",
+                            context = "page $page"
+                        )
+                    )
+                )
+            )
+        )
+    }
 
     override suspend fun getUserFollowers(
         request: GraphQLRequest

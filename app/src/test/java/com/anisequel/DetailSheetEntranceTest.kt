@@ -25,6 +25,11 @@ class DetailSheetEntranceTest {
 
     private val sheet =
         "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
+    private val pageFile =
+        "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailPage.kt"
+
+    /** The sheet owns the state; the page file owns the layout it hands to it. */
+    private fun pageSource(): String = source(sheet) + source(pageFile)
     private val entrance =
         "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailEntrance.kt"
 
@@ -75,7 +80,7 @@ class DetailSheetEntranceTest {
 
     @Test
     fun `the entrance and the close belong to the sheet, not the subject`() {
-        val page = source(sheet)
+        val page = pageSource()
 
         assertTrue(
             "the page does not take the shared entrance",
@@ -100,7 +105,7 @@ class DetailSheetEntranceTest {
 
     @Test
     fun `the page's entrance stands aside while a poster flies`() {
-        val page = source(sheet)
+        val page = pageSource()
 
         assertTrue(
             "the page starts fading in before the copy has its picture, so the two " +
