@@ -172,92 +172,123 @@ fun BackupRestoreCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            OutlinedButton(
-                onClick = { openLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
-                enabled = idle && !selection.isEmpty(),
-                modifier = Modifier.weight(1f).testTag("backup_restore_pick")
-            ) {
-                Text("Restore")
-            }
-            ExpressivePrimaryButton(
-                text = if (busy == BackupBusy.BACKUP) "Backing up…" else "Back up",
-                onClick = { createLauncher.launch(AppBackupManager.defaultFileName()) },
-                modifier = Modifier.weight(1.3f),
-                icon = AppVectorIcons.Export,
-                loading = busy == BackupBusy.BACKUP,
-                enabled = idle && !selection.isEmpty(),
-                testTag = "backup_create"
-            )
-        }
-        if (busy == BackupBusy.READING || busy == BackupBusy.RESTORE) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = if (busy == BackupBusy.READING) "Checking the backup…" else "Restoring…",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        status?.let { message ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.testTag("backup_status")
-            )
-        }
+        BackupActions(
+            busy = busy,
+            enabled = idle && !selection.isEmpty(),
+            onRestore = {
+                openLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+            },
+            onBackup = { createLauncher.launch(AppBackupManager.defaultFileName()) }
+        )
+        BackupStatus(busy = busy, status = status)
     }
 
-    pendingRestore?.let { pending ->
-        AlertDialog(
-            onDismissRequest = { if (idle) pendingRestore = null },
-            title = { Text("Restore this backup?") },
-            text = {
-                Column {
-                    Text(
-                        text = "From ${formatDate(pending.manifest.createdAtMillis)} · " +
-                            "AniSequel ${pending.manifest.appVersion}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = pending.manifest.contents.joinToString { it.displayName },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Only the selected parts are replaced. The app will " +
-                            "restart afterwards so every screen reads the restored files.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (idle) {
-                            pendingRestore = null
-                            startRestore(pending)
-                        }
-                    },
-                    enabled = idle
-                ) { Text("Restore and restart") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { pendingRestore = null },
-                    enabled = idle
-                ) { Text("Cancel") }
-            }
+    RestoreConfirmDialog(
+        pending = pendingRestore,
+        idle = idle,
+        onDismiss = { pendingRestore = null },
+        onConfirm = { pending ->
+            pendingRestore = null
+            startRestore(pending)
+        }
+    )
+}
+
+@Composable
+private fun BackupActions(
+    busy: BackupBusy,
+    enabled: Boolean,
+    onRestore: () -> Unit,
+    onBackup: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        OutlinedButton(
+            onClick = onRestore,
+            enabled = enabled,
+            modifier = Modifier.weight(1f).testTag("backup_restore_pick")
+        ) {
+            Text("Restore")
+        }
+        ExpressivePrimaryButton(
+            text = if (busy == BackupBusy.BACKUP) "Backing up…" else "Back up",
+            onClick = onBackup,
+            modifier = Modifier.weight(1.3f),
+            icon = AppVectorIcons.Export,
+            loading = busy == BackupBusy.BACKUP,
+            enabled = enabled,
+            testTag = "backup_create"
         )
     }
+}
+
+@Composable
+private fun BackupStatus(busy: BackupBusy, status: String?) {
+    if (busy == BackupBusy.READING || busy == BackupBusy.RESTORE) {
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = if (busy == BackupBusy.READING) "Checking the backup…" else "Restoring…",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+    status?.let { message ->
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("backup_status")
+        )
+    }
+}
+
+@Composable
+private fun RestoreConfirmDialog(
+    pending: PendingRestore?,
+    idle: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (PendingRestore) -> Unit
+) {
+    val restore = pending ?: return
+    AlertDialog(
+        onDismissRequest = { if (idle) onDismiss() },
+        title = { Text("Restore this backup?") },
+        text = {
+            Column {
+                Text(
+                    text = "From ${formatDate(restore.manifest.createdAtMillis)} · " +
+                        "AniSequel ${restore.manifest.appVersion}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = restore.manifest.contents.joinToString { it.displayName },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Only the selected parts are replaced. The app will " +
+                        "restart afterwards so every screen reads the restored files.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (idle) onConfirm(restore) },
+                enabled = idle
+            ) { Text("Restore and restart") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = idle) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
