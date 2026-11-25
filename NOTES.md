@@ -4176,3 +4176,38 @@ page cache, fence in-flight pages and start again from page one. The bell in the
 dashboard's top bar is now a preference, but hiding it does not disable the
 inbox; Settings > Notifications always has an Open notification centre button.
 The existing `GET_RECEIVED_MESSAGES` path is unchanged.
+
+The cover cache moved from `cacheDir` to `noBackupFilesDir`. The old directory
+was disposable by contract, so Android could reclaim it between launches and
+every poster went back to its placeholder; the new directory survives an update
+and a system cache wipe. On first launch after the move, an older
+`cacheDir/anilist_cover_cache` is renamed into place when the target does not
+exist yet, which is atomic and copies no bytes. The backup artwork option reads
+the same directory, so a reader who chooses it does not create a second copy.
+
+Backup is one zip with a plain-text manifest first. The reader chooses settings
+and local data, offline snapshots, and the large cover cache independently.
+Restore reads and validates the manifest, rejects entries that escape the staging
+directory, and stages the whole archive under `cacheDir` before replacing any
+file with an atomic sibling rename. It then restarts the process, because
+DataStore holds its parsed files in memory and would otherwise write the old
+values back. `anisequel_auth_prefs.preferences_pb` and
+`anisequel_onboarding_prefs.preferences_pb` are never backed up or restored: the
+session key is sealed by a per-install Android keystore key, and onboarding is
+current-device state. Restoring during first-run marks setup complete before the
+restart so the reader is not sent through it again.
+
+`AppStorageManager` measures the app's private folders directly rather than
+asking Android for a device-wide number: DataStore, fonts, snapshots, Coil's disk
+cache, widget covers and `cacheDir`. The card separates kept data from
+replaceable artwork and temporary files, and its clear action deletes only
+`cacheDir`, so a cache clear cannot take snapshots or settings with it. The cover
+cache control draws its fill against the chosen ceiling before clearing.
+
+The two Info pages now take one `InfoPageArgs` and draw through `InfoPageHost`.
+That is a structural change, not a visual one: the classic and Nova pages still
+compose their own bodies, but the host and the sheet build the argument value
+once, so a new callback cannot be wired into one style and forgotten in the
+other. The sheet's cover-palette effect, live-refresh loop and entry-overlay
+motion moved into `SequelDetailEffects.kt` for the same reason - they are effects
+with their own failure history, not branches of the page.

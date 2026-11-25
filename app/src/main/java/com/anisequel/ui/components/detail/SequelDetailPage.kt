@@ -79,6 +79,8 @@ import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
+import com.anisequel.ui.components.detail.info.InfoPageArgs
+import com.anisequel.ui.components.detail.info.InfoPageHost
 import com.anisequel.ui.components.detail.info.DetailAppearanceLayer
 import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -188,8 +190,9 @@ internal fun SequelDetailPage(
         val containerHeightPx = with(density) { maxHeight.toPx() }
 
         Box(modifier = Modifier.fillMaxSize()) {
-            if (LocalInfoPageStyle.current == InfoPageStyle.NOVA) {
-                NovaInfoPage(
+            InfoPageHost(
+                useNova = LocalInfoPageStyle.current == InfoPageStyle.NOVA,
+                args = InfoPageArgs(
                     subject = subject,
                     isDetailLoading = isDetailLoading,
                     isFriendsLoading = isFriendsLoading,
@@ -207,44 +210,16 @@ internal fun SequelDetailPage(
                     onOpenStudio = onOpenStudio,
                     onOpenCharacter = onOpenCharacter,
                     onOpenStaff = onOpenStaff,
-                    onEditEntry = onEditEntry,
-                    onOpenAppearance = { onShowAppearanceChange(true) },
-                    modifier = Modifier.fillMaxSize(),
-                    listState = infoListState,
-                    bottomContentPadding = navClearance,
-                    infoBackdropSource = themeSettings.infoBackdropSource,
-                    infoBackdropBlur = themeSettings.infoBackdropBlur,
-                    infoBackdropTint = themeSettings.infoBackdropTint
-                )
-            } else {
-                AnimeInfoPage(
-                    subject = subject,
-                    isDetailLoading = isDetailLoading,
-                    isFriendsLoading = isFriendsLoading,
-                    canWriteToAniList = canWriteToAniList,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled,
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching,
-                    quickAddStatus = quickAddStatus,
-                    friends = friends,
-                    onAddMediaToPlanning = onAddMediaToPlanning,
-                    onAddMediaToWatching = onAddMediaToWatching,
-                    onClose = onDismiss,
-                    onOpenMedia = onOpenMedia,
-                    onOpenStudio = onOpenStudio,
-                    onOpenCharacter = onOpenCharacter,
-                    onOpenStaff = onOpenStaff,
-                    onEditEntry = onEditEntry,
-                    onOpenAppearance = { onShowAppearanceChange(true) },
-                    modifier = Modifier.fillMaxSize(),
-                    listState = infoListState,
-                    bottomContentPadding = navClearance,
-                    infoBackdropSource = themeSettings.infoBackdropSource,
-                    infoBackdropBlur = themeSettings.infoBackdropBlur,
-                    infoBackdropTint = themeSettings.infoBackdropTint
-                )
-            }
+                    onEditEntry = onEditEntry
+                ),
+                onOpenAppearance = { onShowAppearanceChange(true) },
+                modifier = Modifier.fillMaxSize(),
+                listState = infoListState,
+                bottomContentPadding = navClearance,
+                infoBackdropSource = themeSettings.infoBackdropSource,
+                infoBackdropBlur = themeSettings.infoBackdropBlur,
+                infoBackdropTint = themeSettings.infoBackdropTint
+            )
 
             SequelDetailDock(
                 destinations = destinations,

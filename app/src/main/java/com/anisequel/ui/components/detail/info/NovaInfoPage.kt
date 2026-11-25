@@ -110,24 +110,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun NovaInfoPage(
-    subject: AnimeDetailSubject,
-    isDetailLoading: Boolean,
-    isFriendsLoading: Boolean = false,
-    canWriteToAniList: Boolean,
-    holdDurationSeconds: Int,
-    swipeEnabled: Boolean,
-    onAddToPlanning: (MissedSequel) -> Unit,
-    onAddToWatching: (MissedSequel) -> Unit,
-    quickAddStatus: QuickAddStatus = QuickAddStatus(),
-    onAddMediaToPlanning: (MediaNode) -> Unit = {},
-    onAddMediaToWatching: (MediaNode) -> Unit = {},
-    friends: List<MediaFriend> = emptyList(),
-    onClose: () -> Unit,
-    onOpenMedia: (MediaNode) -> Unit = {},
-    onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
-    onOpenCharacter: ((Int) -> Unit)? = null,
-    onOpenStaff: ((Int) -> Unit)? = null,
-    onEditEntry: (() -> Unit)? = null,
+    args: InfoPageArgs,
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     bottomContentPadding: Dp = 24.dp,
@@ -136,6 +119,7 @@ fun NovaInfoPage(
     infoBackdropBlur: InfoBackdropBlur = InfoBackdropBlur.DEFAULT,
     infoBackdropTint: InfoBackdropTint = InfoBackdropTint.DEFAULT
 ) {
+    with(args) {
     val media = subject.media
     val context = LocalContext.current
     val immersive = LocalImmersiveMode.current
@@ -245,32 +229,16 @@ fun NovaInfoPage(
                 }
 
                 novaPageItems(
-                    subject = subject,
+                    args = args,
                     sections = sections,
                     themeSongs = themeSongs,
-                    isDetailLoading = isDetailLoading,
-                    isFriendsLoading = isFriendsLoading,
-                    canWriteToAniList = canWriteToAniList,
-                    holdDurationSeconds = holdDurationSeconds,
-                    swipeEnabled = swipeEnabled,
                     context = context,
-                    quickAddStatus = quickAddStatus,
-                    onAddMediaToPlanning = onAddMediaToPlanning,
-                    onAddMediaToWatching = onAddMediaToWatching,
-                    friends = friends,
-                    onAddToPlanning = onAddToPlanning,
-                    onAddToWatching = onAddToWatching,
-                    onOpenMedia = onOpenMedia,
-                    onOpenStudio = onOpenStudio,
-                    onOpenCharacter = onOpenCharacter,
-                    onOpenStaff = onOpenStaff,
                     onOpenCover = {
                         // Not the poster, so no rectangle to expand from. Clearing the
                         // previous one matters when a relation was opened first.
                         coverOrigin = null
                         showCover = true
-                    },
-                    onEditEntry = onEditEntry
+                    }
                 )
             }
 
@@ -289,6 +257,7 @@ fun NovaInfoPage(
             )
         }
     }
+    }
 }
 
 /**
@@ -303,28 +272,13 @@ fun NovaInfoPage(
  * state under the same key.
  */
 private fun LazyListScope.novaPageItems(
-    subject: AnimeDetailSubject,
+    args: InfoPageArgs,
     sections: InfoSections,
     themeSongs: List<ThemeSong>,
-    isDetailLoading: Boolean,
-    isFriendsLoading: Boolean,
-    canWriteToAniList: Boolean,
-    holdDurationSeconds: Int,
-    swipeEnabled: Boolean,
     context: android.content.Context,
-    quickAddStatus: QuickAddStatus,
-    friends: List<MediaFriend>,
-    onAddMediaToPlanning: (MediaNode) -> Unit,
-    onAddMediaToWatching: (MediaNode) -> Unit,
-    onAddToPlanning: (MissedSequel) -> Unit,
-    onAddToWatching: (MissedSequel) -> Unit,
-    onOpenMedia: (MediaNode) -> Unit,
-    onOpenStudio: (Int, String?) -> Unit,
-    onOpenCharacter: ((Int) -> Unit)?,
-    onOpenStaff: ((Int) -> Unit)?,
-    onOpenCover: () -> Unit,
-    onEditEntry: (() -> Unit)?
+    onOpenCover: () -> Unit
 ) {
+    with(args) {
     val media = subject.media
     val revealKey = subject.mediaId to media.type
     val tracked = media.mediaListEntry?.status != null
@@ -495,6 +449,7 @@ private fun LazyListScope.novaPageItems(
 
     cardItem(key = "nova_extras", index = 18, entranceKey = revealKey) {
         InfoExtrasCard(media = media, onOpenCover = onOpenCover, modifier = it)
+    }
     }
 }
 

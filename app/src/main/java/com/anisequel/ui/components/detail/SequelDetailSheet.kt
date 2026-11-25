@@ -1,7 +1,5 @@
 package com.anisequel.ui.components.detail
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.background
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clipToBounds
@@ -36,7 +34,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,40 +57,24 @@ import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.displayName
 import com.anisequel.data.model.isManga
-import com.anisequel.data.model.posterColor
 import com.anisequel.data.model.posterUrl
-import com.anisequel.data.repository.CoverColorRepository
 import com.anisequel.data.repository.ThemeMode
 import com.anisequel.data.repository.ThemePreferences
-import com.anisequel.domain.color.ArgbHex
 import com.anisequel.domain.list.ListStatuses
-import com.anisequel.domain.ui.InfoPageStyle
-import com.anisequel.domain.ui.PosterSource
-import com.anisequel.domain.ui.SequelSeason
 import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.cards.LocalBetterPosters
-import com.anisequel.ui.components.cards.LocalPosterOverlays
-import com.anisequel.ui.components.cards.LocalPosterSource
-import com.anisequel.ui.components.cards.LocalPosterUniqueSeasons
 import com.anisequel.ui.components.cards.cardPosterUrl
-import com.anisequel.ui.components.cards.posterLookupTitle
 import com.anisequel.ui.components.detail.info.AnimeInfoPage
 import com.anisequel.ui.components.detail.info.DetailAppearanceLayer
-import com.anisequel.ui.components.detail.info.NovaInfoPage
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressiveNavigationBar
 import com.anisequel.ui.components.expressive.NavigationDestination
-import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.theme.AniSequelTheme
-import com.anisequel.ui.theme.CoverColors
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
-import com.anisequel.ui.theme.LocalInfoPageStyle
 import com.anisequel.ui.theme.immersiveDisplayInsets
 import com.anisequel.ui.viewmodel.QuickAddStatus
 import com.anisequel.ui.viewmodel.quickAddKey
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -249,13 +230,6 @@ fun SequelDetailSheet(
         )
     )
     val immersive = LocalImmersiveMode.current
-    // Read at composition, used by the extraction below: the colour has to come from
-    // the picture the reader is actually shown. With BetterPosters on that is btttr's
-    // rendered art, not the AniList cover, and the two palettes can be unrelated.
-    val posterSource = LocalPosterSource.current
-    val posterOverlays = LocalPosterOverlays.current
-    val betterPosters = LocalBetterPosters.current
-    val uniqueSeasons = LocalPosterUniqueSeasons.current
 
     // The page's scroll position is hoisted out of `AnimatedContent`, and so is the
     // in-progress edit below, for the same reason: `AnimatedContent` disposes the
@@ -283,105 +257,23 @@ fun SequelDetailSheet(
         if (entryEditor != null) editState.load(entryEditor, subject.mediaId)
     }
 
-    // The ticker stops with the window. A sheet left open behind another app is
-    // still composed, and this loop was keeping a request every ten minutes for a
-    // page nobody could see - the one live-refresh loop in the app that no
-    // visibility gate covered. The first load is deliberately not gated: the answer
-    // is what the page needs the moment it comes back, and asking once costs less
-    // than repainting an empty hero.
-    val detailRefreshResumed = rememberIsResumed()
-    LaunchedEffect(subject.mediaId, subject.media.type, detailRefreshResumed) {
-        onLoadDetail(subject.mediaId, subject.media.type)
-        onLoadFriends(subject.mediaId, subject.media.type)
-        if (!detailRefreshResumed) return@LaunchedEffect
+    // The ticker stops with the window, and the first load is not gated: see
+    // [DetailRefreshEffect].
+    DetailRefreshEffect(
+        mediaId = subject.mediaId,
+        mediaType = subject.media.type,
+        onLoadDetail = onLoadDetail,
+        onLoadFriends = onLoadFriends
+    )
 
-        // Keep the open title current. The store republishes its cache immediately
-        // and performs a network refresh only after its ten-minute freshness window expires.
-        while (true) {
-            delay(com.anisequel.ui.viewmodel.MediaDetailStore.DETAIL_REFRESH_INTERVAL_MILLIS)
-            onLoadDetail(subject.mediaId, subject.media.type)
-        }
-    }
-
-    // The colour comes from the pixels, and the effect waits for the stored
-    // preferences before it writes any.
-    //
-    // It used to read `themeSettings` during the sheet's first composition and
-    // apply the theme in the same `LaunchedEffect` that loaded the detail. The
-    // flow starts at its initial value - `isLoaded = false`, feature off - so a
-    // sheet opened while DataStore was still reading saw the feature as off and
-    // never re-ran the effect when the real settings arrived. The result was the
-    // reported "sometimes it works": whether the app recoloured depended on
-    // whether the preferences happened to beat the tap. Keying on `isLoaded` is
-    // the fix: the effect is inert until the real values are there, then runs
-    // exactly once for this title.
-    //
-    // Extraction runs even when the anime layer is off, because the hero uses
-    // the same seed for its backdrop and shadow. It is one 96px decode from
-    // Coil's cache - the hero is already loading the full image - and it means
-    // the artwork's colour is right whether or not the global recolour is on.
-    LaunchedEffect(
-        subject.mediaId,
-        subject.media.type,
-        media.posterUrl,
-        posterSource,
-        posterOverlays,
-        uniqueSeasons,
-        themeSettings.isLoaded,
-        themeSettings.animeThemeEnabled,
-        themeSettings.animeThemeRetainColor
-    ) {
-        if (!themeSettings.isLoaded) return@LaunchedEffect
-
-        // The picture on screen, resolved the same way `cardPosterUrl` resolves it:
-        // the same source, the same season rule, the same cache. A sequel season
-        // keeps its own cover, so the sheet must not read a palette from a btttr
-        // poster the grid is not drawing - keeping the two in step is why
-        // [posterLookupTitle] exists. The lookup is a cache hit in practice, because
-        // the card that opened this sheet already asked for the same id and variant;
-        // a miss falls back to AniList's cover rather than delaying the colour.
-        val useBetterPoster = posterSource == PosterSource.BETTER_POSTERS &&
-            !(uniqueSeasons && SequelSeason.isSequel(posterLookupTitle(media)))
-        val shownPoster = if (useBetterPoster) {
-            betterPosters?.posterUrl(
-                subject.mediaId,
-                posterOverlays,
-                skipSequels = uniqueSeasons
-            ) ?: media.posterUrl
-        } else {
-            media.posterUrl
-        }
-        val palette = CoverColorRepository.extractPalette(context, shownPoster)
-        val seed = palette?.seed
-        if (palette != null) {
-            // Both keys, because the surfaces read different ones: the sheet knows
-            // the resolved URL, and the hero still falls back to the AniList cover.
-            CoverColors.put(shownPoster, palette.seed)
-            CoverColors.put(media.posterUrl, palette.seed)
-            palette.accent?.let { accent ->
-                CoverColors.putAccent(shownPoster, accent)
-                CoverColors.putAccent(media.posterUrl, accent)
-            }
-        }
-
-        if (!themeSettings.animeThemeEnabled) return@LaunchedEffect
-
-        // Fallback order, most specific first: the cover's own pixels, then
-        // AniList's dominant colour (which is still the cover, just computed
-        // elsewhere), then the brand. A grey cover legitimately produces no
-        // seed, and the app should still recolour to *something* the reader
-        // recognises rather than doing nothing.
-        val colorHex = seed?.let { ArgbHex.format(it) }
-            ?: media.posterColor
-            ?: "#0057B7"
-
-        themeWrite {
-            themePreferences.applyAnimeColorLayer(
-                colorHex = colorHex,
-                retain = themeSettings.animeThemeRetainColor
-            )
-        }
-    }
+    // The palette effect waits for DataStore and reads the cover actually on
+    // screen; both reasons are documented in [DetailPaletteEffect].
+    DetailPaletteEffect(
+        subject = subject,
+        media = media,
+        themeSettings = themeSettings,
+        themePreferences = themePreferences
+    )
 
     // The revert timer starts when the sheet is *closed*, not while it is open.
     // It used to be a `LaunchedEffect` here, which the dismiss disposed - so the
@@ -451,66 +343,22 @@ fun SequelDetailSheet(
         mutableStateOf(false)
     }
     // Back unwinds the topmost detail layer first: appearance editor, My Entry,
-    // then the title page. Keep this state outside Dialog content so its window
-    // dismissal callback can make the same decision as the visible controls.
-    var showEntrySheet by rememberSaveable(subject.mediaId, subject.media.type) {
-        mutableStateOf(false)
-    }
-    // How much of the entry overlay sits below the viewport: 0 is fully open, 1 is
-    // off-screen. The height itself is now fixed - see the sheet's `graphicsLayer`
-    // below - so this value is a draw-phase translation and nothing here re-measures
-    // the form while it moves.
-    val sheetOffset = remember(subject.mediaId, subject.media.type) { Animatable(1f) }
-    // A drag writes these synchronously; the Animatable only owns the settle. The
-    // handle used to `launch { snapTo(...) }` once per pointer event, so one flick
-    // queued a dozen coroutines that each cancelled the previous one and the sheet
-    // visibly lagged the finger.
-    var sheetDragging by remember(subject.mediaId, subject.media.type) {
-        mutableStateOf(false)
-    }
-    var dragFraction by remember(subject.mediaId, subject.media.type) {
-        mutableFloatStateOf(1f)
-    }
-    val closeEntrySheet: () -> Unit = {
-        scope.launch {
-            sheetOffset.animateTo(1f, ExpressiveMotion.SettleSpatial)
-            showEntrySheet = false
-        }
-    }
-    LaunchedEffect(showEntrySheet) {
-        if (showEntrySheet) {
-            // Opened at full height, not stopped at a peek. The form is status,
-            // progress, score, two dates, the private switch, the note and its
-            // pinned action bar - a sheet that stopped at 60% drew three rows and
-            // an action bar and looked like a finished, short form, with every
-            // field below Score hidden behind a scroll nothing suggested. The
-            // handle still collapses it to a 60% peek for a reader who wants the
-            // page behind it.
-            sheetDragging = false
-            sheetOffset.snapTo(1f)
-            sheetOffset.animateTo(0f, ExpressiveMotion.DefaultSpatial)
-        } else {
-            sheetDragging = false
-            sheetOffset.snapTo(1f)
-        }
-    }
-
-    // Opening My Entry is also the moment to retry an entry load that never landed.
-    // The entry is fetched when the title opens, so a request that failed while the
-    // reader was still reading left the editor on its error card - and the only
-    // retry was inside that card. `load` is a no-op once a draft exists, so this
-    // cannot spend a second request on a healthy form.
-    LaunchedEffect(showEntrySheet, subject.mediaId, subject.media.type, entryEditor) {
-        if (showEntrySheet && entryEditor != null && editState.loadError != null) {
-            editState.load(entryEditor, subject.mediaId)
-        }
-    }
+    // then the title page. The overlay's state lives in the hoisted motion object
+    // so this window's dismissal callback can make the same decision as the
+    // visible controls.
+    val entrySheet = rememberDetailEntrySheetMotion(
+        mediaId = subject.mediaId,
+        mediaType = subject.media.type,
+        entryEditor = entryEditor,
+        editState = editState,
+        scope = scope
+    )
 
     Dialog(
         onDismissRequest = {
             when {
                 showAppearance -> showAppearance = false
-                showEntrySheet -> closeEntrySheet()
+                entrySheet.show -> entrySheet.close()
                 else -> handleDismiss()
             }
         },
@@ -568,18 +416,18 @@ fun SequelDetailSheet(
             themePreferences = themePreferences,
             themeSettings = themeSettings,
             entryEditor = entryEditor,
-            onEditEntry = entryEditor?.let { { showEntrySheet = true } },
+            onEditEntry = entryEditor?.let { { entrySheet.onShowChange(true) } },
             editState = editState,
             showAppearance = showAppearance,
             onShowAppearanceChange = { showAppearance = it },
-            showEntrySheet = showEntrySheet,
-            onShowEntrySheetChange = { showEntrySheet = it },
-            sheetOffset = sheetOffset,
-            sheetDragging = sheetDragging,
-            onSheetDraggingChange = { sheetDragging = it },
-            dragFraction = dragFraction,
-            onDragFractionChange = { dragFraction = it },
-            closeEntrySheet = closeEntrySheet,
+            showEntrySheet = entrySheet.show,
+            onShowEntrySheetChange = entrySheet.onShowChange,
+            sheetOffset = entrySheet.offset,
+            sheetDragging = entrySheet.dragging,
+            onSheetDraggingChange = entrySheet.onDraggingChange,
+            dragFraction = entrySheet.dragFraction,
+            onDragFractionChange = entrySheet.onDragFractionChange,
+            closeEntrySheet = entrySheet.close,
             scope = scope,
             infoListState = infoListState,
             posterUrl = posterUrl

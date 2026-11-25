@@ -68,28 +68,13 @@ import com.anisequel.ui.viewmodel.QuickAddStatus
  * the note on [rowItem].
  */
 internal fun LazyListScope.infoPageItems(
-    subject: AnimeDetailSubject,
+    args: InfoPageArgs,
     sections: InfoSections,
     themeSongs: List<ThemeSong>,
-    isDetailLoading: Boolean,
-    isFriendsLoading: Boolean,
-    canWriteToAniList: Boolean,
-    holdDurationSeconds: Int,
-    swipeEnabled: Boolean,
     context: Context,
-    quickAddStatus: QuickAddStatus,
-    friends: List<MediaFriend>,
-    onAddMediaToPlanning: (MediaNode) -> Unit,
-    onAddMediaToWatching: (MediaNode) -> Unit,
-    onAddToPlanning: (MissedSequel) -> Unit,
-    onAddToWatching: (MissedSequel) -> Unit,
-    onOpenMedia: (MediaNode) -> Unit,
-    onOpenStudio: (Int, String?) -> Unit,
-    onOpenCharacter: ((Int) -> Unit)?,
-    onOpenStaff: ((Int) -> Unit)?,
-    onOpenCover: () -> Unit,
-    onEditEntry: (() -> Unit)?
+    onOpenCover: () -> Unit
 ) {
+    with(args) {
     val media = subject.media
 
     // The entrance identity for every section below. The item keys are constant
@@ -270,6 +255,7 @@ internal fun LazyListScope.infoPageItems(
 
     cardItem(key = "extras", index = 16, entranceKey = revealKey) {
         InfoExtrasCard(media = media, onOpenCover = onOpenCover, modifier = it)
+    }
     }
 }
 

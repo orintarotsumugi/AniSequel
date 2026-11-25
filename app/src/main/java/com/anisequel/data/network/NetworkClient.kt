@@ -18,6 +18,7 @@ import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 object NetworkClient {
@@ -199,6 +200,7 @@ object NetworkClient {
                     .build()
             }
             .diskCache {
+                migrateLegacyCoverCache(context)
                 // `noBackupFilesDir`, not `cacheDir`.
                 //
                 // This was `cacheDir/anilist_cover_cache`, and that was the cover
@@ -346,6 +348,22 @@ object NetworkClient {
     // reason it is a preferences file and not a DataStore). 256 MB - the value this
     // constant used to hold, and what an install that never opens the page still
     // gets - is the smallest rung there.
+
+    /**
+     * Moves the cover directory an older build kept under `cacheDir` into the
+     * persistent directory, before Coil opens either one.
+     *
+     * A rename is atomic and moves no bytes. If the target already exists this
+     * build has already started its own cache, so the legacy copy is left alone
+     * rather than merged into a journal Coil is entitled to own. A failed rename
+     * (a directory Android already reclaimed) simply starts the new cache empty.
+     */
+    private fun migrateLegacyCoverCache(context: Context) {
+        val target = File(context.noBackupFilesDir, "anilist_cover_cache")
+        if (target.exists()) return
+        val legacy = File(context.cacheDir, "anilist_cover_cache")
+        if (legacy.isDirectory) legacy.renameTo(target)
+    }
 
     /**
      * How many covers may decode/fetch at once.
