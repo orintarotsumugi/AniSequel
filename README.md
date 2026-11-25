@@ -300,15 +300,18 @@ once are in [BUILDING.md Continuous integration](BUILDING.md#continuous-integrat
 Read [AGENTS.md](AGENTS.md) first - it records the rules this repo learned the
 expensive way. The short version:
 
-- Keep files focused, under 700 lines, split by responsibility.
+- Keep files focused, under 900 lines, split by responsibility.
+- Never commit to `main`: branch, push the branch, and open a pull request.
 - No emoji as UI icons. Pure Compose `ImageVector`; vectors only.
 - Look up the docs before adding a dependency, plugin or experimental API, and
   check it against *this* repo's Kotlin, AGP and compileSdk.
 - Never commit key material. Never rewrite history to hide it.
-- Bump the version in all three places and add the `changelog.json` block in the
-  same change.
+- Bump the version in `gradle.properties`, `app/build.gradle.kts` and
+  `update.json`, and prepend the matching `changelog.json` block in the same
+  change.
 - If a bug reached a build, the regression test is the deliverable.
-- `./gradlew test` must be green. Lint will not save you.
+- `./gradlew test` must be green; CI is the final build. Lint is advisory, not
+  the gate.
 
 ---
 
