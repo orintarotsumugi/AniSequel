@@ -280,6 +280,51 @@ internal fun NotificationSettingsPage(
     }
 }
 
+@Composable
+private fun NotificationPermissionBadge(enabled: Boolean) {
+    Surface(
+        shape = CircleShape,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+    ) {
+        Text(
+            text = if (enabled) "Allowed" else "Off",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+
+private fun notificationPermissionTitle(enabled: Boolean, hasPermission: Boolean): String = when {
+    enabled -> "Android can show AniSequel notifications."
+    !hasPermission -> "The permission has not been granted yet."
+    else -> "Android is blocking AniSequel notifications."
+}
+
+private fun notificationPermissionDetail(enabled: Boolean, hasPermission: Boolean): String = when {
+    enabled ->
+        "The channel is on. You can still silence it from the system page; " +
+            "the inbox itself has no background polling."
+    !hasPermission -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        "Android 13 and later requires this runtime permission. Ask here, " +
+            "or use the system page if the dialog no longer appears."
+    } else {
+        "This Android version does not use a runtime permission. Allow " +
+            "AniSequel in the system page instead."
+    }
+    else ->
+        "The runtime permission is granted, but the app switch or this " +
+            "channel is off. Open system settings and turn them back on."
+}
+
 /**
  * The Android permission, its current state, and the one test post.
  *
@@ -326,56 +371,18 @@ private fun NotificationPermissionSection() {
         title = "Android notifications",
         icon = AppVectorIcons.Notifications,
         subtitle = "Optional system alerts. The inbox keeps working without them.",
-        badge = {
-            Surface(
-                shape = CircleShape,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                }
-            ) {
-                Text(
-                    text = if (enabled) "Allowed" else "Off",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        }
+        badge = { NotificationPermissionBadge(enabled) }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = when {
-                        enabled -> "Android can show AniSequel notifications."
-                        !hasPermission -> "The permission has not been granted yet."
-                        else -> "Android is blocking AniSequel notifications."
-                    },
+                    text = notificationPermissionTitle(enabled, hasPermission),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = when {
-                        enabled ->
-                            "The channel is on. You can still silence it from the system page; " +
-                                "the inbox itself has no background polling."
-                        !hasPermission -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            "Android 13 and later requires this runtime permission. Ask here, " +
-                                "or use the system page if the dialog no longer appears."
-                        } else {
-                            "This Android version does not use a runtime permission. Allow " +
-                                "AniSequel in the system page instead."
-                        }
-                        else ->
-                            "The runtime permission is granted, but the app switch or this " +
-                                "channel is off. Open system settings and turn them back on."
-                    },
+                    text = notificationPermissionDetail(enabled, hasPermission),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

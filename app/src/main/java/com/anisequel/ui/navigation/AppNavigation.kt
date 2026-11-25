@@ -186,6 +186,51 @@ private fun drawRestoringPlaceholder(
     return true
 }
 
+/**
+ * Honours an inbound widget or notification tap once the app knows who is signed in.
+ *
+ * Both requests are deferred rather than fired on arrival. A profile needs an
+ * identity: the widget's `PendingIntent` can only start the Activity, and at that
+ * moment the stored session may still be restoring, or may not exist at all. The
+ * test notification has the same problem and opens the real inbox rather than a
+ * second toast.
+ *
+ * `Authenticated` is the token, not an identity. Firing on the token alone put the
+ * profile through its demo fallback, so the reader landed on somebody else's
+ * fixture for one round trip, or for good when that query failed. `viewerId`
+ * keeps the request pending until the dashboard has answered.
+ */
+@Composable
+private fun LaunchRequestEffects(
+    navController: NavHostController,
+    authState: AuthUiState,
+    viewerId: Int?,
+    openProfileActivityOnLaunch: Boolean,
+    onProfileActivityOpened: () -> Unit,
+    openNotificationsOnLaunch: Boolean,
+    onNotificationsOpened: () -> Unit
+) {
+    LaunchedEffect(openProfileActivityOnLaunch, authState, viewerId) {
+        if (openProfileActivityOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            viewerId != null
+        ) {
+            navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
+            onProfileActivityOpened()
+        }
+    }
+
+    LaunchedEffect(openNotificationsOnLaunch, authState, viewerId) {
+        if (openNotificationsOnLaunch &&
+            authState is AuthUiState.Authenticated &&
+            viewerId != null
+        ) {
+            navController.navigateSingle(NOTIFICATIONS)
+            onNotificationsOpened()
+        }
+    }
+}
+
 @Composable
 fun AppNavigation(
     authRepository: AuthRepository,
@@ -696,42 +741,15 @@ fun AppNavigation(
         }
     }
 
-    // The widget's tap, honoured once the app knows who is signed in.
-    //
-    // Deferred rather than fired on arrival because a profile needs an identity:
-    // the widget's `PendingIntent` can only start the Activity, and at that moment
-    // the stored session may still be being restored - or may not exist, in which
-    // case the request has to stay pending until a sign-in resolves it instead of
-    // being spent on a login screen.
-    //
-    // `Authenticated` is not yet an identity: it is the token, and the viewer id
-    // and name arrive one query later. Firing on the token alone put the profile
-    // route through its demo fallback, so the reader landed on "OtakuExplorer"'s
-    // fixture - somebody else's invented list - for the length of a round trip,
-    // and for good if that query failed.
-    LaunchedEffect(openProfileActivityOnLaunch, authState, signedInViewer) {
-        if (openProfileActivityOnLaunch &&
-            authState is AuthUiState.Authenticated &&
-            signedInViewer != null
-        ) {
-            navController.navigateSingle(ProfileRoutes.OWN_ACTIVITY)
-            onProfileActivityOpened()
-        }
-    }
-
-    // The test notification's tap, deferred for the same identity reason as the
-    // widget's. It opens the real inbox rather than a second toast: a notification
-    // that says "tap to open your inbox" and then does nothing is worse than one
-    // with no tap target at all.
-    LaunchedEffect(openNotificationsOnLaunch, authState, signedInViewer) {
-        if (openNotificationsOnLaunch &&
-            authState is AuthUiState.Authenticated &&
-            signedInViewer != null
-        ) {
-            navController.navigateSingle(NOTIFICATIONS)
-            onNotificationsOpened()
-        }
-    }
+    LaunchRequestEffects(
+        navController = navController,
+        authState = authState,
+        viewerId = signedInViewer?.id,
+        openProfileActivityOnLaunch = openProfileActivityOnLaunch,
+        onProfileActivityOpened = onProfileActivityOpened,
+        openNotificationsOnLaunch = openNotificationsOnLaunch,
+        onNotificationsOpened = onNotificationsOpened
+    )
 
     // Keeps the home-screen widgets in step with the live dashboard counts.
     //
