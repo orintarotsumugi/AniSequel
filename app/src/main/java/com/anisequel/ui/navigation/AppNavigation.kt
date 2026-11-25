@@ -40,6 +40,8 @@ import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.novamarkdown.ProvideNovaCovers
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
+import com.anisequel.data.repository.NotificationPreferencesStore
+import com.anisequel.data.repository.NotificationReadStore
 import com.anisequel.data.repository.AniListSnapshots
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.ArrivingPreferences
@@ -94,6 +96,8 @@ object AppRoutes {
     /** The catalogue search, one of the bar's pages when its tab is enabled. */
     const val SEARCH = "search"
     const val SETTINGS = "settings"
+    const val SETTINGS_NOTIFICATIONS = "settings/notifications"
+    const val NOTIFICATIONS = "notifications"
     const val TIER_LIST = "tier_list"
 
     /** The new look's feature hub. Hidden from the classic bar by design. */
@@ -398,6 +402,18 @@ fun AppNavigation(
             listCacheTtlMillis = refreshIntervalPreferences::currentStalenessMillis,
             snapshots = aniListSnapshots
         )
+    }
+
+    // The inbox preferences and its local read watermark are app-scoped because
+    // the inbox and the Settings page are two readers of one answer: a Settings
+    // reset that built its own store would leave the inbox still drawing dots from
+    // a copy the reset never touched. DataStore is the shared file; these two
+    // objects are the shared readers.
+    val notificationPreferencesStore = remember(context) {
+        NotificationPreferencesStore(context.applicationContext)
+    }
+    val notificationReadStore = remember(context) {
+        NotificationReadStore(context.applicationContext)
     }
 
     // Application-scoped for the same reason: the notes are a property of the
@@ -897,7 +913,16 @@ fun AppNavigation(
                         totalWatchedCount = totalWatchedCount,
                         totalMissedCount = totalMissedCount,
                         cardPreview = cardPreview,
-                        signedInViewer = signedInViewer
+                        signedInViewer = signedInViewer,
+                        notificationPreferencesStore = notificationPreferencesStore,
+                        notificationReadStore = notificationReadStore
+                    )
+
+                    notificationDestinations(
+                        navController = navController,
+                        aniListRepository = aniListRepository,
+                        notificationPreferencesStore = notificationPreferencesStore,
+                        notificationReadStore = notificationReadStore
                     )
                 }
 

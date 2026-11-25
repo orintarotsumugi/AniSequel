@@ -43,6 +43,7 @@ fun AniTopAppBar(
     onOpenFilter: () -> Unit,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenNotifications: (() -> Unit)? = null,
     onOpenProfile: () -> Unit,
     isRefreshing: Boolean = false,
     hasActiveFilters: Boolean = false,
@@ -250,6 +251,25 @@ fun AniTopAppBar(
                             )
                         }
                     }
+                }
+            }
+
+            if (onOpenNotifications != null) {
+                val inboxSource = remember { MutableInteractionSource() }
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onOpenNotifications()
+                    },
+                    modifier = Modifier
+                        .bouncyPress(interactionSource = inboxSource)
+                        .testTag("notifications_button"),
+                    interactionSource = inboxSource
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Notifications,
+                        contentDescription = "Notifications"
+                    )
                 }
             }
 

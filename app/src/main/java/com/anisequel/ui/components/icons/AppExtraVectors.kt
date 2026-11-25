@@ -753,6 +753,48 @@ object AppExtraVectors {
             }
         }.build()
     }
+
+    /**
+     * The notification bell.
+     *
+     * Drawn here rather than borrowed from `Icons.Default`: the pinned icon set is
+     * the core subset, and a notification centre whose entry point is an envelope
+     * reads as mail rather than as the app activity inbox it opens.
+     */
+    val NotificationBell: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "NotificationBell",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                moveTo(12f, 22f)
+                curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
+                lineTo(10f, 20f)
+                curveToRelative(0f, 1.1f, 0.9f, 2f, 2f, 2f)
+                close()
+                moveTo(18f, 16f)
+                lineTo(18f, 11f)
+                curveToRelative(0f, -3.07f, -1.63f, -5.64f, -4.5f, -6.32f)
+                lineTo(13.5f, 4f)
+                curveToRelative(0f, -0.83f, -0.67f, -1.5f, -1.5f, -1.5f)
+                curveToRelative(-0.83f, 0f, -1.5f, 0.67f, -1.5f, 1.5f)
+                lineTo(10.5f, 4.68f)
+                curveTo(7.64f, 5.36f, 6f, 7.92f, 6f, 11f)
+                lineTo(6f, 16f)
+                lineTo(4f, 18f)
+                lineTo(4f, 19f)
+                lineTo(20f, 19f)
+                lineTo(20f, 18f)
+                close()
+            }
+        }.build()
+    }
     /*
      * Nearly every glyph in this file is built the same way: a builder, one `path`
      * per stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,

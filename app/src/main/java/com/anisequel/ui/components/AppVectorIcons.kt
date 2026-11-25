@@ -232,6 +232,7 @@ object AppVectorIcons {
     // CI, not at a glance. Checked against `material-icons-extended-android`'s own
     // class list rather than assumed, the same way [ProfileStats] was.
     val ProfileMessages = Icons.Default.Mail
+    val Notifications = AppExtraVectors.NotificationBell
     // The same distinction inside a message card: an envelope arriving, against
     // [ActivitySend] leaving.
     val MessageReceived = Icons.Default.Inbox

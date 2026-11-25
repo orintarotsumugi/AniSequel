@@ -96,6 +96,7 @@ private val MaxContentWidth = 640.dp
 fun DashboardScreen(
     dashboardViewModel: DashboardViewModel,
     onOpenSettings: (ViewerProfile?) -> Unit,
+    onOpenNotifications: () -> Unit = {},
     onSignInAgain: () -> Unit = {},
     onOpenProfile: (ViewerProfile?) -> Unit = {},
     onOpenSearch: () -> Unit = {},
@@ -382,6 +383,7 @@ fun DashboardScreen(
                 onOpenFilter = { showFilterSheet = true },
                 onRefresh = requestRefresh,
                 onOpenSettings = { onOpenSettings(currentViewer) },
+                onOpenNotifications = onOpenNotifications,
                 onOpenProfile = { onOpenProfile(currentViewer) },
                 onOpenSearch = onOpenSearch,
                 onOpenTiers = onOpenTiers,
@@ -833,6 +835,7 @@ private fun DashboardTopBar(
     onOpenFilter: () -> Unit,
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenNotifications: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenTiers: () -> Unit,
@@ -847,6 +850,7 @@ private fun DashboardTopBar(
             avatarUrl = viewer?.avatar?.medium,
             onOpenProfile = onOpenProfile,
             onOpenSettings = onOpenSettings,
+            onOpenNotifications = onOpenNotifications,
             onOpenSearch = onOpenSearch.takeIf { LocalSearchTopBarShortcut.current },
             onOpenTiers = onOpenTiers.takeIf { LocalTierTopBarShortcut.current }
         )
@@ -857,6 +861,7 @@ private fun DashboardTopBar(
             onOpenFilter = onOpenFilter,
             onRefresh = onRefresh,
             onOpenSettings = onOpenSettings,
+            onOpenNotifications = onOpenNotifications,
             onOpenProfile = onOpenProfile,
             isRefreshing = isRefreshing,
             hasActiveFilters = hasActiveFilters,

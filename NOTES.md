@@ -4099,3 +4099,35 @@ spinner, because a plate behind a 50dp icon that is about to become a transparen
 logo would claim a box the picture never has. The live-card path (a WebView, not
 Coil) uses the same plate, so a spoiler holding an AniList card no longer waits on
 the one bare spinner left in the markdown renderer.
+
+## 2.6.5: an inbox that remembers what it showed
+
+AniList has no per-notification read flag. `Viewer.unreadNotificationCount` is a
+single number with no ids attached, and it cannot say which of the rows on screen
+the reader has opened. The inbox therefore keeps its own read mark in
+Preferences DataStore, keyed by account: an id watermark plus the individual ids
+opened above it. The server count seeds that mark once, on the first page, and is
+never shown as the source of truth afterwards. `Mark all read` moves the local
+watermark and sends nothing; the app still never sends `resetNotificationCount`,
+because that mutation would clear the real account counter to make a local view
+look right. The same store survives process death, so a restart cannot resurrect
+what the reader already opened.
+
+The query is separate from `GET_RECEIVED_MESSAGES`, which continues to source the
+Messages tab from actual message activities. The notification document selects
+`__typename` and one inline fragment per union member. That is the only way to
+read a union, and it also means a future member this build does not know arrives
+with a typename and no id at all. The parser treats the id as nullable and drops
+an unidentifiable row rather than failing the page or inventing an identity for
+it; known members with an id still fall back to the generic card.
+
+Refreshing page one fences in-flight page loads and clears the page cache before
+asking, so a notification that arrived between page one and page two cannot leave
+a seam of duplicate or missing rows. Filtering and folding are cached per
+revision, and only likes that name the same activity or thread comment share a
+row: a reply like has no reply id in its payload, so folding those by parent
+would merge different replies.
+
+Nothing here polls. The page loads on entry and on an explicit pull, Settings
+only edits local switches, and no new permission, channel, worker or service was
+added. The app's existing `GET_RECEIVED_MESSAGES` path is unchanged.

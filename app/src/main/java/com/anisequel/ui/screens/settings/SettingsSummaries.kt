@@ -7,6 +7,7 @@ import com.anisequel.BuildConfig
 import com.anisequel.data.repository.AppLockPreferences
 import com.anisequel.data.repository.InterfacePreferences
 import com.anisequel.data.repository.JokePreferences
+import com.anisequel.data.repository.NotificationPreferencesStore
 import com.anisequel.data.repository.RefreshIntervalPreferences
 import com.anisequel.data.repository.SeasonalPreferences
 import com.anisequel.data.repository.ThemePreferences
@@ -57,6 +58,8 @@ internal data class SettingsSummaries(
     val jokes: String? = null,
     /** "Off", or the effect covering the app. */
     val seasonal: String? = null,
+    /** "Local", or the number of categories that are on. */
+    val notifications: String? = null,
     /** Whether the app asks for the device lock. */
     val device: String? = null,
     /** The installed build, so a bug report can start here. */
@@ -79,7 +82,8 @@ internal fun rememberSettingsSummaries(
     refreshIntervalPreferences: RefreshIntervalPreferences,
     jokePreferences: JokePreferences,
     seasonalPreferences: SeasonalPreferences,
-    appLockPreferences: AppLockPreferences
+    appLockPreferences: AppLockPreferences,
+    notificationPreferencesStore: NotificationPreferencesStore
 ): SettingsSummaries {
     val theme by themePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
     val cardStyle by interfacePreferences.cardStyle.collectAsStateWithLifecycle(initialValue = null)
@@ -87,6 +91,9 @@ internal fun rememberSettingsSummaries(
     val jokes by jokePreferences.settings.collectAsStateWithLifecycle(initialValue = null)
     val seasonal by seasonalPreferences.settings.collectAsStateWithLifecycle(initialValue = null)
     val appLock by appLockPreferences.enabled.collectAsStateWithLifecycle(initialValue = null)
+    val notifications by notificationPreferencesStore.preferences.collectAsStateWithLifecycle(
+        initialValue = null
+    )
 
     return SettingsSummaries(
         appearance = theme?.themeMode?.displayName,
@@ -102,6 +109,23 @@ internal fun rememberSettingsSummaries(
         },
         seasonal = seasonal?.let { settings ->
             if (!settings.enabled) "Off" else settings.effect.displayName
+        },
+        notifications = notifications?.let { settings ->
+            if (!settings.trackingEnabled) {
+                "Unread dots off"
+            } else {
+                val on = listOf(
+                    settings.airing,
+                    settings.likes,
+                    settings.replies,
+                    settings.mentions,
+                    settings.messages,
+                    settings.follows,
+                    settings.mediaUpdates,
+                    settings.submissions
+                ).count { it }
+                if (on == 8) "All categories" else "$on of 8"
+            }
         },
         device = appLock?.let { if (it) "Lock on" else "Lock off" },
         // The build is a constant, so this row has an answer before DataStore does.

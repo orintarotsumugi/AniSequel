@@ -2121,4 +2121,135 @@ object GraphQLQueries {
           }
         }
     """.trimIndent()
+
+    /**
+     * The inbox, unfiltered.
+     *
+     * `type_in` is deliberately absent: the filter chips are local, and asking
+     * the server for one category at a time would make each chip a fresh request
+     * with its own race and rate-limit cost. A page holds every kind the app can
+     * draw, so switching chips re-slices data already in memory.
+     *
+     * `Viewer.unreadNotificationCount` travels in the same request as the first
+     * page. It is used once - to seed the local first-run baseline, since AniList
+     * has no per-item read flag - and never displayed as an authority. This
+     * document never sends `resetNotificationCount`.
+     */
+    val GET_NOTIFICATIONS = """
+        query GetNotifications(${'$'}page: Int, ${'$'}perPage: Int) {
+          Viewer { unreadNotificationCount }
+          Page(page: ${'$'}page, perPage: ${'$'}perPage) {
+            pageInfo { hasNextPage }
+            notifications {
+              __typename
+              ... on AiringNotification {
+                id type episode contexts createdAt
+                media { id type title { romaji english native } coverImage { medium large } }
+              }
+              ... on FollowingNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+              }
+              ... on ActivityLikeNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                activity {
+                  ... on TextActivity { id type text createdAt siteUrl user { id name avatar { medium large } } }
+                  ... on ListActivity { id type status progress createdAt siteUrl user { id name avatar { medium large } } media { id type title { romaji english native } coverImage { medium large } } }
+                }
+              }
+              ... on ActivityReplyNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                activity {
+                  ... on TextActivity { id type text createdAt siteUrl user { id name avatar { medium large } } }
+                  ... on ListActivity { id type status progress createdAt siteUrl user { id name avatar { medium large } } media { id type title { romaji english native } coverImage { medium large } } }
+                }
+              }
+              ... on ActivityReplySubscribedNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                activity {
+                  ... on TextActivity { id type text createdAt siteUrl user { id name avatar { medium large } } }
+                  ... on ListActivity { id type status progress createdAt siteUrl user { id name avatar { medium large } } media { id type title { romaji english native } coverImage { medium large } } }
+                }
+              }
+              ... on ActivityReplyLikeNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                activity {
+                  ... on TextActivity { id type text createdAt siteUrl user { id name avatar { medium large } } }
+                  ... on ListActivity { id type status progress createdAt siteUrl user { id name avatar { medium large } } media { id type title { romaji english native } coverImage { medium large } } }
+                }
+              }
+              ... on ActivityMentionNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                activity {
+                  ... on TextActivity { id type text createdAt siteUrl user { id name avatar { medium large } } }
+                  ... on ListActivity { id type status progress createdAt siteUrl user { id name avatar { medium large } } media { id type title { romaji english native } coverImage { medium large } } }
+                }
+              }
+              ... on ActivityMessageNotification {
+                id type activityId context createdAt
+                user { id name avatar { medium large } }
+                message {
+                  id message createdAt
+                  recipientId messengerId
+                  recipient { id name avatar { medium large } }
+                  messenger { id name avatar { medium large } }
+                }
+              }
+              ... on ThreadCommentReplyNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+                thread { id title }
+                comment { id comment }
+              }
+              ... on ThreadCommentSubscribedNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+                thread { id title }
+                comment { id comment }
+              }
+              ... on ThreadCommentMentionNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+                thread { id title }
+                comment { id comment }
+              }
+              ... on ThreadCommentLikeNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+                thread { id title }
+                comment { id comment }
+              }
+              ... on ThreadLikeNotification {
+                id type context createdAt
+                user { id name avatar { medium large } }
+                thread { id title }
+              }
+              ... on RelatedMediaAdditionNotification {
+                id type mediaId context createdAt
+                media { id type title { romaji english native } coverImage { medium large } }
+              }
+              ... on MediaDataChangeNotification {
+                id type mediaId context reason createdAt
+                media { id type title { romaji english native } coverImage { medium large } }
+              }
+              ... on MediaMergeNotification {
+                id type mediaId deletedMediaTitles context reason createdAt
+                media { id type title { romaji english native } coverImage { medium large } }
+              }
+              ... on MediaDeletionNotification {
+                id type deletedMediaTitle context reason createdAt
+              }
+              ... on MediaSubmissionUpdateNotification {
+                id type contexts status notes createdAt submittedTitle
+                media { id type title { romaji english native } coverImage { medium large } }
+              }
+            }
+          }
+        }
+    """.trimIndent()
 }
