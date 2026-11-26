@@ -310,18 +310,6 @@ fun ProfileActivityTab(
     // `UserProfileScreen` draws both, as siblings of the tab content.
 }
 
-/**
- * Scrolls the profile feed to the activity a notification names.
- *
- * A notification carries one id, while the feed is a page of twenty-five. The
- * first page is usually enough; when the target sits just past it, ask once for
- * the next. If it is still absent - an old post, a failed page, an empty feed -
- * hand the id back to the comment thread rather than dropping the reader at the
- * top of a list that does not contain what they tapped.
- *
- * Kept out of [ProfileActivityTab] so that the screen's own paging and header
- * work is not competing with this request for one extra branch in every review.
- */
 /** What one pass of [FocusActivityEffect] should do next. */
 private sealed interface FocusStep {
     data class Scroll(val beforeCards: Int, val index: Int) : FocusStep
@@ -375,6 +363,18 @@ private fun focusStep(
     return FocusStep.Scroll(beforeCards = calendarRows + 1 + refreshRows, index = index)
 }
 
+/**
+ * Scrolls the profile feed to the activity a notification names.
+ *
+ * A notification carries one id, while the feed is a page of twenty-five. The
+ * first page is usually enough; when the target sits just past it, ask once for
+ * the next. If it is still absent - an old post, a failed page, an empty feed -
+ * hand the id back to the comment thread rather than dropping the reader at the
+ * top of a list that does not contain what they tapped.
+ *
+ * Kept out of [ProfileActivityTab] so that the screen's own paging and header
+ * work is not competing with this request for one extra branch in every review.
+ */
 @Composable
 private fun FocusActivityEffect(
     focusActivityId: Int?,
