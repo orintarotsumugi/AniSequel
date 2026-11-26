@@ -85,7 +85,7 @@ class NotificationCheckRunner(
             previous = previous,
             preferences = preferences,
             nowEpochMillis = nowEpochMillis,
-            nextResumePage = walk.page + 1
+            nextResumePage = walk.nextResumePage
         )
 
         if (plan.baselineEstablished) {
@@ -108,6 +108,7 @@ class NotificationCheckRunner(
     private suspend fun walkPages(previous: NotificationDeliveryState): PageWalk {
         val collected = mutableListOf<InboxNotification>()
         var page = 1
+        var lastFetchedPage = 0
         var hasMore = false
         var fetches = 0
 
@@ -116,6 +117,7 @@ class NotificationCheckRunner(
                 return PageWalk.Failed(it)
             }
             fetches += 1
+            lastFetchedPage = page
             collected += data.notifications
             hasMore = data.hasMore
             if (!data.hasMore) break
@@ -125,7 +127,10 @@ class NotificationCheckRunner(
             page = nextPage(page, previous)
         }
 
-        return PageWalk.Loaded(collected, hasMore, page)
+        // `page` has already advanced to the page after the last fetch, so the
+        // successor has to come from the page actually fetched. Using `page + 1`
+        // skipped one page each time the three-page window filled up.
+        return PageWalk.Loaded(collected, hasMore, lastFetchedPage + 1)
     }
 
     private fun nextPage(page: Int, previous: NotificationDeliveryState): Int =
@@ -189,7 +194,7 @@ class NotificationCheckRunner(
         data class Loaded(
             val notifications: List<InboxNotification>,
             val hasMore: Boolean,
-            val page: Int
+            val nextResumePage: Int
         ) : PageWalk
 
         data class Failed(val cause: Throwable) : PageWalk
