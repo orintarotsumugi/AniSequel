@@ -64,6 +64,10 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** Extra used by the profile-activity widget to request opening the activity screen. */
         const val EXTRA_WIDGET_OPEN_ACTIVITY = "anisequel.widget.open_activity"
+
+        /** Saved-state keys for a notification route that has not been opened yet. */
+        private const val KEY_ALERT_ROUTE = "anisequel.notifications.pending_route"
+        private const val KEY_ALERT_IDS = "anisequel.notifications.pending_ids"
     }
 
     /**
@@ -178,6 +182,21 @@ class MainActivity : ComponentActivity() {
     private var openNotificationsRequest by mutableStateOf(false)
 
     /**
+     * A real event alert's in-app destination, when Android started us by one.
+     *
+     * Held as the raw route string plus the group's ids, not as an
+     * `InboxNotification`: the tap may create a new process, and the only thing
+     * that survives that is what the `PendingIntent` wrote into the extras. The
+     * navigation graph validates the route before using it - `MainActivity` is
+     * exported, so this extra is not trusted input.
+     *
+     * Cleared by [com.anisequel.ui.navigation.AppNavigation] after it has
+     * navigated, so a rotation does not replay the jump.
+     */
+    private var pendingNotificationRoute by mutableStateOf<String?>(null)
+    private var pendingNotificationIds by mutableStateOf<IntArray?>(null)
+
+    /**
      * Held so [onResume] can reach the updater.
      *
      * The controller is process-wide and created inside the composition, so it
@@ -268,6 +287,17 @@ class MainActivity : ComponentActivity() {
             intent?.getBooleanExtra(SystemNotifications.EXTRA_OPEN_NOTIFICATIONS, false) == true
         ) {
             openNotificationsRequest = true
+        }
+        // Same fresh-launch guard as the widget: the route stays on the intent
+        // for the life of the Activity, and a rotation must not navigate again.
+        // A restored state means the tap was already read before the Activity
+        // was recreated, so the pending route comes from the bundle instead -
+        // that is what makes the destination survive process death.
+        if (savedInstanceState == null) {
+            readNotificationAlertIntent(intent)
+        } else {
+            pendingNotificationRoute = savedInstanceState.getString(KEY_ALERT_ROUTE)
+            pendingNotificationIds = savedInstanceState.getIntArray(KEY_ALERT_IDS)
         }
 
         setContent {
@@ -502,7 +532,13 @@ class MainActivity : ComponentActivity() {
                                         openProfileActivityOnLaunch = openProfileActivityRequest,
                                         onProfileActivityOpened = { openProfileActivityRequest = false },
                                         openNotificationsOnLaunch = openNotificationsRequest,
-                                        onNotificationsOpened = { openNotificationsRequest = false }
+                                        onNotificationsOpened = { openNotificationsRequest = false },
+                                        openRouteOnLaunch = pendingNotificationRoute,
+                                        notificationIdsToMarkRead = pendingNotificationIds,
+                                        onRouteOpened = {
+                                            pendingNotificationRoute = null
+                                            pendingNotificationIds = null
+                                        }
                                     )
 
                                     // A dialog is its own window, so it would draw *over*
@@ -680,6 +716,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // The route is cleared once AppNavigation has navigated, so this can
+        // only save a request that is still pending.
+        pendingNotificationRoute?.let { outState.putString(KEY_ALERT_ROUTE, it) }
+        pendingNotificationIds?.let { outState.putIntArray(KEY_ALERT_IDS, it) }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -694,6 +738,17 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(SystemNotifications.EXTRA_OPEN_NOTIFICATIONS, false)) {
             openNotificationsRequest = true
         }
+        // A second alert tap while the app is already open. `singleTask` means
+        // this is the only path it can take - it never reaches `onCreate`.
+        readNotificationAlertIntent(intent)
+    }
+
+    private fun readNotificationAlertIntent(intent: Intent?) {
+        val route = intent?.getStringExtra(SystemNotifications.EXTRA_OPEN_ROUTE)
+            ?.takeIf { it.isNotBlank() }
+            ?: return
+        pendingNotificationRoute = route
+        pendingNotificationIds = intent?.getIntArrayExtra(SystemNotifications.EXTRA_NOTIFICATION_IDS)
     }
 
     private fun handleDeepLinkIntent(intent: Intent?) {

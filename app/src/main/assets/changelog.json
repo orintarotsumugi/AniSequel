@@ -1,6 +1,31 @@
 {
   "versions": [
     {
+      "version": "2.6.7",
+      "entries": [
+        {
+          "title": "Background alerts are real now",
+          "detail": "An optional WorkManager check asks AniList for new events on a schedule - 30 minutes by default, 15 at the fastest - and posts Android notifications that name the person or title involved. AniList has no push stream, so this is periodic checking, not instant delivery; the app says that instead of promising otherwise."
+        },
+        {
+          "title": "Alerts open the row they are about",
+          "detail": "A title alert opens the title sheet, an activity opens its comment thread, a thread alert opens the thread at the comment, a follow opens the profile, and a message opens the Messages tab. The destination survives the app being closed, and a tap marks the folded group read only when your mark-read preference is on."
+        },
+        {
+          "title": "The notification centre is redesigned",
+          "detail": "A compact header with an animated unread pill, an Unread filter, and NEW and EARLIER sections split into Today, Yesterday, Earlier this week and Older. Media rows lead with cover art, social rows with an avatar cluster that counts everyone in a folded like group. Cards are tighter and still expandable."
+        },
+        {
+          "title": "Settings keeps the three ideas apart",
+          "detail": "Inbox preferences shape the cards, background alerts control what Android posts (master switch, eight event categories, interval and Check for new events now), and the Android permission card reports the platform state instead of pretending to toggle it. Background alerts are off until you enable them."
+        },
+        {
+          "title": "Enabling alerts cannot flood you",
+          "detail": "The first background check establishes a silent baseline. Later checks post only genuinely new ids, remember what they posted so a retry cannot duplicate an alert, and preserve pending events when a request fails or Android is blocking notifications."
+        }
+      ]
+    },
+    {
       "version": "2.6.6",
       "entries": [
         {

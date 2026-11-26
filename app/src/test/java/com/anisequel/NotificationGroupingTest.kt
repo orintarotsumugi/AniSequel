@@ -52,6 +52,17 @@ class NotificationGroupingTest {
         media = null
     )
 
+    private fun threadLike(id: Int, threadId: Int, actorId: Int = id): ThreadNotification =
+        ThreadNotification(
+            id = id,
+            kind = NotificationKind.THREAD_LIKE,
+            createdAt = id,
+            actor = NotificationActor(actorId, "user$actorId", null),
+            thread = NotificationThread(threadId, "thread"),
+            comment = null,
+            context = null
+        )
+
     private fun commentLike(id: Int, threadId: Int, commentId: Int?): ThreadNotification =
         ThreadNotification(
             id = id,
@@ -88,6 +99,23 @@ class NotificationGroupingTest {
         val groups = groupNotifications(listOf(like(30, null), like(29, null))) { false }
 
         assertEquals(2, groups.size)
+    }
+
+    @Test
+    fun `likes on the same thread fold into one row`() {
+        val groups = groupNotifications(listOf(threadLike(30, 2), threadLike(29, 2))) { false }
+
+        assertEquals(1, groups.size)
+        assertEquals("thread_like:2", groups.single().key)
+        assertEquals(listOf(30, 29), groups.single().ids)
+    }
+
+    @Test
+    fun `likes on different threads never fold together`() {
+        val groups = groupNotifications(listOf(threadLike(30, 2), threadLike(29, 3))) { false }
+
+        assertEquals(2, groups.size)
+        assertTrue(groups.all { it.members.size == 1 })
     }
 
     @Test

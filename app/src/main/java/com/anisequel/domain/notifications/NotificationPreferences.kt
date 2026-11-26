@@ -46,6 +46,9 @@ data class NotificationPreferences(
 
     fun isFilterEnabled(filter: NotificationFilter): Boolean = when (filter) {
         NotificationFilter.ALL -> true
+        // Without local tracking every row is read, so the chip would always
+        // open an empty inbox. Hiding it is the honest state, not a bug.
+        NotificationFilter.UNREAD -> trackingEnabled
         NotificationFilter.AIRING -> airing
         NotificationFilter.ACTIVITY -> likes || replies || mentions || follows
         NotificationFilter.MESSAGES -> messages
@@ -57,9 +60,24 @@ data class NotificationPreferences(
         NotificationFilter.SUBMISSIONS -> submissions
     }
 
-    /** The chips worth drawing, in the order they are drawn. */
-    fun visibleFilters(): List<NotificationFilter> =
-        NotificationFilter.entries.filter(::isFilterEnabled)
+    /**
+     * The chips worth drawing, in the order they are drawn.
+     *
+     * `UNREAD` is manually placed after `ALL` because `entries` order is the
+     * declaration order and the enum declares it second already; the explicit
+     * list keeps that true even if a future kind is inserted in the middle.
+     */
+    fun visibleFilters(): List<NotificationFilter> = buildList {
+        add(NotificationFilter.ALL)
+        if (trackingEnabled) add(NotificationFilter.UNREAD)
+        addAll(
+            NotificationFilter.entries.filter {
+                it != NotificationFilter.ALL &&
+                    it != NotificationFilter.UNREAD &&
+                    isFilterEnabled(it)
+            }
+        )
+    }
 
     /** True when no category at all is on, so the inbox should say so. */
     val allCategoriesOff: Boolean

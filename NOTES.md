@@ -1534,10 +1534,13 @@ appended only once it arrives.
 - **No offline-first database.** Every scan is a fresh read. Caching AniList
   lists well is a larger project than this one, and a stale list here produces
   confidently wrong answers, which is worse than no answer.
-- **No background or push notifications.** The in-app notification centre is
-  fetched when it is opened or pulled; there is no poller, WorkManager job,
-  Firebase path, channel or new permission. A background poller would be a
-  battery and privacy cost for a feature a sideloaded app does not need.
+- **No push notifications and no push backend.** There is no Firebase path, no
+  server and no instant delivery, because AniList gives this app no event stream.
+  The in-app notification centre is still fetched when it is opened or pulled.
+  A separate, **opt-in** WorkManager job can poll for new events and post real
+  Android alerts; it is off by default, interval-configurable, constrained to a
+  connected network and cancelled on sign-out. It is described honestly as
+  periodic checking. See [2.6.7](#267-real-android-alerts-from-a-periodic-check).
 
 ---
 
@@ -1586,12 +1589,14 @@ deliberate consequences:
 - **A setting changed in Settings takes effect immediately.** Both the repository
   and the watch read the interval per lookup rather than capturing it, so
   picking "15 min" does not need a restart.
-- **The timer is foreground-only, and there is no WorkManager job.** WorkManager
-  cannot run periodic work more often than every 15 minutes, is deliberately
-  inexact under doze, and would spend AniList's request budget refreshing a list
-  nobody is looking at. `onForegrounded` is additionally skipped while the
-  dashboard is not on screen, so an app resumed onto the Library does not start a
-  timer for a page nobody is reading.
+- **The list-refresh timer is foreground-only.** WorkManager cannot run periodic
+  work more often than every 15 minutes, is deliberately inexact under doze, and
+  would spend AniList's request budget refreshing a list nobody is looking at.
+  The app's single WorkManager job is the opt-in notification check (2.6.7),
+  which is a different question and does not refresh the list.
+  `onForegrounded` is additionally skipped while the dashboard is not on screen,
+  so an app resumed onto the Library does not start a timer for a page nobody is
+  reading.
 
 `Always` and `Manual` schedule no timer at all — `Always` has a zero window, so a
 loop would re-fetch continuously rather than on resume, and `Manual` must not
@@ -4140,9 +4145,10 @@ no reply id in its payload, so folding those by parent would merge different
 replies. Thread taps use the API's canonical `siteUrl`; the old guessed
 `#comment-<id>` anchor did not match the site's own.
 
-Nothing here polls. The page loads on entry and on an explicit pull, Settings
-only edits local switches, and no new permission, channel, worker or service was
-added. The app's existing `GET_RECEIVED_MESSAGES` path is unchanged.
+Nothing here polls. The page loads on entry and on an explicit pull, and Settings
+only edits local switches. (2.6.7 later adds an opt-in background check, which is
+a separate job and does not change how this page loads.) The app's existing
+`GET_RECEIVED_MESSAGES` path is unchanged.
 
 ## 2.6.6: notification targets open inside the app, and a permission you can find
 
@@ -4160,7 +4166,8 @@ which rejects the true last page of a very old thread. The API's `siteUrl` is th
 only part of the row now ignored, because the app no longer needs the site to show
 the target.
 
-Android notifications are still optional and still do not imply a worker. The
+Android notifications are still optional and (as of 2.6.6) still did not imply a
+worker; 2.6.7 adds one behind an opt-in switch. The
 manifest declares `POST_NOTIFICATIONS`, but the runtime dialog is requested only
 from Settings > Notifications, never at launch. That section reports the runtime
 permission, the app switch and this app's channel separately, sends one deliberate
@@ -4211,3 +4218,116 @@ once, so a new callback cannot be wired into one style and forgotten in the
 other. The sheet's cover-palette effect, live-refresh loop and entry-overlay
 motion moved into `SequelDetailEffects.kt` for the same reason - they are effects
 with their own failure history, not branches of the page.
+
+## 2.6.7: real Android alerts from a periodic check
+
+The notification centre had no way to reach a reader who was not looking at it.
+`SystemNotifications` could create a channel, ask for the permission and post one
+deliberate test, and the six-step pipeline people mean by "notifications" -
+authenticate, fetch, map, detect what is new, apply preferences, post and open a
+destination - stopped after "map". A successful test post proved the permission
+and nothing about delivery, which is why the old copy had to say so.
+
+### Polling, not push
+
+AniList exposes no event stream to this app. There is no honest way to promise
+instant delivery, so the feature is a periodic WorkManager request:
+`NotificationCheckWorker`, scheduled by `NotificationAlertsScheduler` under one
+unique name, constrained to `NetworkType.CONNECTED`, and defaulting to 30 minutes
+with 15 as the floor WorkManager itself enforces. Enabling the master switch also
+enqueues a one-shot check: its first run establishes a baseline and posts nothing,
+so the reader does not get a year of history when they opt in. The periodic request
+uses `ExistingPeriodicWorkPolicy.UPDATE`, so changing the interval rewrites the
+same work instead of stacking a second request, and WorkManager's own persistence
+is what survives a reboot - there is no `BOOT_COMPLETED` receiver and therefore no
+second source of truth about whether the feature is on.
+
+Signing out, switching account and turning the switch off all call
+`NotificationAlertsScheduler.cancel`. Cancelling scheduled work is not deleting
+data: the per-account cursor stays, so turning alerts back on resumes from the
+last delivered id. An account switch also clears the tray, because `MainActivity`
+is `singleTask` and a notification posted for the previous account would otherwise
+still be tappable after the new one signed in.
+
+### The delivery cursor is not the read mark
+
+`NotificationReadState` answers "what has the reader seen in this app?" It is
+seeded once from `Viewer.unreadNotificationCount` and never sent back. Delivery
+answers a different question: "what has Android actually posted for this account?"
+Conflating them would either silence an alert because the card was opened on
+another device, or mark a card read because a background check ran while the
+reader was asleep. `NotificationAlertStore` therefore keeps a second DataStore,
+keyed by account, with `baselineEstablished`, a high-id `deliveredThroughId` and a
+bounded set of ids above it.
+
+The two-part cursor exists because one check is allowed to stop before it reaches
+the previous watermark. AniList notification ids rise with creation time, so the
+watermark is compact and correct while the walk is contiguous. When more events
+arrive than three pages hold (the cap is deliberate: a periodic wake-up must not
+become a full history walk), the check posts what it can see and records those ids
+in the set, but does **not** move the watermark. Advancing it would silently drop
+everything between the newest page and the old cursor; moving nothing and
+re-posting next time would duplicate alerts. The set makes the next pass skip
+rows it already posted, and `resumePage` is where that pass continues: page one
+is fetched first for new arrivals, then the walk jumps to the page the previous
+run stopped on. AniList pages by offset, so new rows push older rows toward
+higher page numbers - a resume can overlap work already done, never skip it, and
+the set removes the overlap. The watermark jumps to the newest id and both the
+set and the resume page reset once a fetch finally reaches the old cursor.
+
+A category switched off still advances the cursor. "Processed" and "posted" are
+different facts, and turning likes back on must not unload every like the reader
+missed while the switch was off. The other side of the same rule: a failed fetch
+returns before any state is saved, so the cursor is preserved and the next run
+sees the same events; a blocked Android permission likewise leaves the cursor
+alone, because those events were never delivered. Posts are made before the new
+cursor is saved, and the tray id is derived from the group key with
+`setOnlyAlertOnce(true)`, so a retry after process death replaces the same
+notification instead of adding a second one or sounding twice.
+
+### Copy, grouping and taps
+
+`planNotificationAlerts` is pure Kotlin and folds candidates with the existing
+`NotificationGrouping` rules before building drafts. Five likes on one activity
+become one alert that names the first actor and the rest; replies, mentions,
+messages, follows, airing rows and media changes stay individual, because each is
+something a person wrote or a distinct event. Message and comment bodies are
+previewed and collapsed to one line, never logged; unknown GraphQL union members
+produce no alert at all rather than a generic "you have a notification".
+
+Each draft carries an in-app route built by `NotificationDestinations` and the
+group's notification ids. The `PendingIntent` starts `MainActivity` with those two
+extras; `AppNavigation` waits for an authenticated viewer (the same fence the
+widget tap uses), validates the route against the allow-list, navigates, and marks
+the group read only when `markReadOnOpen` is on. Because the payload is a route
+string and a list of ids, it survives the process being killed between the post
+and the tap - there is no Parcelable class to fail loading.
+
+### The inbox and Settings
+
+The centre now draws NEW and EARLIER, each split into date headings (Today,
+Yesterday, Earlier this week / Today, This week, Older) by
+`buildNotificationSections`, which takes the clock and zone as arguments so the
+boundaries are testable. Headings with no rows are never emitted, and the counts
+are member counts, so a folded row and the unread pill agree. `UNREAD` joins the
+filter chips and is hidden when local tracking is off, because with tracking off
+every row is read and the chip would always open an empty page.
+
+Settings keeps its three concepts apart: inbox preferences (local, card-shaped),
+background alerts (master switch, eight event categories, interval, manual
+"check now") and Android permission/channel state (a status plus buttons, never a
+switch that flips back). The manual action enqueues the same worker as the
+periodic check, so it exercises detection and delivery rather than posting the
+test message again. The test post remains, labelled as a diagnostic.
+
+### What the tests can and cannot prove
+
+`NotificationAlertPlanTest`, `NotificationCheckRunnerTest`,
+`NotificationSectionsTest`, `NotificationDestinationsTest` and
+`NotificationAlertPreferencesTest` use fake page sources, cursor stores and sinks.
+They pin the failures that are arithmetic rather than Android: no first-run flood,
+no duplicate on retry, no cursor jump over an unreached page, no post from a
+disabled category, cursor preservation on a failed request, and route encoding for
+names containing route characters. The WorkManager schedule, the tray, the
+permission dialog and a real AniList account still need a device; CI compiles and
+runs the JVM suite, and the PR says which of those were not executed locally.

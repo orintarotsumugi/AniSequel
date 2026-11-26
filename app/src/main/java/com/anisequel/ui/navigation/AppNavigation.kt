@@ -40,6 +40,7 @@ import com.anisequel.ui.components.detail.RepositoryEntryEditor
 import com.anisequel.ui.components.novamarkdown.ProvideNovaCovers
 import com.anisequel.data.network.NetworkClient
 import com.anisequel.data.repository.AniListRepositoryImpl
+import com.anisequel.data.notifications.NotificationAlertStore
 import com.anisequel.data.repository.NotificationPreferencesStore
 import com.anisequel.data.repository.NotificationReadStore
 import com.anisequel.data.repository.AniListSnapshots
@@ -208,7 +209,12 @@ private fun LaunchRequestEffects(
     openProfileActivityOnLaunch: Boolean,
     onProfileActivityOpened: () -> Unit,
     openNotificationsOnLaunch: Boolean,
-    onNotificationsOpened: () -> Unit
+    onNotificationsOpened: () -> Unit,
+    openRouteOnLaunch: String?,
+    notificationIdsToMarkRead: IntArray?,
+    notificationReadStore: NotificationReadStore,
+    notificationPreferencesStore: NotificationPreferencesStore,
+    onRouteOpened: () -> Unit
 ) {
     LaunchedEffect(openProfileActivityOnLaunch, authState, viewerId) {
         if (openProfileActivityOnLaunch &&
@@ -227,6 +233,25 @@ private fun LaunchRequestEffects(
         ) {
             navController.navigateSingle(AppRoutes.NOTIFICATIONS)
             onNotificationsOpened()
+        }
+    }
+
+    // A real event alert carries its own destination. It waits for the same two
+    // facts as the requests above; the route was validated when it was built and
+    // is re-checked in `deliverNotificationRouteOnce` before it reaches the
+    // NavController.
+    LaunchedEffect(openRouteOnLaunch, authState, viewerId) {
+        val route = openRouteOnLaunch ?: return@LaunchedEffect
+        if (authState is AuthUiState.Authenticated && viewerId != null) {
+            deliverNotificationRouteOnce(
+                navController = navController,
+                route = route,
+                notificationIds = notificationIdsToMarkRead,
+                viewerId = viewerId,
+                readStore = notificationReadStore,
+                preferencesStore = notificationPreferencesStore
+            )
+            onRouteOpened()
         }
     }
 }
@@ -257,6 +282,19 @@ fun AppNavigation(
     openNotificationsOnLaunch: Boolean = false,
     /** Called once the inbox request has been navigated to, so it is not replayed. */
     onNotificationsOpened: () -> Unit = {},
+    /**
+     * A real event alert's in-app route, when the Activity was started by one.
+     *
+     * A string rather than an `InboxNotification`: the tap can arrive in a new
+     * process, and the payload has to be readable without the object that posted
+     * it. `MainActivity` passes the extra through verbatim; validation happens
+     * before navigation.
+     */
+    openRouteOnLaunch: String? = null,
+    /** Every notification id in the tapped group, so the tap can mark them read. */
+    notificationIdsToMarkRead: IntArray? = null,
+    /** Called once the route has been handled, so a rotation does not replay it. */
+    onRouteOpened: () -> Unit = {},
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
@@ -494,6 +532,14 @@ fun AppNavigation(
     }
     val notificationReadStore = remember(context) {
         NotificationReadStore(context.applicationContext)
+    }
+
+    // Background alert switches and the per-account delivery cursor. One reader
+    // for the Settings page, the scheduling effect below and the worker's store;
+    // two instances would mean two copies of the same cursor reasoning about the
+    // same DataStore file.
+    val notificationAlertStore = remember(context) {
+        NotificationAlertStore(context.applicationContext)
     }
 
     // Application-scoped for the same reason: the notes are a property of the
@@ -748,7 +794,22 @@ fun AppNavigation(
         openProfileActivityOnLaunch = openProfileActivityOnLaunch,
         onProfileActivityOpened = onProfileActivityOpened,
         openNotificationsOnLaunch = openNotificationsOnLaunch,
-        onNotificationsOpened = onNotificationsOpened
+        onNotificationsOpened = onNotificationsOpened,
+        openRouteOnLaunch = openRouteOnLaunch,
+        notificationIdsToMarkRead = notificationIdsToMarkRead,
+        notificationReadStore = notificationReadStore,
+        notificationPreferencesStore = notificationPreferencesStore,
+        onRouteOpened = onRouteOpened
+    )
+
+    // Schedules, updates or cancels the periodic check. Kept here rather than in
+    // the Settings page so signing out - which can happen from Settings or from
+    // the dashboard - always stops the worker and clears the tray.
+    NotificationAlertSchedulingEffect(
+        context = context.applicationContext,
+        store = notificationAlertStore,
+        authState = authState,
+        viewerId = signedInViewer?.id
     )
 
     // Keeps the home-screen widgets in step with the live dashboard counts.
@@ -989,7 +1050,8 @@ fun AppNavigation(
                         cardPreview = cardPreview,
                         signedInViewer = signedInViewer,
                         notificationPreferencesStore = notificationPreferencesStore,
-                        notificationReadStore = notificationReadStore
+                        notificationReadStore = notificationReadStore,
+                        notificationAlertStore = notificationAlertStore
                     )
 
                     notificationDestinations(

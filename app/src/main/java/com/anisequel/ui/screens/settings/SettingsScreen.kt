@@ -312,6 +312,13 @@ fun SettingsScreen(
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
     /**
+     * Background alerts: the master switch, the per-category switches, the check
+     * interval and the per-account delivery cursor. Separate from
+     * [notificationPreferencesStore] because these control whether Android
+     * posts, not whether the inbox draws a row.
+     */
+    notificationAlertStore: com.anisequel.data.notifications.NotificationAlertStore,
+    /**
      * Opens directly on the Notifications page.
      *
      * A boolean rather than a page enum because [SettingsPage] is internal and this
@@ -507,6 +514,7 @@ fun SettingsScreen(
                                     interfacePreferences = interfacePreferences,
                                     notificationPreferencesStore = notificationPreferencesStore,
                                     notificationReadStore = notificationReadStore,
+                                    notificationAlertStore = notificationAlertStore,
                                     viewer = viewer,
                                     onOpenNotifications = onOpenNotifications,
                                     onNavigateToLogin = onNavigateToLogin,
@@ -890,6 +898,7 @@ private fun SettingsPageContent(
     interfacePreferences: InterfacePreferences,
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
+    notificationAlertStore: com.anisequel.data.notifications.NotificationAlertStore,
     viewer: ViewerProfile?,
     onOpenNotifications: () -> Unit,
     onNavigateToLogin: () -> Unit,
@@ -979,6 +988,7 @@ private fun SettingsPageContent(
         SettingsPage.NOTIFICATIONS -> NotificationSettingsPage(
             preferencesStore = notificationPreferencesStore,
             readStore = notificationReadStore,
+            alertStore = notificationAlertStore,
             viewer = viewer,
             onOpenInbox = onOpenNotifications
         )

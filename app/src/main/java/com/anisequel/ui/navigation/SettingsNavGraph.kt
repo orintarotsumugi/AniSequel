@@ -53,6 +53,7 @@ fun NavGraphBuilder.settingsDestinations(
     interfacePreferences: InterfacePreferences,
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
+    notificationAlertStore: com.anisequel.data.notifications.NotificationAlertStore,
     aniListRepository: AniListRepository,
     /**
      * The two dashboard counts the Settings header shows.
@@ -91,6 +92,7 @@ fun NavGraphBuilder.settingsDestinations(
             interfacePreferences = interfacePreferences,
             notificationPreferencesStore = notificationPreferencesStore,
             notificationReadStore = notificationReadStore,
+            notificationAlertStore = notificationAlertStore,
             startOnNotifications = startOnNotifications,
             checkApiReachability = aniListRepository::checkApiReachability,
             viewer = signedInViewer,
