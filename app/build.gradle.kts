@@ -6,8 +6,8 @@
  * from gradle.properties here - they are asserted to match by
  * `VersionBaselineTest`, which is what keeps the two copies honest.
  */
-val BASELINE_VERSION_NAME = "2.6.6"
-val BASELINE_VERSION_CODE = 701
+val BASELINE_VERSION_NAME = "2.6.7"
+val BASELINE_VERSION_CODE = 702
 
 plugins {
   alias(libs.plugins.android.application)
@@ -272,6 +272,10 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.datastore.preferences)
+  // Background notification checks. The work is a periodic, network-constrained
+  // poll of the existing AniList notification document - there is no push
+  // service and no Firebase dependency. See `NotificationAlertsScheduler`.
+  implementation(libs.androidx.work.runtime.ktx)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

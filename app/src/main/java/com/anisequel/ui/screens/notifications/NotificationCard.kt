@@ -225,7 +225,7 @@ private fun MediaNotificationBody(
         else -> null
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(14.dp),
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.Top
     ) {
         MediaPoster(media?.coverUrl, media?.type)
@@ -287,7 +287,7 @@ private fun SocialNotificationBody(
     onToggleExpanded: () -> Unit,
     onContextOverflow: (Boolean) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActorCluster(group.actors, group.isUnread)
             Spacer(Modifier.width(12.dp))
@@ -368,7 +368,10 @@ private fun ExpandableText(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            // Two lines for a social preview keeps a folded "three people liked"
+            // row to roughly the height of a media row; the full text is one tap
+            // away. Media context gets three because it is usually the only body.
+            maxLines = if (expanded) Int.MAX_VALUE else if (preview) 2 else 3,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { layout ->
                 if (!expanded) {
@@ -468,9 +471,9 @@ private fun MediaPoster(coverUrl: String?, type: String?) {
     var failed by remember(coverUrl) { mutableStateOf(false) }
     Box(
         modifier = Modifier
-            .width(66.dp)
-            .height(94.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .width(62.dp)
+            .height(88.dp)
+            .clip(RoundedCornerShape(13.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHighest),
         contentAlignment = Alignment.Center
     ) {
@@ -497,23 +500,31 @@ private fun MediaPoster(coverUrl: String?, type: String?) {
     }
 }
 
-/** Two or three faces, overlapped; one face gets a plain circle. */
+/**
+ * Two or three faces, overlapped, plus a count bubble when there are more.
+ *
+ * The count is the thing a folded like row is about, and three faces alone read
+ * as "exactly three people" even when there are nine. The bubble is drawn in the
+ * same overlap rhythm so it looks like the next face, not a badge stuck on top.
+ */
 @Composable
 private fun ActorCluster(actors: List<NotificationActor>, unread: Boolean) {
-    val shown = actors.take(3)
+    val shown = actors.take(MAX_CLUSTER_FACES)
     if (shown.size <= 1) {
         val actor = shown.firstOrNull()
         ActorAvatar(
             url = actor?.avatarUrl,
             name = actor?.name,
-            size = 46.dp,
+            size = 44.dp,
             ring = unread
         )
         return
     }
-    val size = 42.dp
-    val overlap = 13.dp
-    Box(modifier = Modifier.width(size + overlap * (shown.size - 1)).height(size)) {
+    val extra = (actors.size - shown.size).coerceAtLeast(0)
+    val size = 40.dp
+    val overlap = 12.dp
+    val slots = shown.size + if (extra > 0) 1 else 0
+    Box(modifier = Modifier.width(size + overlap * (slots - 1)).height(size)) {
         shown.forEachIndexed { index, actor ->
             ActorAvatar(
                 url = actor.avatarUrl,
@@ -523,8 +534,28 @@ private fun ActorCluster(actors: List<NotificationActor>, unread: Boolean) {
                 modifier = Modifier.offset(x = overlap * index)
             )
         }
+        if (extra > 0) {
+            Box(
+                modifier = Modifier
+                    .offset(x = overlap * shown.size)
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+$extra",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
     }
 }
+
+/** Three faces is the point where the cluster stops fitting beside a headline. */
+private const val MAX_CLUSTER_FACES = 3
 
 @Composable
 internal fun ActorAvatar(

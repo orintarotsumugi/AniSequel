@@ -30,7 +30,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -157,6 +160,15 @@ fun ProfileActivityTab(
      * did not know the id simply gets a control the ViewModel refuses.
      */
     viewerId: Int? = null,
+    /**
+     * An activity the route asked this feed to open on.
+     *
+     * A notification used to push a standalone comments sheet, with no activity
+     * list behind it. This is the same request brought back to the real profile
+     * feed: when the post is among the loaded rows the list scrolls to it, and
+     * only when the feed cannot reach it does the caller fall back to the thread.
+     */
+    focusActivityId: Int? = null,
     nowEpochSecond: Long = rememberNowEpochSecond()
 ) {
     // Fetched on first composition, so opening the tab is what costs the request -
@@ -193,6 +205,15 @@ fun ProfileActivityTab(
     // A failed refresh over existing rows is kept apart from the feed's paging
     // error: the retry below re-reads page one, where the footer's retry appends.
     val refreshError = (source.state as? UserActivityViewModel.ActivityState.Success)?.refreshError
+
+    FocusActivityEffect(
+        focusActivityId = focusActivityId,
+        state = source.state,
+        calendar = source.calendar,
+        listState = listState,
+        onLoadNextPage = source.onLoadNextPage,
+        onOpenComments = source.onOpenComments
+    )
 
     LazyColumn(
         modifier = modifier
@@ -287,6 +308,108 @@ fun ProfileActivityTab(
     // sheets on this screen had opposite lifetimes for no reason either could state.
     //
     // `UserProfileScreen` draws both, as siblings of the tab content.
+}
+
+/** What one pass of [FocusActivityEffect] should do next. */
+private sealed interface FocusStep {
+    data class Scroll(val beforeCards: Int, val index: Int) : FocusStep
+    data class OpenThread(val activityId: Int) : FocusStep
+    data object LoadNextPage : FocusStep
+    data object Wait : FocusStep
+}
+
+/**
+ * Decides the next focus move from the feed state alone.
+ *
+ * Keeping this out of the composable gives the request one testable shape: it
+ * either has the row, has one page left to ask for, or can only open the thread.
+ * A failed feed opens the thread because the reader tapped a notification, not
+ * because they wanted the top of a list that failed to load.
+ */
+private fun focusStep(
+    focusActivityId: Int?,
+    state: UserActivityViewModel.ActivityState,
+    calendar: ActivityCalendar?,
+    pagesLoaded: Int
+): FocusStep {
+    val target = focusActivityId?.takeIf { it > 0 } ?: return FocusStep.Wait
+    val success = state as? UserActivityViewModel.ActivityState.Success
+        ?: return if (state is UserActivityViewModel.ActivityState.Error) {
+            FocusStep.OpenThread(target)
+        } else {
+            FocusStep.Wait
+        }
+    // The one extra page can be in flight. Its loading state is still a Success
+    // carrying the old rows, and acting now would decide the target was absent
+    // just before the page that contains it lands.
+    if (success.isLoadingMore || success.activities.isEmpty()) {
+        return if (success.isLoadingMore) FocusStep.Wait else FocusStep.OpenThread(target)
+    }
+    val index = success.activities.indexOfFirst { it.id == target }
+    if (index < 0) {
+        // One page is usually enough for a notification, but a day of likes can
+        // push the target just past the first twenty-five. Ask once for the next
+        // page; a later pass either finds the row or takes the thread fallback.
+        return if (success.hasMore && pagesLoaded == 0) {
+            FocusStep.LoadNextPage
+        } else {
+            FocusStep.OpenThread(target)
+        }
+    }
+    // The calendar and the feed heading precede the first card; a failed refresh
+    // adds one more row between the heading and the cards.
+    val calendarRows = if (calendar != null && calendar.columns.isNotEmpty()) 1 else 0
+    val refreshRows = if (success.refreshError != null) 1 else 0
+    return FocusStep.Scroll(beforeCards = calendarRows + 1 + refreshRows, index = index)
+}
+
+/**
+ * Scrolls the profile feed to the activity a notification names.
+ *
+ * A notification carries one id, while the feed is a page of twenty-five. The
+ * first page is usually enough; when the target sits just past it, ask once for
+ * the next. If it is still absent - an old post, a failed page, an empty feed -
+ * hand the id back to the comment thread rather than dropping the reader at the
+ * top of a list that does not contain what they tapped.
+ *
+ * Kept out of [ProfileActivityTab] so that the screen's own paging and header
+ * work is not competing with this request for one extra branch in every review.
+ */
+@Composable
+private fun FocusActivityEffect(
+    focusActivityId: Int?,
+    state: UserActivityViewModel.ActivityState,
+    calendar: ActivityCalendar?,
+    listState: LazyListState,
+    onLoadNextPage: () -> Unit,
+    onOpenComments: (Int, Int) -> Unit
+) {
+    // One-shot per requested id: a later like or refresh must not yank the list
+    // back to the post the notification opened.
+    val focusedActivity = rememberSaveable(focusActivityId) { mutableStateOf(false) }
+    val focusPagesLoaded = rememberSaveable(focusActivityId) { mutableIntStateOf(0) }
+    LaunchedEffect(focusActivityId, state) {
+        if (focusActivityId == null || focusActivityId <= 0) return@LaunchedEffect
+        if (focusedActivity.value) return@LaunchedEffect
+        when (val step = focusStep(focusActivityId, state, calendar, focusPagesLoaded.intValue)) {
+            is FocusStep.Scroll -> {
+                listState.animateScrollToItem(step.beforeCards + step.index)
+                focusedActivity.value = true
+            }
+
+            is FocusStep.OpenThread -> {
+                onOpenComments(step.activityId, 0)
+                focusedActivity.value = true
+            }
+
+            FocusStep.LoadNextPage -> {
+                focusPagesLoaded.intValue += 1
+                onLoadNextPage()
+            }
+
+            FocusStep.Wait -> Unit
+        }
+    }
 }
 
 /**

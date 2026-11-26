@@ -253,6 +253,14 @@ fun UserProfileScreen(
      * taps own the choice, and a rotation restores wherever they left it.
      */
     initialSegment: Int = SEGMENT_ACTIVITY,
+    /**
+     * An activity a notification asked this profile to open on.
+     *
+     * Kept separate from [initialTab] because it is a request to find one row,
+     * not a choice of page: the profile still opens its normal Activity tab, and
+     * the feed scrolls to the post only if that post is actually among its rows.
+     */
+    initialActivityId: Int? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by overviewViewModel.uiState.collectAsStateWithLifecycle()
@@ -288,7 +296,15 @@ fun UserProfileScreen(
     // `initialTab` is deliberately *not* part of the key. The widget asks for the
     // Activity tab on one profile, and keying on it would make that request
     // outrank the tab the reader last chose here.
-    var selectedTab by rememberSaveable(viewModelKey) { mutableIntStateOf(initialTab) }
+    //
+    // A notification is different: it names one activity, so it must land on the
+    // Activity tab even when this profile's saved tab is Overview. The boolean is
+    // part of the key rather than `initialTab`, so the notification gets its own
+    // saved slot while a later visit to the same profile still remembers the tab
+    // chosen there.
+    var selectedTab by rememberSaveable(viewModelKey, initialActivityId != null) {
+        mutableIntStateOf(initialTab)
+    }
     // The activity row that was tapped, as the row's own media node so the
     // sheet has something to draw on the first frame. The fetched detail
     // supersedes it once it lands.
@@ -575,6 +591,7 @@ fun UserProfileScreen(
                                 profileKey = viewModelKey,
                                 onSelectTab = { selectedTab = it },
                                 initialSegment = initialSegment,
+                                initialActivityId = initialActivityId,
                                 overviewViewModel = overviewViewModel,
                                 isOwnProfile = isOwnProfile,
                                 activityViewModel = activityViewModel,

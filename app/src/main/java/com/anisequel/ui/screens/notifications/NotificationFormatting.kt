@@ -77,7 +77,7 @@ internal fun NotificationGroup.headline(): String {
         is ThreadNotification -> when (newest.kind) {
             NotificationKind.THREAD_LIKE -> "$subject liked your thread"
             NotificationKind.THREAD_COMMENT_LIKE -> "$subject liked your comment"
-            NotificationKind.THREAD_COMMENT_REPLY -> "$subject replied to your thread"
+            NotificationKind.THREAD_COMMENT_REPLY -> "$subject replied to your comment"
             NotificationKind.THREAD_COMMENT_SUBSCRIBED -> "$subject replied to a thread you follow"
             NotificationKind.THREAD_COMMENT_MENTION -> "$subject mentioned you in a thread"
             else -> "$subject replied in a thread"

@@ -13,17 +13,24 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import com.anisequel.MainActivity
+import com.anisequel.R
 
 /**
  * The platform side of notifications: the runtime permission, the channel and
  * the one deliberate test post.
  *
- * The inbox itself does not post anything. It has no background worker and no
- * push service, and this object does not add one: Android notifications exist
- * here so the reader can allow or refuse the permission knowingly, and so a
- * channel exists for a future notifier to use without inventing a second
- * notification vocabulary. The test post is the honest way to prove the
- * permission and channel work on this phone.
+ * The event notifications themselves are posted by [NotificationAlerts] from
+ * [NotificationCheckWorker]. This object owns the vocabulary they share - the
+ * channel id, the two intent extras a tap carries, and the permission state -
+ * so the worker, the inbox and Settings cannot disagree about whether Android
+ * would actually show anything.
+ *
+ * There is exactly **one** channel. An earlier build created
+ * `anisequel_inbox` for the test post; adding a second channel for real events
+ * would have left that one orphaned in the system settings page, silencing a
+ * switch that no longer controlled anything. The existing channel is reused and
+ * its name/description are updated on the next launch, which Android allows for
+ * everything except importance.
  *
  * API 33 introduced [Manifest.permission.POST_NOTIFICATIONS]; API 31 and 32
  * only need the app-wide switch. Both states are reported separately from
@@ -32,13 +39,43 @@ import com.anisequel.MainActivity
  */
 internal object SystemNotifications {
     const val CHANNEL_ID = "anisequel_inbox"
+
+    /** Legacy test-post tap: open the inbox. */
     const val EXTRA_OPEN_NOTIFICATIONS = "anisequel.notifications.open"
 
-    private const val CHANNEL_NAME = "AniSequel inbox"
+    /**
+     * The in-app route a real event alert should open.
+     *
+     * A string rather than a typed payload because a `PendingIntent` can outlive
+     * the process that created it: whatever is in the extras is all the next
+     * process will have, and a route string is the one form that survives that
+     * without a Parcelable class loading problem.
+     */
+    const val EXTRA_OPEN_ROUTE = "anisequel.notifications.route"
+
+    /** Every notification id in the tapped group, so a tap can mark them read. */
+    const val EXTRA_NOTIFICATION_IDS = "anisequel.notifications.ids"
+
+    private const val CHANNEL_NAME = "AniSequel alerts"
     private const val CHANNEL_DESCRIPTION =
-        "Optional alerts from AniSequel. The inbox still refreshes only when you open it or pull down."
+        "AniList activity and title alerts, plus the inbox test post. Background checks " +
+            "are periodic; AniList has no instant push stream."
     private const val TEST_NOTIFICATION_ID = 2101
     private const val TEST_REQUEST_CODE = 2102
+
+    /** Why Android would or would not show a post, in the four states a fix differs for. */
+    enum class ChannelStatus {
+        ALLOWED,
+
+        /** Android 13+ and the runtime dialog has never been granted. */
+        PERMISSION_MISSING,
+
+        /** The app-wide switch is off, or the app is force-restricted by the system. */
+        APP_BLOCKED,
+
+        /** The app is allowed but this channel has been silenced. */
+        CHANNEL_BLOCKED
+    }
 
     fun hasRuntimePermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -56,13 +93,20 @@ internal object SystemNotifications {
      * here so there is an answer to read; creating it again after the reader
      * changed its importance does not overwrite that choice.
      */
-    fun isEnabled(context: Context): Boolean {
-        if (!hasRuntimePermission(context)) return false
-        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
-        if (!manager.areNotificationsEnabled()) return false
+    fun isEnabled(context: Context): Boolean = channelStatus(context) == ChannelStatus.ALLOWED
+
+    fun channelStatus(context: Context): ChannelStatus {
+        if (!hasRuntimePermission(context)) return ChannelStatus.PERMISSION_MISSING
+        val manager = context.getSystemService(NotificationManager::class.java)
+            ?: return ChannelStatus.APP_BLOCKED
+        if (!manager.areNotificationsEnabled()) return ChannelStatus.APP_BLOCKED
         ensureChannel(context)
-        val channel = manager.getNotificationChannel(CHANNEL_ID) ?: return true
-        return channel.importance != NotificationManager.IMPORTANCE_NONE
+        val channel = manager.getNotificationChannel(CHANNEL_ID) ?: return ChannelStatus.ALLOWED
+        return if (channel.importance == NotificationManager.IMPORTANCE_NONE) {
+            ChannelStatus.CHANNEL_BLOCKED
+        } else {
+            ChannelStatus.ALLOWED
+        }
     }
 
     /** False once Android has granted the runtime permission, or on API 31-32. */
@@ -88,7 +132,13 @@ internal object SystemNotifications {
         manager.createNotificationChannel(channel)
     }
 
-    /** Posts one test notification, or returns false when Android would drop it. */
+    /**
+     * Posts one test notification, or returns false when Android would drop it.
+     *
+     * This stays a permission/channel diagnostic: it is the only post that is
+     * not derived from an AniList event, and Settings labels it as such. A real
+     * event alert goes through [NotificationAlerts] and the delivery cursor.
+     */
     fun postTest(context: Context): Boolean {
         if (!isEnabled(context)) return false
         ensureChannel(context)
@@ -103,14 +153,14 @@ internal object SystemNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("AniSequel notifications are on")
             .setContentText("Tap to open your inbox. This is a test, not a new activity.")
             .setStyle(
                 Notification.BigTextStyle().bigText(
-                    "Android alerts can reach you now. AniSequel still has no background " +
-                        "or push worker, so the inbox itself refreshes only when you open it " +
-                        "or pull down."
+                    "Android allows AniSequel to post on this channel. Turn on background " +
+                        "alerts in Notification settings to be woken when AniList activity " +
+                        "arrives; that check is periodic, not instant push."
                 )
             )
             .setContentIntent(openInbox)
@@ -133,6 +183,12 @@ internal object SystemNotifications {
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (launch(context, direct)) return true
+        // Some builds register the channel-level page but not the app-level one.
+        val channel = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, CHANNEL_ID)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (launch(context, channel)) return true
         val details = Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", context.packageName, null)

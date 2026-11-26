@@ -233,7 +233,15 @@ fun ProfileDestination(
      * argument has; the index it maps to belongs to `ProfileActivityPage`, which is
      * why this is that file's [SEGMENT_ACTIVITY] rather than a local guess.
      */
-    initialSegment: Int = SEGMENT_ACTIVITY
+    initialSegment: Int = SEGMENT_ACTIVITY,
+    /**
+     * The activity a notification opened this profile for, if any.
+     *
+     * Passed through to the Activity feed rather than turned into a second route:
+     * the reader asked for one post in their history, not for a new activity page
+     * that would lose the profile, its tab bar and the way back.
+     */
+    initialActivityId: Int? = null
 ) {
     // Keyed on the username as well as the id: two profiles can be opened one
     // after the other from the same stack, and without the name in the key the
@@ -393,6 +401,7 @@ fun ProfileDestination(
         onSignInAgain = onSignInAgain,
         initialTab = initialTab,
         initialSegment = initialSegment,
+        initialActivityId = initialActivityId,
         // The same key the ViewModels are built on, handed to the screen so its saved
         // tab is scoped per profile too - see `UserProfileScreen`.
         viewModelKey = viewModelKey

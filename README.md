@@ -86,7 +86,9 @@ middleman server.
   in - with an inbox you can reply from or dismiss a row out of, and what arrived
   since you last read marked as new. A local-first notification centre collects
   likes, replies, mentions, follows, airing episodes, media changes, submissions
-  and messages, with its own read mark on this device.
+  and messages, with its own read mark on this device. Optional background alerts
+  can wake the phone for new events; they are off until enabled, and they are a
+  periodic AniList check rather than instant push.
 
 ### Make it yours
 
@@ -115,9 +117,12 @@ middleman server.
 ### Deliberate non-goals
 
 No offline-first database (a stale list gives confidently wrong answers) and no
-background or push notifications. The in-app notification centre refreshes when
-it is opened or pulled, with no poller, WorkManager job, Firebase path, channel
-or new permission. More, with reasoning, in
+push backend: there is no Firebase, no server and no instant delivery, because
+AniList offers this app no event stream. The in-app notification centre still
+refreshes when it is opened or pulled. Separately, background alerts are an
+**opt-in** WorkManager job that asks AniList for new events on a schedule (30
+minutes by default, 15 at the fastest) and posts real Android notifications; it
+is cancelled on sign-out and when the switch is off. More, with reasoning, in
 [NOTES.md](NOTES.md#deliberate-non-goals).
 
 ---

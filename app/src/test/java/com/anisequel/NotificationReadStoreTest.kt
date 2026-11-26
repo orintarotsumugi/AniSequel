@@ -83,7 +83,12 @@ class NotificationReadStoreTest {
 
         val preferences = store.preferences.first()
         assertTrue(preferences.allCategoriesOff)
-        assertEquals(listOf(NotificationFilter.ALL), preferences.visibleFilters())
+        // Tracking is on in this test, so Unread remains a meaningful chip even
+        // with every category filtered out; no category chip may remain.
+        assertEquals(
+            listOf(NotificationFilter.ALL, NotificationFilter.UNREAD),
+            preferences.visibleFilters()
+        )
     }
 
     @Test

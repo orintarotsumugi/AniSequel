@@ -1,12 +1,7 @@
 package com.anisequel.ui.screens.notifications
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,23 +16,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -53,39 +51,44 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.domain.notifications.InboxNotification
 import com.anisequel.domain.notifications.NotificationFilter
 import com.anisequel.domain.notifications.NotificationGroup
+import com.anisequel.domain.notifications.NotificationSection
+import com.anisequel.domain.notifications.NotificationSectionSlice
+import com.anisequel.domain.notifications.buildNotificationSections
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.viewmodel.NotificationUiState
 import com.anisequel.ui.viewmodel.NotificationViewModel
-import kotlinx.coroutines.delay
 import java.time.Instant
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 /**
  * The notification inbox.
  *
  * The page is a pure drawing of [NotificationUiState]: filters, folding, unread
- * state and page fences all live in the view model. Tapping a row marks the whole
- * folded group read before handing the representative to the navigation layer.
+ * state and page fences all live in the view model. The one thing computed here
+ * is the section tree (NEW/EARLIER, then a date bucket), because it depends on
+ * the wall clock and on nothing that survives a rotation.
+ *
+ * Tapping a row marks the whole folded group read before handing the
+ * representative to the navigation layer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +108,9 @@ fun NotificationCenterScreen(
     // Keying on the list and the refresh flag, not its size, also refreshes
     // the clock when a pull returns the same page it already showed.
     val now = remember(state.items, state.refreshing) { Instant.now() }
+    val slices = remember(state.groups, now) {
+        buildNotificationSections(state.groups, now)
+    }
 
     BackHandler(onBack = onNavigateBack)
     LaunchedEffect(Unit) { viewModel.start() }
@@ -154,6 +160,7 @@ fun NotificationCenterScreen(
             }
             InboxContent(
                 state = state,
+                slices = slices,
                 listState = listState,
                 now = now,
                 onRefresh = viewModel::refresh,
@@ -172,6 +179,14 @@ fun NotificationCenterScreen(
     }
 }
 
+/**
+ * The header: a title, an animated unread pill, refresh and settings.
+ *
+ * A small app bar, not a Medium one. The previous header carried a second line
+ * ("Your AniList activity, in one place") that said nothing the screen did not
+ * already show, and it cost a fifth of a phone screen above the first row.
+ * Everything that must be one tap away still is.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun InboxTopBar(
@@ -183,21 +198,19 @@ private fun InboxTopBar(
     onRefresh: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    MediumTopAppBar(
+    TopAppBar(
         title = {
-            Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Notifications",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
-                Text(
-                    text = "Your AniList activity, in one place",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (trackingEnabled && unreadCount != null) {
+                    Spacer(Modifier.width(10.dp))
+                    UnreadPill(unreadCount)
+                }
             }
         },
         navigationIcon = {
@@ -213,7 +226,6 @@ private fun InboxTopBar(
             }
         },
         actions = {
-            if (trackingEnabled && unreadCount != null) UnreadPill(unreadCount)
             IconButton(
                 onClick = onRefresh,
                 enabled = !busy,
@@ -243,54 +255,6 @@ private fun InboxTopBar(
 }
 
 @Composable
-private fun UnreadPill(unreadCount: Int) {
-    val description = when {
-        unreadCount <= 0 -> "All notifications read"
-        unreadCount == 1 -> "1 unread notification"
-        else -> "$unreadCount unread notifications"
-    }
-    Surface(
-        shape = CircleShape,
-        color = if (unreadCount > 0) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        modifier = Modifier
-            .padding(end = 2.dp)
-            .clearAndSetSemantics { contentDescription = description }
-            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
-    ) {
-        AnimatedContent(
-            targetState = unreadCount,
-            transitionSpec = {
-                (fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects))
-                    .using(null)
-            },
-            label = "unread_pill_count"
-        ) { count ->
-            Text(
-                text = when {
-                    count <= 0 -> "All read"
-                    count > 99 -> "99+ new"
-                    else -> "$count new"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (count > 0) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
-            )
-        }
-    }
-}
-
-@Composable
 private fun FilterRow(
     filters: List<NotificationFilter>,
     selected: NotificationFilter,
@@ -301,7 +265,7 @@ private fun FilterRow(
         // cluster of chips at the far left of an otherwise centred page.
         val sidePadding = ((maxWidth - NotificationCardMaxWidth) / 2).coerceAtLeast(20.dp)
         LazyRow(
-            contentPadding = PaddingValues(start = sidePadding, top = 8.dp, end = sidePadding, bottom = 8.dp),
+            contentPadding = PaddingValues(start = sidePadding, top = 6.dp, end = sidePadding, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -311,7 +275,7 @@ private fun FilterRow(
                     label = filter.label,
                     selected = selected == filter,
                     onClick = { onSelect(filter) },
-                    minTouchTargetHeight = 48.dp,
+                    minTouchTargetHeight = 46.dp,
                     role = androidx.compose.ui.semantics.Role.RadioButton,
                     onClickLabel = "Show ${filter.label.lowercase(Locale.ROOT)}"
                 )
@@ -323,6 +287,7 @@ private fun FilterRow(
 @Composable
 private fun InboxContent(
     state: NotificationUiState,
+    slices: List<NotificationSectionSlice>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     now: Instant,
     onRefresh: () -> Unit,
@@ -334,8 +299,13 @@ private fun InboxContent(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val unread = remember(state.groups) { state.groups.filter { it.isUnread } }
-    val earlier = remember(state.groups) { state.groups.filterNot { it.isUnread } }
+    val newSlices = remember(slices) { slices.filter { it.section == NotificationSection.NEW } }
+    val earlierSlices = remember(slices) { slices.filter { it.section == NotificationSection.EARLIER } }
+    // Entrance stagger is keyed on the unfiltered list position, so a chip
+    // switch that keeps a row does not replay a different delay for it.
+    val entranceIndex = remember(state.groups) {
+        state.groups.withIndex().associate { (index, group) -> group.key to index }
+    }
     val latestState = rememberUpdatedState(state)
     val shouldLoadMore by remember(listState) {
         derivedStateOf {
@@ -346,11 +316,16 @@ private fun InboxContent(
             // trigger; without that it went false on failure and true again on
             // the next frame, retrying a rate-limited inbox in a loop.
             //
-            // An empty filtered view loads nothing automatically. Otherwise a
-            // chip with no match on page one walked the entire notification
-            // history while the reader watched a spinner. The empty state
-            // offers one explicit "Load older" instead.
+            // Only the unfiltered list may page itself from a viewport that is
+            // not full. A chip with one match on page one used to keep the list
+            // short, which kept this geometry trigger true, which loaded page
+            // after page until the whole history had been walked - the spinner
+            // the reader saw was the app reading everything they had filtered
+            // out. A filtered list never pages itself, no matter where it is
+            // scrolled: its footer (and the empty state's button) is the one
+            // explicit way to ask for older matches.
             count.groups.isNotEmpty() && count.hasMore &&
+                count.filter == NotificationFilter.ALL &&
                 !count.loading && !count.refreshing && !count.loadingMore &&
                 count.loadMoreError == null && last >= info.totalItemsCount - 4
         }
@@ -359,10 +334,20 @@ private fun InboxContent(
         if (shouldLoadMore) onLoadMore()
     }
     // A refresh can return fewer rows than were on screen. Keep the list from
-    // being parked below its new end when that happens.
-    LaunchedEffect(state.groups.size) {
-        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (last > state.groups.size + 3) listState.scrollToItem(0)
+    // being parked below its new end when that happens. Written as a state read
+    // rather than a `LaunchedEffect(groups.size)`: the effect could run before
+    // the new layout existed, see the old, consistent geometry and never run
+    // again. This flag turns true when the laid-out list is actually past its
+    // end, whichever frame that happens on.
+    val beyondEnd by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            info.totalItemsCount > 0 && last >= info.totalItemsCount
+        }
+    }
+    LaunchedEffect(beyondEnd) {
+        if (beyondEnd) listState.scrollToItem(0)
     }
 
     // One clock for every skeleton on the page, and only while the page is a
@@ -390,13 +375,14 @@ private fun InboxContent(
                 contentPadding = PaddingValues(
                     start = sidePadding,
                     end = sidePadding,
-                    top = 4.dp,
+                    top = 2.dp,
                     bottom = 28.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 when {
                     state.loading && state.items.isEmpty() -> {
+                        item(key = "skeleton_header") { SkeletonSectionHeader(skeletonPhase!!) }
                         items(5, key = { "skeleton_$it" }) { index ->
                             // The branch above guarantees the phase was created.
                             SkeletonCard(media = index % 3 == 0, phase = skeletonPhase!!)
@@ -416,7 +402,7 @@ private fun InboxContent(
                     state.groups.isEmpty() -> {
                         item(key = "empty") {
                             EmptyState(
-                                filtered = state.items.isNotEmpty(),
+                                filtered = state.filter != NotificationFilter.ALL,
                                 allCategoriesOff = state.preferences.allCategoriesOff,
                                 hasMore = state.hasMore,
                                 loadingMore = state.loadingMore,
@@ -429,60 +415,125 @@ private fun InboxContent(
                         }
                     }
 
-                    else -> {
-                        if (unread.isNotEmpty()) {
-                            item(key = "new_header") {
-                                SectionHeader(
-                                    title = "New",
-                                    count = unread.sumOf { it.unreadMemberCount },
-                                    onMarkAllRead = onMarkAllRead,
-                                    showMarkAll = state.preferences.trackingEnabled
-                                )
-                            }
-                            itemsIndexed(unread, key = { _, group -> group.key }) { index, group ->
-                                NotificationEntrance(
-                                    group = group,
-                                    index = index,
-                                    now = now,
-                                    onOpen = { onOpenGroup(group) },
-                                    modifier = Modifier.animateItem()
-                                )
-                            }
-                        }
-                        if (earlier.isNotEmpty()) {
-                            item(key = "earlier_header") {
-                                SectionHeader(
-                                    title = "Earlier",
-                                    count = earlier.sumOf { it.members.size },
-                                    onMarkAllRead = onMarkAllRead,
-                                    showMarkAll = state.preferences.trackingEnabled && unread.isEmpty()
-                                )
-                            }
-                            itemsIndexed(earlier, key = { _, group -> group.key }) { index, group ->
-                                NotificationEntrance(
-                                    group = group,
-                                    index = index + unread.size,
-                                    now = now,
-                                    onOpen = { onOpenGroup(group) },
-                                    modifier = Modifier.animateItem()
-                                )
-                            }
-                        }
-                        if (state.loadingMore) {
-                            item(key = "loading_more") {
-                                Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                }
-                            }
-                        }
-                        if (state.loadMoreError != null) {
-                            // A failed page does not replace the rows already read; it
-                            // gets one line under them with its own retry.
-                            item(key = "load_more_error") {
-                                LoadMoreError(state.loadMoreError, onRetry)
-                            }
-                        }
-                    }
+                    else -> inboxSections(
+                        newSlices = newSlices,
+                        earlierSlices = earlierSlices,
+                        entranceIndex = entranceIndex,
+                        trackingEnabled = state.preferences.trackingEnabled,
+                        now = now,
+                        filter = state.filter,
+                        hasMore = state.hasMore,
+                        loadingMore = state.loadingMore,
+                        loadMoreError = state.loadMoreError,
+                        onLoadMore = onLoadMore,
+                        onMarkAllRead = onMarkAllRead,
+                        onRetry = onRetry,
+                        onOpenGroup = onOpenGroup
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The sectioned rows, paging status and filtered footer of a loaded inbox.
+ *
+ * Split from [InboxContent] because the empty/error/skeleton states and the
+ * pull-to-refresh layout are one job, while the shape of the sectioned list is
+ * another. It also keeps the four-condition filtered footer out of the parent's
+ * branch count.
+ */
+private fun LazyListScope.inboxSections(
+    newSlices: List<NotificationSectionSlice>,
+    earlierSlices: List<NotificationSectionSlice>,
+    entranceIndex: Map<String, Int>,
+    trackingEnabled: Boolean,
+    now: Instant,
+    filter: NotificationFilter,
+    hasMore: Boolean,
+    loadingMore: Boolean,
+    loadMoreError: String?,
+    onLoadMore: () -> Unit,
+    onMarkAllRead: () -> Unit,
+    onRetry: () -> Unit,
+    onOpenGroup: (NotificationGroup) -> Unit
+) {
+    if (newSlices.isNotEmpty()) {
+        item(key = "new_header") {
+            SectionHeader(
+                title = "New",
+                count = newSlices.sumOf { it.unreadCount },
+                onMarkAllRead = onMarkAllRead,
+                showMarkAll = trackingEnabled
+            )
+        }
+        newSlices.forEach { slice ->
+            item(key = "bucket_new_${slice.bucket.name}") {
+                BucketHeader(slice)
+            }
+            itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
+                NotificationEntrance(
+                    group = group,
+                    index = entranceIndex[group.key] ?: 0,
+                    now = now,
+                    onOpen = { onOpenGroup(group) },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+    }
+    if (earlierSlices.isNotEmpty()) {
+        item(key = "earlier_header") {
+            SectionHeader(
+                title = "Earlier",
+                count = earlierSlices.sumOf { it.memberCount },
+                onMarkAllRead = onMarkAllRead,
+                // Bulk read belongs to NEW. Without a New section every row is
+                // already read, so the action would do nothing.
+                showMarkAll = false
+            )
+        }
+        earlierSlices.forEach { slice ->
+            item(key = "bucket_earlier_${slice.bucket.name}") {
+                BucketHeader(slice)
+            }
+            itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
+                NotificationEntrance(
+                    group = group,
+                    index = entranceIndex[group.key] ?: 0,
+                    now = now,
+                    onOpen = { onOpenGroup(group) },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+    }
+    if (loadingMore) {
+        item(key = "loading_more") {
+            Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+        }
+    }
+    if (loadMoreError != null) {
+        // A failed page does not replace the rows already read; it gets one line
+        // under them with its own retry.
+        item(key = "load_more_error") {
+            LoadMoreError(loadMoreError, onRetry)
+        }
+    }
+    if (filter != NotificationFilter.ALL && hasMore && !loadingMore && loadMoreError == null) {
+        // A filtered list too short to scroll cannot reach the geometry trigger.
+        // This is the deliberate way out; the unfiltered page still loads itself
+        // automatically.
+        item(key = "filtered_load_more") {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TextButton(onClick = onLoadMore) {
+                    Text("Load older notifications")
                 }
             }
         }
@@ -512,6 +563,15 @@ private fun NotificationEntrance(
         animationSpec = ExpressiveMotion.DefaultSpatial,
         label = "inbox_card_lift"
     )
+    // The card already faded and rose; the small scale closes the entrance on
+    // the same spatial spring as the rest of the app instead of leaving the last
+    // frame to a hard alpha cut. These are draw-phase values, so the list is not
+    // re-measured on every frame.
+    val scale by animateFloatAsState(
+        targetValue = if (shown) 1f else 0.965f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "inbox_card_scale"
+    )
     NotificationCard(
         group = group,
         onClick = onOpen,
@@ -519,10 +579,19 @@ private fun NotificationEntrance(
         modifier = modifier.graphicsLayer {
             this.alpha = alpha
             translationY = lift
+            scaleX = scale
+            scaleY = scale
         }
     )
 }
 
+/**
+ * The NEW / EARLIER heading, with the one bulk action that belongs to it.
+ *
+ * Counts are member counts, not row counts: a folded "three people liked this"
+ * row contributes three to the heading and three to the unread pill, so the two
+ * numbers cannot disagree.
+ */
 @Composable
 private fun SectionHeader(
     title: String,
@@ -533,14 +602,14 @@ private fun SectionHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 12.dp, bottom = 1.dp),
+            .padding(top = 10.dp, bottom = 0.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title.uppercase(Locale.ROOT),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.primary,
             // The heading belongs to this line, not to the row: merging the row
             // also swallowed the Mark all read button, leaving its action
             // unreachable for a screen reader.
@@ -566,6 +635,37 @@ private fun SectionHeader(
                 )
             }
         }
+    }
+}
+
+/**
+ * A date heading under NEW or EARLIER.
+ *
+ * Smaller than the section heading and separated by a rule, so the hierarchy is
+ * readable at a glance: NEW is the promise, "Today" is where to look. Only
+ * buckets that actually contain rows reach this composable - the section
+ * builder never emits an empty one.
+ */
+@Composable
+private fun BucketHeader(slice: NotificationSectionSlice) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 1.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = slice.bucket.label.uppercase(Locale.ROOT),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { heading() }
+        )
+        Spacer(Modifier.width(8.dp))
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        )
     }
 }
 
@@ -623,7 +723,6 @@ private fun EmptyState(
     }
 }
 
-
 private fun emptyStateIcon(allCategoriesOff: Boolean, filtered: Boolean) = when {
     allCategoriesOff -> AppVectorIcons.Tune
     filtered -> AppVectorIcons.Filter
@@ -653,7 +752,7 @@ private fun emptyStateBody(
     filtered ->
         "No notifications match this filter. Switch back to everything to see the rest of your inbox."
     else ->
-        "Likes, replies, follows, messages and title updates will land here when they need you. There is no background checking, so this page refreshes when you open it or pull down."
+        "Likes, replies, follows, messages and title updates will land here when they need you. Turn on background alerts in Notification settings if you want Android to tell you about them."
 }
 
 private fun emptyStateActionLabel(allCategoriesOff: Boolean, filtered: Boolean): String = when {
@@ -736,29 +835,43 @@ private fun LoadMoreError(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
+private fun SkeletonSectionHeader(phase: State<Float>) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ShimmerBox(Modifier.width(78.dp).height(12.dp), CircleShape, phase)
+        Spacer(Modifier.width(8.dp))
+        ShimmerBox(Modifier.size(26.dp, 14.dp), CircleShape, phase)
+        Spacer(Modifier.weight(1f))
+        ShimmerBox(Modifier.width(72.dp).height(12.dp), CircleShape, phase)
+    }
+}
+
+@Composable
 private fun SkeletonCard(media: Boolean, phase: State<Float>) {
     Surface(
         shape = ExpressiveShapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             ShimmerBox(
                 modifier = Modifier.size(
-                    width = if (media) 66.dp else 46.dp,
-                    height = if (media) 94.dp else 46.dp
+                    width = if (media) 64.dp else 44.dp,
+                    height = if (media) 90.dp else 44.dp
                 ),
-                shape = if (media) RoundedCornerShape(14.dp) else CircleShape,
+                shape = if (media) RoundedCornerShape(13.dp) else CircleShape,
                 phase = phase
             )
-            Spacer(Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                ShimmerBox(Modifier.fillMaxWidth(0.32f).height(10.dp), CircleShape, phase)
-                ShimmerBox(Modifier.fillMaxWidth(0.9f).height(17.dp), CircleShape, phase)
-                ShimmerBox(Modifier.fillMaxWidth(0.7f).height(13.dp), CircleShape, phase)
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ShimmerBox(Modifier.fillMaxWidth(0.30f).height(9.dp), CircleShape, phase)
+                ShimmerBox(Modifier.fillMaxWidth(0.92f).height(16.dp), CircleShape, phase)
+                ShimmerBox(Modifier.fillMaxWidth(0.68f).height(12.dp), CircleShape, phase)
                 if (media) {
                     ShimmerBox(
-                        Modifier.fillMaxWidth().height(34.dp),
+                        Modifier.fillMaxWidth().height(30.dp),
                         RoundedCornerShape(10.dp),
                         phase
                     )

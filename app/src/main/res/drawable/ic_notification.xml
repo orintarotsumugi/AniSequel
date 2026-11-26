@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The status-bar icon for every AniSequel notification.
+
+    This is a vector drawable rather than a Compose ImageVector because
+    `Notification.Builder.setSmallIcon` takes a drawable resource id: the
+    platform renders this outside our process, in the status bar and on the lock
+    screen, so there is no composition to draw into. AGENTS.md's "pure Compose"
+    rule is about app UI; this is a platform asset with no Compose equivalent.
+
+    Deliberately a single white silhouette on a transparent background. Android
+    masks the alpha channel for small icons, so any colour here would be
+    flattened and any detail below ~24dp would read as a smudge.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.9,2 2,2zM18,16v-5c0,-3.07 -1.63,-5.64 -4.5,-6.32L13.5,4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.64,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z" />
+</vector>

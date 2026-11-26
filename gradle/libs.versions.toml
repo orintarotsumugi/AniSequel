@@ -77,6 +77,11 @@ okhttp = "4.12.0"
 moshiKotlin = "1.15.2"
 moshiKotlinCodegen = "1.15.2"
 datastorePreferences = "1.1.7"
+# 2.12.0 is the newest stable (September 2026) and the first line that leaves
+# WorkManager's own `compileSdk 33` floor irrelevant here - this app compiles
+# against 37. The periodic minimum is 15 minutes and the 5-minute backoff used
+# by `NotificationAlertsScheduler` is above WorkManager's 10-second floor.
+workManager = "2.12.0"
 robolectric = "4.16.1"
 
 
@@ -141,6 +146,9 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshiKotlin" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshiKotlinCodegen" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+# `work-runtime-ktx`, not plain `work-runtime`: the coroutine worker and the
+# `PeriodicWorkRequestBuilder<T>` reified helper both live in the KTX artifact.
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 

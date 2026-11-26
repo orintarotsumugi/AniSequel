@@ -401,7 +401,17 @@ class NotificationViewModel(
         val groups = if (cached?.first == revision) {
             cached.second
         } else {
-            val value = groupNotifications(enabled.filter { filter.matches(it.kind) }, isUnread)
+            // UNREAD is not a kind filter: `matches` deliberately accepts every
+            // kind, and the folded groups are narrowed afterwards. Filtering the
+            // rows first would still be correct for singles but would hide a
+            // folded like row whose only unread member is not the representative.
+            val source = enabled.filter { filter == NotificationFilter.UNREAD || filter.matches(it.kind) }
+            val folded = groupNotifications(source, isUnread)
+            val value = if (filter == NotificationFilter.UNREAD) {
+                folded.filter { it.isUnread }
+            } else {
+                folded
+            }
             filterCache[filter] = revision to value
             value
         }

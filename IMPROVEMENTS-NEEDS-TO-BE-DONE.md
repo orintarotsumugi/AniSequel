@@ -83,9 +83,10 @@ there; every recommendation names where it lands in AniSequel.
    Where AniSync's local-first design matters, only the *mechanisms it enables*
    (optimistic writes, an empty-response guard, per-status TTLs) are borrowed —
    not the architecture.
-2. **Vectors only, springs only, no Hilt, no WorkManager poller.** Where a
-   borrowed mechanism would need one of those, the recommendation says so and
-   offers the dependency-free version.
+2. **Vectors only, springs only, no Hilt, and no list poller.** The one
+   WorkManager job is the opt-in notification check (2.6.7); nothing below may
+   add a periodic list refresh. Where a borrowed mechanism would need a new
+   dependency, the recommendation says so and offers the dependency-free version.
 
 ### Priority legend
 
@@ -293,7 +294,8 @@ improvements below are about the *pipe feeding it* and the *bytes it costs*.
 
 **Rule check.** The gate is pure Kotlin + coroutines; it fits
 `domain`/`data`. No new dependencies. It does **not** introduce a background
-poller, so the notifications non-goal is untouched.
+poller of the list; the opt-in notification check is a separate periodic job,
+described in NOTES.md.
 
 ---
 
@@ -779,13 +781,13 @@ The updater is **ahead** of AniSync's in every meaningful respect:
 
 #### Improvements
 
-1. **A periodic check + notification — P2, M.** AniSequel deliberately has no
-   notifications, and that non-goal is about a *list* poller. An update
+1. **A periodic check + notification — P2, M.** AniSequel's notification channel
+   now carries opt-in AniList event alerts and one diagnostic test post. An update
    notification is a different thing: it is the app telling you a new version
    exists, once, and it is the only channel a sideloaded app has. If adopted, use
-   a single channel, `autoUpdateEnabled`/`allowPrerelease` preferences, and do
-   **not** reuse it for anything else. If rejected, record the rejection in
-   `TO-DO` so it is not re-litigated.
+   `autoUpdateEnabled`/`allowPrerelease` preferences and do **not** reuse the
+   AniList event categories for it. If rejected, record the rejection in `TO-DO`
+   so it is not re-litigated.
 2. **Atomic `.tmp` rename — P3, S.** AniSequel already writes `.part` and renames
    after verification, which is stricter. No change needed; listed only as a
    confirmation.

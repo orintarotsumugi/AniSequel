@@ -51,6 +51,15 @@ enum class NotificationKind {
 /** The chips across the top of the inbox. */
 enum class NotificationFilter(val label: String) {
     ALL("All"),
+
+    /**
+     * Rows with at least one unread member.
+     *
+     * The only filter that is not a kind: it is a property of the local read
+     * mark. It exists because "what needs me now" is the question the inbox is
+     * opened with, and scanning the New heading past read rows is not an answer.
+     */
+    UNREAD("Unread"),
     AIRING("Airing"),
     ACTIVITY("Activity"),
     MESSAGES("Messages"),
@@ -63,6 +72,9 @@ enum class NotificationFilter(val label: String) {
 
     fun matches(kind: NotificationKind): Boolean = when (this) {
         ALL -> true
+        // Unread is decided by the read store, not by the kind; the caller
+        // filters the folded groups after grouping.
+        UNREAD -> true
         AIRING -> kind == NotificationKind.AIRING
         ACTIVITY -> kind in ACTIVITY_KINDS
         MESSAGES -> kind == NotificationKind.ACTIVITY_MESSAGE
