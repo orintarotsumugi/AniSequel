@@ -6,6 +6,7 @@ import com.anisequel.data.network.AniListException
 import com.anisequel.domain.notifications.InboxNotification
 import com.anisequel.domain.notifications.NotificationAlertDraft
 import com.anisequel.domain.notifications.NotificationAlertPreferences
+import com.anisequel.domain.notifications.NotificationDeliveryPlan
 import com.anisequel.domain.notifications.NotificationDeliveryState
 import com.anisequel.domain.notifications.planNotificationAlerts
 import java.io.IOException
@@ -73,40 +74,18 @@ class NotificationCheckRunner(
         if (!preferences.enabled) return NotificationCheckOutcome.Disabled
 
         val previous = cursors.load(accountId)
-        val collected = mutableListOf<InboxNotification>()
-        var page = 1
-        var hasMore = false
-        var fetches = 0
-
-        // Page one is always fetched, so new arrivals are posted promptly even
-        // while a backlog is being drained. When the previous run stopped above
-        // the cursor, the second fetch jumps to the page it stopped on; the
-        // rows in between were covered by earlier runs, and new arrivals have
-        // only shifted older rows further back, never skipped them.
-        while (fetches < maxPages) {
-            val result = source.page(page, forceRefresh = page == 1)
-            val data = result.getOrElse { return it.toOutcome() }
-            fetches += 1
-            collected += data.notifications
-            hasMore = data.hasMore
-            if (!data.hasMore) break
-            if (!previous.baselineEstablished) break
-            val oldest = data.notifications.minOfOrNull { it.id }
-            if (oldest == null || oldest <= previous.cursor) break
-            page = if (page == 1 && previous.resumePage > 1) {
-                previous.resumePage
-            } else {
-                page + 1
-            }
+        val walk = walkPages(previous)
+        if (walk !is PageWalk.Loaded) {
+            return (walk as PageWalk.Failed).cause.toOutcome()
         }
 
         val plan = planNotificationAlerts(
-            notifications = collected,
-            hasMore = hasMore,
+            notifications = walk.notifications,
+            hasMore = walk.hasMore,
             previous = previous,
             preferences = preferences,
             nowEpochMillis = nowEpochMillis,
-            nextResumePage = page + 1
+            nextResumePage = walk.page + 1
         )
 
         if (plan.baselineEstablished) {
@@ -114,34 +93,79 @@ class NotificationCheckRunner(
             return NotificationCheckOutcome.BaselineEstablished
         }
 
+        return deliver(accountId, plan)
+    }
+
+    /**
+     * Fetches the smallest window that reaches the previous cursor.
+     *
+     * Page one is always fetched, so new arrivals are posted promptly even
+     * while a backlog is being drained. When the previous run stopped above
+     * the cursor, the second fetch jumps to the page it stopped on; the rows
+     * in between were covered by earlier runs, and new arrivals have only
+     * shifted older rows further back, never skipped them.
+     */
+    private suspend fun walkPages(previous: NotificationDeliveryState): PageWalk {
+        val collected = mutableListOf<InboxNotification>()
+        var page = 1
+        var hasMore = false
+        var fetches = 0
+
+        while (fetches < maxPages) {
+            val data = source.page(page, forceRefresh = page == 1).getOrElse {
+                return PageWalk.Failed(it)
+            }
+            fetches += 1
+            collected += data.notifications
+            hasMore = data.hasMore
+            if (!data.hasMore) break
+            if (!previous.baselineEstablished) break
+            val oldest = data.notifications.minOfOrNull { it.id } ?: break
+            if (oldest <= previous.cursor) break
+            page = nextPage(page, previous)
+        }
+
+        return PageWalk.Loaded(collected, hasMore, page)
+    }
+
+    private fun nextPage(page: Int, previous: NotificationDeliveryState): Int =
+        if (page == 1 && previous.resumePage > 1) previous.resumePage else page + 1
+
+    /**
+     * Posts first and saves second on purpose: a state saved first and lost to
+     * process death would drop an alert forever. The opposite order can repeat
+     * a post, which is why the tray identity is the group key and a retry
+     * replaces the same notification instead of adding a second one.
+     */
+    private suspend fun deliver(
+        accountId: Int,
+        plan: NotificationDeliveryPlan
+    ): NotificationCheckOutcome {
         if (!sink.canDeliver()) return NotificationCheckOutcome.PermissionBlocked
 
-        val posted = if (plan.drafts.isEmpty()) {
-            0
-        } else {
-            try {
-                sink.deliver(plan.drafts)
-            } catch (failure: Exception) {
-                // Nothing was saved, so the next attempt sees the same ids and
-                // retries them under the same tray keys.
-                return NotificationCheckOutcome.Failed(
-                    retryable = true,
-                    reason = failure.javaClass.simpleName
-                )
-            }
+        if (plan.drafts.isEmpty()) {
+            cursors.save(accountId, plan.state)
+            return NotificationCheckOutcome.NoNewEvents
         }
-        if (plan.drafts.isNotEmpty() && posted == 0) {
+
+        val posted = try {
+            sink.deliver(plan.drafts)
+        } catch (failure: Exception) {
+            // Nothing was saved, so the next attempt sees the same ids and
+            // retries them under the same tray keys.
+            return NotificationCheckOutcome.Failed(
+                retryable = true,
+                reason = failure.javaClass.simpleName
+            )
+        }
+        if (posted == 0) {
             // `canDeliver` was true a moment ago, but the platform can change
             // its mind between the check and the post. Saving here would mark
             // events delivered that never reached the tray.
             return NotificationCheckOutcome.PermissionBlocked
         }
         cursors.save(accountId, plan.state)
-        return if (posted == 0) {
-            NotificationCheckOutcome.NoNewEvents
-        } else {
-            NotificationCheckOutcome.Posted(posted)
-        }
+        return NotificationCheckOutcome.Posted(posted)
     }
 
     private fun Throwable.toOutcome(): NotificationCheckOutcome {
@@ -159,6 +183,16 @@ class NotificationCheckRunner(
             )
             else -> NotificationCheckOutcome.Failed(retryable = true, reason = kind.name)
         }
+    }
+
+    private sealed interface PageWalk {
+        data class Loaded(
+            val notifications: List<InboxNotification>,
+            val hasMore: Boolean,
+            val page: Int
+        ) : PageWalk
+
+        data class Failed(val cause: Throwable) : PageWalk
     }
 
     companion object {

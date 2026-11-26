@@ -340,17 +340,11 @@ class MainActivity : ComponentActivity() {
             // outage is one notice rather than one per in-flight request.
             LaunchedEffect(Unit) {
                 SystemNotices.events.collect { notice ->
-                    val message = when (notice) {
-                        SystemNotices.Notice.SessionExpired ->
-                            "Your AniList session expired. Sign in again to sync your list."
-                        SystemNotices.Notice.ServerDown ->
-                            "AniList's servers are down right now. Nothing on this device is broken."
-                        SystemNotices.Notice.Offline ->
-                            "No connection. Reconnect and it will load."
-                        SystemNotices.Notice.CommentPosted ->
-                            "Comment posted."
-                    }
-                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@MainActivity,
+                        systemNoticeMessage(notice),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
 
@@ -418,24 +412,7 @@ class MainActivity : ComponentActivity() {
                 initialValue = StartupWarmup.appLockEnabled
             )
             LaunchedEffect(storedAppLock) {
-                val enabled = storedAppLock ?: return@LaunchedEffect
-                appLockEnabled = enabled
-                // The recents thumbnail is captured as the task leaves the
-                // foreground, which can be before `onStop` runs. The flag has to
-                // already be set while the lock is enabled, not added at the
-                // moment the gate appears.
-                applySecureFlag()
-
-                if (!appLockReady) {
-                    appLockReady = true
-                    if (enabled && isDeviceSecurelyLocked() && !appLockState.unlockedSinceLaunch) {
-                        setLocked(true)
-                    }
-                } else if (!enabled) {
-                    // Turning the lock off in Settings must release a gate that
-                    // is already up, not leave it waiting for the next resume.
-                    setLocked(false)
-                }
+                applyStoredAppLock(storedAppLock)
             }
 
             AniSequelTheme(
@@ -554,6 +531,30 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Applies the stored app-lock choice once it has been read.
+     *
+     * The recents thumbnail is captured as the task leaves the foreground,
+     * which can be before `onStop` runs, so the secure flag is applied here
+     * rather than at the moment the gate appears. Turning the lock off in
+     * Settings releases a gate that is already up instead of waiting for the
+     * next resume.
+     */
+    private fun applyStoredAppLock(storedAppLock: Boolean?) {
+        val enabled = storedAppLock ?: return
+        appLockEnabled = enabled
+        applySecureFlag()
+
+        if (!appLockReady) {
+            appLockReady = true
+            if (enabled && isDeviceSecurelyLocked() && !appLockState.unlockedSinceLaunch) {
+                setLocked(true)
+            }
+        } else if (!enabled) {
+            setLocked(false)
         }
     }
 
@@ -757,6 +758,18 @@ class MainActivity : ComponentActivity() {
             uri.scheme == "anisequel" && uri.host == "oauth" -> authViewModel.handleAuthRedirect(uri)
         }
     }
+}
+
+/** The reader-facing copy for one app-wide system notice. */
+private fun systemNoticeMessage(notice: SystemNotices.Notice): String = when (notice) {
+    SystemNotices.Notice.SessionExpired ->
+        "Your AniList session expired. Sign in again to sync your list."
+    SystemNotices.Notice.ServerDown ->
+        "AniList's servers are down right now. Nothing on this device is broken."
+    SystemNotices.Notice.Offline ->
+        "No connection. Reconnect and it will load."
+    SystemNotices.Notice.CommentPosted ->
+        "Comment posted."
 }
 
 /**

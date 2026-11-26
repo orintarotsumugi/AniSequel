@@ -1,6 +1,7 @@
 package com.anisequel.ui.screens.settings
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,87 +101,13 @@ internal fun NotificationSettingsPage(
     var confirmReset by rememberSaveable(viewer?.id) { mutableStateOf(false) }
     var didReset by rememberSaveable(viewer?.id) { mutableStateOf(false) }
 
-    var status by remember { mutableStateOf(SystemNotifications.channelStatus(context)) }
-    var enableAfterGrant by rememberSaveable { mutableStateOf(false) }
-    var lastStatus by remember { mutableStateOf(status) }
-
-    // Only an Activity result can tell us the dialog was answered; coming back
-    // from the system settings page is an `onResume` with no callback at all.
-    // Both paths refresh the badge from the platform, because the platform is
-    // the only authority on a permission it owns.
-    // Keyed on the switch so the effect's closure sees the current value when
-    // the reader returns from the system page; `Unit` captured whatever the
-    // first composition saw.
-    LifecycleResumeEffect(alertPreferences.enabled) {
-        val fresh = SystemNotifications.channelStatus(context)
-        status = fresh
-        if (lastStatus != SystemNotifications.ChannelStatus.ALLOWED &&
-            fresh == SystemNotifications.ChannelStatus.ALLOWED &&
-            alertPreferences.enabled
-        ) {
-            // The reader granted the permission outside this screen after
-            // enabling the feature. Catch up now rather than waiting a period.
-            NotificationAlertsScheduler.checkNow(context)
-        }
-        lastStatus = fresh
-        onPauseOrDispose { }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        status = SystemNotifications.channelStatus(context)
-        if (granted && enableAfterGrant) {
-            enableAfterGrant = false
-            scope.launch {
-                alertStore.setEnabled(true)
-                NotificationAlertsScheduler.ensureScheduled(context, alertPreferences.intervalMinutes)
-                // The first run establishes the silent baseline; it posts
-                // nothing, which is what stops a history dump on enable.
-                NotificationAlertsScheduler.checkNow(context)
-            }
-        } else if (!granted) {
-            enableAfterGrant = false
-            Toast.makeText(
-                context,
-                "Notifications stay off. You can allow them later in system settings.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    val turnOnAlerts: () -> Unit = {
-        when (SystemNotifications.channelStatus(context)) {
-            SystemNotifications.ChannelStatus.ALLOWED -> scope.launch {
-                alertStore.setEnabled(true)
-                NotificationAlertsScheduler.ensureScheduled(context, alertPreferences.intervalMinutes)
-                NotificationAlertsScheduler.checkNow(context)
-            }
-
-            SystemNotifications.ChannelStatus.PERMISSION_MISSING -> {
-                if (SystemNotifications.canRequestRuntimePermission(context)) {
-                    enableAfterGrant = true
-                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Android will not show the permission dialog again. Allow AniSequel in system settings.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    SystemNotifications.openSystemSettings(context)
-                }
-            }
-
-            else -> {
-                Toast.makeText(
-                    context,
-                    "Android is blocking AniSequel alerts. Allow them in system settings first.",
-                    Toast.LENGTH_LONG
-                ).show()
-                SystemNotifications.openSystemSettings(context)
-            }
-        }
-    }
+    val enabler = rememberAlertEnabler(
+        context = context,
+        alertStore = alertStore,
+        enabled = alertPreferences.enabled,
+        intervalMinutes = alertPreferences.intervalMinutes
+    )
+    val status by enabler.status
 
     SettingsScrollColumn(modifier = modifier) {
         SectionCard(
@@ -345,7 +273,7 @@ internal fun NotificationSettingsPage(
             androidAllowed = status == SystemNotifications.ChannelStatus.ALLOWED,
             onToggleEnabled = { enabled ->
                 if (enabled) {
-                    turnOnAlerts()
+                    enabler.enable()
                 } else {
                     scope.launch {
                         alertStore.setEnabled(false)
@@ -378,7 +306,7 @@ internal fun NotificationSettingsPage(
         AndroidPermissionCard(
             status = status,
             canRequest = SystemNotifications.canRequestRuntimePermission(context),
-            onAllow = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+            onAllow = enabler.allow,
             onOpenSettings = {
                 if (!SystemNotifications.openSystemSettings(context)) {
                     Toast.makeText(
@@ -435,6 +363,119 @@ internal fun NotificationSettingsPage(
         )
     }
 }
+
+/**
+ * The permission side of the background-alert switch.
+ *
+ * Hoisted out of the page so the composable that draws the three cards is not
+ * also the one that owns a launcher, a resume observer and a three-branch
+ * permission decision. The status is returned as [State] rather than a value:
+ * the caller reads it while composing the Android card, so a grant made in
+ * system settings still recomposes the badge when the app returns.
+ */
+@Composable
+private fun rememberAlertEnabler(
+    context: Context,
+    alertStore: NotificationAlertStore,
+    enabled: Boolean,
+    intervalMinutes: Int
+): AlertEnablerState {
+    val statusState = remember { mutableStateOf(SystemNotifications.channelStatus(context)) }
+    var lastStatus by remember { mutableStateOf(statusState.value) }
+    var enableAfterGrant by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val enableAlerts: () -> Unit = {
+        scope.launch {
+            alertStore.setEnabled(true)
+            NotificationAlertsScheduler.ensureScheduled(context, intervalMinutes)
+            // The first run establishes the silent baseline; it posts nothing,
+            // which is what stops a history dump on enable.
+            NotificationAlertsScheduler.checkNow(context)
+        }
+    }
+
+    // Only an Activity result can tell us the dialog was answered; coming back
+    // from the system settings page is an `onResume` with no callback at all.
+    // Both paths refresh the badge from the platform, because the platform is
+    // the only authority on a permission it owns.
+    LifecycleResumeEffect(enabled) {
+        val fresh = SystemNotifications.channelStatus(context)
+        statusState.value = fresh
+        if (lastStatus != SystemNotifications.ChannelStatus.ALLOWED &&
+            fresh == SystemNotifications.ChannelStatus.ALLOWED &&
+            enabled
+        ) {
+            // The reader granted the permission outside this screen after
+            // enabling the feature. Catch up now rather than waiting a period.
+            NotificationAlertsScheduler.checkNow(context)
+        }
+        lastStatus = fresh
+        onPauseOrDispose { }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        statusState.value = SystemNotifications.channelStatus(context)
+        if (granted) {
+            if (enableAfterGrant) {
+                enableAfterGrant = false
+                enableAlerts()
+            }
+        } else {
+            enableAfterGrant = false
+            Toast.makeText(
+                context,
+                "Notifications stay off. You can allow them later in system settings.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    val enable: () -> Unit = {
+        when (SystemNotifications.channelStatus(context)) {
+            SystemNotifications.ChannelStatus.ALLOWED -> enableAlerts()
+
+            SystemNotifications.ChannelStatus.PERMISSION_MISSING -> {
+                if (SystemNotifications.canRequestRuntimePermission(context)) {
+                    enableAfterGrant = true
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    Toast.makeText(
+                        context,
+                        "Android will not show the permission dialog again. Allow AniSequel in system settings.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    SystemNotifications.openSystemSettings(context)
+                }
+            }
+
+            else -> {
+                Toast.makeText(
+                    context,
+                    "Android is blocking AniSequel alerts. Allow them in system settings first.",
+                    Toast.LENGTH_LONG
+                ).show()
+                SystemNotifications.openSystemSettings(context)
+            }
+        }
+    }
+
+    return AlertEnablerState(
+        status = statusState,
+        enable = enable,
+        allow = {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    )
+}
+
+private class AlertEnablerState(
+    val status: State<SystemNotifications.ChannelStatus>,
+    val enable: () -> Unit,
+    val allow: () -> Unit
+)
 
 @Composable
 private fun BackgroundAlertsCard(
