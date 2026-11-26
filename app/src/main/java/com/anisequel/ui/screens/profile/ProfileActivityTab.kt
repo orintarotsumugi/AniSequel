@@ -322,6 +322,59 @@ fun ProfileActivityTab(
  * Kept out of [ProfileActivityTab] so that the screen's own paging and header
  * work is not competing with this request for one extra branch in every review.
  */
+/** What one pass of [FocusActivityEffect] should do next. */
+private sealed interface FocusStep {
+    data class Scroll(val beforeCards: Int, val index: Int) : FocusStep
+    data class OpenThread(val activityId: Int) : FocusStep
+    data object LoadNextPage : FocusStep
+    data object Wait : FocusStep
+}
+
+/**
+ * Decides the next focus move from the feed state alone.
+ *
+ * Keeping this out of the composable gives the request one testable shape: it
+ * either has the row, has one page left to ask for, or can only open the thread.
+ * A failed feed opens the thread because the reader tapped a notification, not
+ * because they wanted the top of a list that failed to load.
+ */
+private fun focusStep(
+    focusActivityId: Int?,
+    state: UserActivityViewModel.ActivityState,
+    calendar: ActivityCalendar?,
+    pagesLoaded: Int
+): FocusStep {
+    val target = focusActivityId?.takeIf { it > 0 } ?: return FocusStep.Wait
+    val success = state as? UserActivityViewModel.ActivityState.Success
+        ?: return if (state is UserActivityViewModel.ActivityState.Error) {
+            FocusStep.OpenThread(target)
+        } else {
+            FocusStep.Wait
+        }
+    // The one extra page can be in flight. Its loading state is still a Success
+    // carrying the old rows, and acting now would decide the target was absent
+    // just before the page that contains it lands.
+    if (success.isLoadingMore || success.activities.isEmpty()) {
+        return if (success.isLoadingMore) FocusStep.Wait else FocusStep.OpenThread(target)
+    }
+    val index = success.activities.indexOfFirst { it.id == target }
+    if (index < 0) {
+        // One page is usually enough for a notification, but a day of likes can
+        // push the target just past the first twenty-five. Ask once for the next
+        // page; a later pass either finds the row or takes the thread fallback.
+        return if (success.hasMore && pagesLoaded == 0) {
+            FocusStep.LoadNextPage
+        } else {
+            FocusStep.OpenThread(target)
+        }
+    }
+    // The calendar and the feed heading precede the first card; a failed refresh
+    // adds one more row between the heading and the cards.
+    val calendarRows = if (calendar != null && calendar.columns.isNotEmpty()) 1 else 0
+    val refreshRows = if (success.refreshError != null) 1 else 0
+    return FocusStep.Scroll(beforeCards = calendarRows + 1 + refreshRows, index = index)
+}
+
 @Composable
 private fun FocusActivityEffect(
     focusActivityId: Int?,
@@ -336,45 +389,25 @@ private fun FocusActivityEffect(
     val focusedActivity = rememberSaveable(focusActivityId) { mutableStateOf(false) }
     val focusPagesLoaded = rememberSaveable(focusActivityId) { mutableIntStateOf(0) }
     LaunchedEffect(focusActivityId, state) {
-        val target = focusActivityId?.takeIf { it > 0 } ?: return@LaunchedEffect
+        if (focusActivityId == null || focusActivityId <= 0) return@LaunchedEffect
         if (focusedActivity.value) return@LaunchedEffect
-        val success = state as? UserActivityViewModel.ActivityState.Success
-        if (success == null) {
-            // A failed feed must not swallow the notification. The thread reader
-            // needs only the activity id, while the feed needs the whole page.
-            if (state is UserActivityViewModel.ActivityState.Error) {
-                onOpenComments(target, 0)
+        when (val step = focusStep(focusActivityId, state, calendar, focusPagesLoaded.intValue)) {
+            is FocusStep.Scroll -> {
+                listState.animateScrollToItem(step.beforeCards + step.index)
                 focusedActivity.value = true
             }
-            return@LaunchedEffect
-        }
-        // The one extra page can be in flight. Its loading state is still a
-        // Success carrying the old rows, and acting now would decide the target
-        // was absent just before the page that contains it lands.
-        if (success.isLoadingMore) return@LaunchedEffect
-        if (success.activities.isEmpty()) {
-            onOpenComments(target, 0)
-            focusedActivity.value = true
-            return@LaunchedEffect
-        }
-        val index = success.activities.indexOfFirst { it.id == target }
-        if (index >= 0) {
-            // The calendar and the feed heading precede the first card; a failed
-            // refresh adds one more row between the heading and the cards.
-            val calendarRows = if (calendar != null && calendar.columns.isNotEmpty()) 1 else 0
-            val refreshRows = if (success.refreshError != null) 1 else 0
-            listState.animateScrollToItem(calendarRows + 1 + refreshRows + index)
-            focusedActivity.value = true
-        } else if (success.hasMore && focusPagesLoaded.intValue == 0) {
-            // One page is usually enough for a notification, but a day of likes
-            // can push the target just past the first twenty-five. Ask once for
-            // the next page; the state change re-enters this effect and either
-            // finds the row or takes the thread fallback.
-            focusPagesLoaded.intValue += 1
-            onLoadNextPage()
-        } else {
-            onOpenComments(target, 0)
-            focusedActivity.value = true
+
+            is FocusStep.OpenThread -> {
+                onOpenComments(step.activityId, 0)
+                focusedActivity.value = true
+            }
+
+            FocusStep.LoadNextPage -> {
+                focusPagesLoaded.intValue += 1
+                onLoadNextPage()
+            }
+
+            FocusStep.Wait -> Unit
         }
     }
 }
