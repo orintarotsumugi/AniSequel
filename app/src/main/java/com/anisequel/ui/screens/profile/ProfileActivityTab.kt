@@ -206,56 +206,14 @@ fun ProfileActivityTab(
     // error: the retry below re-reads page one, where the footer's retry appends.
     val refreshError = (source.state as? UserActivityViewModel.ActivityState.Success)?.refreshError
 
-    // A notification names one activity, but a profile feed is a page of twenty-
-    // five. Scroll to the named row when it is here. When it just misses the first
-    // page, ask once for the next; if it is still absent, hand the id back to the
-    // comment thread rather than dropping the reader at the top of the feed with no
-    // explanation. The flag makes this a one-shot request: a later like or refresh
-    // must not yank the list back.
-    val focusedActivity = rememberSaveable(focusActivityId) { mutableStateOf(false) }
-    val focusPagesLoaded = rememberSaveable(focusActivityId) { mutableIntStateOf(0) }
-    LaunchedEffect(focusActivityId, source.state) {
-        val target = focusActivityId?.takeIf { it > 0 } ?: return@LaunchedEffect
-        if (focusedActivity.value) return@LaunchedEffect
-        val success = source.state as? UserActivityViewModel.ActivityState.Success
-        if (success == null) {
-            // A failed feed must not swallow the notification. The thread reader
-            // needs only the activity id, while the feed needs the whole page.
-            if (source.state is UserActivityViewModel.ActivityState.Error) {
-                source.onOpenComments(target, 0)
-                focusedActivity.value = true
-            }
-            return@LaunchedEffect
-        }
-        // The one extra page can be in flight. Its loading state is still a
-        // Success carrying the old rows, and acting now would decide the target
-        // was absent just before the page that contains it lands.
-        if (success.isLoadingMore) return@LaunchedEffect
-        if (success.activities.isEmpty()) {
-            source.onOpenComments(target, 0)
-            focusedActivity.value = true
-            return@LaunchedEffect
-        }
-        val index = success.activities.indexOfFirst { it.id == target }
-        if (index >= 0) {
-            // The calendar and the feed heading precede the first card; a failed
-            // refresh adds one more row between the heading and the cards.
-            val beforeCards = (if (source.calendar != null && source.calendar.columns.isNotEmpty()) 1 else 0) +
-                1 + (if (success.refreshError != null) 1 else 0)
-            listState.animateScrollToItem(beforeCards + index)
-            focusedActivity.value = true
-        } else if (success.hasMore && focusPagesLoaded.intValue == 0) {
-            // One page is usually enough for a notification, but a day of likes
-            // can push the target just past the first twenty-five. Ask once for
-            // the next page; the state change re-enters this effect and either
-            // finds the row or takes the thread fallback.
-            focusPagesLoaded.intValue += 1
-            source.onLoadNextPage()
-        } else {
-            source.onOpenComments(target, 0)
-            focusedActivity.value = true
-        }
-    }
+    FocusActivityEffect(
+        focusActivityId = focusActivityId,
+        state = source.state,
+        calendar = source.calendar,
+        listState = listState,
+        onLoadNextPage = source.onLoadNextPage,
+        onOpenComments = source.onOpenComments
+    )
 
     LazyColumn(
         modifier = modifier
@@ -350,6 +308,75 @@ fun ProfileActivityTab(
     // sheets on this screen had opposite lifetimes for no reason either could state.
     //
     // `UserProfileScreen` draws both, as siblings of the tab content.
+}
+
+/**
+ * Scrolls the profile feed to the activity a notification names.
+ *
+ * A notification carries one id, while the feed is a page of twenty-five. The
+ * first page is usually enough; when the target sits just past it, ask once for
+ * the next. If it is still absent - an old post, a failed page, an empty feed -
+ * hand the id back to the comment thread rather than dropping the reader at the
+ * top of a list that does not contain what they tapped.
+ *
+ * Kept out of [ProfileActivityTab] so that the screen's own paging and header
+ * work is not competing with this request for one extra branch in every review.
+ */
+@Composable
+private fun FocusActivityEffect(
+    focusActivityId: Int?,
+    state: UserActivityViewModel.ActivityState,
+    calendar: ActivityCalendar?,
+    listState: LazyListState,
+    onLoadNextPage: () -> Unit,
+    onOpenComments: (Int, Int) -> Unit
+) {
+    // One-shot per requested id: a later like or refresh must not yank the list
+    // back to the post the notification opened.
+    val focusedActivity = rememberSaveable(focusActivityId) { mutableStateOf(false) }
+    val focusPagesLoaded = rememberSaveable(focusActivityId) { mutableIntStateOf(0) }
+    LaunchedEffect(focusActivityId, state) {
+        val target = focusActivityId?.takeIf { it > 0 } ?: return@LaunchedEffect
+        if (focusedActivity.value) return@LaunchedEffect
+        val success = state as? UserActivityViewModel.ActivityState.Success
+        if (success == null) {
+            // A failed feed must not swallow the notification. The thread reader
+            // needs only the activity id, while the feed needs the whole page.
+            if (state is UserActivityViewModel.ActivityState.Error) {
+                onOpenComments(target, 0)
+                focusedActivity.value = true
+            }
+            return@LaunchedEffect
+        }
+        // The one extra page can be in flight. Its loading state is still a
+        // Success carrying the old rows, and acting now would decide the target
+        // was absent just before the page that contains it lands.
+        if (success.isLoadingMore) return@LaunchedEffect
+        if (success.activities.isEmpty()) {
+            onOpenComments(target, 0)
+            focusedActivity.value = true
+            return@LaunchedEffect
+        }
+        val index = success.activities.indexOfFirst { it.id == target }
+        if (index >= 0) {
+            // The calendar and the feed heading precede the first card; a failed
+            // refresh adds one more row between the heading and the cards.
+            val calendarRows = if (calendar != null && calendar.columns.isNotEmpty()) 1 else 0
+            val refreshRows = if (success.refreshError != null) 1 else 0
+            listState.animateScrollToItem(calendarRows + 1 + refreshRows + index)
+            focusedActivity.value = true
+        } else if (success.hasMore && focusPagesLoaded.intValue == 0) {
+            // One page is usually enough for a notification, but a day of likes
+            // can push the target just past the first twenty-five. Ask once for
+            // the next page; the state change re-enters this effect and either
+            // finds the row or takes the thread fallback.
+            focusPagesLoaded.intValue += 1
+            onLoadNextPage()
+        } else {
+            onOpenComments(target, 0)
+            focusedActivity.value = true
+        }
+    }
 }
 
 /**

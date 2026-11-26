@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -414,92 +415,125 @@ private fun InboxContent(
                         }
                     }
 
-                    else -> {
-                        if (newSlices.isNotEmpty()) {
-                            item(key = "new_header") {
-                                SectionHeader(
-                                    title = "New",
-                                    count = newSlices.sumOf { it.unreadCount },
-                                    onMarkAllRead = onMarkAllRead,
-                                    showMarkAll = state.preferences.trackingEnabled
-                                )
-                            }
-                            newSlices.forEach { slice ->
-                                item(key = "bucket_new_${slice.bucket.name}") {
-                                    BucketHeader(slice)
-                                }
-                                itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
-                                    NotificationEntrance(
-                                        group = group,
-                                        index = entranceIndex[group.key] ?: 0,
-                                        now = now,
-                                        onOpen = { onOpenGroup(group) },
-                                        modifier = Modifier.animateItem()
-                                    )
-                                }
-                            }
-                        }
-                        if (earlierSlices.isNotEmpty()) {
-                            item(key = "earlier_header") {
-                                SectionHeader(
-                                    title = "Earlier",
-                                    count = earlierSlices.sumOf { it.memberCount },
-                                    onMarkAllRead = onMarkAllRead,
-                                    // Bulk read belongs to NEW. Without a New
-                                    // section every row is already read, so the
-                                    // action would do nothing.
-                                    showMarkAll = false
-                                )
-                            }
-                            earlierSlices.forEach { slice ->
-                                item(key = "bucket_earlier_${slice.bucket.name}") {
-                                    BucketHeader(slice)
-                                }
-                                itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
-                                    NotificationEntrance(
-                                        group = group,
-                                        index = entranceIndex[group.key] ?: 0,
-                                        now = now,
-                                        onOpen = { onOpenGroup(group) },
-                                        modifier = Modifier.animateItem()
-                                    )
-                                }
-                            }
-                        }
-                        if (state.loadingMore) {
-                            item(key = "loading_more") {
-                                Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                }
-                            }
-                        }
-                        if (state.loadMoreError != null) {
-                            // A failed page does not replace the rows already read; it
-                            // gets one line under them with its own retry.
-                            item(key = "load_more_error") {
-                                LoadMoreError(state.loadMoreError, onRetry)
-                            }
-                        }
-                        if (state.filter != NotificationFilter.ALL &&
-                            state.hasMore &&
-                            !state.loadingMore &&
-                            state.loadMoreError == null
-                        ) {
-                            // A filtered list too short to scroll cannot reach the
-                            // geometry trigger. This is the deliberate way out; the
-                            // unfiltered page still loads itself automatically.
-                            item(key = "filtered_load_more") {
-                                Box(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    TextButton(onClick = onLoadMore) {
-                                        Text("Load older notifications")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    else -> inboxSections(
+                        newSlices = newSlices,
+                        earlierSlices = earlierSlices,
+                        entranceIndex = entranceIndex,
+                        trackingEnabled = state.preferences.trackingEnabled,
+                        now = now,
+                        filter = state.filter,
+                        hasMore = state.hasMore,
+                        loadingMore = state.loadingMore,
+                        loadMoreError = state.loadMoreError,
+                        onLoadMore = onLoadMore,
+                        onMarkAllRead = onMarkAllRead,
+                        onRetry = onRetry,
+                        onOpenGroup = onOpenGroup
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The sectioned rows, paging status and filtered footer of a loaded inbox.
+ *
+ * Split from [InboxContent] because the empty/error/skeleton states and the
+ * pull-to-refresh layout are one job, while the shape of the sectioned list is
+ * another. It also keeps the four-condition filtered footer out of the parent's
+ * branch count.
+ */
+private fun LazyListScope.inboxSections(
+    newSlices: List<NotificationSectionSlice>,
+    earlierSlices: List<NotificationSectionSlice>,
+    entranceIndex: Map<String, Int>,
+    trackingEnabled: Boolean,
+    now: Instant,
+    filter: NotificationFilter,
+    hasMore: Boolean,
+    loadingMore: Boolean,
+    loadMoreError: String?,
+    onLoadMore: () -> Unit,
+    onMarkAllRead: () -> Unit,
+    onRetry: () -> Unit,
+    onOpenGroup: (NotificationGroup) -> Unit
+) {
+    if (newSlices.isNotEmpty()) {
+        item(key = "new_header") {
+            SectionHeader(
+                title = "New",
+                count = newSlices.sumOf { it.unreadCount },
+                onMarkAllRead = onMarkAllRead,
+                showMarkAll = trackingEnabled
+            )
+        }
+        newSlices.forEach { slice ->
+            item(key = "bucket_new_${slice.bucket.name}") {
+                BucketHeader(slice)
+            }
+            itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
+                NotificationEntrance(
+                    group = group,
+                    index = entranceIndex[group.key] ?: 0,
+                    now = now,
+                    onOpen = { onOpenGroup(group) },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+    }
+    if (earlierSlices.isNotEmpty()) {
+        item(key = "earlier_header") {
+            SectionHeader(
+                title = "Earlier",
+                count = earlierSlices.sumOf { it.memberCount },
+                onMarkAllRead = onMarkAllRead,
+                // Bulk read belongs to NEW. Without a New section every row is
+                // already read, so the action would do nothing.
+                showMarkAll = false
+            )
+        }
+        earlierSlices.forEach { slice ->
+            item(key = "bucket_earlier_${slice.bucket.name}") {
+                BucketHeader(slice)
+            }
+            itemsIndexed(slice.groups, key = { _, group -> group.key }) { _, group ->
+                NotificationEntrance(
+                    group = group,
+                    index = entranceIndex[group.key] ?: 0,
+                    now = now,
+                    onOpen = { onOpenGroup(group) },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+    }
+    if (loadingMore) {
+        item(key = "loading_more") {
+            Box(Modifier.fillMaxWidth().padding(18.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+        }
+    }
+    if (loadMoreError != null) {
+        // A failed page does not replace the rows already read; it gets one line
+        // under them with its own retry.
+        item(key = "load_more_error") {
+            LoadMoreError(loadMoreError, onRetry)
+        }
+    }
+    if (filter != NotificationFilter.ALL && hasMore && !loadingMore && loadMoreError == null) {
+        // A filtered list too short to scroll cannot reach the geometry trigger.
+        // This is the deliberate way out; the unfiltered page still loads itself
+        // automatically.
+        item(key = "filtered_load_more") {
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TextButton(onClick = onLoadMore) {
+                    Text("Load older notifications")
                 }
             }
         }
