@@ -70,12 +70,12 @@ internal fun UnreadPill(unreadCount: Int) {
                 // A small scale on the way in/out reads as the count settling into
                 // the pill. The old pure cross-fade was the one place in this
                 // screen with no spatial motion at all.
-                fadeIn(ExpressiveMotion.FastEffects) +
-                    scaleIn(
-                        initialScale = 0.82f,
-                        animationSpec = ExpressiveMotion.FastSpatial
-                    ) togetherWith (
-                    fadeOut(ExpressiveMotion.FastEffects) +
+                (
+                    fadeIn(ExpressiveMotion.FastEffects) +
+                        scaleIn(
+                            initialScale = 0.82f,
+                            animationSpec = ExpressiveMotion.FastSpatial
+                        ) togetherWith fadeOut(ExpressiveMotion.FastEffects) +
                         scaleOut(
                             targetScale = 0.82f,
                             animationSpec = ExpressiveMotion.FastSpatial
