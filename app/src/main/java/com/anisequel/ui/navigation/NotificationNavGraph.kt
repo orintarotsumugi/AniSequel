@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.anisequel.data.model.ViewerProfile
 import com.anisequel.data.repository.AniListRepository
 import com.anisequel.data.repository.NotificationPreferencesStore
 import com.anisequel.data.repository.NotificationReadStore
@@ -16,6 +17,7 @@ import com.anisequel.ui.screens.notifications.NotificationActivityScreen
 import com.anisequel.ui.screens.notifications.NotificationCenterScreen
 import com.anisequel.ui.screens.notifications.NotificationMediaScreen
 import com.anisequel.ui.screens.notifications.NotificationThreadScreen
+import com.anisequel.ui.viewmodel.MediaDetailHost
 import com.anisequel.ui.viewmodel.NotificationViewModel
 
 /**
@@ -31,17 +33,22 @@ import com.anisequel.ui.viewmodel.NotificationViewModel
  *
  * A media target keeps the same `RepositoryEntryEditor` the Library uses, so the
  * sheet opened from a notification can still edit the viewer's entry. An activity
- * keeps the profile's comment sheet, and a thread is read-only: it has no reply
- * destination of its own yet, and a dead reply box would be worse than none.
+ * opens the real profile Activity feed at the named post rather than a standalone
+ * comment sheet: the reader lands in the list the post belongs to, and only a post
+ * older than the loaded pages falls back to that post's thread. A thread is
+ * read-only: it has no reply destination of its own yet, and a dead reply box would
+ * be worse than none.
  */
 fun NavGraphBuilder.notificationDestinations(
     navController: NavHostController,
     aniListRepository: AniListRepository,
     notificationPreferencesStore: NotificationPreferencesStore,
     notificationReadStore: NotificationReadStore,
-    viewerId: Int?,
+    signedInViewer: ViewerProfile?,
     entryEditor: RepositoryEntryEditor?,
-    threadSeedStore: NotificationThreadSeedStore
+    threadSeedStore: NotificationThreadSeedStore,
+    detailHost: MediaDetailHost,
+    onSignInAgain: () -> Unit
 ) {
     composable(AppRoutes.NOTIFICATIONS) {
         val viewModel: NotificationViewModel = viewModel(
@@ -97,15 +104,35 @@ fun NavGraphBuilder.notificationDestinations(
         )
     ) { entry ->
         val activityId = entry.arguments?.getInt(AppRoutes.NOTIFICATION_ACTIVITY_ID_ARG) ?: 0
-        NotificationActivityScreen(
-            activityId = activityId,
-            viewerId = viewerId,
-            repository = aniListRepository,
-            onBack = { navController.popBackStack() },
-            onOpenUser = { id, name ->
-                navController.navigateSingle(ProfileRoutes.byId(id, name))
-            }
-        )
+        val viewer = signedInViewer
+        if (viewer == null) {
+            // A restored route can be composed for one frame before the session
+            // ViewModel has answered. Keep the old standalone reader as that
+            // bridge; the profile feed replaces it as soon as the viewer lands.
+            NotificationActivityScreen(
+                activityId = activityId,
+                viewerId = null,
+                repository = aniListRepository,
+                onBack = { navController.popBackStack() },
+                onOpenUser = { id, name ->
+                    navController.navigateSingle(ProfileRoutes.byId(id, name))
+                }
+            )
+        } else {
+            ProfileDestination(
+                repository = aniListRepository,
+                detailHost = detailHost,
+                username = viewer.name,
+                userId = viewer.id,
+                isDemo = false,
+                navController = navController,
+                onSignInAgain = onSignInAgain,
+                isOwnProfile = true,
+                viewerId = viewer.id,
+                initialTab = ProfileRoutes.ACTIVITY_TAB_INDEX,
+                initialActivityId = activityId.takeIf { it > 0 }
+            )
+        }
     }
 
     composable(

@@ -1059,9 +1059,11 @@ fun AppNavigation(
                         aniListRepository = aniListRepository,
                         notificationPreferencesStore = notificationPreferencesStore,
                         notificationReadStore = notificationReadStore,
-                        viewerId = signedInViewer?.id,
+                        signedInViewer = signedInViewer,
                         entryEditor = sharedEntryEditor,
-                        threadSeedStore = notificationThreadSeedStore
+                        threadSeedStore = notificationThreadSeedStore,
+                        detailHost = detailHost,
+                        onSignInAgain = authViewModel::logout
                     )
                 }
 

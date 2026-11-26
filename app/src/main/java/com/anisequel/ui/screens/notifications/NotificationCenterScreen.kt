@@ -1,12 +1,7 @@
 package com.anisequel.ui.screens.notifications
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,7 +50,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -260,53 +254,6 @@ private fun InboxTopBar(
 }
 
 @Composable
-private fun UnreadPill(unreadCount: Int) {
-    val description = when {
-        unreadCount <= 0 -> "All notifications read"
-        unreadCount == 1 -> "1 unread notification"
-        else -> "$unreadCount unread notifications"
-    }
-    Surface(
-        shape = CircleShape,
-        color = if (unreadCount > 0) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
-        modifier = Modifier
-            .clearAndSetSemantics { contentDescription = description }
-            .animateContentSize(animationSpec = ExpressiveMotion.FastSpatialSize)
-    ) {
-        AnimatedContent(
-            targetState = unreadCount,
-            transitionSpec = {
-                (fadeIn(ExpressiveMotion.FastEffects) togetherWith fadeOut(ExpressiveMotion.FastEffects))
-                    .using(null)
-            },
-            label = "unread_pill_count"
-        ) { count ->
-            Text(
-                text = when {
-                    count <= 0 -> "All read"
-                    count > 99 -> "99+ new"
-                    else -> "$count new"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (count > 0) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
-            )
-        }
-    }
-}
-
-@Composable
 private fun FilterRow(
     filters: List<NotificationFilter>,
     selected: NotificationFilter,
@@ -368,11 +315,16 @@ private fun InboxContent(
             // trigger; without that it went false on failure and true again on
             // the next frame, retrying a rate-limited inbox in a loop.
             //
-            // An empty filtered view loads nothing automatically. Otherwise a
-            // chip with no match on page one walked the entire notification
-            // history while the reader watched a spinner. The empty state
-            // offers one explicit "Load older" instead.
+            // Only the unfiltered list may page itself from a viewport that is
+            // not full. A chip with one match on page one used to keep the list
+            // short, which kept this geometry trigger true, which loaded page
+            // after page until the whole history had been walked - the spinner
+            // the reader saw was the app reading everything they had filtered
+            // out. A filtered list never pages itself, no matter where it is
+            // scrolled: its footer (and the empty state's button) is the one
+            // explicit way to ask for older matches.
             count.groups.isNotEmpty() && count.hasMore &&
+                count.filter == NotificationFilter.ALL &&
                 !count.loading && !count.refreshing && !count.loadingMore &&
                 count.loadMoreError == null && last >= info.totalItemsCount - 4
         }
@@ -381,10 +333,20 @@ private fun InboxContent(
         if (shouldLoadMore) onLoadMore()
     }
     // A refresh can return fewer rows than were on screen. Keep the list from
-    // being parked below its new end when that happens.
-    LaunchedEffect(state.groups.size) {
-        val last = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (last > state.groups.size + 3) listState.scrollToItem(0)
+    // being parked below its new end when that happens. Written as a state read
+    // rather than a `LaunchedEffect(groups.size)`: the effect could run before
+    // the new layout existed, see the old, consistent geometry and never run
+    // again. This flag turns true when the laid-out list is actually past its
+    // end, whichever frame that happens on.
+    val beyondEnd by remember(listState) {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            info.totalItemsCount > 0 && last >= info.totalItemsCount
+        }
+    }
+    LaunchedEffect(beyondEnd) {
+        if (beyondEnd) listState.scrollToItem(0)
     }
 
     // One clock for every skeleton on the page, and only while the page is a
@@ -518,6 +480,25 @@ private fun InboxContent(
                                 LoadMoreError(state.loadMoreError, onRetry)
                             }
                         }
+                        if (state.filter != NotificationFilter.ALL &&
+                            state.hasMore &&
+                            !state.loadingMore &&
+                            state.loadMoreError == null
+                        ) {
+                            // A filtered list too short to scroll cannot reach the
+                            // geometry trigger. This is the deliberate way out; the
+                            // unfiltered page still loads itself automatically.
+                            item(key = "filtered_load_more") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    TextButton(onClick = onLoadMore) {
+                                        Text("Load older notifications")
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -548,6 +529,15 @@ private fun NotificationEntrance(
         animationSpec = ExpressiveMotion.DefaultSpatial,
         label = "inbox_card_lift"
     )
+    // The card already faded and rose; the small scale closes the entrance on
+    // the same spatial spring as the rest of the app instead of leaving the last
+    // frame to a hard alpha cut. These are draw-phase values, so the list is not
+    // re-measured on every frame.
+    val scale by animateFloatAsState(
+        targetValue = if (shown) 1f else 0.965f,
+        animationSpec = ExpressiveMotion.FastSpatial,
+        label = "inbox_card_scale"
+    )
     NotificationCard(
         group = group,
         onClick = onOpen,
@@ -555,6 +545,8 @@ private fun NotificationEntrance(
         modifier = modifier.graphicsLayer {
             this.alpha = alpha
             translationY = lift
+            scaleX = scale
+            scaleY = scale
         }
     )
 }

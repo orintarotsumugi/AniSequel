@@ -45,20 +45,26 @@ internal fun NotificationAlertSchedulingEffect(
     authState: AuthUiState,
     viewerId: Int?
 ) {
-    val settings by store.preferences.collectAsStateWithLifecycle(
-        initialValue = NotificationAlertPreferences()
+    // Null until DataStore answers. The old default was a fully-populated
+    // `NotificationAlertPreferences()` whose `enabled` is false, so the first
+    // composition cancelled a schedule that was already running before the saved
+    // value had a chance to say it should stay. Null keeps the effect from making
+    // a decision out of a placeholder.
+    val settings by store.preferences.collectAsStateWithLifecycle<NotificationAlertPreferences?>(
+        initialValue = null
     )
     // Remembered across recompositions so the effect can tell a first sign-in
     // (nothing to clear) from a switch (the old tray must go).
     var lastAccount by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(authState, viewerId, settings.enabled, settings.intervalMinutes) {
+    LaunchedEffect(authState, viewerId, settings?.enabled, settings?.intervalMinutes) {
         // Only an actual sign-out cancels and clears. `Authenticated` with a null
         // viewer is the dashboard still loading on a cold start, and treating
         // that as signed-out wiped the tray every time the app was opened.
         when (authState) {
             is AuthUiState.Unauthenticated -> {
                 lastAccount = null
+                store.clearActiveAccount()
                 NotificationAlertsScheduler.cancel(context)
                 NotificationAlerts.cancelAll(context)
                 return@LaunchedEffect
@@ -69,13 +75,18 @@ internal fun NotificationAlertSchedulingEffect(
             else -> return@LaunchedEffect
         }
         val account = viewerId ?: return@LaunchedEffect
+        // Record the account before waiting on DataStore: a periodic worker may
+        // run in that window, and the cursor it reads must belong to the session
+        // whose token it is holding. Scheduling itself still waits for the saved
+        // preference, so the placeholder cannot cancel an existing schedule.
         store.recordActiveAccount(account)
         if (lastAccount != null && lastAccount != account) {
             NotificationAlerts.cancelAll(context)
         }
         lastAccount = account
-        if (settings.enabled) {
-            NotificationAlertsScheduler.ensureScheduled(context, settings.intervalMinutes)
+        val preferences = settings ?: return@LaunchedEffect
+        if (preferences.enabled) {
+            NotificationAlertsScheduler.ensureScheduled(context, preferences.intervalMinutes)
         } else {
             NotificationAlertsScheduler.cancel(context)
         }

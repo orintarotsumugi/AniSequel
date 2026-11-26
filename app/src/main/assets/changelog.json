@@ -9,7 +9,7 @@
         },
         {
           "title": "Alerts open the row they are about",
-          "detail": "A title alert opens the title sheet, an activity opens its comment thread, a thread alert opens the thread at the comment, a follow opens the profile, and a message opens the Messages tab. The destination survives the app being closed, and a tap marks the folded group read only when your mark-read preference is on."
+          "detail": "A title alert opens the title sheet, an activity opens your profile's Activity list at the post that was liked or replied to, a thread alert opens the thread at the comment, a follow opens the profile, and a message opens the Messages tab. If the activity is older than the loaded page, its comment thread still opens. The destination survives the app being closed, and a tap marks the folded group read only when your mark-read preference is on."
         },
         {
           "title": "The notification centre is redesigned",
@@ -22,6 +22,14 @@
         {
           "title": "Enabling alerts cannot flood you",
           "detail": "The first background check establishes a silent baseline. Later checks post only genuinely new ids, remember what they posted so a retry cannot duplicate an alert, and preserve pending events when a request fails or Android is blocking notifications."
+        },
+        {
+          "title": "The inbox reads only the page you are on",
+          "detail": "A filtered feed no longer walks the whole notification history in the background when its first page is short, and it now offers an explicit Load older action at the end instead. Returning to the inbox no longer jumps a valid list to the top."
+        },
+        {
+          "title": "A new event in a folded group can still alert",
+          "detail": "A grouped notification now makes a sound when it gains a genuinely new event, while a retry of the same events stays silent. The unread pill and inbox cards settle with the app's Material 3 Expressive springs, and a permanently denied notification permission offers system settings instead of repeating a dialog Android will not show."
         }
       ]
     },

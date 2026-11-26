@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import com.anisequel.MainActivity
 import com.anisequel.R
 import com.anisequel.domain.notifications.NotificationAlertDraft
@@ -18,8 +19,10 @@ import com.anisequel.domain.notifications.NotificationDestinations
  *
  *  - the tray id is derived from the group key, so a newer like on the same
  *    activity updates one notification instead of stacking a second;
- *  - `setOnlyAlertOnce(true)` means a retried worker run (process death, a
- *    WorkManager retry) cannot sound the same alert twice;
+ *  - an update is only silent when the active notification already carries the
+ *    exact same event ids. `setOnlyAlertOnce` used to cover retries, but it also
+ *    silenced a genuinely new like folded into the same group, so a group could
+ *    grow all day without ever making another sound;
  *  - the tap payload is the in-app route plus every id in the group, so the
  *    destination survives the process being killed between the post and the tap.
  *
@@ -51,7 +54,21 @@ internal object NotificationAlerts {
         var posted = 0
         drafts.asReversed().forEach { draft ->
             val id = notificationIdFor(draft.key)
-            manager.notify(id, build(context, draft, id))
+            val ids = draft.notificationIds.toIntArray()
+            // A retry after process death re-posts the same id. If the tray still
+            // holds exactly these events, there is nothing new to say and no
+            // second sound to make. A group that gained a member has a different
+            // set, so it updates and alerts normally.
+            val alreadyShown = manager.activeNotifications.any { active ->
+                active.id == id &&
+                    active.notification.extras
+                        ?.getIntArray(SystemNotifications.EXTRA_NOTIFICATION_IDS)
+                        ?.contentEquals(ids) == true
+            }
+            if (!alreadyShown) manager.notify(id, build(context, draft, id))
+            // A duplicate still counts as handled: the caller saves the delivery
+            // cursor on a non-zero result, and zero would call this
+            // PermissionBlocked even though the tray already had the events.
             posted += 1
         }
         return posted
@@ -81,9 +98,14 @@ internal object NotificationAlerts {
             .setCategory(draft.tone.notificationCategory())
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setAutoCancel(true)
-            // A retry after process death re-posts the same id. Without this it
-            // would buzz again for an event the reader was already told about.
-            .setOnlyAlertOnce(true)
+            .addExtras(
+                Bundle().apply {
+                    putIntArray(
+                        SystemNotifications.EXTRA_NOTIFICATION_IDS,
+                        draft.notificationIds.toIntArray()
+                    )
+                }
+            )
             .setContentIntent(openIntent(context, draft, id))
             .build()
 

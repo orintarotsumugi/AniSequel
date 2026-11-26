@@ -119,6 +119,18 @@ class NotificationAlertStore(private val context: Context) : NotificationCursorS
         context.notificationAlertDataStore.edit { it[Keys.ACTIVE_ACCOUNT] = accountId }
     }
 
+    /**
+     * Forgets the last signed-in account on sign-out.
+     *
+     * The cursor is keyed by id, so leaving this behind does not mix two
+     * accounts' history - but a worker that runs before the next sign-in could
+     * read it as the account its token belongs to. Clearing it makes that check
+     * fall back to the viewer lookup the worker already knows how to do.
+     */
+    suspend fun clearActiveAccount() {
+        context.notificationAlertDataStore.edit { it.remove(Keys.ACTIVE_ACCOUNT) }
+    }
+
     fun deliveryState(accountId: Int): Flow<NotificationDeliveryState> =
         context.notificationAlertDataStore.data.map { stored -> stored.toDeliveryState(accountId) }
 

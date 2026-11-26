@@ -321,6 +321,14 @@ internal fun ProfileTabsContent(
      */
     initialSegment: Int = SEGMENT_ACTIVITY,
     /**
+     * The activity a notification opened this profile for, if any.
+     *
+     * Threaded only into the Activity page: a notification can name a row in the
+     * reader's own history, not in the friends or messages segments, and the route
+     * that carries it always asks for [SEGMENT_ACTIVITY] too.
+     */
+    initialActivityId: Int? = null,
+    /**
      * Held rather than read from [state], because two of the tabs ask it for work.
      *
      * The Stats tab and a borrowed list both render this person's anime list, and on
@@ -515,6 +523,7 @@ internal fun ProfileTabsContent(
                         // them cannot be showing one, which `ProfileActivityPage`
                         // already enforces.
                         initialSegment = initialSegment,
+                        initialActivityId = initialActivityId,
                         calendar = state.activity,
                         userName = state.username,
                         userAvatar = state.avatarUrl,

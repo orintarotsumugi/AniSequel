@@ -28,13 +28,15 @@ import com.anisequel.ui.screens.profile.rememberNowEpochSecond
 import com.anisequel.ui.viewmodel.UserActivityViewModel
 
 /**
- * One activity from a notification, opened as the real comment thread.
+ * The fallback reader for an activity notification.
  *
- * A notification carries an activity id and, at most, a line of context. That is
- * enough to fetch the root and open the same sheet the profile feed uses - no
- * browser, no second comment implementation, and no fabricated post when the
- * activity still exists. If the root fetch fails the replies are still opened;
- * the thread is useful even without the sentence that started it.
+ * The normal activity destination is now the profile's own Activity feed, where
+ * the named post can be shown in its list (see `ProfileActivityTab`). This screen
+ * remains for the one frame before a restored route knows who is signed in, and
+ * for the case where the feed cannot be built at all: it fetches the root and
+ * opens the same comment sheet the profile uses. If the root fetch fails the
+ * replies are still opened; the thread is useful even without the sentence that
+ * started it.
  */
 @Composable
 internal fun NotificationActivityScreen(

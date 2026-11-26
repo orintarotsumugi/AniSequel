@@ -1,7 +1,9 @@
 package com.anisequel.ui.screens.settings
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,6 +42,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.ViewerProfile
@@ -425,11 +428,26 @@ private fun rememberAlertEnabler(
             }
         } else {
             enableAfterGrant = false
+            // Android reports `shouldShowRequestPermissionRationale` as false
+            // both before the first request and after the reader has refused
+            // twice. This callback only runs after a request, so false here is
+            // the permanent state: launching the dialog again would do nothing,
+            // and the old branch left the reader with a toast and no way in.
+            val activity = context.findActivity()
+            val canAskAgain = activity == null || ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
             Toast.makeText(
                 context,
-                "Notifications stay off. You can allow them later in system settings.",
+                if (canAskAgain) {
+                    "Notifications stay off. You can allow them later in system settings."
+                } else {
+                    "Android will not show the permission dialog again. Opening system settings."
+                },
                 Toast.LENGTH_LONG
             ).show()
+            if (!canAskAgain) SystemNotifications.openSystemSettings(context)
         }
     }
 
@@ -438,17 +456,12 @@ private fun rememberAlertEnabler(
             SystemNotifications.ChannelStatus.ALLOWED -> enableAlerts()
 
             SystemNotifications.ChannelStatus.PERMISSION_MISSING -> {
-                if (SystemNotifications.canRequestRuntimePermission(context)) {
-                    enableAfterGrant = true
-                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
-                    Toast.makeText(
-                        context,
-                        "Android will not show the permission dialog again. Allow AniSequel in system settings.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    SystemNotifications.openSystemSettings(context)
-                }
+                // The status already says the permission is missing on API 33+;
+                // there is no third state where a dialog must not be launched.
+                // A permanently denied request is answered by the launcher's
+                // callback below, which opens system settings instead.
+                enableAfterGrant = true
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
 
             else -> {
@@ -559,7 +572,7 @@ private fun BackgroundAlertsCard(
             // looks tappable and does nothing is the failure mode this page was
             // rewritten to remove. The interval is remembered either way.
             Text(
-                text = "Turn background alerts on to choose a schedule. AniList's minimum is 15 minutes.",
+                text = "Turn background alerts on to choose a schedule. Android's minimum is 15 minutes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -785,6 +798,12 @@ private fun StatusBadge(active: Boolean, onLabel: String, offLabel: String) {
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 private fun permissionTitle(status: SystemNotifications.ChannelStatus): String = when (status) {

@@ -115,6 +115,15 @@ fun ProfileActivityPage(
      * Messages and flashing Activity first.
      */
     initialSegment: Int = SEGMENT_ACTIVITY,
+    /**
+     * The activity a notification asked this page to open on.
+     *
+     * Only the profile's own feed consumes it. Friends and Messages are feeds of
+     * other events and a notification id from one of those would name a row that
+     * is not there; the route that carries this id always asks for the Activity
+     * segment as well.
+     */
+    initialActivityId: Int? = null,
     calendar: ActivityCalendar?,
     userName: String?,
     userAvatar: String?,
@@ -157,7 +166,15 @@ fun ProfileActivityPage(
     // segment asks where to open, it does not outrank the choice the reader made
     // here afterwards. Applying it on every recomposition instead would both
     // fight the chips and flash the wrong feed on the way in.
-    var segment by rememberSaveable { mutableIntStateOf(initialSegment) }
+    //
+    // A notification is the exception, like its tab: it names one activity in the
+    // own feed, so it gets a separate saved slot and starts on Activity even if
+    // the reader last left this profile on Friends. Without the extra key the
+    // notification opened whichever segment was saved and its target was not in
+    // the feed at all.
+    var segment by rememberSaveable(initialActivityId != null) {
+        mutableIntStateOf(initialSegment)
+    }
     // A profile that does not offer the segments can never be showing one. The
     // saved value is kept rather than reset, so returning to an own profile
     // restores the last choice.
@@ -342,6 +359,7 @@ fun ProfileActivityPage(
                     contentPadding = contentPadding,
                     listState = activityListState,
                     viewerId = messagesState.viewerId,
+                    focusActivityId = initialActivityId,
                     onOpenDetail = onOpenDetail
                 )
             }
