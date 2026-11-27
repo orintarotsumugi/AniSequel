@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "2.7.0",
+      "entries": [
+        {
+          "title": "The countdown counts the last hour",
+          "detail": "Every branch of the airing countdown was truncated to a single unit, so an episode five hours and twenty minutes away printed 'in 5h': twenty minutes wrong for an hour, and then nothing new for that hour. Under a day the line now carries hours and minutes ('in 5h 20m'), and under a week the days carry their hours ('in 2d 4h'). A whole unit is still dropped rather than padded with a zero, so an episode exactly five hours out still reads 'in 5h'."
+        },
+        {
+          "title": "A show without an episode count still says when it airs",
+          "detail": "AniList reports no episode count for a show whose length it has not announced, and the airing line was gated on that total - so a weekly show with a known slot and an unknown length printed no countdown anywhere, which is the 'it knows when it airs, why does the app not' complaint. The sentence no longer needs the denominator: 'Episode 12 airs in 5h 20m', 'Episode 12 of 131 airs in 5h 20m' when there is one. When nextAiringEpisode is empty the app asks AniList's own airing schedule - filtered to slots that have not aired, the only part of it the API promises is complete - and moves on to the next slot as each one passes. Nova's stats strip draws the line for any airing anime now, instead of only for titles that also had a progress bar."
+        },
+        {
+          "title": "A synopsis is kept for three days",
+          "detail": "Finished and cancelled titles were held for a week, on the argument that nothing in the record moves. The synopsis and the cast do not, but the score, popularity, favourites and rankings keep drifting, so a title opened after a week printed a week-old score beside live ones. The window is three days: the synopsis is not re-fetched between opens, and the numbers cannot freeze for a week. A cached record whose whole schedule has aired is discarded as well, instead of waiting out its window while the countdown it can build runs out to nothing."
+        },
+        {
+          "title": "Opening a title no longer rebuilds its palette",
+          "detail": "The page's colours are derived from the cover - two tonal palettes per scheme, around forty tone solves and a thirty-six-role copy, on the main thread on the sheet's first frame, thrown away when it closes. That result is a pure function of the seed colour and the tint settings, so it is kept: reopening a title is a lookup now, and only a cover that has not been opened recently does the work again."
+        },
+        {
+          "title": "The twelve fixed roles follow the cover",
+          "detail": "Material 3 has twelve roles that are the same in light and dark on purpose - primaryFixed, primaryFixedDim and their on-colours, and the secondary and tertiary sets - and AniSequel generated none of them. The scheme copy is a list of named roles, so an unlisted one silently kept the app's baseline: a date picker, a snackbar action or a tooltip on a green cover drew Material's purple. They are derived now at Material's own tones (90/80 for the fills, 10/30 for their text) in both modes, copied onto the scheme with the other forty-eight, and eased between themes with the accents they belong to. The hand-written brand and accent palettes get the same twelve from their own accents, derived once per palette and mode rather than for all ten at startup, so the default theme is no longer the one place that still shows purple."
+        },
+        {
+          "title": "Tone 99 is no longer a different colour",
+          "detail": "The gamut solver reduces chroma until a tone fits in sRGB, and at the very top of the ladder CAM16's inverse of white overshoots by a few percent - so no chroma fitted, the search gave up silently, and it returned the unclipped solve. Asking for tone 99 at a red hue produced a clipped magenta at tone 70: a 30-tone drop and a hue nobody asked for. The solver now falls back to the neutral at the requested tone, and the ceiling tolerance is half a linear unit, which is under one 8-bit step, so tone 99 keeps its chroma where the gamut can hold it. Every tone from 1 to 99, at three chromas across twelve hues, now measures within 1.5 tone of the request."
+        },
+        {
+          "title": "The page's tertiary is the artwork's second hue",
+          "detail": "Tertiary - and the three fixed roles built from it - was a blind 60-degree rotation of the seed's hue, which is Material's answer for a wallpaper with no better information. A cover does have better information: the quantizer already scores a second, distinct hue for the hero's backdrop. When that hue is at least 25 degrees from the seed and genuinely coloured, it becomes the tertiary palette, so the chips and containers under the art are sampled from the art. A one-hue cover, a grey accent, or an accent too close to the seed keeps the rotation, and primary and secondary never move."
+        },
+        {
+          "title": "A grey cover is no longer decoded on every open",
+          "detail": "The palette cache only remembered successes, so the covers that produce no palette were the most expensive ones in the app: a black-and-white cover was fetched from Coil, copied to a software bitmap and quantized again on every open, under two URLs, to learn the same null. Definitive misses are remembered now, in a bounded least-recently-used set alongside the palettes. A failed request, a timeout or a cancelled decode is not remembered, because the next open may have a network this one did not."
+        },
+        {
+          "title": "A cover's colours are read once, not twice",
+          "detail": "Building a cover palette converts every 5-bit histogram bin to HCT once for the seed and once for the accent, and a 96px cover can hold four thousand bins - eight thousand CAM16 solves on the IO thread every time a title is opened for the first time. The bins are converted once now and both passes score the same list, which halves that work without changing the seed or the accent."
+        },
+        {
+          "title": "Quiet text clears AA on the brightest surface",
+          "detail": "The emphasis roles - secondary text, captions, dividers, the progress track - are dimmed to a named floor against the worst surface they can be drawn on, which the palette took to be surfaceContainerHighest. It is not the worst: the dark scheme's surfaceBright is lighter (tone 24 against 22) and the light scheme's surfaceDim is darker (87 against 90). A red cover's secondary text measured 4.48:1 on surfaceBright in the dark theme, under the 4.5:1 it is named for. The surface is chosen by measured contrast across all eight surface roles now, so every emphasis role clears its floor on all of them, and surfaceTint rides the surface spring instead of arriving before the surfaces it tints."
+        }
+      ]
+    },
+    {
       "version": "2.6.9",
       "entries": [
         {
@@ -62,6 +107,22 @@
         {
           "title": "A pinch no longer rebuilds the page around the board",
           "detail": "The board's zoom was a value read by the screen's own body, so the toolbar readout, the sheet host and the persistence effect all subscribed to it: every frame of a pinch recomposed the whole page - the tray, both toolbars and every sheet slot - only to pass the board a number it already had. The zoom now lives in a small saved holder that the board and the stepper read and the page merely carries. The board's measurement pass stopped building a list of row, poster and caret objects on each frame as well: it walks the same children in order twice, once to measure and once to place."
+        },
+        {
+          "title": "The friends row keeps up with the page",
+          "detail": "The Info page re-asks for a title every ten minutes so a score, a synopsis or an airing state cannot go stale while it is open, and its own note said that kept the page fresh. The friends card was loaded once when the sheet opened and then never again: its first answer was the answer for the whole session, so a friend who started the show while the reader was looking at it never appeared, and reopening the title later still showed the row from that first visit. Friends now age on the same ten-minute window, refresh behind the card already on screen - no spinner over a list that is still true as far as anyone can see - and ask the repository to skip its own cache, which can hold the answer for longer than this page waits."
+        },
+        {
+          "title": "The score ring's wave moves",
+          "detail": "The progress bar's crests travel; the score's wavy ring was drawn at a fixed phase, so beside that bar it looked like a picture of a wave rather than water. The outline now drifts through the same arithmetic at a deliberately slow rate - five seconds to travel one lobe, against the loading arc's one and a half to come round - and the filled share drifts with it, because the two are one outline drawn twice. It stops when the page is not on screen and when the reader has asked for Instant motion, like every other loop in the app."
+        },
+        {
+          "title": "The tier list has its own mark",
+          "detail": "The tier tab, the Library's door, the profile's row and the top bar's button all drew the trophy, which is the anime rankings section's glyph: one drawing for two destinations, and a prize for a page whose job is filing titles into rows. A tier list is a board - a column of labels with the titles ranked against them, and a last row only as full as the reader's taste made it. The trophy stays where a ranking belongs."
+        },
+        {
+          "title": "The bottom bar stays off the tier list",
+          "detail": "The tier list hid the bottom bar only while a board was open, so its shelf of lists drew the bar over its own bottom edge and reserved the bar's height under the last row - an empty strip where a control used to be. The tier page now draws no bar at all: its shelf has a Back arrow in its own top bar and the system back gesture, and a board's tray is dragged along the edge the bar would have been sharing."
         }
       ]
     },

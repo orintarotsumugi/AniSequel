@@ -232,12 +232,12 @@ fun LibraryScreen(
                             }
                         }
                         // Beside the title rather than in `actions`, for the reason
-                        // the profile's trophy gives: the tier list ranks the
+                        // the profile's row gives: the tier list ranks the
                         // library this page is showing, so it is worth reaching
                         // while looking at that library. In the actions slot it
                         // would read as another place the page goes rather than as
                         // a way of ordering what is on it.
-                        // The trophy rides in a soft capsule of its own, so the
+                        // The button rides in a soft capsule of its own, so the
                         // bar's two controls read as one row of buttons rather
                         // than an icon stranded between two text lines.
                         Surface(
@@ -256,7 +256,7 @@ fun LibraryScreen(
                                 // target, so the button stays easy to hit while
                                 // reading as lighter than the avatar beside it.
                                 Icon(
-                                    imageVector = AppVectorIcons.Trophy,
+                                    imageVector = AppVectorIcons.TierBoard,
                                     contentDescription = "Open tier list",
                                     modifier = Modifier.size(20.dp)
                                 )

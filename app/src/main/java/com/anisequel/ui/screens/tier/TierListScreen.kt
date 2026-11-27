@@ -10,7 +10,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +26,7 @@ import com.anisequel.ui.viewmodel.TierListViewModel
  *
  * ## One route, two screens, and one place that decides
  *
- * The trophy still opens one destination, and this is it. Which of the two screens
+ * The shortcut still opens one destination, and this is it. Which of the two screens
  * is showing is `opened == null` - the library - and nothing else: no second route,
  * no argument in the navigation graph, and therefore no way for a deep link, a
  * restored back stack and the app's own back gesture to disagree about where they
@@ -63,7 +62,6 @@ import com.anisequel.ui.viewmodel.TierListViewModel
 fun TierListScreen(
     tierListViewModel: TierListViewModel,
     onNavigateBack: () -> Unit,
-    onBoardOpenChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val viewModel = tierListViewModel
@@ -130,16 +128,6 @@ fun TierListScreen(
         }
     }
 
-    // The bar over this route is the library's, not an open board's - see
-    // `showsMainBar`. The host draws the bar and cannot see this screen's state, so
-    // the state is reported rather than inferred from the route: the route is the
-    // same for both screens. `DisposableEffect` covers the leaving half, because a
-    // tab switch disposes this composition without recomposing it again.
-    LaunchedEffect(document != null) { onBoardOpenChange(document != null) }
-    DisposableEffect(Unit) {
-        onDispose { onBoardOpenChange(false) }
-    }
-
     // Fetch the pool for the shelf that is visible, and for a restored/open board
     // whose pool may not have arrived yet. Guarded in the ViewModel, so this is
     // safe to call on every recomposition of the effect.
@@ -150,7 +138,7 @@ fun TierListScreen(
 
     // The system back gesture has to reach the same place as the bar's arrow, or
     // the feature is reachable two ways and leaves one of them. Inside a list that
-    // is the library; on the library it is wherever the trophy was opened from.
+    // is the library; on the library it is wherever the shortcut was opened from.
     BackHandler {
         if (document == null) onNavigateBack() else viewModel.closeList()
     }

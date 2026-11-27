@@ -3,6 +3,7 @@ package com.anisequel
 import com.anisequel.domain.color.ArgbHex
 import com.anisequel.domain.color.CoverColorQuantizer
 import com.anisequel.domain.color.Hct
+import com.anisequel.domain.color.TonalPalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -87,6 +88,48 @@ class ColorEngineTest {
         val second = CoverColorQuantizer.score(mapOf(a, b))
         assertEquals(first, second)
         assertTrue(first != null)
+    }
+
+/**
+     * Every tone on the ladder is the tone it asked for, at every hue and chroma.
+     *
+     * This is the contrast contract: the palette builder picks tones 40/80/90 by
+     * name and the AA pairs are guaranteed by those tones being what they say. The
+     * gamut search at the top of the scale used to give up silently - with no
+     * chroma in gamut it returned the unclipped solve, so tone 99 at a red hue came
+     * back as a clipped magenta at tone 70, and a scheme that asked for tone 99 got
+     * a colour two thirds of the way down the ladder. An achromatic fallback now
+     * guarantees the tone, and a half-unit tolerance at the ceiling lets tone 99
+     * keep its chroma where the gamut can hold it.
+     */
+    @Test
+    fun `every tone of every palette is the tone it asks for`() {
+        for (hue in 0 until 360 step 30) {
+            for (chroma in listOf(24.0, 48.0, 120.0)) {
+                val palette = TonalPalette(hue.toDouble(), chroma)
+                for (tone in 1..99) {
+                    val measured = Hct.fromInt(palette.tone(tone)).tone
+                    assertTrue(
+                        "hue $hue at chroma $chroma asked for tone $tone and got " +
+                            "%.2f".format(measured),
+                        kotlin.math.abs(measured - tone) < 1.5
+                    )
+                }
+            }
+        }
+    }
+
+    /** The exact failure above, named, so a regression is one line to read. */
+    @Test
+    fun `tone 99 of a red palette is still a red at tone 99`() {
+        val solved = TonalPalette(0.0, 120.0).tone(99)
+        val hct = Hct.fromInt(solved)
+        assertTrue(
+            "tone 99 came back as tone %.2f (hue %.1f): the solver returned an "
+                .format(hct.tone, hct.hue) +
+                "out-of-gamut colour instead of the neutral it can actually draw",
+            hct.tone >= 97.5
+        )
     }
 
     private fun angularDistance(a: Double, b: Double): Double {

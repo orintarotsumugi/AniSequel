@@ -448,15 +448,29 @@ internal object HctSolver {
         if (!isInGamut(xyz)) {
             var low = 0.0
             var high = chroma
+            var fitted = false
             repeat(CHROMA_STEPS) {
                 val mid = (low + high) / 2.0
                 val candidate = xyzForTone(hue, mid, tone)
                 if (isInGamut(candidate)) {
                     low = mid
                     xyz = candidate
+                    fitted = true
                 } else {
                     high = mid
                 }
+            }
+            if (!fitted) {
+                // Nothing on the chroma axis fitted, which happens at the very top
+                // of the tone scale: CAM16's inverse white lands a few percent
+                // above white in linear red, so *no* chroma - not even one - is
+                // inside the box at tone 99. This used to fall through and return
+                // the original, unclipped solve: tone 99 at a red hue came back as
+                // a clipped magenta at tone 70, with a hue nothing had asked for.
+                // The tone is the property the palette depends on, so give up hue
+                // and chroma - which the gamut cannot honour anyway - and answer
+                // with the neutral at that tone.
+                return ColorMath.argbFromTone(tone)
             }
         }
         return ColorMath.argbFromXyz(xyz[0], xyz[1], xyz[2])
@@ -474,8 +488,41 @@ internal object HctSolver {
         return xyz
     }
 
+    /**
+     * Whether [xyz] is inside sRGB, with a tolerance of half a percent.
+     *
+     * The tolerance used to be 0.01, which is tighter than the CAM16 round trip
+     * itself: the inverse of a tone-99 solve overshoots white by about three
+     * percent in red, and the transform back from CAM16 is only good to a few
+     * tenths of a unit. Rejecting a linear channel of 100.4 made the search
+     * believe the whole top of the tone scale was out of gamut. Half a percent is
+     * under one 8-bit step at the top of the ramp, so accepting it and letting
+     * [ColorMath.delinearized] clamp costs nothing visible.
+     */
     private fun isInGamut(xyz: DoubleArray): Boolean {
         val linear = ColorMath.linearRgbFromXyz(xyz[0], xyz[1], xyz[2])
-        return linear.all { it >= -0.01 && it <= 100.01 }
+        return linear.all { it >= -GAMUT_FLOOR_EPSILON && it <= 100.0 + GAMUT_CEILING_EPSILON }
     }
+
+    /**
+     * How far below zero a channel may sit and still count as in-gamut.
+     *
+     * Tight on purpose. At the dark end of the tone scale a negative channel is
+     * how the solver represents a hue the gamut cannot hold at that luminance, and
+     * clipping it to zero *raises* the colour's tone: tone 1 with a negative green
+     * of 0.17 came back at tone 2.9, a visible step off the ladder.
+     */
+    private const val GAMUT_FLOOR_EPSILON = 0.01
+
+    /**
+     * How far above white a channel may sit.
+     *
+     * Loose because of the opposite failure: CAM16's inverse of a near-white tone
+     * overshoots the red channel by about three percent, and the tight bound the
+     * solver used to apply made the entire top of the tone scale look out of
+     * gamut. Half a unit of linear light at the top of the ramp is under one
+     * 8-bit step, so clipping it is invisible - and it is what lets tone 99 exist
+     * at all.
+     */
+    private const val GAMUT_CEILING_EPSILON = 0.5
 }

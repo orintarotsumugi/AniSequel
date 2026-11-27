@@ -39,6 +39,49 @@ import com.anisequel.domain.color.MaterialScheme
 object DynamicThemeBuilder {
 
     /**
+     * How many generated palettes are kept; see [palettes].
+     *
+     * Twenty-four covers is far more than the one or two a reader opens in a
+     * session, and small enough that evicting costs a regeneration rather than a
+     * leak.
+     */
+    private const val PALETTE_CACHE_ENTRIES = 24
+
+    /** The four inputs a scheme is a pure function of. */
+    private data class PaletteKey(
+        val argb: Int,
+        val tintSurfaces: Boolean,
+        val tintStrength: Float,
+        val accentArgb: Int?
+    )
+
+    /**
+     * Schemes already built, keyed by seed and knobs.
+     *
+     * This used to be recomputed on every call, and every call is the first frame
+     * of a title sheet: two tonal palettes for the light scheme, two for the dark
+     * one, roughly fifty HCT tone solves and a forty-eight-role `copy` on the main
+     * thread, before the page can be laid out. The sheet is disposed when it
+     * closes, so the next open of the same title paid all of it again - the one
+     * piece of work on that path that is a pure function of a handful of numbers.
+     * Reopening a cover is now a lookup; a new cover still generates once.
+     *
+     * Not a SnapshotStateMap: nothing observes it, and the value read is a
+     * composition-time function of its key, so a palette arriving late would not
+     * be a change anyone needs to be notified about.
+     */
+    private val palettes = object :
+        LinkedHashMap<PaletteKey, Pair<ColorScheme, ColorScheme>>(
+            PALETTE_CACHE_ENTRIES,
+            0.75f,
+            true
+        ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<PaletteKey, Pair<ColorScheme, ColorScheme>>?
+        ): Boolean = size > PALETTE_CACHE_ENTRIES
+    }
+
+    /**
      * Parses a stored hex colour.
      *
      * Kept as a `Color`-returning function here because callers in the theme
@@ -88,8 +131,19 @@ object DynamicThemeBuilder {
      * Both schemes are returned and both are reachable now. The anime layer
      * respects Light/Dark/System rather than forcing dark.
      */
-    fun createDynamicSchemes(seed: Color, tintSurfaces: Boolean = false): Pair<ColorScheme, ColorScheme> =
-        createSchemes(seed = seed, tintSurfaces = tintSurfaces, tintStrength = 1f)
+    fun createDynamicSchemes(
+        seed: Color,
+        tintSurfaces: Boolean = false,
+        // The artwork's second hue, when the caller already looked it up.
+        // Optional so the standing accent and the anime layer - which have no
+        // second hue to offer - keep Material's 60-degree tertiary.
+        accent: Color? = null
+    ): Pair<ColorScheme, ColorScheme> = createSchemes(
+        seed = seed,
+        tintSurfaces = tintSurfaces,
+        tintStrength = 1f,
+        accent = accent
+    )
 
     /**
      * The retained theme at a chosen surface strength.
@@ -106,32 +160,48 @@ object DynamicThemeBuilder {
      */
     fun createRetainedSchemes(
         seed: Color,
-        tintStrength: Float
+        tintStrength: Float,
+        accent: Color? = null
     ): Pair<ColorScheme, ColorScheme> = createSchemes(
         seed = seed,
         tintSurfaces = true,
-        tintStrength = tintStrength
+        tintStrength = tintStrength,
+        accent = accent
     )
 
     private fun createSchemes(
         seed: Color,
         tintSurfaces: Boolean,
-        tintStrength: Float
+        tintStrength: Float,
+        accent: Color?
     ): Pair<ColorScheme, ColorScheme> {
+        val accentArgb = accent?.toArgb()
+        val key = PaletteKey(seed.toArgb(), tintSurfaces, tintStrength, accentArgb)
+        // Synchronized because the access-ordered map is mutated by a read: two
+        // threads asking at once could otherwise reorder the eviction order while
+        // iterating it. In the app every caller is the main thread.
+        synchronized(palettes) {
+            palettes[key]?.let { return it }
+        }
         val argb = seed.toArgb()
         val light = MaterialColorSchemes.tonalSpot(
             argb,
             dark = false,
             tintSurfaces = tintSurfaces,
-            tintStrength = tintStrength
+            tintStrength = tintStrength,
+            accentArgb = accentArgb
         )
         val dark = MaterialColorSchemes.tonalSpot(
             argb,
             dark = true,
             tintSurfaces = tintSurfaces,
-            tintStrength = tintStrength
+            tintStrength = tintStrength,
+            accentArgb = accentArgb
         )
-        return light.toColorScheme(LightColorScheme) to dark.toColorScheme(DarkColorScheme)
+        val generated =
+            light.toColorScheme(LightColorScheme) to dark.toColorScheme(DarkColorScheme)
+        synchronized(palettes) { palettes[key] = generated }
+        return generated
     }
 
     /**
@@ -139,8 +209,15 @@ object DynamicThemeBuilder {
      *
      * The copies are a safety net for a future Material role this file has not
      * learned yet: an omitted role keeps the app's brand value rather than
-     * Material's purple baseline. All 36 roles that exist today are overridden,
+     * Material's purple baseline. All 48 roles that exist today are overridden,
      * and `MaterialScheme.role` is tested to cover the same set.
+     *
+     * The twelve fixed roles used to be missing, and they are the one set where
+     * "keeps the base scheme" was visibly wrong: a date picker or a snackbar
+     * action on a green cover still drew Material's purple, because
+     * `ColorScheme.copy` simply left them at the app's baseline values. They are
+     * mode-independent by Material's definition, so both schemes get the same
+     * tones.
      */
     private fun MaterialScheme.toColorScheme(base: ColorScheme): ColorScheme = base.copy(
         primary = Color(primary),
@@ -178,6 +255,18 @@ object DynamicThemeBuilder {
         surfaceContainerHighest = Color(surfaceContainerHighest),
         surfaceContainerLow = Color(surfaceContainerLow),
         surfaceContainerLowest = Color(surfaceContainerLowest),
-        surfaceDim = Color(surfaceDim)
+        surfaceDim = Color(surfaceDim),
+        primaryFixed = Color(primaryFixed),
+        primaryFixedDim = Color(primaryFixedDim),
+        onPrimaryFixed = Color(onPrimaryFixed),
+        onPrimaryFixedVariant = Color(onPrimaryFixedVariant),
+        secondaryFixed = Color(secondaryFixed),
+        secondaryFixedDim = Color(secondaryFixedDim),
+        onSecondaryFixed = Color(onSecondaryFixed),
+        onSecondaryFixedVariant = Color(onSecondaryFixedVariant),
+        tertiaryFixed = Color(tertiaryFixed),
+        tertiaryFixedDim = Color(tertiaryFixedDim),
+        onTertiaryFixed = Color(onTertiaryFixed),
+        onTertiaryFixedVariant = Color(onTertiaryFixedVariant)
     )
 }

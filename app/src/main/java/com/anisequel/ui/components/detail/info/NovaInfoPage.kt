@@ -137,12 +137,18 @@ fun NovaInfoPage(
     val coverSeed = CoverColors.color(poster)
         ?: CoverColors.color(media.posterUrl)
         ?: media.posterColor.toCoverColorOrNull()
+    // The artwork's second hue, if the quantizer found one. Passing it makes
+    // tertiary - and the fixed roles built from it - the cover's own second
+    // colour instead of the synthetic +60 rotation Material uses for a wallpaper
+    // there is no better information about.
+    val coverAccent = CoverColors.accent(poster) ?: CoverColors.accent(media.posterUrl)
     val standingScheme = MaterialTheme.colorScheme
-    val derivedScheme = remember(coverSeed, darkTheme) {
+    val derivedScheme = remember(coverSeed, coverAccent, darkTheme) {
         coverSeed?.let { seed ->
             val (light, dark) = DynamicThemeBuilder.createDynamicSchemes(
                 seed = seed,
-                tintSurfaces = true
+                tintSurfaces = true,
+                accent = coverAccent
             )
             if (darkTheme) dark else light
         }
@@ -365,6 +371,10 @@ private fun LazyListScope.novaPageItems(
             media = media,
             isDetailLoading = isDetailLoading,
             onOpenStudio = onOpenStudio,
+            // The stats strip above states the next episode on this page, for
+            // every anime with one. Letting the grid draw it too would put the
+            // same ticking sentence twice on one scroll.
+            showAiring = false,
             modifier = it
         )
     }

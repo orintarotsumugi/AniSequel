@@ -52,12 +52,10 @@ import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.MissedSequel
 import com.anisequel.data.model.StudioCredit
-import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.compactCount
 import com.anisequel.data.model.countryLabel
 import com.anisequel.data.model.descriptionBody
 import com.anisequel.data.model.hasNotAired
-import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.releaseLabel
@@ -156,8 +154,7 @@ fun InfoProgressCard(
     val fraction = media.watchFraction() ?: return
     val count = media.progressCountLabel ?: return
     val isManga = media.isManga
-    val nextEpisode = media.airingEpisodeNumber
-    val countdown = rememberAiringCountdown(media)
+    val airing = rememberAiringLine(media)
 
     InfoCard(
         modifier = modifier.testTag("info_progress_card"),
@@ -202,7 +199,7 @@ fun InfoProgressCard(
             )
         }
 
-        if (nextEpisode != null && countdown != null) {
+        if (airing != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = AppVectorIcons.Schedule,
@@ -225,10 +222,15 @@ fun InfoProgressCard(
                     // this string added a second one. The `now` case printed
                     // "airs in now", which is how it survived review: it only
                     // looked wrong for the last minute.
+                    // Both halves come from the model now: it is the same
+                    // sentence the stats strip and the details grid print, and the
+                    // three used to be spelled out separately here, which is how
+                    // they drifted to different answers about a show whose episode
+                    // total AniList has not announced.
                     text = if (isManga) {
-                        "Chapter $nextEpisode publishes $countdown"
+                        "Chapter ${airing.episodeDetail} publishes ${airing.countdown}"
                     } else {
-                        "Episode $nextEpisode airs $countdown"
+                        airing.sentence
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -400,6 +402,17 @@ fun InfoSpecsCard(
      * same way (see the note on this card).
      */
     onOpenStudio: (Int, String?) -> Unit = { _, _ -> },
+    /**
+     * Whether this card states the next episode.
+     *
+     * The page has to be able to turn it off, because the row used to be gated on
+     * the data alone: whichever card sat above the grid took the sentence, and the
+     * grid was told "not mine" by asking [com.anisequel.data.model.hasProgressCard].
+     * The Nova page draws the countdown in its stats strip, which is *above* this
+     * card, so leaving the grid's gate to the old predicate printed the same
+     * countdown twice a scroll apart - ticking out of step by up to a minute.
+     */
+    showAiring: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val studios = remember(media) { media.studioCredits }
@@ -412,10 +425,13 @@ fun InfoSpecsCard(
     // show they have not started said nothing at all about when more of it
     // arrives, which is one of the two reasons to open the page of a running show.
     //
-    // Gated on `hasProgressCard` rather than always drawn: that card is the one a
-    // tracker reads, and two countdowns a scroll apart would tick out of step and
-    // disagree by up to a minute.
-    val untrackedAiring = if (media.hasProgressCard) null else rememberAiringCountdown(media)
+    // [showAiring] rather than `hasProgressCard`: the page that draws the sentence
+    // elsewhere says so, instead of this card guessing from a predicate about a
+    // wave. The guess is what left a tracked show with an unannounced episode count
+    // with no countdown anywhere - the wave could not be drawn, so the progress
+    // card did not exist, and this card had already decided the progress card was
+    // speaking.
+    val untrackedAiring = if (showAiring) rememberAiringLine(media) else null
 
     // Memoised on the title and the countdown it embeds: the grid is a walk over
     // the node, and the card recomposes several times per open (and every minute
@@ -459,12 +475,8 @@ fun InfoSpecsCard(
             //
             // Only anime carry `nextAiringEpisode`, so this is "Next episode" and not
             // a manga branch that could never run.
-            untrackedAiring?.let { countdown ->
-                add(
-                    "Next episode" to
-                        listOfNotNull(media.airingEpisodeNumber?.toString(), countdown)
-                            .joinToString(" · ")
-                )
+            untrackedAiring?.let { airing ->
+                add("Next episode" to airing.specValue)
             }
             media.sourceLabel?.let { add("Source" to it) }
             media.popularity?.takeIf { it > 0 }?.let {

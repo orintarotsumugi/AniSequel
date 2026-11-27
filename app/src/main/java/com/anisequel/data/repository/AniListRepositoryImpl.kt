@@ -454,7 +454,14 @@ class AniListRepositoryImpl(
          *  - **RELEASING** (3h): the countdown and score are moving now.
          *  - **NOT_YET_RELEASED** (6h): announcements and air dates change on
          *    the scale of a day, not a week.
-         *  - **FINISHED / CANCELLED** (7d): the facts are settled.
+         *  - **FINISHED / CANCELLED** (3d): the synopsis, cast and studios are
+         *    settled, so this is the window that decides how often a finished
+         *    title costs a request at all. It was seven days, on the argument
+         *    that nothing in the record moves - which is not quite true: the
+         *    synopsis is settled, but the score, popularity, favourites and
+         *    rankings keep drifting, and a week-stale score beside a live one on
+         *    the profile reads as a bug. Three days buys the caching the payload
+         *    deserves without letting the numbers freeze for a week.
          *  - everything else, including an absent status: a day, as before.
          *
          * The airing countdown is a second, independent override: see
@@ -464,7 +471,7 @@ class AniListRepositoryImpl(
          */
         const val DETAIL_RELEASING_WINDOW_MILLIS = 3 * 60 * 60 * 1000L
         const val DETAIL_NOT_YET_RELEASED_WINDOW_MILLIS = 6 * 60 * 60 * 1000L
-        const val DETAIL_FINISHED_WINDOW_MILLIS = 7 * 24 * 60 * 60 * 1000L
+        const val DETAIL_FINISHED_WINDOW_MILLIS = 3 * 24 * 60 * 60 * 1000L
         const val DETAIL_DEFAULT_WINDOW_MILLIS = 24 * 60 * 60 * 1000L
 
         /**
@@ -1458,8 +1465,20 @@ class AniListRepositoryImpl(
      */
     private fun isDetailStale(node: MediaNode, storedAtMillis: Long): Boolean {
         if (nowMillis() - storedAtMillis > detailWindowMillis(node)) return true
-        val airingAtSeconds = node.nextAiringEpisode?.airingAt ?: return false
-        return nowMillis() >= airingAtSeconds * 1000L
+        // An explicit next airing that has passed makes the record provably wrong.
+        node.nextAiringEpisode?.airingAt?.let { airingAtSeconds ->
+            if (nowMillis() >= airingAtSeconds * 1000L) return true
+        }
+        // The schedule-only case. A record whose next airing exists only in
+        // `airingSchedule` - a currently airing show whose length AniList has not
+        // announced - has no `nextAiringEpisode` for the check above to expire, so
+        // it used to sit there for the rest of its window while the last slot it
+        // described aired, and the countdown it could produce ran out to nothing.
+        // Only an *exhausted* schedule is stale: while a future slot remains, the
+        // record still answers correctly and is not worth re-buying.
+        val slots = node.airingSchedule?.nodes.orEmpty().mapNotNull { it.airingAt }
+        val lastSlot = slots.maxOrNull() ?: return false
+        return lastSlot * 1000L <= nowMillis()
     }
 
     /**

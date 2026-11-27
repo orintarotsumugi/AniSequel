@@ -622,8 +622,7 @@ internal fun SetupStepChoices(
             Spacer(modifier = Modifier.height(8.dp))
             SwitchRow(
                 title = "Tier lists",
-                subtitle = "Add a Tiers tab and a trophy shortcut in both " +
-                    "layouts.",
+                subtitle = "Add a Tiers tab and a shortcut in both layouts.",
                 checked = draft.tiersShortcut,
                 onCheckedChange = { onDraftChange(draft.copy(tiersShortcut = it)) },
                 modifier = Modifier.testTag("onboarding_tiers_shortcut")

@@ -3,6 +3,7 @@ package com.anisequel.domain.color
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 /**
  * Picks a Material theme seed out of a cover image.
@@ -49,20 +50,40 @@ object CoverColorQuantizer {
     private const val ACCENT_MIN_HUE_DISTANCE = 40.0
 
     /**
+     * How close two scores must be before population decides which colour won.
+     *
+     * Scores are sums of proportions and chroma terms, so two genuinely different
+     * colours can land within floating-point noise of each other. The seed already
+     * treated those as ties; the accent compared the doubles exactly, which let
+     * the last bit of a division decide the second hue - and therefore the
+     * tertiary palette - for two covers that were the same picture.
+     */
+    private const val SCORE_TIE_EPSILON = 1e-7
+
+    /**
      * Builds the complete cover palette from one histogram pass.
      *
      * The old repository asked for the seed and accent separately; both calls
      * quantized the same pixel array into the same 5-bit histogram. A cover is
      * sampled only once, so keep that histogram and score both roles from it.
+     *
+     * The bins are also converted to HCT once, here. Each conversion is a full
+     * CAM16 solve, and a 96px cover can hold four thousand distinct bins: the
+     * seed pass used to convert every one, then the accent pass converted the same
+     * four thousand again, on the IO thread, for every new title opened.
      */
     fun paletteFrom(pixels: IntArray): CoverPalette? {
-        val histogram = quantize(pixels)
-        val seed = score(histogram) ?: return null
-        return CoverPalette(seed = seed, accent = accent(histogram, seed))
+        val candidates = colorCandidates(quantize(pixels))
+        val seed = scoreCandidates(candidates) ?: return null
+        return CoverPalette(
+            seed = seed.hct.argb,
+            accent = accentCandidate(candidates, seed.hct.argb)
+        )
     }
 
     /** The most suitable theme seed in [pixels], or null if the image is grey. */
-    fun seedFrom(pixels: IntArray): Int? = score(quantize(pixels))
+    fun seedFrom(pixels: IntArray): Int? =
+        scoreCandidates(colorCandidates(quantize(pixels)))?.hct?.argb
 
     /**
      * A second, distinct hue in [pixels] - the colour a gradient pairs with the seed.
@@ -74,27 +95,36 @@ object CoverColorQuantizer {
      * [ACCENT_MIN_HUE_DISTANCE] of [seed] - a two-colour gradient needs two colours,
      * and a cover with only one hue has no second colour to give.
      */
-    fun accentFrom(pixels: IntArray, seed: Int? = null): Int? = accent(quantize(pixels), seed)
+    fun accentFrom(pixels: IntArray, seed: Int? = null): Int? =
+        accentCandidate(colorCandidates(quantize(pixels)), seed)
 
     /** [accentFrom] with a hand-built histogram, so the scoring can be tested. */
-    fun accent(histogram: Map<Int, Int>, seed: Int? = null): Int? {
-        val total = histogram.values.sumOf { it.toLong() }
+    fun accent(histogram: Map<Int, Int>, seed: Int? = null): Int? =
+        accentCandidate(colorCandidates(histogram), seed)
+
+    /**
+     * The accent among [candidates] - already converted - or null if there is none.
+     *
+     * Split from the pixel entry point so the seed pass and the accent pass can
+     * share one conversion of each bin; see [paletteFrom].
+     */
+    private fun accentCandidate(candidates: List<ColorCandidate>, seed: Int?): Int? {
+        val total = candidates.sumOf { it.population.toLong() }
         if (total <= 0L) return null
         // A fallback seed (AniList's colour) is often a grey. Grey has no hue, so
         // filtering by its HCT hue would silently reject every accent near that
         // arbitrary number. Only apply the distance rule to a seed with a real hue.
-        val seedHct = seed?.let { Hct.fromInt(it) }
-        val seedHue = seedHct?.takeIf { it.chroma >= CUTOFF_CHROMA }?.hue
+        val seedHue = seed?.let { Hct.fromInt(it) }
+            ?.takeIf { it.chroma >= CUTOFF_CHROMA }
+            ?.hue
 
-        var best: Int? = null
-        var bestPopulation = 0
+        var best: ColorCandidate? = null
         var bestScore = -1.0
-        for ((argb, population) in histogram) {
-            if (population <= 0) continue
-            val share = population.toDouble() / total
+        for (candidate in candidates) {
+            val share = candidate.population.toDouble() / total
             if (share < ACCENT_MIN_SHARE) continue
 
-            val hct = Hct.fromInt(argb)
+            val hct = candidate.hct
             if (hct.chroma < ACCENT_MIN_CHROMA) continue
             if (seedHue != null && hueDistance(hct.hue, seedHue) < ACCENT_MIN_HUE_DISTANCE) {
                 continue
@@ -102,21 +132,18 @@ object CoverColorQuantizer {
 
             // Chroma, tempered by how much of the image wears it: the same trade a
             // designer makes between "the accent colour" and "a bright speck".
-            val score = hct.chroma * kotlin.math.sqrt(share)
+            val score = hct.chroma * sqrt(share)
             // The seed's tie-break prefers the bigger region, then the smaller
-            // ARGB as a stable last resort. The accent used to break ties on ARGB
-            // alone, so a one-pixel bright bin could beat a large region of the
-            // same score depending on which colour happened to sort lower.
-            if (score > bestScore || (score == bestScore && (
-                    population > bestPopulation ||
-                        (population == bestPopulation && (best == null || argb < best))
-                    ))) {
+            // ARGB as a stable last resort. The accent used to compare the doubles
+            // exactly here, so a one-pixel bright bin could beat a large region of
+            // the same score depending on which colour happened to sort lower - or
+            // on which order the HashMap happened to iterate in.
+            if (isBetter(score, candidate, bestScore, best)) {
                 bestScore = score
-                bestPopulation = population
-                best = argb
+                best = candidate
             }
         }
-        return best
+        return best?.hct?.argb
     }
 
     /** The shortest arc between two hues, in degrees. */
@@ -165,16 +192,19 @@ object CoverColorQuantizer {
      * separate from [quantize] so the scoring can be tested with a hand-built
      * histogram instead of a bitmap.
      */
-    fun score(histogram: Map<Int, Int>): Int? {
+    fun score(histogram: Map<Int, Int>): Int? =
+        scoreCandidates(colorCandidates(histogram))?.hct?.argb
+
+    /** [score] among bins that are already converted. */
+    private fun scoreCandidates(all: List<ColorCandidate>): ColorCandidate? {
         // Greys must not reach the hue population: HCT gives an achromatic bin an
         // arbitrary hue (usually 0), so a large black-and-white margin inflated
         // excited[0] and could hand the seed to a coloured region near red that
         // the artwork barely contained. The same chroma cutoff bestCandidate
         // applies now filters the input too, as Material's Score does.
-        val candidates = colorCandidates(histogram)
-            .filter { it.hct.chroma >= CUTOFF_CHROMA }
+        val candidates = all.filter { it.hct.chroma >= CUTOFF_CHROMA }
         val excitedProportion = excitedProportions(candidates) ?: return null
-        return bestCandidate(candidates, excitedProportion)?.hct?.argb
+        return bestCandidate(candidates, excitedProportion)
     }
 
     private fun colorCandidates(histogram: Map<Int, Int>): List<ColorCandidate> =
@@ -240,15 +270,24 @@ object CoverColorQuantizer {
         return proportionScore + (hct.chroma - TARGET_CHROMA) * chromaWeight
     }
 
-    /** Equal scores use population and ARGB, never HashMap iteration order. */
+    /**
+     * Equal scores use population and ARGB, never HashMap iteration order.
+     *
+     * "Equal" means within [SCORE_TIE_EPSILON], in both directions. The previous
+     * version let *any* strictly larger double win immediately - a difference in
+     * the last bit was enough - and only applied the epsilon when the candidate
+     * was slightly worse, so population could promote a colour that had scored
+     * lower but never demote one that had scored higher by the same amount.
+     */
     private fun isBetter(
         score: Double,
         candidate: ColorCandidate,
         bestScore: Double,
         best: ColorCandidate?
     ): Boolean {
-        if (score > bestScore) return true
-        if (abs(score - bestScore) >= 0.0000001 || best == null) return false
+        if (best == null) return true
+        if (score > bestScore + SCORE_TIE_EPSILON) return true
+        if (abs(score - bestScore) > SCORE_TIE_EPSILON) return false
         return candidate.population > best.population ||
             (candidate.population == best.population && candidate.hct.argb < best.hct.argb)
     }

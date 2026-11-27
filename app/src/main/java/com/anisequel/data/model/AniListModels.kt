@@ -342,6 +342,18 @@ data class MediaNode(
     val relations: MediaRelations? = null,
     val mediaListEntry: SimpleMediaListEntry? = null,
     val nextAiringEpisode: NextAiringEpisode? = null,
+    /**
+     * The episodes that have not aired yet, from AniList's own schedule.
+     *
+     * Only the detail query asks for this. [nextAiringEpisode] is documented as
+     * *the next* one, and it is null for a show whose length AniList has not
+     * announced even while its weekly slot is known - the "airing, no episode
+     * count" case the Info page used to render as nothing at all. The docs promise
+     * that *future* airing data is present and accurate ("we only aim to guarantee
+     * that FUTURE airing data is present"), which is exactly this call's filter:
+     * `notYetAired: true`.
+     */
+    val airingSchedule: AiringScheduleConnection? = null,
     val source: String? = null,
     val duration: Int? = null,
     val trailer: MediaTrailer? = null,
@@ -430,6 +442,7 @@ data class MediaNode(
         startDate = detail.startDate ?: startDate,
         endDate = detail.endDate ?: endDate,
         nextAiringEpisode = detail.nextAiringEpisode ?: nextAiringEpisode,
+        airingSchedule = detail.airingSchedule ?: airingSchedule,
         studios = detail.studios ?: studios,
         source = detail.source ?: source,
         duration = detail.duration ?: duration,
@@ -690,6 +703,25 @@ private val MONTH_NAMES = listOf(
 data class NextAiringEpisode(
     val episode: Int? = null,
     val airingAt: Long? = null
+)
+
+/**
+ * One entry of a media's airing schedule.
+ *
+ * The API also returns `id`, `timeUntilAiring` and `mediaId`; only these two are
+ * asked for. `timeUntilAiring` is deliberately not used - it is the answer on
+ * AniList's clock at the moment of the query, and it goes stale in a cached node,
+ * where `airingAt` can always be compared to the device's.
+ */
+@JsonClass(generateAdapter = true)
+data class AiringSchedule(
+    val episode: Int? = null,
+    val airingAt: Long? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class AiringScheduleConnection(
+    val nodes: List<AiringSchedule>? = null
 )
 
 @JsonClass(generateAdapter = true)

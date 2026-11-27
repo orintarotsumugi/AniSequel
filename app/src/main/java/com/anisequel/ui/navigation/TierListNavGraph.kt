@@ -35,7 +35,6 @@ fun NavGraphBuilder.tierListDestinations(
     /** The viewer query's failure, when the account query is what failed. */
     dashboardError: DashboardUiState.Error?,
     mainDashboardViewModel: DashboardViewModel?,
-    onBoardOpenChange: (Boolean) -> Unit,
     onSignInAgain: () -> Unit
 ) {
     composable(AppRoutes.TIER_LIST) {
@@ -91,7 +90,6 @@ fun NavGraphBuilder.tierListDestinations(
         // a second one stacked on top of the tier list's own header.
         TierListScreen(
             tierListViewModel = tierListViewModel,
-            onBoardOpenChange = onBoardOpenChange,
             onNavigateBack = { navController.popBackStack() }
         )
     }

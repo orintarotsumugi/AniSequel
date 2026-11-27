@@ -43,7 +43,25 @@ data class MaterialScheme(
     val surfaceContainerHighest: Int,
     val surfaceContainerLow: Int,
     val surfaceContainerLowest: Int,
-    val surfaceDim: Int
+    val surfaceDim: Int,
+    // The twelve "fixed" roles: the same tones in light and dark, so a component
+    // that opts out of the mode switch (a date picker's day cell, a snackbar
+    // action) keeps the seed's colour instead of falling back to Material's
+    // purple. They were missing entirely, which meant every one of them stayed at
+    // the baseline scheme's value - the one place a cover-derived theme still
+    // showed Material's default.
+    val primaryFixed: Int,
+    val primaryFixedDim: Int,
+    val onPrimaryFixed: Int,
+    val onPrimaryFixedVariant: Int,
+    val secondaryFixed: Int,
+    val secondaryFixedDim: Int,
+    val onSecondaryFixed: Int,
+    val onSecondaryFixedVariant: Int,
+    val tertiaryFixed: Int,
+    val tertiaryFixedDim: Int,
+    val onTertiaryFixed: Int,
+    val onTertiaryFixedVariant: Int
 ) {
     /** Role lookup for tests and diagnostics. */
     fun role(name: String): Int = when (name) {
@@ -83,6 +101,18 @@ data class MaterialScheme(
         "surfaceContainerLow" -> surfaceContainerLow
         "surfaceContainerLowest" -> surfaceContainerLowest
         "surfaceDim" -> surfaceDim
+        "primaryFixed" -> primaryFixed
+        "primaryFixedDim" -> primaryFixedDim
+        "onPrimaryFixed" -> onPrimaryFixed
+        "onPrimaryFixedVariant" -> onPrimaryFixedVariant
+        "secondaryFixed" -> secondaryFixed
+        "secondaryFixedDim" -> secondaryFixedDim
+        "onSecondaryFixed" -> onSecondaryFixed
+        "onSecondaryFixedVariant" -> onSecondaryFixedVariant
+        "tertiaryFixed" -> tertiaryFixed
+        "tertiaryFixedDim" -> tertiaryFixedDim
+        "onTertiaryFixed" -> onTertiaryFixed
+        "onTertiaryFixedVariant" -> onTertiaryFixedVariant
         else -> throw IllegalArgumentException("unknown Material colour role '$name'")
     }
 
@@ -97,7 +127,11 @@ data class MaterialScheme(
             "surfaceVariant", "onSurfaceVariant", "surfaceTint", "inverseSurface",
             "inverseOnSurface", "outline", "outlineVariant", "scrim", "surfaceBright",
             "surfaceContainer", "surfaceContainerHigh", "surfaceContainerHighest",
-            "surfaceContainerLow", "surfaceContainerLowest", "surfaceDim"
+            "surfaceContainerLow", "surfaceContainerLowest", "surfaceDim",
+            "primaryFixed", "primaryFixedDim", "onPrimaryFixed", "onPrimaryFixedVariant",
+            "secondaryFixed", "secondaryFixedDim", "onSecondaryFixed",
+            "onSecondaryFixedVariant", "tertiaryFixed", "tertiaryFixedDim",
+            "onTertiaryFixed", "onTertiaryFixedVariant"
         )
     }
 }
@@ -114,7 +148,8 @@ data class MaterialScheme(
  *  - **primary** - the seed's hue, at the seed's chroma (floored here, see below)
  *  - **secondary** - the same hue, much less chroma, so secondary actions sit
  *    beside primary without competing with it
- *  - **tertiary** - the hue rotated 60 degrees, for accents that are related but
+ *  - **tertiary** - the cover's own second hue when the quantizer found one, and
+ *    the hue rotated 60 degrees otherwise, for accents that are related but
  *    distinguishable
  *  - **neutral** - the seed's hue at an eighth of its chroma (floored, capped,
  *    see [tonalSpot]): surfaces
@@ -158,6 +193,31 @@ object MaterialColorSchemes {
 
     /** The app's neutral blue-grey for untinted surfaces. */
     private const val BRAND_NEUTRAL_CHROMA: Double = 6.0
+
+    /**
+     * How coloured a cover's second hue must be before it becomes tertiary.
+     *
+     * Below this it is a tinted grey, and the 60-degree rotation produces a
+     * clearer companion than the artwork would have.
+     */
+    private const val MIN_ACCENT_CHROMA: Double = 24.0
+
+    /**
+     * How far the second hue must sit from the seed before it counts as one.
+     *
+     * Tonal spot's tertiary is 60 degrees away; anything under 25 is close enough
+     * to read as the same colour at tone 40, so the rotation is better.
+     */
+    private const val MIN_ACCENT_HUE_DISTANCE: Double = 25.0
+
+    /**
+     * The most chroma a cover's second hue may bring to tertiary.
+     *
+     * Primary is capped at its own chroma; a neon accent at chroma 100 would make
+     * the tertiary container the loudest surface on the page and break the
+     * primary/secondary/tertiary hierarchy the ladder is meant to express.
+     */
+    private const val MAX_TERTIARY_CHROMA: Double = 60.0
 
     /**
      * The tinted surface ramp's chroma bounds: low enough that a grey cover still
@@ -236,6 +296,38 @@ object MaterialColorSchemes {
     }
 
     /**
+     * The tertiary palette from a cover's second hue, or null when there is none
+     * worth using.
+     *
+     * The accent is already a scored region of the artwork - the quantizer only
+     * reports one at chroma 24 or above and 40 degrees from the seed - so the
+     * checks here are about the *scheme*, not the picture: an accent that is
+     * nearly grey would make tertiary muddier than the rotation it replaces, one
+     * within [MIN_ACCENT_HUE_DISTANCE] of the seed is not a second colour, and an
+     * extremely vivid one is capped so tertiary stays a companion to primary
+     * rather than outshouting it.
+     */
+    private fun accentPalette(
+        accentArgb: Int?,
+        hue: Double,
+        primaryChroma: Double
+    ): TonalPalette? {
+        val accent = accentArgb?.let { Hct.fromInt(it) } ?: return null
+        if (accent.chroma < MIN_ACCENT_CHROMA) return null
+        if (angularDistance(accent.hue, hue) < MIN_ACCENT_HUE_DISTANCE) return null
+        return TonalPalette(
+            accent.hue,
+            accent.chroma.coerceIn(MIN_PRIMARY_CHROMA, MAX_TERTIARY_CHROMA)
+        )
+    }
+
+    /** Shortest distance between two hues, in degrees. */
+    private fun angularDistance(a: Double, b: Double): Double {
+        val raw = ((a - b) % 360.0 + 360.0) % 360.0
+        return if (raw > 180.0) 360.0 - raw else raw
+    }
+
+    /**
      * Builds the light and dark schemes for [seedArgb].
      *
      * Both are always generated even though the anime layer used to force dark
@@ -257,7 +349,19 @@ object MaterialColorSchemes {
          * interpolates the *inputs* to the ladder instead, so Subtle and Balanced
          * get a coherent ramp that is still recognisably from the cover.
          */
-        tintStrength: Float = 1f
+        tintStrength: Float = 1f,
+        /**
+         * The artwork's second hue, when the quantizer found one.
+         *
+         * A blind +60 rotation is Material's default because a wallpaper has no
+         * better information; a cover does. When the accent is a genuinely
+         * different hue, tertiary - and the three fixed roles built from it - are
+         * the poster's own second colour instead of a synthetic neighbour, which
+         * is what makes the chips in the detail page look sampled from the art.
+         * Null, a grey accent, or an accent within [MIN_ACCENT_HUE_DISTANCE] of
+         * the seed falls back to the rotation, so a one-hue cover is unchanged.
+         */
+        accentArgb: Int? = null
     ): MaterialScheme {
         val strength = tintStrength.coerceIn(0f, 1f).toDouble()
         val seed = Hct.fromInt(seedArgb)
@@ -270,7 +374,7 @@ object MaterialColorSchemes {
             maxOf(primaryChroma - 32.0, primaryChroma * 0.5)
         )
 
-        val tertiary = TonalPalette(
+        val tertiary = accentPalette(accentArgb, hue, primaryChroma) ?: TonalPalette(
             ColorMath.sanitizeDegrees(hue + 60.0),
             primaryChroma
         )
@@ -368,7 +472,22 @@ object MaterialColorSchemes {
             surfaceContainerHighest = neutral.tone(90),
             surfaceContainerLow = neutral.tone(96),
             surfaceContainerLowest = neutral.tone(100),
-            surfaceDim = neutral.tone(87)
+            surfaceDim = neutral.tone(87),
+            // Fixed tones are mode-independent by definition: 90/80 for the fill
+            // and its dimmed pair, 10/30 for the label. Material's own schemes use
+            // these exact tones in both modes.
+            primaryFixed = primary.tone(90),
+            primaryFixedDim = primary.tone(80),
+            onPrimaryFixed = primary.tone(10),
+            onPrimaryFixedVariant = primary.tone(30),
+            secondaryFixed = secondary.tone(90),
+            secondaryFixedDim = secondary.tone(80),
+            onSecondaryFixed = secondary.tone(10),
+            onSecondaryFixedVariant = secondary.tone(30),
+            tertiaryFixed = tertiary.tone(90),
+            tertiaryFixedDim = tertiary.tone(80),
+            onTertiaryFixed = tertiary.tone(10),
+            onTertiaryFixedVariant = tertiary.tone(30)
         )
     }
 
@@ -421,7 +540,20 @@ object MaterialColorSchemes {
             surfaceContainerHighest = neutral.tone(22),
             surfaceContainerLow = neutral.tone(10),
             surfaceContainerLowest = neutral.tone(4),
-            surfaceDim = neutral.tone(6)
+            surfaceDim = neutral.tone(6),
+            // Same tones as the light scheme on purpose - see the note there.
+            primaryFixed = primary.tone(90),
+            primaryFixedDim = primary.tone(80),
+            onPrimaryFixed = primary.tone(10),
+            onPrimaryFixedVariant = primary.tone(30),
+            secondaryFixed = secondary.tone(90),
+            secondaryFixedDim = secondary.tone(80),
+            onSecondaryFixed = secondary.tone(10),
+            onSecondaryFixedVariant = secondary.tone(30),
+            tertiaryFixed = tertiary.tone(90),
+            tertiaryFixedDim = tertiary.tone(80),
+            onTertiaryFixed = tertiary.tone(10),
+            onTertiaryFixedVariant = tertiary.tone(30)
         )
     }
 

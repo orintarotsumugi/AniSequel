@@ -673,6 +673,18 @@ private fun rememberResolvedColorScheme(
     trueBlack: Boolean,
     background: Color?
 ): ColorScheme {
+    // The brand palettes are hand-written and name only the 36 mode roles, so their
+    // twelve fixed roles were still Material's baseline - purple on a blue page.
+    // The cover-, custom- and wallpaper-derived schemes arrive with their own fixed
+    // roles and are not touched here.
+    //
+    // Remembered rather than computed in the branch below: this composable is
+    // re-called on every composition of the app root, and each derivation is four
+    // tone solves per accent, so doing it inline would put twelve HCT solves on
+    // every recomposition. Do it once per palette and mode instead.
+    val staticScheme = remember(palette, darkTheme) {
+        if (darkTheme) palette.dark.withFixedRoles() else palette.light.withFixedRoles()
+    }
     val scheme = when {
         animeColor != null -> requireNotNull(animeSchemes).let { schemes ->
             if (darkTheme) schemes.second else schemes.first
@@ -681,8 +693,7 @@ private fun rememberResolvedColorScheme(
         customColor != null -> requireNotNull(customDynamicSchemes).let { schemes ->
             if (darkTheme) schemes.second else schemes.first
         }
-        darkTheme -> palette.dark
-        else -> palette.light
+        else -> staticScheme
     }
     val baseScheme = if (trueBlack && darkTheme) {
         scheme.copy(

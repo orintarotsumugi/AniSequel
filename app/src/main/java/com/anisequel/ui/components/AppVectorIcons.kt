@@ -162,6 +162,16 @@ object AppVectorIcons {
     val Trending = Icons.AutoMirrored.Filled.TrendingUp
     val Studio = AppCustomVectors.StudioBuilding
     val Trophy = AppCustomVectors.TrophyRank
+
+    /**
+     * The tier list's own glyph, beside [Trophy] because the two used to be one.
+     *
+     * A trophy is what a *ranking* looks like - a prize someone won - and the tier
+     * feature borrowed it, so the tab, the Library's door and the profile's row all
+     * drew the anime rankings section's mark. A tier list is a board the reader
+     * builds. See [AppCustomVectors.TierBoard] for what the drawing says.
+     */
+    val TierBoard = AppCustomVectors.TierBoard
     val Tag = AppCustomVectors.TagLabel
     val SystemUpdate = Icons.Default.SystemUpdate
     val Download = Icons.Default.Download

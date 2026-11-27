@@ -7,7 +7,10 @@ import androidx.core.graphics.ColorUtils
 import com.anisequel.domain.color.Hct
 import com.anisequel.domain.color.MaterialColorSchemes
 import com.anisequel.domain.color.MaterialScheme
+import com.anisequel.ui.theme.DarkColorScheme
 import com.anisequel.ui.theme.DynamicThemeBuilder
+import com.anisequel.ui.theme.LightColorScheme
+import com.anisequel.ui.theme.withFixedRoles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -212,7 +215,7 @@ class SpoilerAndThemeOverrideTest {
 
         assertEquals(
             "the scheme and the test have to agree on how many roles Material 3 has",
-            36,
+            48,
             MaterialScheme.ROLE_NAMES.size
         )
 
@@ -238,6 +241,50 @@ class SpoilerAndThemeOverrideTest {
                         "was copied from, which is the purple-border bug",
                     expected.role(role),
                     actual.role(role)
+                )
+            }
+        }
+    }
+
+    /**
+     * The brand palette's fixed roles belong to the brand.
+     *
+     * `lightColorScheme` fills an unnamed role with Material's baseline, and the
+     * fixed set is the one where that baseline is a different hue rather than a
+     * different shade: the app's brand scheme is blue and Material's fixed roles are
+     * purple. `withFixedRoles` re-derives them from the scheme's own accents at
+     * Material's tones, so a date picker's selected day on the default theme is blue.
+     */
+    @Test
+    fun `the brand palette derives its fixed roles from its own accents`() {
+        listOf(
+            "light" to LightColorScheme.withFixedRoles(),
+            "dark" to DarkColorScheme.withFixedRoles()
+        ).forEach { (mode, scheme) ->
+            val primaryHue = Hct.fromInt(scheme.primary.toArgb()).hue
+            val fixedHue = Hct.fromInt(scheme.primaryFixed.toArgb()).hue
+            assertTrue(
+                "$mode primaryFixed is hue %.1f, not the brand's %.1f - the role kept "
+                    .format(fixedHue, primaryHue) +
+                    "Material's baseline purple",
+                angularDistance(fixedHue, primaryHue) < 10.0
+            )
+
+            // Material's tones, not the accent's own tone: a fixed fill is tone 90
+            // whatever the accent was sampled at.
+            listOf(
+                Triple("primaryFixed", scheme.primaryFixed, 90.0),
+                Triple("primaryFixedDim", scheme.primaryFixedDim, 80.0),
+                Triple("onPrimaryFixed", scheme.onPrimaryFixed, 10.0),
+                Triple("onPrimaryFixedVariant", scheme.onPrimaryFixedVariant, 30.0),
+                Triple("tertiaryFixed", scheme.tertiaryFixed, 90.0),
+                Triple("onTertiaryFixedVariant", scheme.onTertiaryFixedVariant, 30.0)
+            ).forEach { (role, colour, tone) ->
+                val measured = Hct.fromInt(colour.toArgb()).tone
+                assertTrue(
+                    "$mode $role is tone %.2f, not the tone $tone Material uses"
+                        .format(measured),
+                    kotlin.math.abs(measured - tone) < 1.5
                 )
             }
         }
@@ -523,6 +570,18 @@ class SpoilerAndThemeOverrideTest {
         "surfaceContainerLow" -> surfaceContainerLow.toArgb()
         "surfaceContainerLowest" -> surfaceContainerLowest.toArgb()
         "surfaceDim" -> surfaceDim.toArgb()
+        "primaryFixed" -> primaryFixed.toArgb()
+        "primaryFixedDim" -> primaryFixedDim.toArgb()
+        "onPrimaryFixed" -> onPrimaryFixed.toArgb()
+        "onPrimaryFixedVariant" -> onPrimaryFixedVariant.toArgb()
+        "secondaryFixed" -> secondaryFixed.toArgb()
+        "secondaryFixedDim" -> secondaryFixedDim.toArgb()
+        "onSecondaryFixed" -> onSecondaryFixed.toArgb()
+        "onSecondaryFixedVariant" -> onSecondaryFixedVariant.toArgb()
+        "tertiaryFixed" -> tertiaryFixed.toArgb()
+        "tertiaryFixedDim" -> tertiaryFixedDim.toArgb()
+        "onTertiaryFixed" -> onTertiaryFixed.toArgb()
+        "onTertiaryFixedVariant" -> onTertiaryFixedVariant.toArgb()
         else -> throw IllegalArgumentException("unknown role '$name'")
     }
 

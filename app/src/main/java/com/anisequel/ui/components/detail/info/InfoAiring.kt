@@ -4,14 +4,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import com.anisequel.data.model.AiringLine
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.airingAtSeconds
-import com.anisequel.data.model.airingCountdown
+import com.anisequel.data.model.airingLineAt
 import com.anisequel.ui.components.rememberIsResumed
 import kotlinx.coroutines.delay
 
 /**
- * How often the airing countdown is recomputed.
+ * How often the airing line is recomputed.
  *
  * A minute, because [com.anisequel.data.model.AiringCountdown] speaks in whole
  * days, hours and minutes: recomputing faster would redraw the card to print the
@@ -20,7 +21,8 @@ import kotlinx.coroutines.delay
 private const val COUNTDOWN_TICK_MILLIS = 60_000L
 
 /**
- * Time until the next episode, recomputed while the reader is looking at it.
+ * The next episode and how long until it, recomputed while the reader is
+ * looking at it.
  *
  * ## Why this is a clock and not a string
  *
@@ -28,7 +30,16 @@ private const val COUNTDOWN_TICK_MILLIS = 60_000L
  * is a value with an expiry date and no clock: a sheet left open across the
  * boundary went on saying "airs in 5m" after the episode had aired, and a page
  * opened an hour before an episode said the same thing an hour later. This is a
- * `produceState` now, so the line expires with the thing it describes.
+ * `produceState` now, so the line expires with the thing it describes - and when it
+ * expires, [com.anisequel.data.model.upcomingAiring] moves to the following slot
+ * from AniList's schedule instead of the line going blank.
+ *
+ * ## Why it is a line and not a countdown string
+ *
+ * The number and the countdown have to describe the same airing. Once the
+ * schedule can supply the slot (see `upcomingAiring`), a caller that took the
+ * number from `nextAiringEpisode` and the string from this clock could label next
+ * week's episode with this week's number. One remembered value, both halves.
  *
  * ## Why it stops with the screen
  *
@@ -41,35 +52,42 @@ private const val COUNTDOWN_TICK_MILLIS = 60_000L
  *
  * ## Why there is only ever one of these on the page
  *
- * Both callers are gated on the same condition, from opposite sides: the progress
- * card asks whenever it is drawn, and the details card asks only when there is no
- * progress card. Two countdowns a scroll apart would tick out of step and disagree
- * by up to a minute, which reads as a bug in whichever one the reader looked at
- * second.
+ * The callers are gated so exactly one of them asks: the Nova stats strip takes
+ * it for every airing anime and tells the details card to skip its row, and on the
+ * classic page the progress card takes it whenever it is drawn while the details
+ * card asks only when no progress card exists. Two countdowns a scroll apart would
+ * tick out of step and disagree by up to a minute, which reads as a bug in
+ * whichever one the reader looked at second.
  *
  * Null means there is no scheduled airing. At the release boundary the shared
  * formatter briefly says "now", so the reader does not lose the episode line
  * at the exact minute the countdown reaches zero.
  */
 @Composable
-internal fun rememberAiringCountdown(media: MediaNode): String? {
+internal fun rememberAiringLine(media: MediaNode): AiringLine? {
     val resumed = rememberIsResumed()
     val airingAt = media.airingAtSeconds
+    // Part of the key because it is part of the answer: a title whose explicit
+    // countdown has run out is re-answered from the schedule, and a detail landing
+    // with the schedule filled must restart the producer rather than leave it on
+    // the old "no airing" answer.
+    val schedule = media.airingSchedule
 
     // The first value is formatted once. It used to be built in the argument list,
     // which runs on every pass - so a detail page recomposing for a scroll read the
     // clock and formatted a countdown string it then threw away.
-    val initialCountdown = remember(media.id, media.type, airingAt, resumed) {
-        if (resumed) media.airingCountdown() else null
+    val initialLine = remember(media.id, media.type, airingAt, schedule, resumed) {
+        if (resumed) media.airingLineAt() else null
     }
-    val countdown by produceState(
-        initialValue = initialCountdown,
+    val line by produceState(
+        initialValue = initialLine,
         media.id,
         media.type,
         airingAt,
+        schedule,
         resumed
     ) {
-        if (!resumed || airingAt == null) {
+        if (!resumed || (airingAt == null && schedule == null)) {
             // `value` lives in a `remember` the keys do not reset, and a media
             // swap can arrive on this guard path: the detail of the next title
             // landing takes `airingAt` from set to null, the producer restarts,
@@ -80,10 +98,10 @@ internal fun rememberAiringCountdown(media: MediaNode): String? {
             return@produceState
         }
         while (true) {
-            value = media.airingCountdown()
+            value = media.airingLineAt()
             delay(COUNTDOWN_TICK_MILLIS)
         }
     }
 
-    return countdown
+    return line
 }

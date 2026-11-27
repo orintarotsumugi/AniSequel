@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -239,6 +240,42 @@ object AppCustomVectors {
                 horizontalLineTo(19f)
                 verticalLineTo(8f)
                 close()
+            }
+        }.build()
+    }
+
+    /**
+     * The tier list's own mark: a board of ranked rows, not a prize.
+     *
+     * It was the trophy, which is the picture for having *won* something, and the
+     * trophy was already the anime rankings section's glyph - so one drawing meant two
+     * pages. A tier list is a board the reader builds: a column of labels with the
+     * titles filed against them, and a last row that is short because a tier is only
+     * ever as full as the reader's taste made it. Eight rounded blocks is the fewest
+     * that still reads at 24dp, the size the bar draws it at.
+     */
+    val TierBoard: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TierBoard",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                // The label column - one block per tier.
+                tierBlock(2.2f, 3f, 6.4f, 8f)
+                tierBlock(2.2f, 9.5f, 6.4f, 14.5f)
+                tierBlock(2.2f, 16f, 6.4f, 21f)
+                // The titles filed against them: two to a full row, one in the last.
+                tierBlock(7.6f, 3f, 14.4f, 8f)
+                tierBlock(15.6f, 3f, 22f, 8f)
+                tierBlock(7.6f, 9.5f, 14.4f, 14.5f)
+                tierBlock(15.6f, 9.5f, 22f, 14.5f)
+                tierBlock(7.6f, 16f, 14.4f, 21f)
             }
         }.build()
     }
@@ -836,4 +873,24 @@ object AppCustomVectors {
             }
         }.build()
     }
+}
+
+/**
+ * One rounded block of [AppCustomVectors.TierBoard].
+ *
+ * The corners are what make the glyph read as tiles at 24dp; eight hand-copied sets
+ * of them is eight chances to round a different radius.
+ */
+private fun PathBuilder.tierBlock(left: Float, top: Float, right: Float, bottom: Float) {
+    val radius = 1.1f
+    moveTo(left + radius, top)
+    lineTo(right - radius, top)
+    quadTo(right, top, right, top + radius)
+    lineTo(right, bottom - radius)
+    quadTo(right, bottom, right - radius, bottom)
+    lineTo(left + radius, bottom)
+    quadTo(left, bottom, left, bottom - radius)
+    lineTo(left, top + radius)
+    quadTo(left, top, left + radius, top)
+    close()
 }

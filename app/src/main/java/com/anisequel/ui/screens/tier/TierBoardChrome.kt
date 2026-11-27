@@ -513,7 +513,7 @@ internal fun TierEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         ExpressiveEmptyOrb(
-            icon = AppVectorIcons.Trophy,
+            icon = AppVectorIcons.TierBoard,
             containerColor = AniSequelTheme.statusColors.infoContainer,
             iconTint = AniSequelTheme.statusColors.info
         )
@@ -579,7 +579,7 @@ internal fun TierEmptyState(
         ExpressivePrimaryButton(
             text = "Rank from AniList scores",
             onClick = onSeed,
-            icon = AppVectorIcons.Trophy,
+            icon = AppVectorIcons.TierBoard,
             loading = isSeeding,
             enabled = candidates.isNotEmpty() && !isPoolLoading && !poolLoadFailed,
             modifier = Modifier.fillMaxWidth()
@@ -625,7 +625,7 @@ internal fun TierBoardLegend(locked: Boolean = false) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (locked) AppVectorIcons.Privacy else AppVectorIcons.Trophy,
+            imageVector = if (locked) AppVectorIcons.Privacy else AppVectorIcons.TierBoard,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)

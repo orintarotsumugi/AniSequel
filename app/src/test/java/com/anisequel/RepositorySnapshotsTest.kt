@@ -3,6 +3,8 @@ package com.anisequel
 import com.anisequel.data.model.ActivityDetailData
 import com.anisequel.data.model.ActivityFeedData
 import com.anisequel.data.model.ActivityLikesData
+import com.anisequel.data.model.AiringSchedule
+import com.anisequel.data.model.AiringScheduleConnection
 import com.anisequel.data.model.ApiStatusData
 import com.anisequel.data.model.CharacterProfileData
 import com.anisequel.data.model.DeleteMediaListEntryData
@@ -182,22 +184,27 @@ class RepositorySnapshotsTest {
     }
 
     @Test
-    fun `a finished title is reused for a week`() = runTest {
+    fun `a finished title is reused for three days`() = runTest {
         service.detailStatus = "FINISHED"
         launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
         assertEquals(1, service.detailRequests)
 
-        now += 6 * DAY_MILLIS
+        // The window was seven days, on the argument that a finished show's
+        // record never changes. The synopsis and the cast do not, but the score,
+        // popularity, favourites and rankings keep moving - so a title opened a
+        // week later showed a score from the week before, beside a live one on the
+        // profile.
+        now += 2 * DAY_MILLIS + DAY_MILLIS - 1
         launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
         assertEquals(
-            "a finished show's synopsis, cast and studios do not change in six days",
+            "a finished show's synopsis, cast and studios are still good after three days",
             1,
             service.detailRequests
         )
 
-        now += DAY_MILLIS + 1
+        now += 2
         launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
-        assertEquals("past seven days it is worth asking again", 2, service.detailRequests)
+        assertEquals("past three days it is worth asking again", 2, service.detailRequests)
     }
 
     @Test
@@ -210,6 +217,38 @@ class RepositorySnapshotsTest {
         launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
         assertEquals(
             "an airing show's score and countdown move within a day",
+            2,
+            service.detailRequests
+        )
+    }
+
+    @Test
+    fun `a schedule-only record expires when its last slot airs`() = runTest {
+        // The weekly show with no announced length carries no `nextAiringEpisode`
+        // for the countdown check to expire, so this record stayed fresh for its
+        // whole three-hour window after the slots it described had aired - and the
+        // countdown the app could build from it ran out to nothing.
+        service.detailStatus = "RELEASING"
+        service.airingScheduleSlots = listOf(now / 1000 + 60, now / 1000 + 3600)
+
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(1, service.detailRequests)
+
+        // The first slot airs; a second is still ahead, so the record still
+        // answers correctly and must not be re-bought.
+        now += 61_000L
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(
+            "a record with a slot still ahead is not stale",
+            1,
+            service.detailRequests
+        )
+
+        // The last slot airs: nothing in the record describes the future now.
+        now += 3_600_000L
+        launch().getMediaDetail(MEDIA_ID, ANIME).getOrThrow()
+        assertEquals(
+            "the schedule described only slots that have now aired",
             2,
             service.detailRequests
         )
@@ -450,6 +489,9 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
     /** The cached next episode's airing time, in Unix seconds. */
     var nextAiringAtSeconds: Long? = null
 
+    /** Slots the cached detail's airing schedule carries, in Unix seconds. */
+    var airingScheduleSlots: List<Long>? = null
+
     /** When true, the next list response is well-formed but has no entries. */
     var returnEmptyList = false
 
@@ -506,6 +548,11 @@ override suspend fun getActivityReplyLikers(request: GraphQLRequest): GraphQLRes
                     description = "A synopsis the list query does not carry",
                     nextAiringEpisode = nextAiringAtSeconds?.let {
                         NextAiringEpisode(episode = 2, airingAt = it)
+                    },
+                    airingSchedule = airingScheduleSlots?.let { slots ->
+                        AiringScheduleConnection(
+                            nodes = slots.map { AiringSchedule(episode = 3, airingAt = it) }
+                        )
                     },
                     mediaListEntry = detailProgress?.let {
                         SimpleMediaListEntry(mediaId = 1, status = "CURRENT", progress = it)

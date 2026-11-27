@@ -30,8 +30,8 @@ import com.anisequel.ui.theme.LocalMainBarLift
  * The declaration order **is** the bar's order: [enabledMainTabs] filters this list
  * rather than building one, so the tier list sits between the Library and the
  * Profile by being declared there. The tier list is one of the bar's pages and not
- * a page pushed from them, so all three doors into it - the bar, the trophy in the
- * Library and the row in the profile - take the same route and leave Back in the
+ * a page pushed from them, so all three doors into it - the bar, the Library's
+ * button and the row in the profile - take the same route and leave Back in the
  * same place.
  */
 enum class MainTab {
@@ -130,12 +130,13 @@ internal fun mainTabDestinations(
             icon = AppVectorIcons.Search,
             testTag = "main_tab_search"
         )
-        // The same trophy the Library's card and the profile's row use, because
-        // it is the same page. A second glyph for the tab would make the two
-        // look like two features.
+        // The same board glyph the Library's card and the profile's row draw,
+        // because it is the same page. It used to be the trophy, which is the anime
+        // rankings section's mark - one drawing for two destinations, and a prize
+        // for a page whose whole job is filing titles into rows.
         MainTab.TIERS -> NavigationDestination(
             label = "Tiers",
-            icon = AppVectorIcons.Trophy,
+            icon = AppVectorIcons.TierBoard,
             testTag = "main_tab_tiers"
         )
         MainTab.PROFILE -> NavigationDestination(
@@ -164,10 +165,10 @@ internal fun mainTabDestinations(
  * they are the same page; which one a tap navigates to is decided by the caller,
  * from the session state rather than from this mapping.
  *
- * The tier list answers TIERS even though it can hide the bar - see
- * [showsMainBar]. It is still one of the bar's pages, and the answer is what makes
- * a joke's "main pages" rule, a tab-change announcement and a Back out of the
- * board all agree with the tab the reader tapped to get there.
+ * The tier list answers TIERS even though it draws no bar - see [showsMainBar]. It
+ * is still one of the bar's pages, and the answer is what makes a joke's "main
+ * pages" rule and a tab-change announcement agree with the tab the reader tapped to
+ * get there.
  *
  * The profile answers with the route *pattern* it is registered under
  * (`profile?tab={tab}&segment={segment}`), not with a literal - `NavDestination.route`
@@ -187,24 +188,24 @@ internal fun mainTabForRoute(route: String?): MainTab? = when (route) {
 /**
  * Whether [MainBar] is drawn over a page that belongs to [tab].
  *
- * Every one of the bar's pages draws it, with one exception that is a state rather
- * than a route: an **open** tier board.
+ * Every one of the bar's pages draws it except the tier list, which owns its whole
+ * bottom edge: the shelf sits in a Scaffold with its own Back arrow, an open board
+ * has its own chrome, and the board's tray is pinned over the edge and dragged with
+ * the finger. A floating capsule under any of that is a second set of controls in
+ * the strip the page is already using.
  *
- * The tier list's library is one of the bar's pages and keeps the bar - a reader
- * choosing a list, or leaving for another tab, is doing exactly what the bar is for.
- * A board is different: it is dragged with the finger and its tray is pinned over
- * the bottom edge. That tray is the page's own control, and a floating capsule
- * underneath it would be a second set of controls in the same strip of screen. So
- * the bar steps aside only while [tierBoardOpen], and comes back when the reader
- * closes the board - which the host animates rather than snaps.
- *
- * This used to be `tab != MainTab.TIERS` with no second argument, which hid the bar
- * over the library as well. That left the tier list's list of lists as the only page
- * in the app you could not leave by the bar, which read as the app having lost its
- * navigation rather than as the board owning the screen.
+ * This has been wrong twice, in both directions, so both failures are worth writing
+ * down. It first hid the bar only while a *board* was open, on the theory that the
+ * shelf was an ordinary page and the bar was how a reader left it - but the shelf
+ * then reserved the bar's clearance and drew a bar over its own bottom edge, which
+ * is the "it's broken" the reader reported. Before that it was a bare
+ * `tab != MainTab.TIERS`, which is what this is again, and the argument against it
+ * was that the shelf became the one page in the app you cannot leave by the bar.
+ * That is true and accepted now: the shelf has a Back arrow in its own top bar and
+ * the system back gesture, and the tab is not a place the bar can be usefully
+ * selected from - it is the page the reader is on, drawn full screen.
  */
-internal fun showsMainBar(tab: MainTab?, tierBoardOpen: Boolean): Boolean =
-    tab != null && !(tab == MainTab.TIERS && tierBoardOpen)
+internal fun showsMainBar(tab: MainTab?): Boolean = tab != null && tab != MainTab.TIERS
 
 /**
  * How much room a main page's scrolling content leaves for [MainBar], *below the
@@ -361,7 +362,7 @@ internal fun mainTabTarget(tab: MainTab, signedIn: Boolean): MainTabTarget {
  * must not push a duplicate.
  *
  * The tier list is one of those alternatives now, and it takes this path from all
- * three of its doors - the bar, the Library's trophy and the profile's row. Before,
+ * three of its doors - the bar, the Library's button and the profile's row. Before,
  * those two pushed it, so Back from a list opened in the Library went to the
  * Library while Back from one opened in the bar would have gone to Home: the same
  * page with two different Back behaviours depending on how the reader arrived.

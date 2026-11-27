@@ -199,6 +199,138 @@ class MaterialColorSchemeTest {
         }
     }
 
+/**
+     * The twelve fixed roles are Material's tones, and they do not follow the mode.
+     *
+     * They were missing from the scheme entirely, so `ColorScheme.copy` left them at
+     * the app's baseline - Material's purple - and any M3 component that reads one
+     * (a date picker, a snackbar action, a tooltip) drew purple on a green cover.
+     * The tones are Material's own: 90/80 for the fills, 10/30 for their text,
+     * identical in light and dark by definition.
+     */
+    @Test
+    fun `the fixed roles are the seed tones in both modes`() {
+        val seeds = listOf(
+            "red" to 0xFFD32F2F.toInt(),
+            "green" to 0xFF2E7D32.toInt(),
+            "yellow" to 0xFFFBC02D.toInt(),
+            "violet" to 0xFF7B1FA2.toInt(),
+            "grey" to 0xFF808080.toInt()
+        )
+        seeds.forEach { (name, seed) ->
+            val light = MaterialColorSchemes.tonalSpot(seed, dark = false, tintSurfaces = true)
+            val dark = MaterialColorSchemes.tonalSpot(seed, dark = true, tintSurfaces = true)
+
+            fun assertTone(role: String, colour: Int, tone: Double) {
+                val measured = Hct.fromInt(colour).tone
+                assertTrue(
+                    "$name $role is tone %.2f, not the tone $tone Material uses"
+                        .format(measured),
+                    kotlin.math.abs(measured - tone) < 1.5
+                )
+            }
+
+            listOf(
+                Triple("primaryFixed", light.primaryFixed, 90.0),
+                Triple("primaryFixedDim", light.primaryFixedDim, 80.0),
+                Triple("onPrimaryFixed", light.onPrimaryFixed, 10.0),
+                Triple("onPrimaryFixedVariant", light.onPrimaryFixedVariant, 30.0),
+                Triple("secondaryFixed", light.secondaryFixed, 90.0),
+                Triple("secondaryFixedDim", light.secondaryFixedDim, 80.0),
+                Triple("onSecondaryFixed", light.onSecondaryFixed, 10.0),
+                Triple("onSecondaryFixedVariant", light.onSecondaryFixedVariant, 30.0),
+                Triple("tertiaryFixed", light.tertiaryFixed, 90.0),
+                Triple("tertiaryFixedDim", light.tertiaryFixedDim, 80.0),
+                Triple("onTertiaryFixed", light.onTertiaryFixed, 10.0),
+                Triple("onTertiaryFixedVariant", light.onTertiaryFixedVariant, 30.0)
+            ).forEach { (role, colour, tone) -> assertTone(role, colour, tone) }
+
+            assertEquals(
+                "$name: fixed roles are the same in both modes - a component opts out",
+                light.primaryFixed,
+                dark.primaryFixed
+            )
+            assertEquals(
+                "$name: and so is the tertiary text that sits on it",
+                light.onTertiaryFixedVariant,
+                dark.onTertiaryFixedVariant
+            )
+
+            // Material's own guarantee for the fixed set: both text tones read on
+            // both fills, whatever the seed.
+            listOf("primary" to light, "secondary" to light, "tertiary" to light).forEach { (role, scheme) ->
+                val fixed = scheme.role(role + "Fixed")
+                val fixedDim = scheme.role(role + "FixedDim")
+                val onFixed = scheme.role("on" + role.replaceFirstChar { it.uppercase() } + "Fixed")
+                val onVariant = scheme.role("on" + role.replaceFirstChar { it.uppercase() } + "FixedVariant")
+                listOf(fixed, fixedDim).forEach { fill ->
+                    listOf(onFixed, onVariant).forEach { text ->
+                        val ratio = contrastRatio(text, fill)
+                        assertTrue(
+                            "$name $role fixed pair is only %.2f:1".format(ratio),
+                            ratio >= 4.5
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The cover's second hue becomes tertiary, because a picture knows better than
+     * a 60-degree rotation.
+     *
+     * The rotation stays for a cover with one hue, a grey accent, or an accent too
+     * close to the seed to read as a second colour.
+     */
+    @Test
+    fun `a cover second hue becomes the tertiary palette`() {
+        val seed = 0xFFD32F2F.toInt()
+        val accent = Hct.from(210.0, 50.0, 50.0).argb
+        val plain = MaterialColorSchemes.tonalSpot(seed, dark = false, tintSurfaces = true)
+        val withAccent = MaterialColorSchemes.tonalSpot(
+            seed,
+            dark = false,
+            tintSurfaces = true,
+            accentArgb = accent
+        )
+
+        val tertiaryHue = Hct.fromInt(withAccent.tertiary).hue
+        assertTrue(
+            "tertiary took hue %.1f instead of the artwork's second hue 210"
+                .format(tertiaryHue),
+            angularDistance(tertiaryHue, 210.0) < 8.0
+        )
+        assertEquals(
+            "primary is untouched by the accent",
+            plain.primary,
+            withAccent.primary
+        )
+
+        val seedHue = Hct.fromInt(seed).hue
+        val nearAccent = Hct.from(seedHue + 10.0, 50.0, 50.0).argb
+        assertEquals(
+            "an accent ten degrees from the seed is not a second colour",
+            plain.tertiary,
+            MaterialColorSchemes.tonalSpot(
+                seed,
+                dark = false,
+                tintSurfaces = true,
+                accentArgb = nearAccent
+            ).tertiary
+        )
+        assertEquals(
+            "a grey accent has no hue to contribute",
+            plain.tertiary,
+            MaterialColorSchemes.tonalSpot(
+                seed,
+                dark = false,
+                tintSurfaces = true,
+                accentArgb = 0xFF808080.toInt()
+            ).tertiary
+        )
+    }
+
     private fun contrastRatio(a: Int, b: Int): Double {
         val first = relativeLuminance(a)
         val second = relativeLuminance(b)

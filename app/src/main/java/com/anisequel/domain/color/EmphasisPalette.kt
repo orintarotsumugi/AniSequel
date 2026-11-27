@@ -68,21 +68,54 @@ data class EmphasisPalette(
         /**
          * The emphasis roles for one scheme.
          *
-         * The backdrop is `surfaceContainerHighest` rather than `surface`: it is
-         * the furthest the surface ramp moves from `onSurface` in *both* modes
-         * (darker than white in the light theme, lighter than the page in the
-         * dark one), so a role that clears its floor there clears it everywhere.
+         * The backdrop is [worstSurface], which is the surface a role can be drawn
+         * on where it will read worst - not `surfaceContainerHighest`, which this
+         * used to assume was that surface. See [worstSurface] for what the
+         * assumption got wrong.
          */
         fun of(scheme: MaterialScheme): EmphasisPalette = of(
             onSurface = scheme.onSurface,
             onSurfaceVariant = scheme.onSurfaceVariant,
-            surfaceContainerHighest = scheme.surfaceContainerHighest,
+            worstSurface = worstSurface(scheme),
             outline = scheme.outline,
             outlineVariant = scheme.outlineVariant,
             primary = scheme.primary,
             secondary = scheme.secondary,
             tertiary = scheme.tertiary,
             error = scheme.error
+        )
+
+        /**
+         * The surface a role drawn on a card can land on where it reads worst.
+         *
+         * This used to be `surfaceContainerHighest` on the claim that it is the
+         * furthest the surface ramp moves from `onSurface` in both modes. It is
+         * not: the light theme's `surfaceDim` (tone 87) is darker than
+         * `surfaceContainerHighest` (tone 90), and the dark theme's
+         * `surfaceBright` (24) is lighter than it (22). A role dimmed to 4.5:1 on
+         * the highest container measured 4.48:1 on `surfaceBright` for a red seed
+         * in the dark theme - the secondary text missed AA on the brightest
+         * surface. Picking
+         * the surface with the *lowest* contrast against `onSurface` is the only
+         * definition that is true in both modes, and it is what the comment
+         * claimed all along.
+         */
+        fun worstSurface(onSurface: Int, surfaces: List<Int>): Int =
+            surfaces.minByOrNull { Contrast.ratio(onSurface, it) } ?: surfaces.first()
+
+        /** [worstSurface] over every surface role of [scheme]. */
+        fun worstSurface(scheme: MaterialScheme): Int = worstSurface(
+            scheme.onSurface,
+            listOf(
+                scheme.surface,
+                scheme.surfaceDim,
+                scheme.surfaceBright,
+                scheme.surfaceContainer,
+                scheme.surfaceContainerHigh,
+                scheme.surfaceContainerHighest,
+                scheme.surfaceContainerLow,
+                scheme.surfaceContainerLowest
+            )
         )
 
         /**
@@ -95,7 +128,7 @@ data class EmphasisPalette(
         fun of(
             onSurface: Int,
             onSurfaceVariant: Int,
-            surfaceContainerHighest: Int,
+            worstSurface: Int,
             outline: Int,
             outlineVariant: Int,
             primary: Int,
@@ -103,7 +136,7 @@ data class EmphasisPalette(
             tertiary: Int,
             error: Int
         ): EmphasisPalette {
-            val worst = surfaceContainerHighest
+            val worst = worstSurface
             val strongest = onSurface
 
             /**

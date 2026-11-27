@@ -58,8 +58,8 @@ import kotlinx.coroutines.launch
  * The bar, plus the one rule that hides it.
  *
  * `showsMainBar` is the whole visibility rule - null means this is a screen
- * pushed from a tab (Settings, a studio, somebody else's profile), and an open
- * tier board owns the bottom edge with its own tray.
+ * pushed from a tab (Settings, a studio, somebody else's profile), and the tier
+ * list draws no bar at all because its page owns the bottom edge.
  *
  * Animated rather than conditional, because the tier list is a *tab*: a bar that
  * vanished on the tap and reappeared on Back would read as the app losing its
@@ -76,19 +76,12 @@ internal fun BoxScope.MainBarHost(
     navController: NavHostController,
     tabs: List<MainTab>,
     profileAvatarUrl: String?,
-    signedIn: Boolean,
-    tierBoardOpen: Boolean,
-    onTierBoardOpenChange: (Boolean) -> Unit
+    signedIn: Boolean
 ) {
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val currentTab = mainTabForRoute(currentRoute)
 
-    // A board that is open when the route is left - a pop from somewhere the
-    // screen's own dispose did not run first - must not hide the bar on whatever
-    // page comes next. The screen also reports false when it goes, but the host
-    // is the only place that knows the route changed.
     LaunchedEffect(currentRoute) {
-        if (currentRoute != AppRoutes.TIER_LIST) onTierBoardOpenChange(false)
         // A new page starts with its navigation on screen. Without this, a
         // reader who scrolled Home away and tapped through to Settings would
         // arrive with the bar still hidden - the page would look like it had no
@@ -117,13 +110,13 @@ internal fun BoxScope.MainBarHost(
     // the control, so the bar publishes nothing to the sky and nothing is painted
     // over it. See the note in SeasonalPiles about why the drift sits on the
     // screen edge rather than on the bar.
-    // Two reasons to hide, and only one of them is the route: the bar steps
-    // aside for an open tier board, and it also slides away while the reader is
-    // travelling down a page. `MainBarAutoHide` is a read of app-wide scroll
-    // state, so this recomposes the bar host only - the page underneath and the
-    // navigation graph are untouched - and the content's bottom clearance stays
-    // put, so the bar neither jumps the list nor changes where it can scroll to.
-    val barVisible = showsMainBar(currentTab, tierBoardOpen) && !MainBarAutoHide.hidden
+    // Two reasons to hide, and only one of them is the route: the tier list draws
+    // no bar, and the bar also slides away while the reader is travelling down any
+    // other page. `MainBarAutoHide` is a read of app-wide scroll state, so this
+    // recomposes the bar host only - the page underneath and the navigation graph
+    // are untouched - and the content's bottom clearance stays put, so the bar
+    // neither jumps the list nor changes where it can scroll to.
+    val barVisible = showsMainBar(currentTab) && !MainBarAutoHide.hidden
 
     AnimatedVisibility(
         visible = barVisible,
@@ -150,9 +143,8 @@ internal fun BoxScope.MainBarHost(
     ) {
         MainBar(
             // The last real tab, not Home, while the bar animates out - see [lastTab].
-            // An open board still hides the bar; `MainBar` coerces an unknown selection
-            // to the first tab for that one frame rather than crashing on an index of
-            // -1.
+            // The tier list hides the bar, and `MainBar` coerces a selection that is not
+            // in its list to the first tab rather than crashing on an index of -1.
             selected = currentTab ?: lastTab.value,
             tabs = tabs,
             // The largest the viewer's avatar has; the bar falls back to a glyph
@@ -176,8 +168,8 @@ internal fun BoxScope.MainBarHost(
  *
  * `active` is the page rule, not the switch: the host owns the switch, frequency
  * and timing. Main-pages means the pages the bar owns - the tier list included,
- * since it is one of them even while an open board hides the bar; Everywhere adds
- * the pages pushed from them. Login is excluded from both arms - a joke over the
+ * since it is one of them even though that page draws no bar; Everywhere adds the
+ * pages pushed from them. Login is excluded from both arms - a joke over the
  * sign-in screen is an interruption at the one moment the reader is deciding
  * something.
  */

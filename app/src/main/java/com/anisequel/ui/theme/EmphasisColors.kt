@@ -47,7 +47,22 @@ internal fun ColorScheme.toEmphasisColors(): EmphasisColors {
     val palette = EmphasisPalette.of(
         onSurface = onSurface.toSrgbInt(),
         onSurfaceVariant = onSurfaceVariant.toSrgbInt(),
-        surfaceContainerHighest = surfaceContainerHighest.toSrgbInt(),
+        // Every surface the role can be drawn on, so the floor is measured
+        // against the one it reads worst on - not against the highest container,
+        // which is not the furthest from onSurface in either mode.
+        worstSurface = EmphasisPalette.worstSurface(
+            onSurface.toSrgbInt(),
+            listOf(
+                surface.toSrgbInt(),
+                surfaceDim.toSrgbInt(),
+                surfaceBright.toSrgbInt(),
+                surfaceContainer.toSrgbInt(),
+                surfaceContainerHigh.toSrgbInt(),
+                surfaceContainerHighest.toSrgbInt(),
+                surfaceContainerLow.toSrgbInt(),
+                surfaceContainerLowest.toSrgbInt()
+            )
+        ),
         outline = outline.toSrgbInt(),
         outlineVariant = outlineVariant.toSrgbInt(),
         primary = primary.toSrgbInt(),

@@ -228,8 +228,23 @@ the poster and title sit in a lockup over it, the status is a full-width capsule
 that opens the editor, and the artwork drifts against the scroll in the draw
 phase. A four-up strip under it prints score, popularity, favourites and
 length; `favourites` was added to `MEDIA_DETAIL_FIELDS` for that column. The
-next-episode countdown appears once — in the stats strip for a tracked anime,
-and in the Details card (as before) when there is no progress card to own it.
+next-episode countdown appears once: the stats strip draws it for any airing
+anime and the Details card is told to skip its own row. The strip's gate used to
+be "a progress card exists", and a wave needs the episode *total* — so a show
+whose length AniList has not announced lost the countdown entirely, and the
+details card had already been told the progress card was speaking.
+
+**The next airing is read from two fields, and only the future is promised.**
+`nextAiringEpisode` is documented as the media's next episode and is still null on
+a currently airing show whose length has not been announced, so the detail query
+also asks for `airingSchedule(notYetAired: true, perPage: 25)` — the one part of
+the schedule AniList says is present and accurate. `upcomingAiring` takes the
+explicit field while it is still ahead and otherwise the earliest future slot,
+and `isDetailStale` treats a record whose whole schedule has aired as stale even
+though its TTL has not run out. The countdown itself is a `rememberAiringLine`
+clock rather than a string read at composition, and under a day it speaks in
+hours and minutes ("in 5h 20m"): a single-unit answer was twenty minutes wrong
+for the hour a reader is actually waiting through, and then stood still for it.
 The wavy progress card and the trailer card (drawn from YouTube's deterministic
 thumbnail) are the other new surfaces; the synopsis, Categories, cast, relations
 and the rest are the same cards, in the reference order.
@@ -269,6 +284,20 @@ they are deliberately different. The watch-page rule matters for the same report
 YouTube's only action on a refused video is "Watch on YouTube", and letting that
 load in the player replaced the video with the watch page in a 16:9 hole with no
 back button.
+
+Two alpha channels meet in this dialog and only one of them is Compose's. A `WebView`
+is an interop view: it draws above every Compose node and ignores their
+`graphicsLayer { alpha }`, so the picture fades through the view's own `alpha`
+(`snapshotFlow { reveal * presence() }`) while the scrim and the chrome fade through
+the layer. That is why the two exist, and it is also why the player has to end on a
+real 1: a Compose spring stops inside its visibility threshold instead of on its
+target, so the product rested at 0.99 and the trailer was never drawn as an opaque
+view at all - below 1 the framework composes it through an alpha layer instead of
+drawing it straight through, which is not a path a video is tested on. The report that
+surfaced it was audio playing with no picture. The reveal is an `Animatable` now, and
+it and the dialog's entrance snap to their target once the spring is done, so the
+picture settles as exactly opaque; `AnimationWiringTest` pins the snaps so a later
+`animateFloatAsState` cannot quietly put the 0.99 back.
 
 The frame is 16:9 at the window's width only *while that fits*. It was
 `fillMaxWidth().aspectRatio(16f / 9f)` with the title row above it and the escape
@@ -771,7 +800,7 @@ inheriting the no-op default.
 `coverImage.color` is one server-computed average of the whole file, and it is
 frequently the background wash rather than the artwork, so the app used to theme
 itself from a colour the reader could not see. The seed now comes from the cover
-pixels: `CoverColorRepository` asks Coil for a 128px software decode (memory- and
+pixels: `CoverColorRepository` asks Coil for a 96px software decode (memory- and
 disk-cached, the same URL the hero is already loading), `CoverColorQuantizer`
 bins opaque pixels into a 5-bit histogram and ranks the bins with Material 3's
 `Score` rules — chroma is rewarded, hue is scored by a 15-degree neighbourhood so
@@ -783,8 +812,9 @@ The seed feeds a pure-Kotlin HCT/CAM16 port (`domain/color/Hct.kt`) that builds 
 Material 3 tonal-spot scheme: primary, secondary, tertiary, neutral and neutral
 variant palettes sampled at fixed tones — 40/80 for primaries, 10/90 for
 containers, 6/98 for surfaces, 30/80 for secondary text, 50/60 for outlines — and
-all 36 `ColorScheme` roles are generated for **both** light and dark. The error
-palette stays red whatever the show. The anime layer no longer forces dark mode:
+all 48 `ColorScheme` roles are generated for **both** light and dark — the 36 that
+follow the mode and the 12 fixed ones Material keeps at tones 90/80/10/30 in either.
+The error palette stays red whatever the show. The anime layer no longer forces dark mode:
 it follows Light/Dark/System, and the scheme cross-fades through
 `AnimatedColorScheme` instead of cutting. Surfaces take the show's hue only for
 the anime layer (`tintSurfaces`); the custom accent in Settings shares the builder
@@ -3131,7 +3161,7 @@ reader who forced Dark on a light phone got the light tone behind a dark page. T
 now read `LocalAppDarkTheme`, provided once by `AniSequelTheme` from the resolved
 mode, and `ThemeDarknessTest` pins that they keep doing it.
 
-The theme transition also stopped moving all 36 roles on one spring: accents use
+The theme transition also stopped moving every role on one spring: accents use
 `ThemeColorEffects` and the large surfaces use the softer `SurfaceColorEffects`, so
 the recolour arrives accent-first with the page settling behind it. Both are springs,
 so an interrupted second recolour simply retargets - no delay to queue in the wrong
@@ -3605,7 +3635,71 @@ the resolved URL first and keeps the AniList URL as its fallback. The quantizer 
 a second pass - `accentFrom` - which rewards chroma, requires a real region and rejects
 hues within 40 degrees of the seed, so a two-colour gradient only exists when the
 artwork has two colours. The hero backdrop and the Info page wash use it. One 96px
-decode produces both colours and the pair is cached.
+decode produces both colours, and both passes score one conversion per histogram bin
+instead of two: a 96px cover holds up to four thousand bins, so the second pass used
+to cost another four thousand CAM16 solves on the IO thread for every cover opened
+for the first time.
+
+**A miss is remembered, in a bounded LRU.** The palette cache only ever held
+successes, so the covers that produce no palette - a black-and-white poster, a
+transparent one, a cover too small to sample - were the most expensive ones in the
+app: decoded and quantized again on every open, under two URLs, to learn the same
+`null`. `CoverPaletteMisses` remembers a definitive answer and evicts the oldest
+beyond `CACHE_ENTRIES`, reading through `get` rather than `containsKey` because
+`LinkedHashMap` refreshes access order on the former and not the latter. A failed
+request, a timeout and a cancelled decode are deliberately *not* remembered: those
+are properties of the moment, not of the artwork.
+
+**The artwork's second hue is the tertiary palette.** Tertiary - and the three fixed
+roles built from it - used to be a blind 60-degree rotation of the seed, which is
+Material's answer for a wallpaper that carries no better information. A cover does:
+`paletteFrom` already scores a second hue for the hero's backdrop. When that hue is
+at least 25 degrees from the seed and genuinely coloured, `tonalSpot(accentArgb = …)`
+uses it for tertiary, so the chips and containers under the art are sampled from the
+art. A one-hue cover, a grey accent, or an accent within 25 degrees of the seed keeps
+the rotation, and primary and secondary never move.
+
+### Forty-eight roles, and a tone that means what it says
+
+`MaterialScheme` carried 36 of Material 3's colour roles. The other twelve are the
+fixed set - `primaryFixed`, `primaryFixedDim`, `onPrimaryFixed`,
+`onPrimaryFixedVariant` and the secondary and tertiary equivalents - and they are
+fixed on purpose: the same tones 90/80/10/30 in light and dark, for a component that
+must keep its own colours when the surrounding theme is reversed. Because
+`ColorScheme.copy` is a list of named arguments, an omitted role does not fail to
+compile - it keeps the app's baseline, which was Material's purple. A date picker, a
+snackbar action or a tooltip on a green cover drew purple. All twelve are generated
+now, copied by `toColorScheme`, animated by `AnimatedColorScheme` and listed in
+`ROLE_NAMES`, so the test that walks the roles walks 48. The hand-written brand and
+accent palettes in `Theme.kt`/`ThemePalettes.kt` were the other half of the same
+bug - they name their 36 mode roles by hand and inherited the purple for the rest -
+so `ColorScheme.withFixedRoles()` derives the twelve from the scheme's own accents.
+It runs per palette and mode inside the resolved-scheme composable, not in the
+palette builders: ten palettes at class-init would have been a hundred and twenty
+tone solves on the launch path, for roles only a few M3 components read.
+
+The tonal solver got two corrections behind that. When no chroma fitted in gamut
+within the tolerance, `HctSolver.solve` returned the unclipped solve: asking for tone
+99 at a red hue produced a clipped magenta at tone 70 - a thirty-tone drop and a hue
+mistake the caller could not see. It falls back to the neutral at the requested tone
+now. The gamut tolerance is asymmetric as well, with a tight floor and a half-unit
+ceiling: CAM16's inverse of white overshoots the top of the scale by a few percent,
+and a loose floor let a negative channel through that clamping turned into a higher
+tone (tone 1 came back as 2.85). `ColorEngineTest` sweeps every tone from 1 to 99 at
+three chromas across twelve hues and requires each within 1.5 tone of the request.
+
+**A floor is measured against the worst surface, not the highest container.** The
+emphasis roles - secondary text, captions, dividers, the progress track, the chart
+series - are dimmed to a named contrast floor against the surface they might be
+drawn on, and the palette took that to be `surfaceContainerHighest`. It is not the
+worst: the dark scheme's `surfaceBright` is lighter (tone 24 against 22) and the
+light scheme's `surfaceDim` is darker (87 against 90). A red cover's secondary text
+measured 4.48:1 on `surfaceBright` in the dark theme, under the 4.5:1 it is named for.
+`EmphasisPalette.worstSurface` picks the surface by measured contrast across all eight
+surface roles, and `EmphasisColourTest` asserts every role and every chart series
+against each of them. `surfaceTint` also stopped arriving ahead of the surfaces it
+tints: it rode a fast effects spring while the surfaces cross-faded on the slower
+spatial one.
 
 ### Blur at radius zero is still a layer
 
@@ -3910,7 +4004,7 @@ A control that eases between two scheme roles - a chip between its selected and
 unselected pair, a connection capsule between its verdicts - used to call
 `animateColorAsState(targetValue = MaterialTheme.colorScheme.X)`. That is correct
 until the theme itself animates, which this app's does: `rememberAnimatedColorScheme`
-eases all 36 roles, so `colorScheme.primaryContainer` is a different value on
+eases every role, so `colorScheme.primaryContainer` is a different value on
 every frame of a theme change. The control's own spring then re-targeted 36 times
 a frame: it arrived a beat after the page it lives in, and on a bouncy token it
 overshot a colour the page had already left.

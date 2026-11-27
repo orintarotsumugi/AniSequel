@@ -78,7 +78,23 @@ class EmphasisColourTest {
         surfaceContainerHighest = 0xFFDCE5F2.toInt(),
         surfaceContainerLow = 0xFFFAFCFF.toInt(),
         surfaceContainerLowest = 0xFFFFFFFF.toInt(),
-        surfaceDim = 0xFFDDE4EF.toInt()
+        surfaceDim = 0xFFDDE4EF.toInt(),
+        // The fixed roles are mode-independent in Material, so both hand-built
+        // schemes carry the same ones. Nothing here reads them; they exist because
+        // `MaterialScheme` is a complete scheme and the emphasis palette is fed
+        // real ones.
+        primaryFixed = 0xFFD3E4FF.toInt(),
+        primaryFixedDim = 0xFFA9C7FF.toInt(),
+        onPrimaryFixed = 0xFF001C38.toInt(),
+        onPrimaryFixedVariant = 0xFF00497D.toInt(),
+        secondaryFixed = 0xFF9CF0F4.toInt(),
+        secondaryFixedDim = 0xFF80D4D8.toInt(),
+        onSecondaryFixed = 0xFF002021.toInt(),
+        onSecondaryFixedVariant = 0xFF004F51.toInt(),
+        tertiaryFixed = 0xFFFFE6C2.toInt(),
+        tertiaryFixedDim = 0xFFFFD08A.toInt(),
+        onTertiaryFixed = 0xFF2C1700.toInt(),
+        onTertiaryFixedVariant = 0xFF6A3C00.toInt()
     )
 
     private val brandDark = MaterialScheme(
@@ -117,30 +133,49 @@ class EmphasisColourTest {
         surfaceContainerHighest = 0xFF2A3B4C.toInt(),
         surfaceContainerLow = 0xFF101A24.toInt(),
         surfaceContainerLowest = 0xFF070C12.toInt(),
-        surfaceDim = 0xFF0D151E.toInt()
+        surfaceDim = 0xFF0D151E.toInt(),
+        // Identical to the light scheme's: fixed roles do not follow the mode.
+        primaryFixed = 0xFFD3E4FF.toInt(),
+        primaryFixedDim = 0xFFA9C7FF.toInt(),
+        onPrimaryFixed = 0xFF001C38.toInt(),
+        onPrimaryFixedVariant = 0xFF00497D.toInt(),
+        secondaryFixed = 0xFF9CF0F4.toInt(),
+        secondaryFixedDim = 0xFF80D4D8.toInt(),
+        onSecondaryFixed = 0xFF002021.toInt(),
+        onSecondaryFixedVariant = 0xFF004F51.toInt(),
+        tertiaryFixed = 0xFFFFE6C2.toInt(),
+        tertiaryFixedDim = 0xFFFFD08A.toInt(),
+        onTertiaryFixed = 0xFF2C1700.toInt(),
+        onTertiaryFixedVariant = 0xFF6A3C00.toInt()
     )
 
     /**
-     * Every role clears the floor it is named for.
+     * Every role clears the floor it is named for, on every surface it can sit on.
      *
-     * Measured against `surfaceContainerHighest`, which is what the palette uses as
-     * its worst case: it is the furthest the surface ramp moves from `onSurface` in
-     * both modes, so a role that clears there clears on the page and on a card.
+     * Measured against *all* the surface roles, not against
+     * `surfaceContainerHighest`: the palette used to assume that was the furthest
+     * the ramp moves from `onSurface`, and it is not - the light scheme's
+     * `surfaceDim` is darker (tone 87 against 90) and the dark scheme's
+     * `surfaceBright` is lighter (24 against 22). Measured against the container
+     * the palette used to treat as worst, the dark theme's secondary text on a red
+     * seed reads 4.48:1 on `surfaceBright` - under the 4.5:1 it is named for.
      */
     @Test
     fun `every emphasis role clears its own floor`() {
         listOf("brand light" to brandLight, "brand dark" to brandDark).forEach { (name, scheme) ->
             val palette = EmphasisPalette.of(scheme)
-            val worst = scheme.surfaceContainerHighest
 
             fun check(role: String, colour: Int, floor: Double) {
-                val ratio = Contrast.ratio(colour, worst)
-                assertTrue(
-                    "$name $role measures %.2f:1 on the worst surface, under its %.2f " +
-                        "floor - the value it replaced was an alpha, and an alpha is " +
-                        "measured against whatever happens to be behind it".format(ratio, floor),
-                    ratio >= floor
-                )
+                surfaces(scheme).forEach { surface ->
+                    val ratio = Contrast.ratio(colour, surface)
+                    assertTrue(
+                        "$name $role measures %.2f:1 on %08X, under its %.2f " +
+                            "floor - the value it replaced was an alpha, and an alpha is " +
+                            "measured against whatever happens to be behind it"
+                                .format(ratio, surface, floor),
+                        ratio >= floor
+                    )
+                }
             }
 
             check("secondary", palette.secondary, EmphasisPalette.FLOOR_SECONDARY)
@@ -172,36 +207,26 @@ class EmphasisColourTest {
             listOf(false, true).forEach { dark ->
                 val scheme = MaterialColorSchemes.tonalSpot(seed, dark = dark, tintSurfaces = true)
                 val palette = EmphasisPalette.of(scheme)
-                val worst = scheme.surfaceContainerHighest
                 val mode = if (dark) "dark" else "light"
 
-                assertTrue(
-                    "$name $mode secondary is %.2f:1".format(Contrast.ratio(palette.secondary, worst)),
-                    Contrast.ratio(palette.secondary, worst) >= EmphasisPalette.FLOOR_SECONDARY
-                )
-                assertTrue(
-                    "$name $mode muted is %.2f:1".format(Contrast.ratio(palette.muted, worst)),
-                    Contrast.ratio(palette.muted, worst) >= EmphasisPalette.FLOOR_MUTED
-                )
-                assertTrue(
-                    "$name $mode disabled is %.2f:1".format(Contrast.ratio(palette.disabled, worst)),
-                    Contrast.ratio(palette.disabled, worst) >= EmphasisPalette.FLOOR_CONTROL
-                )
-                assertTrue(
-                    "$name $mode divider is %.2f:1".format(Contrast.ratio(palette.divider, worst)),
-                    Contrast.ratio(palette.divider, worst) >= EmphasisPalette.FLOOR_DIVIDER
-                )
-                assertTrue(
-                    "$name $mode skeleton is %.2f:1".format(Contrast.ratio(palette.skeleton, worst)),
-                    Contrast.ratio(palette.skeleton, worst) >= EmphasisPalette.FLOOR_SKELETON
-                )
+                fun check(role: String, colour: Int, floor: Double) {
+                    surfaces(scheme).forEach { surface ->
+                        val ratio = Contrast.ratio(colour, surface)
+                        assertTrue(
+                            "$name $mode $role is %.2f:1 on %08X, under its %.2f floor"
+                                .format(ratio, surface, floor),
+                            ratio >= floor
+                        )
+                    }
+                }
+
+                check("secondary", palette.secondary, EmphasisPalette.FLOOR_SECONDARY)
+                check("muted", palette.muted, EmphasisPalette.FLOOR_MUTED)
+                check("disabled", palette.disabled, EmphasisPalette.FLOOR_CONTROL)
+                check("divider", palette.divider, EmphasisPalette.FLOOR_DIVIDER)
+                check("skeleton", palette.skeleton, EmphasisPalette.FLOOR_SKELETON)
                 palette.charts.forEachIndexed { index, series ->
-                    assertTrue(
-                        "$name $mode chart series $index is %.2f:1".format(
-                            Contrast.ratio(series, worst)
-                        ),
-                        Contrast.ratio(series, worst) >= EmphasisPalette.FLOOR_CONTROL
-                    )
+                    check("chart series $index", series, EmphasisPalette.FLOOR_CONTROL)
                 }
             }
         }
@@ -217,7 +242,7 @@ class EmphasisColourTest {
     fun `the ladder steps down in the order it claims`() {
         listOf("light" to brandLight, "dark" to brandDark).forEach { (name, scheme) ->
             val palette = EmphasisPalette.of(scheme)
-            val worst = scheme.surfaceContainerHighest
+            val worst = EmphasisPalette.worstSurface(scheme)
             fun of(colour: Int) = Contrast.ratio(colour, worst)
 
             assertTrue(
@@ -341,6 +366,18 @@ class EmphasisColourTest {
             )
         }
     }
+
+    /** Every surface role a card can take its background from. */
+    private fun surfaces(scheme: MaterialScheme): List<Int> = listOf(
+        scheme.surface,
+        scheme.surfaceDim,
+        scheme.surfaceBright,
+        scheme.surfaceContainer,
+        scheme.surfaceContainerHigh,
+        scheme.surfaceContainerHighest,
+        scheme.surfaceContainerLow,
+        scheme.surfaceContainerLowest
+    )
 
     private fun source(path: String): String {
         val file = File(findProjectRoot(), path)
