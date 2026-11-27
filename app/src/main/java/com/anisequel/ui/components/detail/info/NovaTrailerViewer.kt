@@ -100,8 +100,9 @@ import java.net.URLEncoder
  * enabled - the player *is* a web app, and without scripting the embed is a black
  * rectangle. Everything a document could do with that is closed off instead: the
  * page is a fixed wrapper holding one iframe, the only hosts it may load are
- * YouTube's, and any navigation anywhere else is cancelled here and handed to the
- * external opener.
+ * YouTube's, and a navigation that is not one of the player's own pages is
+ * cancelled here - a web page among them is handed to the external opener, and
+ * anything that is not a web page is simply stopped.
  */
 @Composable
 internal fun NovaTrailerCard(
@@ -458,11 +459,13 @@ internal fun NovaTrailerViewer(
 /**
  * The embed, in the one `WebView` that may run scripting.
  *
- * Loaded from a wrapper page on `https://www.youtube.com/` rather than pointed at
- * the embed URL directly: YouTube's player checks the referer, and a `WebView`
- * asked for the embed with no origin is served "Video unavailable" often enough
- * that the direct route is not worth taking. The wrapper is a string this function
- * builds from a validated id - no remote document is ever composed into it.
+ * Loaded from a wrapper page rather than pointed at the embed URL directly: the
+ * wrapper is the document that can carry an origin and a referer, and they are the
+ * app's own id - see [NOVA_TRAILER_ORIGIN] for why that is the whole fix for error
+ * 152. A `WebView` asked for the embed with no referer is served "Video
+ * unavailable" often enough that the direct route is not worth taking. The wrapper
+ * is a string this function builds from a validated id - no remote document is ever
+ * composed into it.
  *
  * The id is validated rather than escaped: AniList's ids are `[A-Za-z0-9_-]`, and
  * anything else is not a trailer. That is what keeps a malformed payload from
