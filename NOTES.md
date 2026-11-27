@@ -1194,6 +1194,51 @@ base64 rather than linked. It is kept as the renderer `TierListTest` can assert
 on without a device, and as the route to a printable export; the app's share
 sheet uses PNG because every messaging app accepts it.
 
+### A gutter label is not white on every colour
+
+Every row's letters were `Color.White`, copied into the SVG palette and the PNG
+paint as the same constant. On the palette's amber `#FFC53D` that is 1.6:1 - the
+label the board exists to show was the least legible thing on it - and the grey
+`#8E8E93` was 3.3:1, under the 4.5:1 floor the small count beneath it needs. Ten
+of the twelve palette colours missed that floor; amber missed it by nearly three.
+
+`domain/tier/TierLabelInk.kt` now picks between white and black by WCAG contrast
+against the row's own colour, ties to white, and the board, the SVG writer and the
+PNG exporter all call that one function rather than each carrying the constant.
+Black is true `#000000` and not the export background's near-black on purpose:
+indigo `#6366F1` is 4.70:1 against black and 4.04:1 against the near-black, so
+"nearly black" is the difference between a palette that passes on every entry and
+one that fails on the twelfth. The rule is a comparison, not a table, so a colour
+the picker adds tomorrow is covered. `TierLabelInkTest` holds every palette colour
+to the floor and pins the two extremes, and it asserts the SVG case too: an
+exporter that silently kept white would disagree with the board it is a picture of.
+
+The count under the letter was drawn at 82% of the label's ink, which is a second
+contrast failure hidden behind the first: 0.82 of the *right* ink over violet is
+4.05:1 and over indigo 4.10:1, back under the floor the ink was chosen to clear.
+It is full ink now, quieter by being smaller - the same lesson as
+[An alpha is not a contrast unit](#an-alpha-is-not-a-contrast-unit), one widget
+further out.
+
+### A pinch invalidates the board, not the page
+
+The live zoom was a `var` in `TierBoardScreen`, and the screen's body read it to
+build the toolbar's readout, the sheet host's data and the persistence
+`LaunchedEffect`. Compose subscribes a composition to every state read in that
+composition's scope, so every frame of a pinch recomposed the page - the tray, both
+toolbars, the sheet host and its six-way switch - while the board it was all for
+would have recomposed by itself anyway.
+
+`TierZoomState` is a small saved holder in `ui/screens/tier/TierBoardZoom.kt`: the
+screen passes it, the board and the stepper read `value`, and nothing else
+subscribes. It saves as a `Float` rather than as state, so the saved zoom and the
+stored preference are one number and one clamp. The board's measurement pass lost
+its own per-frame list too: `TierGeometry` used to `remember` a `List<Slot>` - one
+object per row and poster, rebuilt whenever the arrangement or the draw window
+changed, which during a pinch is every frame - and now walks the same rows, tiles
+and caret twice, once to measure and once to place. Two ordered walks over the same
+`arrangement` cannot disagree with the content lambda; a second copy can.
+
 ### The name search matches words, not substrings
 
 The filter sheet's field is not `title.contains(query)`. People type

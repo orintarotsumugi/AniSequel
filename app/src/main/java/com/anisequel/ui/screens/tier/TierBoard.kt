@@ -56,7 +56,7 @@ internal fun TierBoardHost(
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
     display: TierDisplay,
-    zoom: Float,
+    zoom: TierZoomState,
     onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
@@ -98,7 +98,7 @@ internal fun TierBoardHost(
                 assignment = assignment,
                 candidates = candidates,
                 display = display,
-                zoom = zoom,
+                zoomState = zoom,
                 onZoomChange = onZoomChange,
                 viewport = viewport,
                 scrollState = scrollState,
@@ -156,7 +156,7 @@ private fun TierBoard(
     assignment: TierAssignment,
     candidates: List<TierCandidate>,
     display: TierDisplay,
-    zoom: Float,
+    zoomState: TierZoomState,
     onZoomChange: (Float) -> Unit,
     viewport: TierBoardViewport,
     scrollState: ScrollState,
@@ -168,6 +168,10 @@ private fun TierBoard(
     externalDragging: Boolean,
     externalDrop: (() -> TierDrop?)?
 ) {
+    // The one read of the holder that the board makes; the options, arrangement
+    // and geometry below are all functions of it, so this is the composition a
+    // pinch is allowed to invalidate - not the screen that hosts it.
+    val zoom = zoomState.value
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     // The gesture's state lives in one object, so the pointer handler, the
@@ -485,18 +489,26 @@ private fun tierBoardOptions(
  * Coil can cancel, recycle and cross-fade. The measure policy is the only place
  * in the app that knows about positions, and it knows about nothing else.
  *
- * The content lambda and [slots] are two views of the same ordered list - rows,
+ * The content lambda and the measure policy walk the same ordered geometry - rows,
  * tiles, then the caret - and the `check` is what keeps them that way. Compose hands
  * the measure policy its children in emission order and offers no way to ask which
- * is which, so a row added to one list and not the other would otherwise place every
- * tile one row too high, and it would read as a layout bug for ever.
+ * is which, so a position added to one half and not the other would otherwise place
+ * every tile one row too high, and it would read as a layout bug for ever.
+ *
+ * The geometry is walked twice rather than copied into a list of positions first.
+ * It used to be: a `remember` rebuilt a hundred-to-thousand-entry `List<Slot>`
+ * whenever the arrangement or the draw window changed - which during a pinch is
+ * every frame - so a gesture allocated one four-float object per row and poster per
+ * frame only to read it once and drop it. The two walks below read the same
+ * `arrangement` and `drawnItems` the content lambda emits, so there is no second
+ * copy to drift.
  *
  * Both halves read the same [visibleTierItems] list rather than filtering for
  * themselves. They used to disagree - the dragged tile was skipped from the
  * emitted children only - so starting a drag made the two counts differ by one and
  * the `check` below threw. Sharing the list is what makes that impossible rather
- * than merely fixed, and the caret is added to both halves in one `remember` for
- * the same reason.
+ * than merely fixed, and the caret is one more position both halves read rather
+ * than one each adds.
  *
  * Named `arrangement` rather than `layout` because a parameter called `layout`
  * would shadow `MeasureScope.layout` at the `layout(width, height)` call at the
@@ -535,15 +547,9 @@ private fun TierGeometry(
             row.tierId to arrangement.items.count { it.y >= row.y && it.bottom <= row.bottom }
         }
     }
-    val slots = remember(arrangement, drawnItems, dropCaret) {
-        buildList {
-            arrangement.rows.forEach { add(Slot(it.x, it.y, it.width, it.height)) }
-            drawnItems.forEach { add(Slot(it.x, it.y, it.width, it.height)) }
-            dropCaret?.let {
-                add(Slot(it.x - TIER_CARET_WIDTH / 2f, it.y, TIER_CARET_WIDTH, it.height))
-            }
-        }
-    }
+    // How many children the content lambda has to emit, in the order it emits
+    // them: every row, then every drawn tile, then the caret if there is one.
+    val positionCount = arrangement.rows.size + drawnItems.size + if (dropCaret != null) 1 else 0
 
     Layout(
         content = {
@@ -595,28 +601,66 @@ private fun TierGeometry(
             }
         },
         measurePolicy = { measurables, _ ->
-            check(measurables.size == slots.size) {
-                "TierGeometry emitted ${measurables.size} children for ${slots.size} " +
-                    "slots; the content lambda and the slot list must stay in step."
+            check(measurables.size == positionCount) {
+                "TierGeometry emitted ${measurables.size} children for $positionCount " +
+                    "positions; the content lambda and the measure policy must stay in step."
             }
-            val placeables = measurables.mapIndexed { index, measurable ->
-                val slot = slots[index]
-                measurable.measure(
-                    Constraints.fixed(
-                        width = (slot.width * zoom).dp.toPx().roundToInt(),
-                        height = (slot.height * zoom).dp.toPx().roundToInt()
+            // Exactly the order the content lambda emits in: rows, then the drawn
+            // tiles, then the caret.
+            val placeables = buildList(measurables.size) {
+                var index = 0
+                arrangement.rows.forEach { row ->
+                    add(
+                        measurables[index++].measure(
+                            Constraints.fixed(
+                                width = (row.width * zoom).dp.toPx().roundToInt(),
+                                height = (row.height * zoom).dp.toPx().roundToInt()
+                            )
+                        )
                     )
-                )
+                }
+                drawnItems.forEach { box ->
+                    add(
+                        measurables[index++].measure(
+                            Constraints.fixed(
+                                width = (box.width * zoom).dp.toPx().roundToInt(),
+                                height = (box.height * zoom).dp.toPx().roundToInt()
+                            )
+                        )
+                    )
+                }
+                dropCaret?.let { caret ->
+                    add(
+                        measurables[index++].measure(
+                            Constraints.fixed(
+                                width = (TIER_CARET_WIDTH * zoom).dp.toPx().roundToInt(),
+                                height = (caret.height * zoom).dp.toPx().roundToInt()
+                            )
+                        )
+                    )
+                }
             }
             layout(
                 width = (arrangement.width * zoom).dp.toPx().roundToInt(),
                 height = (arrangement.height * zoom).dp.toPx().roundToInt()
             ) {
-                placeables.forEachIndexed { index, placeable ->
-                    val slot = slots[index]
-                    placeable.place(
-                        x = (slot.x * zoom).dp.toPx().roundToInt(),
-                        y = (slot.y * zoom).dp.toPx().roundToInt()
+                var index = 0
+                arrangement.rows.forEach { row ->
+                    placeables[index++].place(
+                        x = (row.x * zoom).dp.toPx().roundToInt(),
+                        y = (row.y * zoom).dp.toPx().roundToInt()
+                    )
+                }
+                drawnItems.forEach { box ->
+                    placeables[index++].place(
+                        x = (box.x * zoom).dp.toPx().roundToInt(),
+                        y = (box.y * zoom).dp.toPx().roundToInt()
+                    )
+                }
+                dropCaret?.let { caret ->
+                    placeables[index++].place(
+                        x = ((caret.x - TIER_CARET_WIDTH / 2f) * zoom).dp.toPx().roundToInt(),
+                        y = (caret.y * zoom).dp.toPx().roundToInt()
                     )
                 }
             }
@@ -624,6 +668,3 @@ private fun TierGeometry(
         modifier = Modifier.testTag("tier_geometry")
     )
 }
-
-/** One position, in the layout's own dp units, before zoom is applied. */
-private data class Slot(val x: Float, val y: Float, val width: Float, val height: Float)

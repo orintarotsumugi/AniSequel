@@ -33,7 +33,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -144,14 +143,19 @@ internal fun TierBoardScreen(
     // the flush on the way out. `rememberSaveable` keyed on the list id means
     // switching lists starts from that list's own zoom rather than carrying the
     // previous one across.
-    var zoom by rememberSaveable(document.id) {
-        mutableFloatStateOf(clampTierZoom(display.zoom))
+    //
+    // A holder, not a `var` here: this page passed the number on to the board, the
+    // stepper and the sheets, so reading it in this body subscribed all three (and
+    // this screen) to every frame of a pinch. Only the board and the stepper read
+    // `value` now, and they are the only things a pinch changes.
+    val zoom = rememberSaveable(document.id, saver = TierZoomState.Saver) {
+        TierZoomState(display.zoom)
     }
     TierBoardZoomPersistence(
         documentId = document.id,
         zoom = zoom,
         storedZoom = display.zoom,
-        onLocalZoomChanged = { zoom = it },
+        onLocalZoomChanged = { zoom.set(it) },
         onZoomChange = onZoomChange
     )
 
@@ -405,7 +409,7 @@ internal fun TierBoardScreen(
                             candidates = visibleCandidates,
                             display = display,
                             zoom = zoom,
-                            onZoomChange = { value -> zoom = clampTierZoom(value) },
+                            onZoomChange = { value -> zoom.set(value) },
                             viewport = viewport,
                             scrollState = scrollState,
                             dragEnabled = !boardLocked,
@@ -503,9 +507,9 @@ internal fun TierBoardScreen(
                     zoom = zoom,
                     locked = boardLocked,
                     onToggleLock = { setLocked(!boardLocked) },
-                    onZoomOut = { zoom = clampTierZoom(zoom - TIER_ZOOM_STEP) },
-                    onZoomIn = { zoom = clampTierZoom(zoom + TIER_ZOOM_STEP) },
-                    onResetZoom = { zoom = 1f }
+                    onZoomOut = { zoom.set(zoom.value - TIER_ZOOM_STEP) },
+                    onZoomIn = { zoom.set(zoom.value + TIER_ZOOM_STEP) },
+                    onResetZoom = { zoom.set(1f) }
                 )
             }
 
@@ -593,7 +597,7 @@ internal fun TierBoardScreen(
             onDisplayChange = onDisplayChange,
             // Through the local value the stepper writes, so reset cannot lose a
             // race with the debounced write of the zoom it replaced.
-            onResetZoom = { zoom = 1f },
+            onResetZoom = { zoom.set(1f) },
             onClearPlacements = onClearPlacements
         )
     )

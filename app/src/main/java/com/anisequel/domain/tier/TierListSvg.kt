@@ -44,7 +44,13 @@ object TierListSvg {
         // a conversion to begin with.
         val headingText: Long = 0xFFFFFFFF,
         val subheadingText: Long = 0xB3FFFFFF,
-        val labelText: Long = 0xFFFFFFFF,
+        //
+        // Null means "pick per row from the row's own colour", which is what
+        // the board does: black on amber, gold or the grey, white on brown or
+        // violet. It was a single white, and on amber that is 1.6:1 - the label
+        // the export is supposed to preserve was the part of it nobody could
+        // read. A caller that really wants one ink can still pin it here.
+        val labelText: Long? = null,
         val captionText: Long = 0xE6FFFFFF,
         val tileFill: Long = 0xFF2A2522,
         val tileStroke: Long = 0x33FFFFFF
@@ -172,17 +178,23 @@ object TierListSvg {
             // couple of units when the formats are compared side by side.
             val centerY = row.y + row.height / 2f
             val labelY = centerY + if (count > 0) LABEL_WITH_COUNT_SHIFT else LABEL_WITHOUT_COUNT_SHIFT
+            // The same choice the Compose gutter makes, from the same function:
+            // the point of the exporter is that a shared picture and a
+            // screenshot of the board do not disagree about the label.
+            val labelInk = palette.labelText ?: tierLabelInk(row.colorArgb)
             append("      <text x=\"").append(num(row.x + LABEL_GUTTER / 2f)).append("\" y=\"").append(num(labelY))
                 .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
                 .append("font-size=\"").append(LABEL_FONT_SIZE).append("\" font-weight=\"700\" ")
-                .append("text-anchor=\"middle\"").color("fill", palette.labelText)
+                .append("text-anchor=\"middle\"").color("fill", labelInk)
                 .append(">").append(escape(row.label)).append("</text>\n")
             if (count > 0) {
                 append("      <text x=\"").append(num(row.x + LABEL_GUTTER / 2f))
                     .append("\" y=\"").append(num(labelY + LABEL_COUNT_LINE_HEIGHT))
                     .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
                     .append("font-size=\"11\" text-anchor=\"middle\"")
-                    .color("fill", palette.labelText, alpha = 0.82f)
+                    // Full ink: 0.82 of the chosen ink put violet and indigo back
+                    // under the floor the choice exists to clear.
+                    .color("fill", labelInk)
                     .append(">").append(count).append("</text>\n")
             }
             append("    </g>\n")
@@ -260,7 +272,10 @@ object TierListSvg {
                             .append("\" y=\"").append(num(box.y + 15f))
                             .append("\" font-family=\"system-ui,-apple-system,Segoe UI,Roboto,sans-serif\" ")
                             .append("font-size=\"11\" text-anchor=\"middle\"")
-                            .color("fill", palette.labelText)
+                            // White, not the gutter's ink: this caption sits on
+                            // the 55%-black scrim above the cover, where the row
+                            // label's choice of ink has nothing to say.
+                            .color("fill", TIER_LABEL_INK_LIGHT)
                             .append(">").append(caption).append("</text>\n")
                     }
                 }

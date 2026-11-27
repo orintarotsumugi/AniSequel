@@ -315,20 +315,32 @@ private fun TierContinueCard(list: TierListDocument, onOpen: () -> Unit) {
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = list.name,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = tierListCardStatus(list),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The list's own tiers, so the card shows which list it is offering
+            // and not only what it is called.
+            TierListPreview(
+                tiers = list.tiers,
+                width = 34.dp,
+                height = 34.dp,
+                modifier = Modifier.padding(end = 12.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = list.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = tierListCardStatus(list),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(12.dp))
         ExpressivePrimaryButton(
             text = "Open",
@@ -360,6 +372,13 @@ private fun TierListRow(
             .padding(start = 20.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Two lists of the same shelf were rows of identical text until one of
+        // them was opened. The bars are the only thing about a list that is
+        // recognisable without reading it.
+        TierListPreview(
+            tiers = document.tiers,
+            modifier = Modifier.padding(end = 14.dp)
+        )
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

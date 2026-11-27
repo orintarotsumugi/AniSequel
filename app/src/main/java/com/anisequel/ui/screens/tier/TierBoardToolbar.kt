@@ -127,7 +127,7 @@ internal fun TierHistoryControls(
  */
 @Composable
 internal fun TierZoomControls(
-    zoom: Float,
+    zoom: TierZoomState,
     locked: Boolean,
     onToggleLock: () -> Unit,
     onZoomOut: () -> Unit,
@@ -135,6 +135,9 @@ internal fun TierZoomControls(
     onResetZoom: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Read here rather than in the screen: a pinch moving the zoom should
+    // recompose this 44dp readout, not the page that hosts the board.
+    val zoomValue = zoom.value
     Row(
         modifier = modifier
             .clip(ExpressiveShapes.pill)
@@ -151,7 +154,7 @@ internal fun TierZoomControls(
         CompactTierButton(
             icon = AppVectorIcons.StepDown,
             contentDescription = "Zoom out",
-            enabled = zoom > TIER_MIN_ZOOM,
+            enabled = zoomValue > TIER_MIN_ZOOM,
             onClick = onZoomOut,
             modifier = Modifier.testTag("tier_zoom_out")
         )
@@ -171,7 +174,7 @@ internal fun TierZoomControls(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "${(zoom * 100).roundToInt()}%",
+                text = "${(zoomValue * 100).roundToInt()}%",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -181,7 +184,7 @@ internal fun TierZoomControls(
         CompactTierButton(
             icon = AppVectorIcons.StepUp,
             contentDescription = "Zoom in",
-            enabled = zoom < TIER_MAX_ZOOM,
+            enabled = zoomValue < TIER_MAX_ZOOM,
             onClick = onZoomIn,
             modifier = Modifier.testTag("tier_zoom_in")
         )

@@ -38,6 +38,18 @@
         {
           "title": "A poster that is loading says what it is",
           "detail": "Both title pages drew a flat cover colour until the poster decoded, which reads as a missing picture, and kept it if the request never resolved. They draw the same initials tile the cards have drawn since the grid first had a cold start, with the artwork dissolving over it."
+        },
+        {
+          "title": "A tier label is readable on its own colour",
+          "detail": "The gutter label on every row was white, and white on the palette's amber is 1.6:1 - not a faint label but an unreadable one, and the small count beneath it was worse. The label and the count now take black or white by whichever has the higher contrast against the row's own fill, so amber, gold and grey go black while brown and violet stay white; every colour the palette offers now clears the WCAG small-text floor of 4.5:1 instead of ten of the twelve failing it. The count under the label also lost the 82% alpha it was drawn at: fading the chosen ink put violet and indigo back under the floor, so the count is quieter by being smaller, not by being fainter. The board, the SVG export and the PNG export all ask one shared function, so a board exported to a file cannot disagree with the screen it was exported from."
+        },
+        {
+          "title": "The tier list shows its colours before it is opened",
+          "detail": "A list in the tier library showed its name and how many titles it held and nothing about the tiers inside it, so two lists looked identical until one of them was opened. Each row now leads with a small stack of bars in the list's own tier colours - up to five, in the board's order - and the 'Carry on with' card does the same. Each stack is one canvas: no image is decoded and no five composables are laid out to draw five rectangles."
+        },
+        {
+          "title": "A pinch no longer rebuilds the page around the board",
+          "detail": "The board's zoom was a value read by the screen's own body, so the toolbar readout, the sheet host and the persistence effect all subscribed to it: every frame of a pinch recomposed the whole page - the tray, both toolbars and every sheet slot - only to pass the board a number it already had. The zoom now lives in a small saved holder that the board and the stepper read and the page merely carries. The board's measurement pass stopped building a list of row, poster and caret objects on each frame as well: it walks the same children in order twice, once to measure and once to place."
         }
       ]
     },

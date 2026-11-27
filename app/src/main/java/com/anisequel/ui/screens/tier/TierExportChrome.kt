@@ -9,6 +9,7 @@ import android.text.TextUtils
 import com.anisequel.domain.tier.TierDefinition
 import com.anisequel.domain.tier.TierItemBox
 import com.anisequel.domain.tier.TierRowBox
+import com.anisequel.domain.tier.tierLabelInk
 
 /**
  * The parts of an exported board that are not posters: its heading and its tier
@@ -21,7 +22,7 @@ import com.anisequel.domain.tier.TierRowBox
  * two share live here because the heading is what established them.
  */
 
-/** White for a tier's letters and the score badges drawn over its posters. */
+/** White for the score badges drawn over a poster, and any other text on artwork. */
 internal const val EXPORT_LABEL = 0xFFFFFFFF.toInt()
 
 private const val EXPORT_HEADING = 0xFFFFFFFF.toInt()
@@ -130,7 +131,6 @@ internal fun drawRows(
     }
     val countPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = EXPORT_LABEL
-        alpha = 210
         textSize = 11f
         textAlign = Paint.Align.CENTER
         typeface = Typeface.create("sans-serif", Typeface.NORMAL)
@@ -142,6 +142,16 @@ internal fun drawRows(
         rowPaint.alpha = 235
         val rect = RectF(row.x, row.y, row.x + row.width, row.y + row.height)
         canvas.drawRoundRect(rect, 10f, 10f, rowPaint)
+
+        // The gutter label and its count, in whichever ink the row's own colour
+        // needs - the same call the board and the SVG writer make, so the three
+        // agree. Full alpha for both: the count used to be drawn at 210/255 of
+        // the label's white, which on violet and indigo lands under the contrast
+        // floor the ink is chosen for. It is smaller, and that is the whole of its
+        // quietness.
+        val ink = tierLabelInk(row.colorArgb).toInt()
+        labelPaint.color = ink
+        countPaint.color = ink
 
         val count = items.count { it.y >= row.y && it.bottom <= row.bottom }
         val centerY = row.y + row.height / 2f
