@@ -54,8 +54,12 @@ internal fun ColorScheme.toEmphasisColors(): EmphasisColors {
             onSurface.toSrgbInt(),
             listOf(
                 surface.toSrgbInt(),
+                background.toSrgbInt(),
                 surfaceDim.toSrgbInt(),
                 surfaceBright.toSrgbInt(),
+                // Deprecated, still generated, still lighter than surfaceBright
+                // in dark: see EmphasisPalette.worstSurface.
+                surfaceVariant.toSrgbInt(),
                 surfaceContainer.toSrgbInt(),
                 surfaceContainerHigh.toSrgbInt(),
                 surfaceContainerHighest.toSrgbInt(),

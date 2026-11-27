@@ -41,7 +41,7 @@
         },
         {
           "title": "Quiet text clears AA on the brightest surface",
-          "detail": "The emphasis roles - secondary text, captions, dividers, the progress track - are dimmed to a named floor against the worst surface they can be drawn on, which the palette took to be surfaceContainerHighest. It is not the worst: the dark scheme's surfaceBright is lighter (tone 24 against 22) and the light scheme's surfaceDim is darker (87 against 90). A red cover's secondary text measured 4.48:1 on surfaceBright in the dark theme, under the 4.5:1 it is named for. The surface is chosen by measured contrast across all eight surface roles now, so every emphasis role clears its floor on all of them, and surfaceTint rides the surface spring instead of arriving before the surfaces it tints."
+          "detail": "The emphasis roles - secondary text, captions, dividers, the progress track - are dimmed to a named floor against the worst surface they can be drawn on, which the palette took to be surfaceContainerHighest. It is not the worst: the dark scheme's surfaceBright is lighter (tone 24 against 22) and the light scheme's surfaceDim is darker (87 against 90). A red cover's secondary text measured 4.48:1 on surfaceBright in the dark theme, under the 4.5:1 it is named for. The surface is chosen by measured contrast across every surface role now - background, the deprecated surfaceVariant and the five containers included, because a surfaceVariant at tone 30 is lighter than surfaceBright's 24 in the dark theme -, so every emphasis role clears its floor on all of them, and surfaceTint rides the surface spring instead of arriving before the surfaces it tints."
         }
       ]
     },

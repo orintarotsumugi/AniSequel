@@ -108,8 +108,16 @@ data class EmphasisPalette(
             scheme.onSurface,
             listOf(
                 scheme.surface,
+                // The plain page background is a tone away from `surface` at most,
+                // and it is the surface a caption outside any card sits on.
+                scheme.background,
                 scheme.surfaceDim,
                 scheme.surfaceBright,
+                // Deprecated in Material 3 but still generated and still a
+                // background some components draw on, and it is tone 30 in dark -
+                // lighter than surfaceBright's 24, so omitting it would measure
+                // the floor against a surface the text does not actually sit on.
+                scheme.surfaceVariant,
                 scheme.surfaceContainer,
                 scheme.surfaceContainerHigh,
                 scheme.surfaceContainerHighest,

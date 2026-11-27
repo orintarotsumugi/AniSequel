@@ -370,8 +370,10 @@ class EmphasisColourTest {
     /** Every surface role a card can take its background from. */
     private fun surfaces(scheme: MaterialScheme): List<Int> = listOf(
         scheme.surface,
+        scheme.background,
         scheme.surfaceDim,
         scheme.surfaceBright,
+        scheme.surfaceVariant,
         scheme.surfaceContainer,
         scheme.surfaceContainerHigh,
         scheme.surfaceContainerHighest,
