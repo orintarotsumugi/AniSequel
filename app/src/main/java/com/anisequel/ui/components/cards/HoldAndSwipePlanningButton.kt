@@ -43,7 +43,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -211,7 +213,18 @@ private fun ActiveQuickAddPlanningButton(
 
     val holdDurationMs = holdDurationMillis(holdDurationSeconds)
 
-    val progressFraction = holdProgressAnim.value
+    // The hold's fraction as a *read*, not a value.
+    //
+    // It used to be `val progressFraction = holdProgressAnim.value`, so every frame
+    // of a three-second hold recomposed this whole button - its face, its confirm
+    // answers and its gesture chain - to redraw a colour and a corner radius. The
+    // KDoc below claimed that had been dealt with; only the colour spring had been,
+    // and the expensive half was still here. The fraction is read inside the draw
+    // blocks now (the layer outlines, the fill's colour, the fill bar's scale), so a
+    // hold invalidates drawing and nothing else.
+    val progress: () -> Float = { holdProgressAnim.value }
+    val holdStart = MaterialTheme.colorScheme.primary
+    val holdEnd = statusColors.info
 
     // The hold's colour, computed from the hold's own fraction.
     //
@@ -222,11 +235,10 @@ private fun ActiveQuickAddPlanningButton(
     // frame to keep feeding it. AGENTS.md §3 names this exact shape - animate toward a
     // settled value - and the old `> 0.05f` branch made it worse by jumping the target
     // from primary to the lerp's value one frame in.
-    val buttonColor = androidx.compose.ui.graphics.lerp(
-        MaterialTheme.colorScheme.primary,
-        statusColors.info,
-        progressFraction
-    )
+    //
+    // The lerp itself moved into the fill's draw block for the other half of the
+    // same problem, and the `> 0.05f` branch went with it: a branch on the fraction
+    // is a composition read by definition.
 
     val buttonScale by animateFloatAsState(
         targetValue = if (isHolding) 0.97f else 1f,
@@ -251,9 +263,10 @@ private fun ActiveQuickAddPlanningButton(
     // tap = Planning) looked identical to it until the colour had already changed.
     // `PillCorner` is more than half the 44dp height below, so `RoundedCornerShape`
     // clamps it to a true capsule rather than an ellipse.
-    val shape = RoundedCornerShape(
-        lerp(ExpressiveShapes.SmallCorner, ExpressiveShapes.PillCorner, progressFraction)
-    )
+    //
+    // The shape is built inside the two `graphicsLayer` blocks that clip the button
+    // ([holdOutline]); as a `val` here it was the last composition read of the
+    // fraction, and it was enough on its own to keep the per-frame rebuild alive.
 
     val canSwipe = swipeEnabled && !isBusy && !confirming
 
@@ -304,8 +317,15 @@ private fun ActiveQuickAddPlanningButton(
                 .graphicsLayer {
                     scaleX = buttonScale
                     scaleY = buttonScale
+                    // The hold's outline, set on the layer instead of with
+                    // `Modifier.clip`: a clip takes a `Shape` value, so the fraction
+                    // had to be read in composition and the button was rebuilt on
+                    // every frame of the hold. The layer takes the shape in the draw
+                    // phase, and everything to its right - the surface, the fill, the
+                    // label - is clipped by it exactly as before.
+                    shape = holdOutline(progress())
+                    clip = true
                 }
-                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .testTag("hold_swipe_button_$mediaId")
         ) {
@@ -323,8 +343,18 @@ private fun ActiveQuickAddPlanningButton(
                     // stale or interrupted drag must not draw the fill outside its
                     // own container either way.
                     .offset { IntOffset(dragOffset.value.coerceAtLeast(0f).roundToInt(), 0) }
-                    .clip(shape)
-                    .background(buttonColor)
+                    .graphicsLayer {
+                        // Same reason as the outer surface: the fill's own outline
+                        // is the hold's, and it is read where the fraction already is.
+                        shape = holdOutline(progress())
+                        clip = true
+                    }
+                    .drawBehind {
+                        // The colour the hold lerps toward, read in the draw phase.
+                        drawRect(
+                            androidx.compose.ui.graphics.lerp(holdStart, holdEnd, progress())
+                        )
+                    }
                     // The gestures are detached while the question is open. A tick
                     // is an answer, not another tap to plan - and the old gesture
                     // handler would read a press on the label as one more "add".
@@ -356,7 +386,7 @@ private fun ActiveQuickAddPlanningButton(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                HoldProgressFill(progressFraction = progressFraction)
+                HoldProgressFill(progress = progress)
 
                 AnimatedContent(
                     targetState = confirming,
@@ -532,10 +562,17 @@ private fun SwipeToWatchReveal(revealColor: Color, containerColor: Color) {
     }
 }
 
-/** The white fill that grows across the button while a hold is in progress. */
+/**
+ * The white fill that grows across the button while a hold is in progress.
+ *
+ * [progress] is a read rather than a value, and the `if (fraction <= 0.01f) return`
+ * it used to open with is gone with it: that branch was a third composition read of
+ * the hold, and it made the bar *appear* as a structural change one frame after the
+ * colour had already started moving. Scaling to nothing draws no pixels, so the bar
+ * is always composed and never recomposes.
+ */
 @Composable
-private fun BoxScope.HoldProgressFill(progressFraction: Float) {
-    if (progressFraction <= 0.01f) return
+private fun BoxScope.HoldProgressFill(progress: () -> Float) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -545,11 +582,21 @@ private fun BoxScope.HoldProgressFill(progressFraction: Float) {
                 // form re-runs layout on every frame of the hold, and §3 asks for
                 // transforms in the draw phase. Same bar, no measuring.
                 transformOrigin = TransformOrigin(0f, 0.5f)
-                scaleX = progressFraction
+                scaleX = progress()
             }
             .background(Color.White.copy(alpha = 0.28f))
     )
 }
+
+/**
+ * The hold's outline at [fraction]: a small rounded rectangle rounding into a capsule.
+ *
+ * A function because both call sites are `graphicsLayer` blocks, i.e. the draw phase,
+ * where the hold's live fraction is the only thing that knows how round the control
+ * should be *this* frame.
+ */
+private fun holdOutline(fraction: Float): Shape =
+    RoundedCornerShape(lerp(ExpressiveShapes.SmallCorner, ExpressiveShapes.PillCorner, fraction))
 
 /**
  * What the button says: a spinner while saving, otherwise the icon and label

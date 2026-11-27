@@ -15,9 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -104,6 +102,16 @@ fun WavyProgressBar(
      */
     entranceKey: Any? = null,
     /**
+     * Whether this bar has already played its entrance for [entranceKey].
+     *
+     * Owned by [InfoProgressBar], one level up, because the flag used to live here and
+     * a style switch disposes this composable: picking a style from the card's own
+     * picker recreated the flag as `false`, and the new bar filled from zero under the
+     * finger that had just chosen it. Read only when the fill is created, so the flag
+     * turning true after the first frame cannot recreate the `Animatable` mid-spring.
+     */
+    alreadyPlayed: Boolean = false,
+    /**
      * Whether the entrance and travelling phase run.
      *
      * Off for the style picker's three previews: they are a still sample, not
@@ -113,8 +121,9 @@ fun WavyProgressBar(
 ) {
     val target = progress.coerceIn(0f, 1f)
 
-    // The entrance happens once per bar, and the flag that says so is
-    // `rememberSaveable` for the same reason `sectionReveal`'s is: a `LazyColumn`
+    // The entrance happens once per bar. The flag that says so belongs to
+    // [InfoProgressBar] now - see [alreadyPlayed] - and it is `rememberSaveable`
+    // there for the same reason `sectionReveal`'s flag is: a `LazyColumn`
     // disposes the items it has scrolled past and keeps their saved state under the
     // item's key, so this flag outlives the bar leaving the screen. A plain
     // `remember` lost it with the item, and the bar replayed the entire fill from
@@ -124,14 +133,14 @@ fun WavyProgressBar(
     // Keyed on the title, because the saved flag was scoped to the sheet: following
     // a relation to the next title reuses this list item, so the restored flag said
     // "already played" and the new title's bar arrived full instead of rising.
-    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
+    //
     // A `Float` rather than `animateFloatAsState`: that initialises *at* its
     // target, so the bar would simply appear full rather than filling. Where this
     // one starts is the flag's decision - at nothing for a bar that has never
     // played, at the progress it is about to show for one that has, which is how a
     // bar restored from a scroll keeps the height it already had instead of rising
     // a second time.
-    val fill = remember(entranceKey) { Animatable(if (!animate || played) target else 0f) }
+    val fill = remember(entranceKey) { Animatable(if (!animate || alreadyPlayed) target else 0f) }
     // Unconditional, and it checks the flag's meaning rather than being wrapped in
     // `if (!played)`: a `LaunchedEffect` skipped on the played path would also never
     // see a *later* progress - the entry editor's own writes - and the bar would sit
@@ -144,7 +153,6 @@ fun WavyProgressBar(
     // effect keyed on the value alone would not restart, leaving the freshly
     // remembered fill sitting at zero for a bar that should be half full.
     LaunchedEffect(entranceKey, target, animate) {
-        played = true
         if (animate) {
             fill.animateTo(target, ExpressiveMotion.FastSpatial)
         } else {

@@ -139,7 +139,7 @@ internal fun SequelDetailPage(
     sheetOffset: Animatable<Float, AnimationVector1D>,
     sheetDragging: Boolean,
     onSheetDraggingChange: (Boolean) -> Unit,
-    dragFraction: Float,
+    dragFraction: () -> Float,
     onDragFractionChange: (Float) -> Unit,
     closeEntrySheet: () -> Unit,
     scope: CoroutineScope,
@@ -320,7 +320,7 @@ private fun BoxScope.SequelDetailDock(
     selected: Int,
     showEntrySheet: Boolean,
     sheetDragging: Boolean,
-    dragFraction: Float,
+    dragFraction: () -> Float,
     sheetOffset: Animatable<Float, AnimationVector1D>,
     containerHeightPx: Float,
     dockHeightPx: Int,
@@ -345,7 +345,7 @@ if (destinations.size > 1) {
                     // the finger during a drag instead of only
                     // catching up when the sheet settles.
                     val hidden = if (sheetDragging) {
-                        dragFraction
+                        dragFraction()
                     } else {
                         sheetOffset.value
                     }
@@ -375,7 +375,7 @@ private fun BoxScope.SequelDetailEntryOverlay(
     containerHeightPx: Float,
     sheetOffset: Animatable<Float, AnimationVector1D>,
     sheetDragging: Boolean,
-    dragFraction: Float,
+    dragFraction: () -> Float,
     onDragFractionChange: (Float) -> Unit,
     onSheetDraggingChange: (Boolean) -> Unit,
     closeEntrySheet: () -> Unit,
@@ -400,7 +400,7 @@ private fun BoxScope.SequelDetailEntryOverlay(
                 .align(Alignment.BottomCenter)
                 .graphicsLayer {
                     val hidden = if (sheetDragging) {
-                        dragFraction
+                        dragFraction()
                     } else {
                         sheetOffset.value
                     }
@@ -449,7 +449,7 @@ private fun BoxScope.SequelDetailEntryOverlay(
                                 change.consume()
                                 if (containerHeightPx > 0f) {
                                     onDragFractionChange(
-                                        (dragFraction + dragAmount / containerHeightPx)
+                                        (dragFraction() + dragAmount / containerHeightPx)
                                             .coerceIn(0f, 1f)
                                     )
                                 }
@@ -461,9 +461,10 @@ private fun BoxScope.SequelDetailEntryOverlay(
                                 // *opens* past it, so reaching it is a
                                 // choice rather than the first thing the
                                 // reader has to undo.
+                                val settled = dragFraction()
                                 val target = when {
-                                    dragFraction < 0.18f -> 0f
-                                    dragFraction < 0.62f -> 0.4f
+                                    settled < 0.18f -> 0f
+                                    settled < 0.62f -> 0.4f
                                     else -> 1f
                                 }
                                 scope.launch {
@@ -471,7 +472,7 @@ private fun BoxScope.SequelDetailEntryOverlay(
                                     // animatable before the gesture state
                                     // stops drawing from it, or the sheet
                                     // snaps back for one frame.
-                                    sheetOffset.snapTo(dragFraction)
+                                    sheetOffset.snapTo(dragFraction())
                                     onSheetDraggingChange(false)
                                     if (target >= 1f) {
                                         sheetOffset.animateTo(
@@ -489,7 +490,7 @@ private fun BoxScope.SequelDetailEntryOverlay(
                             },
                             onDragCancel = {
                                 scope.launch {
-                                    sheetOffset.snapTo(dragFraction)
+                                    sheetOffset.snapTo(dragFraction())
                                     onSheetDraggingChange(false)
                                     sheetOffset.animateTo(
                                         0f,

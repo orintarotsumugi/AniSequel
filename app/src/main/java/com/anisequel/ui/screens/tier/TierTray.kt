@@ -485,7 +485,11 @@ internal fun TierTrayGhost(candidate: TierCandidate, modifier: Modifier = Modifi
             .graphicsLayer {
                 scaleX = lift.value
                 scaleY = lift.value
-                shadowElevation = 16f
+                // Pixels, not dp: `shadowElevation` is a raw px value, so the bare
+                // 16 drew 16px - 5.8dp on a 2.75x device and 8dp on a 2x one, a
+                // different shadow on every phone. The board ghost used 18f for the
+                // same reason and had the same drift.
+                shadowElevation = 8.dp.toPx()
                 this.shape = shape
             }
             .clip(shape)

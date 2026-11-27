@@ -529,7 +529,8 @@ internal fun TierDragGhost(
                 translationY = travel.value.y + scrollShift()
                 scaleX = lift.value
                 scaleY = lift.value
-                shadowElevation = 18f
+                // dp, not a bare px value - see the tray ghost's copy of this note.
+                shadowElevation = 8.dp.toPx()
                 shape = ghostShape
             }
             .testTag("tier_drag_ghost")

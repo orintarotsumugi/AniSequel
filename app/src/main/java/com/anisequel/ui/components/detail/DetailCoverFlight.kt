@@ -398,8 +398,21 @@ internal class DetailCoverFlightState(
     /** Whether the copy has its picture; polled by the flight's launcher. */
     val copyIsReady: Boolean get() = copyReady.value
 
+    /**
+     * The copy has landed: the page draws the picture again and the copy is gone.
+     *
+     * A separate flag from [onStage], which only says *which side draws*. Landing
+     * used to clear `onStage` alone, so the copy stayed composed at `visible =
+     * false` - a second decoded full-size poster plus an 18dp elevation layer, kept
+     * alive for the rest of the session in a dialog that had already finished
+     * moving. [showable] is what composes the copy, so this is the flag that has to
+     * be cleared for it to actually go away.
+     */
+    private val landed = mutableStateOf(false)
+
     /** Whether the copy should be composed at all, visible or not. */
-    private val showable: Boolean get() = origin != null && armed.value && !abandoned.value
+    private val showable: Boolean
+        get() = origin != null && armed.value && !abandoned.value && !landed.value
 
     /**
      * 1 while the page's own poster is the one on screen, 0 while the copy is.
@@ -479,6 +492,7 @@ internal class DetailCoverFlightState(
 
     fun land() {
         onStage.value = false
+        landed.value = true
     }
 }
 

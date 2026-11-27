@@ -153,7 +153,19 @@ internal class DetailEntrySheetMotion(
     val offset: Animatable<Float, AnimationVector1D>,
     val dragging: Boolean,
     val onDraggingChange: (Boolean) -> Unit,
-    val dragFraction: Float,
+    /**
+     * The drag's live position, as a read rather than a value.
+     *
+     * It was a plain `Float` parameter, and a `pointerInput` handler only restarts
+     * when its *keys* change - not when one of the values it closed over changes. The
+     * handler therefore kept the fraction it was built with (1, the closed sheet) for
+     * the whole gesture: every drag event added its delta to 1 and clamped to 1, and
+     * the first `moved` pixel of a drag snapped the sheet shut. A lambda reads the
+     * live state from inside the handler, and - because nothing in composition reads
+     * it any more - the drag invalidates the draw phase only instead of recomposing
+     * the page on every frame.
+     */
+    val dragFraction: () -> Float,
     val onDragFractionChange: (Float) -> Unit,
     val close: () -> Unit
 )
@@ -205,13 +217,15 @@ internal fun rememberDetailEntrySheetMotion(
         }
     }
 
+    val readDragFraction: () -> Float = remember(mediaId, mediaType) { { dragFraction } }
+
     return DetailEntrySheetMotion(
         show = showEntrySheet,
         onShowChange = { showEntrySheet = it },
         offset = sheetOffset,
         dragging = sheetDragging,
         onDraggingChange = { sheetDragging = it },
-        dragFraction = dragFraction,
+        dragFraction = readDragFraction,
         onDragFractionChange = { dragFraction = it },
         close = close
     )

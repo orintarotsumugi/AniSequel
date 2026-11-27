@@ -711,8 +711,15 @@ private fun HeroChips(
         // show nobody has scored - an announced title's most likely case. The
         // details grid and the Nova strip already suppress the zero; this was the
         // one surface on the page that did not.
+        //
+        // The number counts in rather than appearing at full value: see
+        // [rememberCountingUp]. This is the one place on the page whose motion has to
+        // recompose something - text cannot be transformed into a different text in
+        // the draw phase - so it is a leaf chip and nothing around it reads the
+        // counter.
         media.averageScore?.takeIf { it > 0 }?.let { score ->
-            HeroChip(icon = AppVectorIcons.Star, label = "$score%")
+            val counted = rememberCountingUp(score, entranceKey = media.id to media.type)
+            HeroChip(icon = AppVectorIcons.Star, label = "${counted.value}%")
         }
         // Gated on a real status. `statusLabel` answers "Unknown" for a null,
         // which is honest on the Details grid but reads as a fact in a chip:

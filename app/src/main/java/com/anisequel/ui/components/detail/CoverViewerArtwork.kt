@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -22,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
@@ -41,12 +43,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /**
  * The artwork and its gestures, split out of [FullScreenCoverViewer].
@@ -104,17 +110,52 @@ internal class CoverZoomState {
         private set
     var frameSize by mutableStateOf(IntSize.Zero)
 
+    /** The double-tap's own spring, so a pinch can cancel it and the reverse. */
+    private var animation: Job? = null
+
     val isZoomed: Boolean get() = scale > ZOOMED_THRESHOLD
 
     fun reset() {
+        animation?.cancel()
+        animation = null
         scale = 1f
         offsetX = 0f
         offsetY = 0f
     }
 
-    /** The double-tap: open the artwork, or put a zoomed one back. */
-    fun toggleDoubleTap() {
-        if (scale > DOUBLE_TAP_RESET_THRESHOLD) reset() else scale = DOUBLE_TAP_SCALE
+    /**
+     * The double-tap: open the artwork, or put a zoomed one back.
+     *
+     * Animated, where it used to assign [scale] and the offsets directly. A
+     * double-tap is a jump in magnification by a factor of 2.4, and cutting
+     * straight to it read as the picture being *replaced* rather than zoomed: the
+     * eye had no frame that showed it moving, and the sharp edges of the artwork
+     * arrived at a new size with no continuity to tell it what happened. It travels
+     * on `SettleSpatial` now - the same token the reveal uses for a picture that is
+     * landing, so the two cannot disagree about how a cover moves.
+     */
+    fun animateDoubleTap(scope: CoroutineScope) {
+        animation?.cancel()
+        val target = if (scale > DOUBLE_TAP_RESET_THRESHOLD) 1f else DOUBLE_TAP_SCALE
+        animation = scope.launch { zoomTo(target) }
+    }
+
+    private suspend fun zoomTo(target: Float) {
+        val fromScale = scale
+        val fromX = offsetX
+        val fromY = offsetY
+        // Zero pan at both ends: the pan limits are measured from the *new* scale,
+        // and keeping the old offsets while the scale grows would put the artwork
+        // past the edge it is allowed to reach on the very first frame.
+        animate(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = ExpressiveMotion.SettleSpatial
+        ) { fraction, _ ->
+            scale = lerp(fromScale, target, fraction)
+            offsetX = lerp(fromX, 0f, fraction)
+            offsetY = lerp(fromY, 0f, fraction)
+        }
     }
 
     /**
@@ -124,6 +165,11 @@ internal class CoverZoomState {
      * that is exactly how far it can move before an edge shows.
      */
     fun applyGesture(pan: Offset, zoomChange: Float) {
+        // The finger owns the zoom from the first pinch frame: a spring still
+        // running from a double-tap would write the scale on top of this one and
+        // the picture would pull away from the pinch.
+        animation?.cancel()
+        animation = null
         val newScale = (scale * zoomChange).coerceIn(1f, MAX_ZOOM)
         scale = newScale
         if (newScale > 1f) {
@@ -297,6 +343,9 @@ internal fun CoverArtwork(
     onFrameBounds: ((Rect) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    // The double-tap's spring outlives the tap callback, which is not a suspend
+    // function; this scope is how it keeps running past the gesture.
+    val zoomScope = rememberCoroutineScope()
     BoxWithConstraints(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -321,7 +370,7 @@ internal fun CoverArtwork(
                 .pointerInput(zoom, onTap) {
                     detectTapGestures(
                         onTap = { onTap() },
-                        onDoubleTap = { zoom.toggleDoubleTap() }
+                        onDoubleTap = { zoom.animateDoubleTap(zoomScope) }
                     )
                 }
                 // Only a pinch, or a drag while already zoomed, claims the

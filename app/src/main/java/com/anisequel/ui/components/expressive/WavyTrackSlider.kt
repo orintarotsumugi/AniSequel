@@ -29,7 +29,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.anisequel.data.repository.MotionStyle
 import com.anisequel.domain.motion.WaveGeometry
+import com.anisequel.ui.components.rememberIsResumed
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -79,8 +81,15 @@ internal fun WavyTrackSlider(
     // the thumb is not on.
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
 
+    // Both gates the file was missing: the loop ran while the app was behind another
+    // one (AGENTS.md section 3 caps indefinite animations on visibility) and it ran
+    // under Instant motion, where every token in `ExpressiveMotion` is a `snap()` -
+    // so this was the one control in the app that still travelled for a reader who
+    // had asked for no travel.
+    val motionAllowed = rememberIsResumed() && ExpressiveMotion.speed != MotionStyle.INSTANT
     val phase = remember { Animatable(0f) }
-    LaunchedEffect(engaged) {
+    LaunchedEffect(engaged, motionAllowed) {
+        if (!motionAllowed) return@LaunchedEffect
         // One turn at a time, rather than a snap back to the start on every press:
         // the effect that replaces this one on release finishes the turn already
         // running, and a press that arrives while that finish is in flight
