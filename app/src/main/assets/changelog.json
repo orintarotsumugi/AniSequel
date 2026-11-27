@@ -1,6 +1,23 @@
 {
   "versions": [
     {
+      "version": "2.6.9",
+      "entries": [
+        {
+          "title": "The trailer plays again",
+          "detail": "The wrapper page identified itself as https://www.youtube.com, and YouTube reads that as YouTube embedding itself: every trailer came back as error 152 - 'This video is unavailable' - before a frame played. The page now loads under the app's own https origin, which is the Referer YouTube now requires (a missing one is error 153), and the player is told that same origin for its API and its attribution. The iframe still comes from youtube-nocookie.com; the page's identity and the player's host were never supposed to be the same value."
+        },
+        {
+          "title": "Watch on YouTube leaves the app",
+          "detail": "The one link YouTube offers on a refused video - and any other main-frame link - stayed inside the player and replaced the trailer with the watch page in a 16:9 hole with no back button. Only the player's own subframes stay in the WebView now; a link the reader chose opens in the YouTube app or the browser, and if nothing can take it the URL is copied instead of the tap doing nothing."
+        },
+        {
+          "title": "A trailer with no id still leaves a link",
+          "detail": "The external hand-off for a trailer AniList did not give an id for used a raw intent whose failure was swallowed, so a device with no browser got no browser, no message and no URL. It uses the app's shared opener now, which copies the address when it cannot open it."
+        }
+      ]
+    },
+    {
       "version": "2.6.8",
       "entries": [
         {

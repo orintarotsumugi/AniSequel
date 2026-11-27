@@ -244,9 +244,24 @@ scripting the embed is a black rectangle. What keeps that contained: the page is
 fixed wrapper built by `novaTrailerEmbedHtml` from a **validated** id (YouTube's
 alphabet only, so a payload cannot become markup), the only hosts it may load are
 YouTube's (`isNovaTrailerHost`, dot-anchored so `youtube.com.example.net` does not
-pass), and every other navigation is cancelled into the shared external opener.
-Both guards are pinned by `NovaTrailerViewerTest`; what a `WebView` does cannot be
-asserted, so what it is *given* is.
+pass), and only the player's own **subframes** stay in the view
+(`staysInNovaTrailer`); a main-frame link the reader chose goes to the shared
+external opener. Both guards are pinned by `NovaTrailerViewerTest`; what a
+`WebView` does cannot be asserted, so what it is *given* is.
+
+The wrapper's page origin is the app id, `https://com.aistudio.anisequel.app`, and
+not a YouTube host. It has to be: YouTube identifies the embedder by the page's
+origin, and a page claiming `https://www.youtube.com` is read as YouTube embedding
+itself and answered with error 152, "This video is unavailable" - which was every
+trailer, not one bad id. `loadDataWithBaseURL` turns that base URL into the
+`Referer` header YouTube now refuses embeds without (error 153), and the
+`origin`/`widget_referrer` player vars name the same value or the IFrame API's
+messages are discarded. The iframe itself still loads from
+`youtube-nocookie.com`: the origin names the page, the host names the player, and
+they are deliberately different. The main-frame rule matters for the same report:
+YouTube's only action on a refused video is "Watch on YouTube", and letting that
+load in the player replaced the video with the watch page in a 16:9 hole with no
+back button.
 
 The score in the summary strip is drawn inside a closed version of the same wave —
 `NovaWavyRing`, built on `WaveGeometry.ringRadius`, so the page's two wavy marks

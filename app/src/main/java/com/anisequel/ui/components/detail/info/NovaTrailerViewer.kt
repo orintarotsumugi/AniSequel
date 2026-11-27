@@ -72,6 +72,7 @@ import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import java.net.URLEncoder
 
 /**
  * The official trailer: the card that advertises it, and the player it opens.
@@ -576,21 +577,18 @@ private fun createNovaTrailerPlayer(
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
-            ): Boolean = handle(playerNav = request?.url?.toString())
-            // The deprecated `(WebView, String)` overload is gone rather
-            // than suppressed: the platform stopped calling it in API 24
-            // and `minSdk` is 31, so its `handle(playerNav = url)` was a
-            // second entry point to the same rule that could never fire.
-
-            private fun handle(playerNav: String?): Boolean {
-                // `true` for everything: this view is a player, not a
-                // browser. YouTube's own "watch on YouTube" button and any
-                // link inside the frame leave the app through the same
-                // opener the card used, and nothing else is followed at all.
-                if (playerNav != null && isNovaTrailerHost(playerNav)) return false
-                playerNav?.let { openExternalUrlOrCopy(context, it) }
+            ): Boolean {
+                val target = request?.url?.toString()
+                if (request != null && staysInNovaTrailer(target.orEmpty(), request.isForMainFrame)) {
+                    return false
+                }
+                target?.let { openExternalUrlOrCopy(context, it) }
                 return true
             }
+            // The deprecated `(WebView, String)` overload is gone rather
+            // than suppressed: the platform stopped calling it in API 24
+            // and `minSdk` is 31, so a second entry point to the same rule
+            // could never fire.
         }
         loadDataWithBaseURL(
             NOVA_TRAILER_BASE_URL,
@@ -607,11 +605,24 @@ private fun createNovaTrailerPlayer(
 }
 
 /**
- * YouTube requires the API's origin to match the wrapper's secure base URL. The
- * old iframe omitted it, so some providers showed a player shell that never started.
+ * The origin the wrapper page is loaded under, and the one the player is told it
+ * is embedded in.
+ *
+ * This must not be a YouTube host. The player identifies its embedder by the
+ * page's origin, and a page whose origin is `https://www.youtube.com` is read as
+ * YouTube embedding itself: every trailer came back as error 152, "This video is
+ * unavailable", before a frame played. That was the whole trailer library, not one
+ * bad id. The app id is a real `https://` origin, is unique to this caller, and is
+ * the identifier Google documents for a WebView embed - `loadDataWithBaseURL`
+ * turns it into the `Referer` header, which is the identification YouTube now
+ * refuses embeds without (error 153). The iframe itself still loads from
+ * youtube-nocookie.com: the origin names the *page*, the host names the *player*,
+ * and they are not supposed to be the same value here.
  */
-private const val NOVA_TRAILER_BASE_URL = "https://www.youtube.com/"
-private const val NOVA_TRAILER_ORIGIN_QUERY = "https%3A%2F%2Fwww.youtube.com"
+internal const val NOVA_TRAILER_ORIGIN = "https://com.aistudio.anisequel.app"
+internal const val NOVA_TRAILER_BASE_URL = "$NOVA_TRAILER_ORIGIN/"
+private val NOVA_TRAILER_ORIGIN_QUERY: String =
+    URLEncoder.encode(NOVA_TRAILER_ORIGIN, Charsets.UTF_8.name())
 
 /** The console line the wrapper writes once the iframe's own `load` has fired. */
 private const val NOVA_TRAILER_READY_MESSAGE = "anisequel:trailer-ready"
@@ -680,6 +691,21 @@ internal fun isNovaTrailerHost(url: String): Boolean {
     return NOVA_TRAILER_HOSTS.any { host == it || host.endsWith(".$it") }
 }
 
+/**
+ * Whether a navigation belongs to the player and may stay inside its `WebView`.
+ *
+ * Only a **subframe** does. The embed is one iframe inside the wrapper, so
+ * everything the player does internally - its error card, a consent interstitial,
+ * the IFrame API's own pages - is a subframe navigation and has to be followed or
+ * the player cannot function at all. A main-frame navigation is always somewhere
+ * the reader chose to go: YouTube's "Watch on YouTube" on a refused video, the
+ * channel name, an ad. This view is a player, not a browser, and letting a
+ * youtube.com main frame through replaced the video with the watch page inside a
+ * 16:9 hole that has no back button - which is the link that was reported dead.
+ */
+internal fun staysInNovaTrailer(url: String, isForMainFrame: Boolean): Boolean =
+    !isForMainFrame && isNovaTrailerHost(url)
+
 /** Whether [id] is a YouTube video id and therefore safe to put in a page. */
 internal fun isNovaTrailerId(id: String): Boolean =
     id.isNotEmpty() && id.length <= 20 && id.all { it.isLetterOrDigit() || it == '_' || it == '-' }
@@ -713,8 +739,18 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
             append("&enablejsapi=1&origin=")
             append(NOVA_TRAILER_ORIGIN_QUERY)
+            // The widget referrer is the same origin by definition; the embed
+            // API takes it separately, and it is the value the player uses for
+            // attribution when the page is not a public site.
+            append("&widget_referrer=")
+            append(NOVA_TRAILER_ORIGIN_QUERY)
             append("\"")
-            append(" referrerpolicy=\"origin\"")
+            // `strict-origin-when-cross-origin` is the policy YouTube documents
+            // and the one a browser sends by default. It still sends only the
+            // origin cross-origin, which is all YouTube needs, and it stopped
+            // being `origin` here so the attribute matches what the platform now
+            // recommends rather than a value that happened to work.
+            append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
             // One line back to Kotlin when the player itself has loaded. The
