@@ -151,7 +151,7 @@ fun LibraryScreen(
     // profile. This is the only screen that draws both halves of the reader's own
     // list, so both are asked for here: one request per open, and none at all once
     // the repository has the answer cached or on disk.
-    LaunchedEffect(Unit) { overviewViewModel.prefetchMangaLibrary() }
+    LaunchedEffect(overviewViewModel) { overviewViewModel.prefetchMangaLibrary() }
 
     // The poster that was tapped, as its own list node so the sheet has
     // something to draw on the first frame. The fetched detail supersedes it
