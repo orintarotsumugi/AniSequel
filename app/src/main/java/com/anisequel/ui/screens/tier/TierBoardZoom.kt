@@ -3,7 +3,7 @@ package com.anisequel.ui.screens.tier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Saver
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -48,7 +48,7 @@ internal class TierZoomState(initial: Float) {
         // Qualified on purpose: the property below is called `Saver` too, and an
         // unqualified call in its own initialiser is the kind of resolution the
         // reader has to run the compiler in their head to answer.
-        val Saver: Saver<TierZoomState, Float> = androidx.compose.runtime.Saver(
+        val Saver: Saver<TierZoomState, Float> = androidx.compose.runtime.saveable.Saver(
             save = { it.value },
             restore = { TierZoomState(it) }
         )
