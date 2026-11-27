@@ -4279,6 +4279,47 @@ last delivered id. An account switch also clears the tray, because `MainActivity
 is `singleTask` and a notification posted for the previous account would otherwise
 still be tappable after the new one signed in.
 
+### Battery optimisation is a grant, not a setting
+
+A periodic request is still a request, and Doze and the app standby buckets may
+defer it past its interval - on a phone that has been off the charger for a day,
+"every 30 minutes" can read as hours in the delivery status line. The one thing
+a reader can change about that is Android's battery-optimisation exemption, so
+Notification settings has a card for it.
+
+The card is a status plus a hand-off for the same reason the Android permission
+card is: the app does not own the value. It reports
+`PowerManager.isIgnoringBatteryOptimizations` and re-reads it on every resume,
+because the grant can arrive from the dialog or from a Settings screen this app
+never sees. The direct dialog,
+`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, is only offered to an app whose
+manifest declares `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - without that line the
+action has no target and the button is a tap that goes nowhere, which is why
+`BatteryOptimisationTest` asserts the declaration rather than trusting it.
+
+`BatteryOptimisation.requestRoutes` is the same ladder as the install permission:
+the package-scoped request first, then Android's exemption list, then the app's
+details page, every rung carrying `FLAG_ACTIVITY_NEW_TASK` because the call can
+come from a non-Activity context. The exemption is deliberately not sold as
+instant delivery: a manufacturer's own battery manager can ignore the platform
+list, a check still needs a connection, and WorkManager's 15-minute floor stands.
+
+### The destination shows itself
+
+Tapping an activity alert opens the profile's Activity tab through the real feed
+and scrolls to the activity it names. Landing is not the same as arriving: on a
+feed of near-identical cards the reader could not tell which row the alert was
+about, so the tap read as "the app opened somewhere in the list". The focused row
+draws a ring for about two seconds after the scroll lands - two strokes of the
+card's own outline, the wide one outside the bounds - and the mark is cleared
+afterwards so it does not compete with every later like or refresh.
+
+The ring is drawn in the draw phase (`Modifier.drawWithContent`) and not blurred.
+A blur is the obvious way to make a glow and the expensive one: it is a render
+pass per row, and this feed is already the subject of TO-DO 5.1. Two strokes cost
+one path each, fade without a recomposition, and scale with the card through the
+press layer.
+
 ### The delivery cursor is not the read mark
 
 `NotificationReadState` answers "what has the reader seen in this app?" It is

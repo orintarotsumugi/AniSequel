@@ -233,6 +233,9 @@ object AppVectorIcons {
     // class list rather than assumed, the same way [ProfileStats] was.
     val ProfileMessages = Icons.Default.Mail
     val Notifications = AppExtraVectors.NotificationBell
+    // The battery card in Notification settings: the platform switch, not another
+    // notification preference, so it does not wear the bell above.
+    val BatteryBolt = AppExtraVectors.BatteryBolt
     // The same distinction inside a message card: an envelope arriving, against
     // [ActivitySend] leaving.
     val MessageReceived = Icons.Default.Inbox

@@ -4,6 +4,14 @@
       "version": "2.6.9",
       "entries": [
         {
+          "title": "Battery saver can be told to leave the checks alone",
+          "detail": "AniList has no push stream, so a new event is found by a periodic check - and Android may defer that check for battery saving, sometimes for hours on a phone that has been off the charger. Notification settings now has a Battery optimisation card: it reports whether Android exempts the app and opens the system dialog that grants the exemption, with Android's own exemption list and the app's details page as fallbacks for the phones that do not answer the direct request. The card also says what the exemption does not promise: a check still needs a connection, and a manufacturer's own battery manager can ignore the platform list."
+        },
+        {
+          "title": "The alert you tapped shows you the post",
+          "detail": "Tapping an activity alert already opened the Activity tab scrolled to the post it named, but on a feed of near-identical cards nothing said which row was the destination, so the arrival read as \"the app opened somewhere in the list\". That row now draws a ring that arrives at full strength and fades out over about two seconds: two strokes of the card's own outline, drawn over the card in the draw phase rather than blurred, so a long feed does not pay for a render pass per row."
+        },
+        {
           "title": "The trailer plays again",
           "detail": "The wrapper page identified itself as https://www.youtube.com, and YouTube reads that as YouTube embedding itself: every trailer came back as error 152 - 'This video is unavailable' - before a frame played. The page now loads under the app's own https origin, which is the Referer YouTube now requires (a missing one is error 153), and the player is told that same origin for its API and its attribution. The iframe still comes from youtube-nocookie.com; the page's identity and the player's host were never supposed to be the same value."
         },

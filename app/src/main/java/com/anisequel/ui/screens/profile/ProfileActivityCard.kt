@@ -102,7 +102,15 @@ fun ActivityCard(
     /** Opens the author's profile; null on the profile's own feed. */
     onOpenAuthor: (() -> Unit)? = null,
     /** Opens the conversation with the author; null where there is no one to message. */
-    onMessageAuthor: (() -> Unit)? = null
+    onMessageAuthor: (() -> Unit)? = null,
+    /**
+     * The one row an activity notification just opened on.
+     *
+     * Passed straight through to whichever shape draws; see
+     * [rememberNotificationGlow] for why the target wears a ring and why it is
+     * drawn rather than blurred.
+     */
+    highlighted: Boolean = false
 ) {
     when {
         activity.media != null -> ActivityListCard(
@@ -117,7 +125,8 @@ fun ActivityCard(
             likePending = likePending,
             nowEpochSecond = nowEpochSecond,
             onOpenAuthor = onOpenAuthor,
-            onMessageAuthor = onMessageAuthor
+            onMessageAuthor = onMessageAuthor,
+            highlighted = highlighted
         )
         activity.isTextPost -> ActivityTextCard(
             activity = activity,
@@ -130,7 +139,8 @@ fun ActivityCard(
             likePending = likePending,
             nowEpochSecond = nowEpochSecond,
             onOpenAuthor = onOpenAuthor,
-            onMessageAuthor = onMessageAuthor
+            onMessageAuthor = onMessageAuthor,
+            highlighted = highlighted
         )
     }
 }
@@ -157,7 +167,9 @@ private fun ActivityListCard(
     /** Opens the author's profile; null on the profile's own feed. */
     onOpenAuthor: (() -> Unit)? = null,
     /** Opens the conversation with the author; null where there is no one to message. */
-    onMessageAuthor: (() -> Unit)? = null
+    onMessageAuthor: (() -> Unit)? = null,
+    /** See [ActivityCard.highlighted]. */
+    highlighted: Boolean = false
 ) {
     // Read before the early return below rather than after it: the card has nothing
     // to draw without a media node, and a `Local` read that only happens on some
@@ -182,10 +194,19 @@ private fun ActivityListCard(
     // feed no longer leaves the card under the finger squashed, and the press
     // animation costs one pointer-input node instead of two on every row.
     val interactionSource = remember { MutableInteractionSource() }
+    val glow = rememberNotificationGlow(highlighted)
 
     Card(
         modifier = modifier
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            // Inside the press layer, so the ring shrinks with the card instead of
+            // hanging in place around it. The halo falls outside the card's bounds
+            // and the press layer does not clip, which is what lets it be seen.
+            .notificationGlow(
+                glow = glow,
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.primary
+            )
             .clickable(
                 interactionSource = interactionSource,
                 onClickLabel = "Open ${media.title?.displayTitle.orEmpty()} details",

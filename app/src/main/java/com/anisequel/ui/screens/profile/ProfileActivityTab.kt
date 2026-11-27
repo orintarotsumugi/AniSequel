@@ -54,6 +54,7 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.UserActivityViewModel
+import kotlinx.coroutines.delay
 
 /**
  * Everything that differs between the two feeds the Activity tab can show.
@@ -206,13 +207,27 @@ fun ProfileActivityTab(
     // error: the retry below re-reads page one, where the footer's retry appends.
     val refreshError = (source.state as? UserActivityViewModel.ActivityState.Success)?.refreshError
 
+    // The row the notification opened. Set when the scroll lands, cleared once the
+    // ring has faded: the mark is about the arrival, not about the post being special
+    // for as long as the screen is open, and a ring left on would fight every later
+    // like and refresh for attention.
+    val glowActivityId = rememberSaveable(focusActivityId) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(glowActivityId.value) {
+        val target = glowActivityId.value ?: return@LaunchedEffect
+        delay(ACTIVITY_GLOW_MILLIS)
+        // A second tap can land while this wait is running; only clear the mark
+        // this effect was started for.
+        if (glowActivityId.value == target) glowActivityId.value = null
+    }
+
     FocusActivityEffect(
         focusActivityId = focusActivityId,
         state = source.state,
         calendar = source.calendar,
         listState = listState,
         onLoadNextPage = source.onLoadNextPage,
-        onOpenComments = source.onOpenComments
+        onOpenComments = source.onOpenComments,
+        onFocused = { glowActivityId.value = it }
     )
 
     LazyColumn(
@@ -292,7 +307,8 @@ fun ProfileActivityTab(
             source = source,
             nowEpochSecond = nowEpochSecond,
             viewerId = viewerId,
-            onOpenDetail = onOpenDetail
+            onOpenDetail = onOpenDetail,
+            highlightedActivityId = glowActivityId.value
         )
     }
 
@@ -382,7 +398,9 @@ private fun FocusActivityEffect(
     calendar: ActivityCalendar?,
     listState: LazyListState,
     onLoadNextPage: () -> Unit,
-    onOpenComments: (Int, Int) -> Unit
+    onOpenComments: (Int, Int) -> Unit,
+    /** Called once the feed has actually been brought to the activity. */
+    onFocused: (Int) -> Unit
 ) {
     // One-shot per requested id: a later like or refresh must not yank the list
     // back to the post the notification opened.
@@ -395,6 +413,10 @@ private fun FocusActivityEffect(
             is FocusStep.Scroll -> {
                 listState.animateScrollToItem(step.beforeCards + step.index)
                 focusedActivity.value = true
+                // After the scroll, not with the request: the ring is meant to
+                // arrive on a card that is already under the eye, and a mark set
+                // first would fade while the feed was still travelling.
+                onFocused(focusActivityId)
             }
 
             is FocusStep.OpenThread -> {
@@ -424,7 +446,8 @@ private fun LazyListScope.activityFeedItems(
     source: ActivityFeedSource,
     nowEpochSecond: Long,
     viewerId: Int?,
-    onOpenDetail: (MediaNode) -> Unit
+    onOpenDetail: (MediaNode) -> Unit,
+    highlightedActivityId: Int?
 ) {
     when (val activityState = source.state) {
         is UserActivityViewModel.ActivityState.Idle,
@@ -505,7 +528,8 @@ private fun LazyListScope.activityFeedItems(
                             { messageAuthor(messageTarget) }
                         } else {
                             null
-                        }
+                        },
+                        highlighted = activity.id == highlightedActivityId
                     )
                 }
 
@@ -543,6 +567,14 @@ private fun LazyListScope.activityFeedItems(
 }
 
 private const val PAGE_TRIGGER_ROWS = 6
+
+/**
+ * How long the focused card keeps its glow before the mark is cleared.
+ *
+ * Long enough for the spring to fade out on its own (about two seconds), plus a
+ * beat, so clearing the mark is not what ends the animation.
+ */
+private const val ACTIVITY_GLOW_MILLIS = 2_600L
 
 /**
  * The feed's first page, sketched as the cards that are coming.
