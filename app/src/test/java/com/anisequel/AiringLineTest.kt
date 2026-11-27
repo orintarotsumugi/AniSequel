@@ -40,7 +40,11 @@ import org.junit.Test
  */
 class AiringLineTest {
 
-    private val now = 1_700_000_000_000L
+    // Relative to the real clock, not a fixed instant: `progressCardStatesAiring`
+    // reads the wall clock (it is a composition-time property, not a pure
+    // function), so a fixture pinned to 2023 was describing an airing two years
+    // past and the predicate answered false for a show that is about to air.
+    private val now = System.currentTimeMillis() / 1000 * 1000
     private val seconds = now / 1000
 
     private fun anime(
@@ -87,7 +91,9 @@ class AiringLineTest {
         val unknownLength = anime(episodes = null, episode = 12, progress = 130)
 
         assertEquals("Episode 12 airs in 5h 20m", unknownLength.airingLineAt(now)?.sentence)
-        assertEquals("Episode 12", unknownLength.airingLineAt(now)?.episodeDetail)
+        // `episodeDetail` is the value the details grid prints under a row it has
+        // already labelled "Next episode", so it carries no noun of its own.
+        assertEquals("12", unknownLength.airingLineAt(now)?.episodeDetail)
     }
 
     @Test
@@ -104,7 +110,7 @@ class AiringLineTest {
     fun `a zero episode count is unknown rather than a length of zero`() {
         // AniList answers 0 for "not announced yet". The unguarded label printed
         // "Episode 12 of 0" on exactly those titles.
-        assertEquals("Episode 12", anime(episodes = 0, episode = 12).airingLineAt(now)?.episodeDetail)
+        assertEquals("12", anime(episodes = 0, episode = 12).airingLineAt(now)?.episodeDetail)
     }
 
     @Test
@@ -134,7 +140,9 @@ class AiringLineTest {
         )
 
         assertEquals(12, stale.upcomingAiring(now)?.episode)
-        assertEquals("Episode 12 airs in 6d", stale.airingLineAt(now)?.sentence)
+        // Episode 12 is the twelfth of twelve, so the total is named: the stale
+        // field is the one that must not win, not the length.
+        assertEquals("Episode 12 of 12 airs in 6d", stale.airingLineAt(now)?.sentence)
     }
 
     @Test
