@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -128,7 +129,13 @@ internal fun NovaTrailerCard(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "nova_trailer_scrim"
     )
-    var playing by remember(videoId) { mutableStateOf(false) }
+    // Saved, not remembered: the reason to rotate a phone with this open is to
+    // watch the trailer on its side, and a configuration change rebuilt the tree -
+    // so the one moment the reader asked for landscape was the moment the player
+    // closed, leaving the page they came from. The dialog reopens and the embed
+    // reloads from the start: a `WebView` belongs to the activity that created it
+    // and cannot outlive a recreation, which is a restart, not a resume.
+    var playing by rememberSaveable(videoId) { mutableStateOf(false) }
 
     Surface(
         shape = shape,

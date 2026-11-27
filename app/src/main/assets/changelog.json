@@ -20,8 +20,8 @@
           "detail": "The one link YouTube offers on a refused video - and any other link a reader taps - stayed inside the player and replaced the trailer with the watch page in a 16:9 hole with no back button. That button is a new-window link and this player has no popup window, so it arrives in the player's own frame; the rule now keeps only the player's own pages - the embed, its error card, its consent screen - and sends the watch page out through the shared opener. If nothing can take the address it is copied instead of the tap doing nothing."
         },
         {
-          "title": "The trailer fits a phone on its side",
-          "detail": "The player framed the video 16:9 at the window's width, which on a phone on its side is 450dp of picture on a 360dp screen: the bottom of the video, the close button above it and the way out to YouTube below it were off the display. The one surface in the app that takes the whole screen was the one that could not be used sideways. The frame is offered the room the chrome leaves and fits inside it instead, so landscape gets the whole player and portrait keeps exactly the geometry it had."
+          "title": "The trailer works sideways",
+          "detail": "Two things broke the moment the phone was turned. The frame was 16:9 at the window's width, which on a phone on its side is 450dp of picture on a 360dp screen, so the close button, the bottom of the video and the way out to YouTube were off the display; it is offered the room the chrome leaves and fits inside it, and portrait keeps exactly the geometry it had. And the flag that opened the player was plain remember, so the rotation rebuilt the tree and closed it - the one moment a reader asks for landscape was the moment the player went away. The flag is saved now, so the player reopens on its side; the embed reloads from the start, because a WebView belongs to the activity that created it and cannot outlive a recreation."
         },
         {
           "title": "A trailer with no id still leaves a link",

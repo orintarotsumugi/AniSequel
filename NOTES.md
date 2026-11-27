@@ -282,6 +282,14 @@ chrome leaves, not forced to take it - and
 is unchanged because the ratio fits the width there and the box wraps the
 picture; landscape gets the whole player letterboxed between its two rows.
 
+The other half of "landscape does not work" was that there was nothing to rotate
+*into* the good case: `playing` in the card was a plain `remember`, so the
+configuration change that a rotation is rebuilt the tree and the dialog closed -
+the one moment a reader turns the phone was the moment the player went away. It is
+`rememberSaveable` now. The embed still reloads from the start, because a
+`WebView` belongs to the activity that created it: this is a restart, not a
+resume, and it is the honest cost of not holding a view across a recreation.
+
 **The poster is one picture in two windows.** A card records its rectangle on
 the *press* (`boundsInWindow`, `PointerEventPass.Initial`, consuming nothing), and
 the sheet draws a copy of that picture at the hero's measured rectangle, scaled
