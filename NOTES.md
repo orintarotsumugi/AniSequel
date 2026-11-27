@@ -263,6 +263,21 @@ YouTube's only action on a refused video is "Watch on YouTube", and letting that
 load in the player replaced the video with the watch page in a 16:9 hole with no
 back button.
 
+**The poster is one picture in two windows.** A card records its rectangle on
+the *press* (`boundsInWindow`, `PointerEventPass.Initial`, consuming nothing), and
+the sheet draws a copy of that picture at the hero's measured rectangle, scaled
+and translated back toward the press in the draw phase. Three things are easy to
+get wrong. The copy used to decode the poster at its original size, which is a
+different Coil cache key from the card on screen a frame earlier, so a second
+full-resolution decode often outlived the six-frame wait and the open silently
+gave up - it now asks for the card's rectangle and grows that bitmap. That size
+is also why the copy stays composed, invisibly, after the landing: v2.6.8 removed
+it to avoid a second full-size poster living for the session, which cost the
+close the only picture it had to fly home. Sharing the card's cache entry makes
+the copy cheap enough to keep, so the close starts on its first frame. And the
+copy carries the hero's hairline, because a frame that appeared a frame after
+the landing was the one edge of the hand-off the flight did not draw.
+
 The score in the summary strip is drawn inside a closed version of the same wave —
 `NovaWavyRing`, built on `WaveGeometry.ringRadius`, so the page's two wavy marks
 are one family rather than two squiggles that happen to be near each other. It is

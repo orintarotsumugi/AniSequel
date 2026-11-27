@@ -75,10 +75,12 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.data.repository.InfoBackdropTint
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_BORDER_WIDTH
 import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
 import com.anisequel.ui.components.detail.LocalDetailCoverReveal
 import com.anisequel.ui.components.detail.LocalDetailCoverTarget
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
@@ -194,6 +196,9 @@ fun InfoHero(
     val coverReveal = LocalDetailCoverReveal.current
     val coverTarget = LocalDetailCoverTarget.current
     val posterShape = MaterialTheme.shapes.medium
+    // One value for the stroke and for what the flight records, so the copy cannot
+    // land with a frame the hero is not drawing.
+    val posterBorder = Color.White.copy(alpha = 0.22f)
     val openCover: () -> Unit = { onOpenCover(posterBounds) }
     // Long-pressing the title is the shortcut to the one thing people do with a
     // title on this page: take it somewhere else. The full name sheet with its
@@ -525,7 +530,7 @@ fun InfoHero(
                         spotColor = Color.Black
                     )
                     .clip(posterShape)
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), posterShape)
+                    .border(HERO_POSTER_BORDER_WIDTH, posterBorder, posterShape)
                     .background(coverColor)
                     // The rectangle the viewer expands out of. `boundsInWindow`
                     // rather than `boundsInRoot` because the Info page lives in
@@ -537,7 +542,14 @@ fun InfoHero(
                         posterBounds = rect
                         // Where the copy lands. Plain fields in the holder, not
                         // state: this runs on every scroll frame.
-                        coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
+                        coverTarget?.record(
+                            rect,
+                            posterShape,
+                            coverColor,
+                            HERO_POSTER_ELEVATION,
+                            posterBorder,
+                            HERO_POSTER_BORDER_WIDTH
+                        )
                     }
                     .expressiveHoldGesture(onHold = openCover, onClick = openCover)
                     // The hold gesture is a raw `pointerInput`, which TalkBack
@@ -556,6 +568,15 @@ fun InfoHero(
                     }
                     .testTag("detail_hero_poster")
             ) {
+                // The same first frame a card has: a cold open used to show the flat
+                // cover colour here until the poster decoded, which read as a missing
+                // picture rather than a loading one. Behind the artwork, so it is also
+                // the answer when the request never resolves.
+                PosterPlaceholder(
+                    title = media.displayName,
+                    tint = coverColor,
+                    modifier = Modifier.matchParentSize()
+                )
                 AsyncImage(
                     // The Info page's poster is a card like any other: when the reader
                     // chose btttr's rendered art, the picture they tapped and the
