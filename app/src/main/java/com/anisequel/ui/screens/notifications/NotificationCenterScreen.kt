@@ -1,7 +1,6 @@
 package com.anisequel.ui.screens.notifications
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -67,7 +66,6 @@ import com.anisequel.domain.notifications.buildNotificationSections
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.ShimmerBox
 import com.anisequel.ui.components.expressive.ExpressiveEmptyOrb
-import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
@@ -478,7 +476,7 @@ private fun LazyListScope.inboxSections(
                     index = entranceIndex[group.key] ?: 0,
                     now = now,
                     onOpen = { onOpenGroup(group) },
-                    modifier = Modifier.animateItem()
+                    modifier = notificationRowPlacement()
                 )
             }
         }
@@ -504,7 +502,7 @@ private fun LazyListScope.inboxSections(
                     index = entranceIndex[group.key] ?: 0,
                     now = now,
                     onOpen = { onOpenGroup(group) },
-                    modifier = Modifier.animateItem()
+                    modifier = notificationRowPlacement()
                 )
             }
         }
@@ -538,51 +536,6 @@ private fun LazyListScope.inboxSections(
             }
         }
     }
-}
-
-@Composable
-private fun NotificationEntrance(
-    group: NotificationGroup,
-    index: Int,
-    now: Instant,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var shown by remember(group.key) { mutableStateOf(false) }
-    LaunchedEffect(group.key) {
-        if (index < 10) delay(index * 26L)
-        shown = true
-    }
-    val alpha by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = ExpressiveMotion.FastEffects,
-        label = "inbox_card_fade"
-    )
-    val lift by animateFloatAsState(
-        targetValue = if (shown) 0f else 12f,
-        animationSpec = ExpressiveMotion.DefaultSpatial,
-        label = "inbox_card_lift"
-    )
-    // The card already faded and rose; the small scale closes the entrance on
-    // the same spatial spring as the rest of the app instead of leaving the last
-    // frame to a hard alpha cut. These are draw-phase values, so the list is not
-    // re-measured on every frame.
-    val scale by animateFloatAsState(
-        targetValue = if (shown) 1f else 0.965f,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "inbox_card_scale"
-    )
-    NotificationCard(
-        group = group,
-        onClick = onOpen,
-        now = now,
-        modifier = modifier.graphicsLayer {
-            this.alpha = alpha
-            translationY = lift
-            scaleX = scale
-            scaleY = scale
-        }
-    )
 }
 
 /**

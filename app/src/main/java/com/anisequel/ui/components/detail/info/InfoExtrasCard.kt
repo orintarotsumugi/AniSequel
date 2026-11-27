@@ -76,10 +76,6 @@ fun InfoExtrasCard(
 ) {
     val context = LocalContext.current
     val trailerUrl = media.trailerYoutubeUrl
-    val scope = rememberCoroutineScope()
-    var savingPoster by remember(media.id) { mutableStateOf(false) }
-    var posterSaved by remember(media.id) { mutableStateOf(false) }
-    val posterToSave = cardPosterUrl(media) ?: media.posterUrl
 
     InfoCard(
         modifier = modifier.testTag("info_extras_card"),
@@ -90,50 +86,11 @@ fun InfoExtrasCard(
         // BetterPosters render when that art is chosen, so a title with no AniList
         // cover is not the same thing as a title with nothing to open.
         if (media.posterUrl != null || media.bannerImage != null) {
-            InfoExtraRow(
-                icon = AppVectorIcons.FullscreenExpand,
-                title = "Full artwork",
-                subtitle = "The poster and every other image, on its own",
-                onClick = onOpenCover
-            )
-
-            InfoExtraRow(
-                icon = AppVectorIcons.Download,
-                title = if (posterSaved) "Poster saved" else if (savingPoster) "Saving poster…" else "Download poster",
-                subtitle = "Save the best available artwork to your gallery",
-                onClick = {
-                    if (savingPoster) return@InfoExtraRow
-                    val url = posterToSave
-                    if (url == null) return@InfoExtraRow
-                    savingPoster = true
-                    scope.launch {
-                        val ok = saveCoverToGallery(
-                            context = context,
-                            coverUrl = url,
-                            title = media.displayName
-                        )
-                        savingPoster = false
-                        posterSaved = ok
-                        if (ok) {
-                            kotlinx.coroutines.delay(COPY_CONFIRMATION_MILLIS)
-                            posterSaved = false
-                        }
-                    }
-                }
-            )
+            ExtraArtworkRows(media = media, onOpenCover = onOpenCover)
         }
 
         if (trailerUrl != null) {
-            InfoExtraRow(
-                icon = AppVectorIcons.Trailer,
-                title = "Watch the trailer",
-                subtitle = "Opens on YouTube",
-                onClick = {
-                    runCatching {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
-                    }
-                }
-            )
+            ExtraTrailerRow(media = media, trailerUrl = trailerUrl)
         }
 
         // Anime only: LiveChart tracks airing anime, so its search answers
@@ -165,6 +122,109 @@ fun InfoExtrasCard(
                     context.startActivity(Intent.createChooser(send, null))
                 }
             }
+        )
+    }
+}
+
+/**
+ * The artwork pair: look at it, or keep it.
+ *
+ * Owns its two states (`savingPoster`, `posterSaved`) because nothing outside these rows reads
+ * them, and the card above only decides whether there is any artwork to talk about.
+ * Extracted from [InfoExtrasCard] for that reason, and because the download row's
+ * tap is a coroutine with two early exits and a confirmation window - which is a job
+ * of its own, not a line in a card of unrelated actions.
+ */
+@Composable
+private fun ExtraArtworkRows(
+    media: MediaNode,
+    onOpenCover: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var savingPoster by remember(media.id) { mutableStateOf(false) }
+    var posterSaved by remember(media.id) { mutableStateOf(false) }
+    val posterToSave = cardPosterUrl(media) ?: media.posterUrl
+
+    InfoExtraRow(
+        icon = AppVectorIcons.FullscreenExpand,
+        title = "Full artwork",
+        subtitle = "The poster and every other image, on its own",
+        onClick = onOpenCover
+    )
+
+    InfoExtraRow(
+        icon = AppVectorIcons.Download,
+        title = if (posterSaved) "Poster saved" else if (savingPoster) "Saving poster…" else "Download poster",
+        subtitle = "Save the best available artwork to your gallery",
+        onClick = {
+            if (savingPoster) return@InfoExtraRow
+            val url = posterToSave
+            if (url == null) return@InfoExtraRow
+            savingPoster = true
+            scope.launch {
+                val ok = saveCoverToGallery(
+                    context = context,
+                    coverUrl = url,
+                    title = media.displayName
+                )
+                savingPoster = false
+                posterSaved = ok
+                if (ok) {
+                    kotlinx.coroutines.delay(COPY_CONFIRMATION_MILLIS)
+                    posterSaved = false
+                }
+            }
+        }
+    )
+}
+
+/**
+ * The trailer row, and the viewer it opens.
+ *
+ * In the app whenever there is an id to embed. The row used to be a raw
+ * `ACTION_VIEW` hand-off to YouTube - which left the app, lost the title, and on a
+ * device with no browser tried to copy a URL instead. The player the Info page
+ * already had is the honest destination; the hand-off survives only for a trailer
+ * whose id AniList did not give us, where there is nothing to embed.
+ *
+ * The viewer is hosted here, not passed up as a callback: the extras card is where
+ * the reader asked for the video, and a viewer that outlives the tap belongs to the
+ * row that opened it.
+ */
+@Composable
+private fun ExtraTrailerRow(
+    media: MediaNode,
+    trailerUrl: String
+) {
+    val context = LocalContext.current
+    // Validated exactly as the player validates it: an id that is not
+    // `[A-Za-z0-9_-]` is not a video, and the embed is refused rather than
+    // escaped into a page with scripting on.
+    val videoId = media.trailer?.id?.takeIf { isNovaTrailerId(it) }
+    var playing by remember(media.id) { mutableStateOf(false) }
+
+    InfoExtraRow(
+        icon = AppVectorIcons.Trailer,
+        title = "Watch the trailer",
+        subtitle = if (videoId != null) "Plays in the app" else "Opens on YouTube",
+        onClick = {
+            if (videoId != null) {
+                playing = true
+            } else {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
+                }
+            }
+        }
+    )
+
+    if (playing && videoId != null) {
+        NovaTrailerViewer(
+            videoId = videoId,
+            title = media.displayName,
+            fallbackUrl = trailerUrl,
+            onDismiss = { playing = false }
         )
     }
 }

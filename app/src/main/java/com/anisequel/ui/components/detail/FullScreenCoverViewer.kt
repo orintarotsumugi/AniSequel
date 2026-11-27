@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -720,6 +721,10 @@ private fun CoverRevealEffects(
     chrome: Animatable<Float, *>,
     onOverlayVisible: (Boolean) -> Unit
 ) {
+    // Read live, not as the value this effect was launched with: the close can start
+    // while the artwork is still travelling, and the code below suspends for the whole
+    // of that travel.
+    val currentClosing by rememberUpdatedState(closing)
     LaunchedEffect(Unit) {
         // The backdrop comes up first and on its own: it is the stage the artwork
         // travels over, and fading it at the same speed as everything else made the
@@ -733,7 +738,7 @@ private fun CoverRevealEffects(
         }
     }
     LaunchedEffect(artworkFrame) {
-        if (closing) return@LaunchedEffect
+        if (currentClosing) return@LaunchedEffect
         val target = artworkFrame ?: return@LaunchedEffect
         if (origin == null || target.width <= 0f || target.height <= 0f) return@LaunchedEffect
         if (reveal.value < 1f) {
@@ -747,7 +752,12 @@ private fun CoverRevealEffects(
             // on screen and stops a second full-size image being kept around.
             onOverlayVisible(false)
         }
-        // The chrome arrives with the artwork, not before it.
+        // The chrome arrives with the artwork, not before it - and only if nobody
+        // has asked to leave in the meantime. This await is where the old code went
+        // wrong: the close had already taken `chrome` to zero, and animating it back
+        // to one here faded the header and the sheet *in* over a dialog that was
+        // leaving. The flag is re-read after the suspension for that reason.
+        if (currentClosing) return@LaunchedEffect
         chrome.animateTo(1f, ExpressiveMotion.FastEffects)
     }
 }

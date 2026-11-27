@@ -1,8 +1,10 @@
 package com.anisequel.ui.components.detail.info
 
+import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -38,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import com.anisequel.ui.theme.DialogImmersiveEffect
+import com.anisequel.ui.theme.LocalImmersiveMode
+import com.anisequel.ui.theme.immersiveDisplayInsets
 import coil.compose.AsyncImage
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.displayName
@@ -238,7 +246,7 @@ internal fun NovaTrailerCard(
  * handover `SequelDetailSheet` makes for the title page itself.
  */
 @Composable
-private fun NovaTrailerViewer(
+internal fun NovaTrailerViewer(
     videoId: String,
     title: String,
     fallbackUrl: String,
@@ -265,13 +273,33 @@ private fun NovaTrailerViewer(
             decorFitsSystemWindows = false
         )
     ) {
+        val dialogView = LocalView.current
+        // The platform draws a hard, undimmable scrim behind every dialog, so the
+        // reader got a 60%-black cut on the frame the viewer opened while this
+        // dialog's own scrim faded in behind it - and the same cut backwards on the
+        // way out, which made the exit a fade followed by a flick. Zeroing the
+        // window's dim leaves one scrim, and it is the one that animates. The cover
+        // viewer makes the same call for the same reason.
+        LaunchedEffect(Unit) {
+            (dialogView.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
+        }
+        // A dialog is its own window, so the Activity's bars do not follow it: the
+        // player came back with the status and navigation bars drawn over the video,
+        // which is the one screen in the app that cannot have them. Every other
+        // full-screen surface already opts in; this dialog was the exception.
+        DialogImmersiveEffect()
+        val immersive = LocalImmersiveMode.current
+
         // The scrim, the frame and the chrome move as one window: fading only the
         // player would leave a black page pretending to be closed.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = entrance.value }
+                // Full bleed, then the cutout: the scrim has to cover the display,
+                // while the chrome has to stay out from under a camera hole.
                 .background(Color.Black.copy(alpha = 0.94f * entrance.value))
+                .then(Modifier.immersiveDisplayInsets(immersive))
                 .padding(horizontal = 12.dp)
                 .testTag("nova_trailer_viewer")
         ) {
@@ -334,7 +362,24 @@ private fun NovaTrailerViewer(
                     // frame is a black rectangle for as long as the embed takes to
                     // paint, and a spinner sitting in the middle of it is the
                     // difference between "starting" and "broken".
-                    if (!loaded) {
+                    // The ring used to be dropped in the frame the embed reported
+                    // in - one frame before the player had any alpha of its own - so
+                    // the spinner vanished, the frame went black, and only then did
+                    // the video fade in. The two are one crossfade now: the ring
+                    // fades out over the spring the player fades in on, and stops
+                    // turning as it goes, so the hand-off reads as the video
+                    // arriving under the spinner instead of as a gap.
+                    val ringAlpha by animateFloatAsState(
+                        targetValue = if (loaded) 0f else 1f,
+                        animationSpec = ExpressiveMotion.FastEffects,
+                        label = "nova_trailer_ring"
+                    )
+                    // Composed while it is still visible, not while it is still
+                    // loading: dropping it at the start of the fade - which is what
+                    // the old `if (!loaded)` did - blinked the accent arc out one
+                    // frame into a 200ms fade. It leaves the tree when the last of
+                    // it does, and that is also what stops its spin.
+                    if (ringAlpha > 0f) {
                         NovaWavyRing(
                             progress = null,
                             color = Color.White,
@@ -342,11 +387,15 @@ private fun NovaTrailerViewer(
                             modifier = Modifier
                                 .align(Alignment.Center)
                                 .size(44.dp)
+                                // Draw phase: the fade costs a layer update per
+                                // frame, not a redraw of the ring's geometry.
+                                .graphicsLayer { alpha = ringAlpha }
                         )
                     }
                     NovaTrailerPlayer(
                         videoId = videoId,
                         modifier = Modifier.fillMaxSize(),
+                        presence = { entrance.value },
                         onLoaded = { loaded = true }
                     )
                 }
@@ -396,68 +445,55 @@ private fun NovaTrailerViewer(
  * anything else is not a trailer. That is what keeps a malformed payload from
  * becoming markup in a page with JavaScript on.
  */
-@Suppress("SetJavaScriptEnabled", "OVERRIDE_DEPRECATION")
 @Composable
 private fun NovaTrailerPlayer(
     videoId: String,
     modifier: Modifier = Modifier,
+    /**
+     * The dialog's entrance, 0..1, read per frame rather than passed as a value.
+     *
+     * A lambda for the same reason every other transform in this app is one: the
+     * caller animates it, this composable only forwards it to the view's own alpha,
+     * and nothing here has to recompose on the frames it changes.
+     */
+    presence: () -> Float,
     onLoaded: () -> Unit
 ) {
     val context = LocalContext.current
     val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
+    var revealed by remember(videoId) { mutableStateOf(false) }
+    // The reveal is a Compose spring rather than the view's own animator, so the
+    // ring above it can fade out on the same clock and a reader who chose Instant
+    // motion gets the frame instead of a fade. The platform animator that used to
+    // live here was a second clock: the dialog could neither cancel it nor ask how
+    // far along it was.
+    val reveal by animateFloatAsState(
+        targetValue = if (revealed) 1f else 0f,
+        animationSpec = ExpressiveMotion.FastEffects,
+        label = "nova_trailer_reveal"
+    )
+    // Built here rather than inside `AndroidView`'s factory, because the reveal has
+    // to be reachable from the watchdog as well as from the page's own signals.
+    val player = remember(videoId) {
+        createNovaTrailerPlayer(context = context, html = html) {
+            revealed = true
+            onLoaded()
+        }
+    }
+    // A `WebView` is a real view in the interop layer: it draws above every Compose
+    // node and ignores their alpha, so the dialog's `graphicsLayer { alpha }` never
+    // reached it. That is what the close looked like - the scrim and the chrome
+    // faded while the video stayed at full strength until the node was torn down, a
+    // window that ignored its own exit - and on the way in it is how a player that
+    // reported early could appear at full strength inside a frame that was still
+    // arriving. The view's own alpha is the one channel that works, and it carries
+    // both halves of the picture.
+    LaunchedEffect(player) {
+        snapshotFlow { reveal * presence() }.collect { alpha -> player.alpha = alpha }
+    }
     AndroidView(
         modifier = modifier.testTag("nova_trailer_player"),
-        factory = {
-            WebView(context).apply {
-                setBackgroundColor(AndroidColor.BLACK)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                settings.loadsImagesAutomatically = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                settings.mediaPlaybackRequiresUserGesture = false
-                val chromeClient = NovaTrailerChromeClient(this)
-                webChromeClient = chromeClient
-                settings.setSupportZoom(false)
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                overScrollMode = View.OVER_SCROLL_NEVER
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String?) {
-                        onLoaded()
-                    }
-
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?
-                    ): Boolean = handle(playerNav = request?.url?.toString())
-                    // The deprecated `(WebView, String)` overload is gone rather
-                    // than suppressed: the platform stopped calling it in API 24
-                    // and `minSdk` is 31, so its `handle(playerNav = url)` was a
-                    // second entry point to the same rule that could never fire.
-
-                    private fun handle(playerNav: String?): Boolean {
-                        // `true` for everything: this view is a player, not a
-                        // browser. YouTube's own "watch on YouTube" button and any
-                        // link inside the frame leave the app through the same
-                        // opener the card used, and nothing else is followed at all.
-                        if (playerNav != null && isNovaTrailerHost(playerNav)) return false
-                        playerNav?.let { openExternalUrlOrCopy(context, it) }
-                        return true
-                    }
-                }
-                loadDataWithBaseURL(
-                    NOVA_TRAILER_BASE_URL,
-                    html,
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
-            }
-        },
+        factory = { player },
         onRelease = { view ->
             // Stop before destroy: an embed still buffering when the reader closes
             // the viewer tears down a live media pipeline otherwise. Remove a
@@ -470,15 +506,128 @@ private fun NovaTrailerPlayer(
 }
 
 /**
+ * The player view, and the one place that decides when it may be seen.
+ *
+ * ## Why it starts transparent
+ *
+ * The frame used to be a `WebView` painted opaque black from its first frame, with
+ * the page's wavy ring composed *behind* it in the same `Box`. A `WebView` is a real
+ * Android view in Compose's interop layer, and that layer draws above every Compose
+ * node in the window - so the ring ran, span, and could not be seen: what the reader
+ * got was the black rectangle the ring existed to explain. That is the "the circle
+ * loading is not wavy" report; the wave was correct and one view layer too low. The
+ * view now starts at `alpha` 0 and fades in when it has something to show, so the
+ * ring *is* the loading state rather than a decoration under an opaque surface.
+ *
+ * That alpha is owned by the caller, not by this function: the dialog's entrance
+ * fades the whole window, and a layer cannot fade an interop view - so the entrance,
+ * the reveal and the ring's crossfade are one driver writing one property.
+ *
+ * ## What counts as loaded
+ *
+ * `onPageFinished` fires for the wrapper - the local HTML string - not for the
+ * player inside it, so it hid the ring a frame after the viewer opened and left a
+ * black frame for however long the embed took. The authoritative signal is the
+ * iframe's own `load` event, which the wrapper reports with one console line: not an
+ * `addJavascriptInterface` bridge, because a bridge is a callable surface handed to a
+ * remote frame and all this needs is one string. The wrapper also reports on a timer,
+ * and [NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS] is the last resort, so a player that never
+ * reports cannot leave a spinner turning forever.
+ */
+@Suppress("SetJavaScriptEnabled", "OVERRIDE_DEPRECATION")
+private fun createNovaTrailerPlayer(
+    context: Context,
+    html: String,
+    onReady: () -> Unit
+): WebView {
+    val webView = WebView(context)
+    var revealed = false
+    // Idempotent: three signals can fire the reveal and the first one wins.
+    val reveal: () -> Unit = {
+        if (!revealed) {
+            revealed = true
+            onReady()
+        }
+    }
+    webView.apply {
+        // Zero until the caller's driver raises it. The driver owns this property
+        // now (see `NovaTrailerPlayer`): an animator here would be a second,
+        // uncancellable clock fighting the dialog's entrance for the same value,
+        // and the exit could not reach it at all.
+        alpha = 0f
+        setBackgroundColor(AndroidColor.BLACK)
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+        settings.loadsImagesAutomatically = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        settings.mediaPlaybackRequiresUserGesture = false
+        webChromeClient = NovaTrailerChromeClient(this, onPlayerReady = reveal)
+        settings.setSupportZoom(false)
+        settings.builtInZoomControls = false
+        settings.displayZoomControls = false
+        isVerticalScrollBarEnabled = false
+        isHorizontalScrollBarEnabled = false
+        overScrollMode = View.OVER_SCROLL_NEVER
+        webViewClient = object : WebViewClient() {
+            // There is deliberately no `onPageFinished` reveal: it fires for the
+            // wrapper, i.e. for the HTML this app wrote, and not for the player.
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean = handle(playerNav = request?.url?.toString())
+            // The deprecated `(WebView, String)` overload is gone rather
+            // than suppressed: the platform stopped calling it in API 24
+            // and `minSdk` is 31, so its `handle(playerNav = url)` was a
+            // second entry point to the same rule that could never fire.
+
+            private fun handle(playerNav: String?): Boolean {
+                // `true` for everything: this view is a player, not a
+                // browser. YouTube's own "watch on YouTube" button and any
+                // link inside the frame leave the app through the same
+                // opener the card used, and nothing else is followed at all.
+                if (playerNav != null && isNovaTrailerHost(playerNav)) return false
+                playerNav?.let { openExternalUrlOrCopy(context, it) }
+                return true
+            }
+        }
+        loadDataWithBaseURL(
+            NOVA_TRAILER_BASE_URL,
+            html,
+            "text/html",
+            "UTF-8",
+            null
+        )
+    }
+    // A player that says nothing at all - no WebView provider, a script the page
+    // declined to run - still has to stop being a spinner eventually.
+    webView.postDelayed({ reveal() }, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    return webView
+}
+
+/**
  * YouTube requires the API's origin to match the wrapper's secure base URL. The
  * old iframe omitted it, so some providers showed a player shell that never started.
  */
 private const val NOVA_TRAILER_BASE_URL = "https://www.youtube.com/"
 private const val NOVA_TRAILER_ORIGIN_QUERY = "https%3A%2F%2Fwww.youtube.com"
 
+/** The console line the wrapper writes once the iframe's own `load` has fired. */
+private const val NOVA_TRAILER_READY_MESSAGE = "anisequel:trailer-ready"
+
+/** The wrapper's own timer, for an `iframe` that never fires `load` at all. */
+private const val NOVA_TRAILER_WRAPPER_READY_MILLIS = 4500L
+
+/** The last-resort reveal: a player that never reports must not spin forever. */
+private const val NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS = 7000L
+
 /** Routes YouTube's full-screen video surface above the Compose dialog. */
 @Suppress("OVERRIDE_DEPRECATION")
-private class NovaTrailerChromeClient(private val webView: WebView) : WebChromeClient() {
+private class NovaTrailerChromeClient(
+    private val webView: WebView,
+    private val onPlayerReady: () -> Unit
+) : WebChromeClient() {
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
 
@@ -500,6 +649,17 @@ private class NovaTrailerChromeClient(private val webView: WebView) : WebChromeC
     }
 
     override fun onHideCustomView() = hideCustomView()
+
+    // The player reports itself through the console rather than through a
+    // JavaScript interface: a bridge is a callable surface exposed to a frame this
+    // app does not control, and all this needs is for one string to arrive.
+    override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+        if (message.message() == NOVA_TRAILER_READY_MESSAGE) {
+            onPlayerReady()
+            return true
+        }
+        return super.onConsoleMessage(message)
+    }
 
     fun hideCustomView() {
         val view = customView ?: return
@@ -548,7 +708,7 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             // the escape hatch under the frame is where the reader goes next.
             append("<div></div>")
         } else {
-            append("<iframe src=\"https://www.youtube-nocookie.com/embed/")
+            append("<iframe id=\"p\" src=\"https://www.youtube-nocookie.com/embed/")
             append(safeId)
             append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
             append("&enablejsapi=1&origin=")
@@ -557,6 +717,17 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append(" referrerpolicy=\"origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
+            // One line back to Kotlin when the player itself has loaded. The
+            // wrapper's own `onPageFinished` fires before the embed has painted,
+            // so it cannot be the signal that ends the loading state; this can.
+            append("<script>(function(){var f=document.getElementById('p');var told=false;")
+            append("function ready(){if(told){return}told=true;console.log('")
+            append(NOVA_TRAILER_READY_MESSAGE)
+            append("');}")
+            append("if(f){f.addEventListener('load',ready);}")
+            append("setTimeout(ready,")
+            append(NOVA_TRAILER_WRAPPER_READY_MILLIS.toString())
+            append(");})();</script>")
         }
         append("</body></html>")
     }

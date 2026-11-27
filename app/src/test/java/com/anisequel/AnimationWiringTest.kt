@@ -287,6 +287,74 @@ class AnimationWiringTest {
         )
     }
 
+    /**
+     * A dialog cannot fade an interop view, so the view has to fade itself.
+     *
+     * `WebView` is a real Android view in the interop layer: it draws above every
+     * Compose node and ignores their alpha. The trailer viewer animated its scrim and
+     * its chrome through `graphicsLayer { alpha }` and left the player alone, so the
+     * close faded everything except the video - which stayed at full strength until
+     * the dialog was torn down - and an embed that reported early could appear inside
+     * a frame that was still arriving. The fix is one driver writing the view's own
+     * alpha from the same two states the window uses.
+     */
+    @Test
+    fun `the trailer player's alpha is driven in one place`() {
+        val code = source(
+            "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
+        )
+
+        assertTrue("the player must fade through its own alpha", code.contains("player.alpha ="))
+        assertTrue(
+            "the reveal and the dialog's entrance must share one clock",
+            code.contains("snapshotFlow {") && code.contains("presence()")
+        )
+        assertFalse(
+            "a platform animator is a second clock the dialog can neither cancel nor read",
+            code.contains(".animate().alpha(")
+        )
+        assertTrue(
+            "the ring must fade into the player instead of vanishing a frame early",
+            code.contains("nova_trailer_ring") && code.contains("if (ringAlpha > 0f)")
+        )
+        assertTrue(
+            "the platform's own dim is the hard cut this dialog must not draw",
+            code.contains("setDimAmount(0f)")
+        )
+    }
+
+    /**
+     * An arriving inbox row must not be faded twice.
+     *
+     * `NotificationEntrance` fades each card in; `animateItem()`'s default does too,
+     * and the two multiplied - a new row arrived at the square of the curve its
+     * neighbours were on. The bare call also used inline springs, so a reader who had
+     * asked for Instant motion still got rows sliding.
+     */
+    @Test
+    fun `an inbox row is faded by its entrance and not by the list`() {
+        val code = source(
+            "app/src/main/java/com/anisequel/ui/screens/notifications/NotificationCenterScreen.kt"
+        )
+        val row = source(
+            "app/src/main/java/com/anisequel/ui/screens/notifications/NotificationRow.kt"
+        )
+
+        assertTrue("both halves of the list must use it", code.contains("notificationRowPlacement()"))
+        assertTrue(
+            "the list must not add a second fade in",
+            row.contains("fadeInSpec = null")
+        )
+        assertTrue(
+            "the exit belongs to the list, because the entrance is gone by then",
+            row.contains("fadeOutSpec = ExpressiveMotion.ListItemFadeOut")
+        )
+        assertFalse(
+            "the bare default fades in and ignores the motion style",
+            code.contains("Modifier.animateItem()") || row.contains("Modifier.animateItem()")
+        )
+    }
+
     private fun findProjectRoot(): File {
         var candidate = File(System.getProperty("user.dir") ?: ".").absoluteFile
         while (!File(candidate, "gradle.properties").isFile) {

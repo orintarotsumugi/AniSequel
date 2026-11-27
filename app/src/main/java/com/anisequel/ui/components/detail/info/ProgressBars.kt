@@ -133,6 +133,19 @@ internal fun InfoProgressBar(
     entranceKey: Any? = null,
     animate: Boolean = true
 ) {
+    // The entrance is one event per title, not one per style.
+    //
+    // It used to live inside each drawing, as `rememberSaveable(entranceKey)` around
+    // the "already played" flag. A style change swaps the `when` branch, so the
+    // drawing and that flag were disposed together and the new style started from
+    // zero - the fill dropped and grew back under the finger that had just chosen a
+    // style, which reads as the *progress* having changed. Hoisted above the `when`,
+    // the flag outlives the switch and a new drawing simply opens at its value.
+    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
+    // Marked after the first composition rather than during it: the drawings seed
+    // their fill from this flag, and it has to still be false on the frame that
+    // creates them or the entrance would be skipped by the very fact of starting.
+    LaunchedEffect(entranceKey) { played = true }
     when (style) {
         ProgressBarStyle.WAVE -> WavyProgressBar(
             progress = progress,
@@ -141,6 +154,7 @@ internal fun InfoProgressBar(
             waveColor = progressColor,
             trackColor = trackColor,
             entranceKey = entranceKey,
+            alreadyPlayed = played,
             animate = animate
         )
         ProgressBarStyle.BAR -> SimpleProgressBar(
@@ -150,6 +164,7 @@ internal fun InfoProgressBar(
             progressColor = progressColor,
             trackColor = trackColor,
             entranceKey = entranceKey,
+            alreadyPlayed = played,
             animate = animate
         )
         ProgressBarStyle.ROCKET -> RocketProgressBar(
@@ -159,6 +174,7 @@ internal fun InfoProgressBar(
             progressColor = progressColor,
             trackColor = trackColor,
             entranceKey = entranceKey,
+            alreadyPlayed = played,
             animate = animate
         )
     }
@@ -180,9 +196,10 @@ private fun SimpleProgressBar(
     progressColor: Color,
     trackColor: Color,
     entranceKey: Any?,
+    alreadyPlayed: Boolean,
     animate: Boolean
 ) {
-    val fill by rememberAnimatedProgress(progress, entranceKey, animate)
+    val fill by rememberAnimatedProgress(progress, entranceKey, animate, alreadyPlayed)
     val endColor = MaterialTheme.colorScheme.tertiary
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {
         val trackHeight = minOf(9.dp.toPx(), size.height * 0.34f)
@@ -233,9 +250,10 @@ private fun RocketProgressBar(
     progressColor: Color,
     trackColor: Color,
     entranceKey: Any?,
+    alreadyPlayed: Boolean,
     animate: Boolean
 ) {
-    val fill by rememberAnimatedProgress(progress, entranceKey, animate)
+    val fill by rememberAnimatedProgress(progress, entranceKey, animate, alreadyPlayed)
     val moonColor = MaterialTheme.colorScheme.tertiary
     val craterColor = MaterialTheme.colorScheme.onTertiary.copy(alpha = 0.34f)
     val windowColor = MaterialTheme.colorScheme.surface
@@ -385,23 +403,26 @@ private fun DrawScope.drawRocket(
  *
  * A plain `animateFloatAsState` would begin at its target, so the first frame of a
  * freshly opened title would already show the full rocket/bar position - the same
- * failure the wave's documented `Animatable` avoids. The saved flag keeps a scroll
- * away and back from replaying the entrance, and the key makes a new title start
- * from the beginning even when it has the same fraction as the previous one.
+ * failure the wave's documented `Animatable` avoids. The key makes a new title
+ * start from the beginning even when it has the same fraction as the previous one,
+ * and [alreadyPlayed] - owned by [InfoProgressBar], not by this helper - is what
+ * keeps a scroll away and back from replaying the entrance *and* what stops a style
+ * switch from doing the same. It is read only when the fill is created, so the
+ * flag flipping after the first frame cannot recreate the `Animatable` under the
+ * running spring.
  */
 @Composable
 private fun rememberAnimatedProgress(
     progress: Float,
     entranceKey: Any?,
-    animate: Boolean
+    animate: Boolean,
+    alreadyPlayed: Boolean
 ): State<Float> {
     val target = progress.coerceIn(0f, 1f)
-    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
     val fill = remember(entranceKey) {
-        Animatable(if (!animate || played) target else 0f)
+        Animatable(if (!animate || alreadyPlayed) target else 0f)
     }
     LaunchedEffect(entranceKey, target, animate) {
-        played = true
         if (animate) {
             fill.animateTo(target, ExpressiveMotion.FastSpatial)
         } else {

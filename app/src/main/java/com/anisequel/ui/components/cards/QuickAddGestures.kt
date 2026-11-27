@@ -113,10 +113,28 @@ internal fun Modifier.quickAddGestures(
 
     val swipe = if (swipeEnabled) {
         Modifier.pointerInput(mediaId) {
+            // The snaps of this gesture, so the settle can end them.
+            //
+            // Each drag event used to `launch { snapTo(...) }` into the screen's
+            // scope and the settle launched into the same scope after it, so both
+            // fought over `Animatable`'s mutator: a snap still queued when the
+            // finger left could start *after* `animateTo(0f)` had begun, cancel the
+            // settle and throw the fill back out. The bar was seen to jump right and
+            // then slide left on a cancelled swipe. The queue is cancelled here
+            // before the settle exists, so no snap outlives its own gesture.
+            val pendingSnaps = ArrayDeque<Job>()
+            var dragTarget = 0f
             detectDragGestures(
+                onDragStart = { dragTarget = 0f },
                 onDragEnd = {
+                    pendingSnaps.forEach { it.cancel() }
+                    pendingSnaps.clear()
                     coroutineScope.launch {
-                        if (dragOffset.value >= swipeThresholdPx) {
+                        // Snap to the finger's last position before the spring: a
+                        // cancelled trailing snap would otherwise leave the fill a
+                        // few pixels short of where the reader let go.
+                        dragOffset.snapTo(dragTarget)
+                        if (dragTarget >= swipeThresholdPx) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onAddToWatching()
                         }
@@ -129,15 +147,21 @@ internal fun Modifier.quickAddGestures(
                     }
                 },
                 onDragCancel = {
+                    pendingSnaps.forEach { it.cancel() }
+                    pendingSnaps.clear()
                     coroutineScope.launch {
+                        dragOffset.snapTo(dragTarget)
                         dragOffset.animateTo(0f, ExpressiveMotion.FastEffects)
                     }
                 },
                 onDrag = { change, dragAmount ->
                     change.consume()
-                    val newOffset = (dragOffset.value + dragAmount.x)
+                    dragTarget = (dragTarget + dragAmount.x)
                         .coerceIn(0f, swipeThresholdPx * 1.5f)
-                    coroutineScope.launch { dragOffset.snapTo(newOffset) }
+                    pendingSnaps.removeAll { it.isCompleted }
+                    pendingSnaps.addLast(
+                        coroutineScope.launch { dragOffset.snapTo(dragTarget) }
+                    )
                 }
             )
         }

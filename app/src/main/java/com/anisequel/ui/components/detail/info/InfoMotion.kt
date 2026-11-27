@@ -3,6 +3,8 @@ package com.anisequel.ui.components.detail.info
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.anisequel.data.repository.MotionStyle
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * The staggered entrance for one section of the Info page.
@@ -91,6 +94,48 @@ private const val STAGGER_MILLIS = 42
 
 /** How far a section rises as it comes in, in the draw phase. */
 private val REVEAL_RISE = 20.dp
+
+/**
+ * A number that counts up to its value, once per title.
+ *
+ * The Info page states its score in a chip over the artwork, and a chip that reads
+ * "87%" from the first frame is a label rather than a measurement - it appears with
+ * the page, before the reader has looked at it, and gives no sign that anything was
+ * counted. Counting it in on `DefaultSpatial` is the same motion the sections around
+ * it use, and it is what makes the number read as the *result* of the page having
+ * loaded.
+ *
+ * Three constraints, each of which was a way to get this wrong:
+ *
+ * - the target is a `Float` in the `Animatable` and rounded on the way out, because
+ *   an integer spring stops short of its last step and leaves "86%" on a score of
+ *   87;
+ * - `played` is `rememberSaveable` and keyed on the title, for the same reason
+ *   [sectionReveal] is: a recycled list item would otherwise re-count a number the
+ *   reader has already watched arrive, and a new title under the same item would
+ *   not count at all;
+ * - it is read through a `derivedStateOf` so the *value* only changes when the
+ *   rounded integer does - the `Animatable` ticks on every frame, and this is the
+ *   one place in the page where a frame of motion has to recompose something
+ *   (text cannot be drawn in the draw phase).
+ */
+@Composable
+internal fun rememberCountingUp(target: Int, entranceKey: Any?): State<Int> {
+    val animate = ExpressiveMotion.speed != MotionStyle.INSTANT && target > 0
+    var played by rememberSaveable(entranceKey) { mutableStateOf(false) }
+    val counter = remember(entranceKey) {
+        Animatable(if (animate && !played) 0f else target.toFloat())
+    }
+    LaunchedEffect(entranceKey, target, animate) {
+        played = true
+        if (animate) {
+            counter.animateTo(target.toFloat(), ExpressiveMotion.DefaultSpatial)
+        } else {
+            counter.snapTo(target.toFloat())
+        }
+    }
+    return remember(counter) { derivedStateOf { counter.value.roundToInt() } }
+}
 
 /**
  * The handover between the hero's title lockup and the docked bar, as shares of
