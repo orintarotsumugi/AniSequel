@@ -87,9 +87,11 @@ import com.anisequel.data.model.studioCredits
 import com.anisequel.data.repository.InfoBackdropSource
 import com.anisequel.domain.list.ListStatuses
 import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.detail.HERO_POSTER_BORDER_WIDTH
 import com.anisequel.ui.components.detail.HERO_POSTER_ELEVATION
 import com.anisequel.ui.components.detail.LocalDetailCoverReveal
 import com.anisequel.ui.components.detail.LocalDetailCoverTarget
+import com.anisequel.ui.components.cards.PosterPlaceholder
 import com.anisequel.ui.components.cards.cardPosterUrl
 import com.anisequel.ui.components.cards.toCoverColorOrNull
 import com.anisequel.ui.components.cards.unseamedCover
@@ -420,6 +422,9 @@ private fun HeroLockup(
     val coverReveal = LocalDetailCoverReveal.current
     val coverTarget = LocalDetailCoverTarget.current
     val posterShape = MaterialTheme.shapes.large
+    // One value for the stroke and for what the flight records, so the copy cannot
+    // land with a frame the hero is not drawing.
+    val posterBorder = Color.White.copy(alpha = 0.24f)
     Row(verticalAlignment = Alignment.Bottom) {
         val posterInteraction = remember { MutableInteractionSource() }
         Box(
@@ -439,18 +444,21 @@ private fun HeroLockup(
                     spotColor = Color.Black
                 )
                 .clip(posterShape)
-                .border(
-                    1.dp,
-                    Color.White.copy(alpha = 0.24f),
-                    posterShape
-                )
+                .border(HERO_POSTER_BORDER_WIDTH, posterBorder, posterShape)
                 .background(coverColor)
                 .onGloballyPositioned {
                     val rect = it.boundsInWindow()
                     onPosterBounds(rect)
                     // Where the copy lands. Plain fields in the holder, not state:
                     // this runs on every scroll frame.
-                    coverTarget?.record(rect, posterShape, coverColor, HERO_POSTER_ELEVATION)
+                    coverTarget?.record(
+                        rect,
+                        posterShape,
+                        coverColor,
+                        HERO_POSTER_ELEVATION,
+                        posterBorder,
+                        HERO_POSTER_BORDER_WIDTH
+                    )
                 }
                 .expressiveHoldGesture(onHold = onOpenCover, onClick = onOpenCover)
                 .semantics {
@@ -463,6 +471,15 @@ private fun HeroLockup(
                 }
                 .testTag("nova_detail_hero_poster")
         ) {
+            // The same first frame a card has: a cold open used to show the flat
+            // cover colour here until the poster decoded, which read as a missing
+            // picture rather than a loading one. Behind the artwork, so it is also
+            // the answer when the request never resolves.
+            PosterPlaceholder(
+                title = media.displayName,
+                tint = coverColor,
+                modifier = Modifier.matchParentSize()
+            )
             AsyncImage(
                 model = poster,
                 contentDescription = null,

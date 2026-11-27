@@ -244,9 +244,66 @@ scripting the embed is a black rectangle. What keeps that contained: the page is
 fixed wrapper built by `novaTrailerEmbedHtml` from a **validated** id (YouTube's
 alphabet only, so a payload cannot become markup), the only hosts it may load are
 YouTube's (`isNovaTrailerHost`, dot-anchored so `youtube.com.example.net` does not
-pass), and every other navigation is cancelled into the shared external opener.
-Both guards are pinned by `NovaTrailerViewerTest`; what a `WebView` does cannot be
-asserted, so what it is *given* is.
+pass, port-stripped so `youtube.com:443` is still YouTube), and only the player's
+own pages stay in the view (`staysInNovaTrailer`): a **subframe** at the embed, its
+error card or its consent screen. Anything else — a main frame, a non-YouTube host,
+or a subframe that is the **watch page** — goes to the shared external opener. The
+watch-page clause is not redundant with the frame one: "Watch on YouTube" is a
+`target="_blank"` link and the view has no popup window, so the navigation arrives
+*inside the iframe* and the frame test alone followed it. A navigation that is not
+an `http(s)` page (`about:blank`, `data:`, `blob:`) is neither followed nor
+opened — handing those to the opener copied `about:blank` onto the clipboard and
+announced it. The guards are pinned by `NovaTrailerViewerTest`; what a `WebView`
+does cannot be asserted, so what it is *given* is.
+
+The wrapper's page origin is the app id, `https://com.aistudio.anisequel.app`, and
+not a YouTube host. It has to be: YouTube identifies the embedder by the page's
+origin, and a page claiming `https://www.youtube.com` is read as YouTube embedding
+itself and answered with error 152, "This video is unavailable" - which was every
+trailer, not one bad id. `loadDataWithBaseURL` turns that base URL into the
+`Referer` header YouTube now refuses embeds without (error 153), and the
+`origin`/`widget_referrer` player vars name the same value or the IFrame API's
+messages are discarded. The iframe itself still loads from
+`youtube-nocookie.com`: the origin names the page, the host names the player, and
+they are deliberately different. The watch-page rule matters for the same report:
+YouTube's only action on a refused video is "Watch on YouTube", and letting that
+load in the player replaced the video with the watch page in a 16:9 hole with no
+back button.
+
+The frame is 16:9 at the window's width only *while that fits*. It was
+`fillMaxWidth().aspectRatio(16f / 9f)` with the title row above it and the escape
+hatch below, which is right in portrait and impossible in landscape: a
+full-width 16:9 rectangle on a 360dp-tall screen is 450dp, so the column
+(44dp of chrome, 450dp of picture, 48dp of chrome) overflowed and the close
+button, the bottom of the video and "Open on YouTube" were all off the display.
+The picture now sits in a `weight(1f, fill = false)` box - offered the height the
+chrome leaves, not forced to take it - and
+`aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)` fits inside. Portrait
+is unchanged because the ratio fits the width there and the box wraps the
+picture; landscape gets the whole player letterboxed between its two rows.
+
+The other half of "landscape does not work" was that there was nothing to rotate
+*into* the good case: `playing` in the card was a plain `remember`, so the
+configuration change that a rotation is rebuilt the tree and the dialog closed -
+the one moment a reader turns the phone was the moment the player went away. It is
+`rememberSaveable` now. The embed still reloads from the start, because a
+`WebView` belongs to the activity that created it: this is a restart, not a
+resume, and it is the honest cost of not holding a view across a recreation.
+
+**The poster is one picture in two windows.** A card records its rectangle on
+the *press* (`boundsInWindow`, `PointerEventPass.Initial`, consuming nothing), and
+the sheet draws a copy of that picture at the hero's measured rectangle, scaled
+and translated back toward the press in the draw phase. Three things are easy to
+get wrong. The copy used to decode the poster at its original size, which is a
+different Coil cache key from the card on screen a frame earlier, so a second
+full-resolution decode often outlived the six-frame wait and the open silently
+gave up - it now asks for the card's rectangle and grows that bitmap. That size
+is also why the copy stays composed, invisibly, after the landing: v2.6.8 removed
+it to avoid a second full-size poster living for the session, which cost the
+close the only picture it had to fly home. Sharing the card's cache entry makes
+the copy cheap enough to keep, so the close starts on its first frame. And the
+copy carries the hero's hairline, because a frame that appeared a frame after
+the landing was the one edge of the hand-off the flight did not draw.
 
 The score in the summary strip is drawn inside a closed version of the same wave —
 `NovaWavyRing`, built on `WaveGeometry.ringRadius`, so the page's two wavy marks
@@ -1163,6 +1220,51 @@ still text and every rule is still a rectangle, and posters are embedded as
 base64 rather than linked. It is kept as the renderer `TierListTest` can assert
 on without a device, and as the route to a printable export; the app's share
 sheet uses PNG because every messaging app accepts it.
+
+### A gutter label is not white on every colour
+
+Every row's letters were `Color.White`, copied into the SVG palette and the PNG
+paint as the same constant. On the palette's amber `#FFC53D` that is 1.6:1 - the
+label the board exists to show was the least legible thing on it - and the grey
+`#8E8E93` was 3.3:1, under the 4.5:1 floor the small count beneath it needs. Ten
+of the twelve palette colours missed that floor; amber missed it by nearly three.
+
+`domain/tier/TierLabelInk.kt` now picks between white and black by WCAG contrast
+against the row's own colour, ties to white, and the board, the SVG writer and the
+PNG exporter all call that one function rather than each carrying the constant.
+Black is true `#000000` and not the export background's near-black on purpose:
+indigo `#6366F1` is 4.70:1 against black and 4.04:1 against the near-black, so
+"nearly black" is the difference between a palette that passes on every entry and
+one that fails on the twelfth. The rule is a comparison, not a table, so a colour
+the picker adds tomorrow is covered. `TierLabelInkTest` holds every palette colour
+to the floor and pins the two extremes, and it asserts the SVG case too: an
+exporter that silently kept white would disagree with the board it is a picture of.
+
+The count under the letter was drawn at 82% of the label's ink, which is a second
+contrast failure hidden behind the first: 0.82 of the *right* ink over violet is
+4.05:1 and over indigo 4.10:1, back under the floor the ink was chosen to clear.
+It is full ink now, quieter by being smaller - the same lesson as
+[An alpha is not a contrast unit](#an-alpha-is-not-a-contrast-unit), one widget
+further out.
+
+### A pinch invalidates the board, not the page
+
+The live zoom was a `var` in `TierBoardScreen`, and the screen's body read it to
+build the toolbar's readout, the sheet host's data and the persistence
+`LaunchedEffect`. Compose subscribes a composition to every state read in that
+composition's scope, so every frame of a pinch recomposed the page - the tray, both
+toolbars, the sheet host and its six-way switch - while the board it was all for
+would have recomposed by itself anyway.
+
+`TierZoomState` is a small saved holder in `ui/screens/tier/TierBoardZoom.kt`: the
+screen passes it, the board and the stepper read `value`, and nothing else
+subscribes. It saves as a `Float` rather than as state, so the saved zoom and the
+stored preference are one number and one clamp. The board's measurement pass lost
+its own per-frame list too: `TierGeometry` used to `remember` a `List<Slot>` - one
+object per row and poster, rebuilt whenever the arrangement or the draw window
+changed, which during a pinch is every frame - and now walks the same rows, tiles
+and caret twice, once to measure and once to place. Two ordered walks over the same
+`arrangement` cannot disagree with the content lambda; a second copy can.
 
 ### The name search matches words, not substrings
 
@@ -3854,6 +3956,17 @@ under, already said by the heading above the card. The tile says one thing now,
 in one colour: *this row opens a page*. The silhouette still comes from the row's
 position, which is the one axis on which variety costs nothing.
 
+### The press a scroll cancels
+
+`bouncyPress` installs its own pointer loop only when no `InteractionSource` is
+passed, and that loop cannot tell a drag from a press until the finger leaves
+touch slop - so a scroll started on one of those rows springs it down first. Eleven
+sites inside scrolls that were still taking the fallback now pass the source their
+`clickable` already owns: the four Settings colour controls, the title page's hero
+chip, cast card, parent card and copy button, a notification row, a tier search
+poster, a saved joke's action and a person's voiced-character card. TO-DO §1.3
+counts what is left and why the remainder cannot be done centrally.
+
 ### A warning sign is the wrong shape for a missing picture
 
 A bio image that failed to load was drawn by Coil's `error` painter: a warning
@@ -4248,6 +4361,47 @@ data: the per-account cursor stays, so turning alerts back on resumes from the
 last delivered id. An account switch also clears the tray, because `MainActivity`
 is `singleTask` and a notification posted for the previous account would otherwise
 still be tappable after the new one signed in.
+
+### Battery optimisation is a grant, not a setting
+
+A periodic request is still a request, and Doze and the app standby buckets may
+defer it past its interval - on a phone that has been off the charger for a day,
+"every 30 minutes" can read as hours in the delivery status line. The one thing
+a reader can change about that is Android's battery-optimisation exemption, so
+Notification settings has a card for it.
+
+The card is a status plus a hand-off for the same reason the Android permission
+card is: the app does not own the value. It reports
+`PowerManager.isIgnoringBatteryOptimizations` and re-reads it on every resume,
+because the grant can arrive from the dialog or from a Settings screen this app
+never sees. The direct dialog,
+`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, is only offered to an app whose
+manifest declares `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` - without that line the
+action has no target and the button is a tap that goes nowhere, which is why
+`BatteryOptimisationTest` asserts the declaration rather than trusting it.
+
+`BatteryOptimisation.requestRoutes` is the same ladder as the install permission:
+the package-scoped request first, then Android's exemption list, then the app's
+details page, every rung carrying `FLAG_ACTIVITY_NEW_TASK` because the call can
+come from a non-Activity context. The exemption is deliberately not sold as
+instant delivery: a manufacturer's own battery manager can ignore the platform
+list, a check still needs a connection, and WorkManager's 15-minute floor stands.
+
+### The destination shows itself
+
+Tapping an activity alert opens the profile's Activity tab through the real feed
+and scrolls to the activity it names. Landing is not the same as arriving: on a
+feed of near-identical cards the reader could not tell which row the alert was
+about, so the tap read as "the app opened somewhere in the list". The focused row
+draws a ring for about two seconds after the scroll lands - two strokes of the
+card's own outline, the wide one outside the bounds - and the mark is cleared
+afterwards so it does not compete with every later like or refresh.
+
+The ring is drawn in the draw phase (`Modifier.drawWithContent`) and not blurred.
+A blur is the obvious way to make a glow and the expensive one: it is a render
+pass per row, and this feed is already the subject of TO-DO 5.1. Two strokes cost
+one path each, fade without a recomposition, and scale with the card through the
+press layer.
 
 ### The delivery cursor is not the read mark
 

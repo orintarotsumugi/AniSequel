@@ -201,10 +201,13 @@ internal fun ActivityTextCard(
     /** Opens the author's profile; null on the profile's own feed. See [ActivityAuthorRow]. */
     onOpenAuthor: (() -> Unit)? = null,
     /** Opens the conversation with the author; null where there is no one to message. */
-    onMessageAuthor: (() -> Unit)? = null
+    onMessageAuthor: (() -> Unit)? = null,
+    /** See [ActivityCard.highlighted]. */
+    highlighted: Boolean = false
 ) {
     val text = activity.text ?: return
     val interactionSource = remember { MutableInteractionSource() }
+    val glow = rememberNotificationGlow(highlighted)
     // Saveable, and keyed on the post: `remember` dropped the expansion on the
     // first configuration change, so rotating the phone closed a long post the
     // reader had just opened and threw them back to the top of the feed's layout.
@@ -219,6 +222,11 @@ internal fun ActivityTextCard(
     Card(
         modifier = modifier
             .bouncyPress(pressedScale = 0.97f, interactionSource = interactionSource)
+            .notificationGlow(
+                glow = glow,
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.primary
+            )
             .clickable(
                 interactionSource = interactionSource,
                 onClickLabel = "Open comments",

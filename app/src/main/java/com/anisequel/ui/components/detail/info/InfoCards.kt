@@ -6,8 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -624,6 +626,9 @@ fun InfoParentCard(
 ) {
     val statusColors = AniSequelTheme.statusColors
     val openable = onOpenParent != null
+    // The page scrolls and this card sits in it: one source for the press and the
+    // click, so a drag that starts on the card does not spring it.
+    val pressSource = remember { MutableInteractionSource() }
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -638,8 +643,10 @@ fun InfoParentCard(
             .then(
                 if (openable) {
                     Modifier
-                        .bouncyPress(pressedScale = 0.98f)
+                        .bouncyPress(pressedScale = 0.98f, interactionSource = pressSource)
                         .clickable(
+                            interactionSource = pressSource,
+                            indication = LocalIndication.current,
                             role = Role.Button,
                             onClickLabel = "Open " + sequel.parentTitle
                         ) { onOpenParent() }

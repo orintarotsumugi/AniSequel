@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -72,6 +73,7 @@ import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import java.net.URLEncoder
 
 /**
  * The official trailer: the card that advertises it, and the player it opens.
@@ -98,8 +100,9 @@ import com.anisequel.ui.components.openExternalUrlOrCopy
  * enabled - the player *is* a web app, and without scripting the embed is a black
  * rectangle. Everything a document could do with that is closed off instead: the
  * page is a fixed wrapper holding one iframe, the only hosts it may load are
- * YouTube's, and any navigation anywhere else is cancelled here and handed to the
- * external opener.
+ * YouTube's, and a navigation that is not one of the player's own pages is
+ * cancelled here - a web page among them is handed to the external opener, and
+ * anything that is not a web page is simply stopped.
  */
 @Composable
 internal fun NovaTrailerCard(
@@ -127,7 +130,13 @@ internal fun NovaTrailerCard(
         animationSpec = ExpressiveMotion.FastColorEffects,
         label = "nova_trailer_scrim"
     )
-    var playing by remember(videoId) { mutableStateOf(false) }
+    // Saved, not remembered: the reason to rotate a phone with this open is to
+    // watch the trailer on its side, and a configuration change rebuilt the tree -
+    // so the one moment the reader asked for landscape was the moment the player
+    // closed, leaving the page they came from. The dialog reopens and the embed
+    // reloads from the start: a `WebView` belongs to the activity that created it
+    // and cannot outlive a recreation, which is a restart, not a resume.
+    var playing by rememberSaveable(videoId) { mutableStateOf(false) }
 
     Surface(
         shape = shape,
@@ -351,53 +360,68 @@ internal fun NovaTrailerViewer(
                     }
                 }
 
+                // The frame is 16:9 at the window's width *while that fits*, and by the
+                // room the chrome leaves otherwise. A full-width 16:9 rectangle on a
+                // phone on its side is 450dp tall on a 360dp screen, so the bottom of
+                // the picture and the escape hatch under it were off the display: the
+                // one surface in the app that takes the whole screen was the one that
+                // could not be watched in landscape. The weighted box is offered the
+                // leftover height and, because it is not forced to fill it, portrait
+                // keeps exactly the geometry it had - the aspect ratio fits the width
+                // there and the box wraps the picture.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(Color.Black)
+                        .weight(1f, fill = false),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // The loading mark is the page's own wavy ring, spinning: the
-                    // frame is a black rectangle for as long as the embed takes to
-                    // paint, and a spinner sitting in the middle of it is the
-                    // difference between "starting" and "broken".
-                    // The ring used to be dropped in the frame the embed reported
-                    // in - one frame before the player had any alpha of its own - so
-                    // the spinner vanished, the frame went black, and only then did
-                    // the video fade in. The two are one crossfade now: the ring
-                    // fades out over the spring the player fades in on, and stops
-                    // turning as it goes, so the hand-off reads as the video
-                    // arriving under the spinner instead of as a gap.
-                    val ringAlpha by animateFloatAsState(
-                        targetValue = if (loaded) 0f else 1f,
-                        animationSpec = ExpressiveMotion.FastEffects,
-                        label = "nova_trailer_ring"
-                    )
-                    // Composed while it is still visible, not while it is still
-                    // loading: dropping it at the start of the fade - which is what
-                    // the old `if (!loaded)` did - blinked the accent arc out one
-                    // frame into a 200ms fade. It leaves the tree when the last of
-                    // it does, and that is also what stops its spin.
-                    if (ringAlpha > 0f) {
-                        NovaWavyRing(
-                            progress = null,
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(44.dp)
-                                // Draw phase: the fade costs a layer update per
-                                // frame, not a redraw of the ring's geometry.
-                                .graphicsLayer { alpha = ringAlpha }
+                    Box(
+                        modifier = Modifier
+                            .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(Color.Black)
+                    ) {
+                        // The loading mark is the page's own wavy ring, spinning: the
+                        // frame is a black rectangle for as long as the embed takes to
+                        // paint, and a spinner sitting in the middle of it is the
+                        // difference between "starting" and "broken".
+                        // The ring used to be dropped in the frame the embed reported
+                        // in - one frame before the player had any alpha of its own - so
+                        // the spinner vanished, the frame went black, and only then did
+                        // the video fade in. The two are one crossfade now: the ring
+                        // fades out over the spring the player fades in on, and stops
+                        // turning as it goes, so the hand-off reads as the video
+                        // arriving under the spinner instead of as a gap.
+                        val ringAlpha by animateFloatAsState(
+                            targetValue = if (loaded) 0f else 1f,
+                            animationSpec = ExpressiveMotion.FastEffects,
+                            label = "nova_trailer_ring"
+                        )
+                        // Composed while it is still visible, not while it is still
+                        // loading: dropping it at the start of the fade - which is what
+                        // the old `if (!loaded)` did - blinked the accent arc out one
+                        // frame into a 200ms fade. It leaves the tree when the last of
+                        // it does, and that is also what stops its spin.
+                        if (ringAlpha > 0f) {
+                            NovaWavyRing(
+                                progress = null,
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(44.dp)
+                                    // Draw phase: the fade costs a layer update per
+                                    // frame, not a redraw of the ring's geometry.
+                                    .graphicsLayer { alpha = ringAlpha }
+                            )
+                        }
+                        NovaTrailerPlayer(
+                            videoId = videoId,
+                            modifier = Modifier.fillMaxSize(),
+                            presence = { entrance.value },
+                            onLoaded = { loaded = true }
                         )
                     }
-                    NovaTrailerPlayer(
-                        videoId = videoId,
-                        modifier = Modifier.fillMaxSize(),
-                        presence = { entrance.value },
-                        onLoaded = { loaded = true }
-                    )
                 }
 
                 Row(
@@ -435,11 +459,13 @@ internal fun NovaTrailerViewer(
 /**
  * The embed, in the one `WebView` that may run scripting.
  *
- * Loaded from a wrapper page on `https://www.youtube.com/` rather than pointed at
- * the embed URL directly: YouTube's player checks the referer, and a `WebView`
- * asked for the embed with no origin is served "Video unavailable" often enough
- * that the direct route is not worth taking. The wrapper is a string this function
- * builds from a validated id - no remote document is ever composed into it.
+ * Loaded from a wrapper page rather than pointed at the embed URL directly: the
+ * wrapper is the document that can carry an origin and a referer, and they are the
+ * app's own id - see [NOVA_TRAILER_ORIGIN] for why that is the whole fix for error
+ * 152. A `WebView` asked for the embed with no referer is served "Video
+ * unavailable" often enough that the direct route is not worth taking. The wrapper
+ * is a string this function builds from a validated id - no remote document is ever
+ * composed into it.
  *
  * The id is validated rather than escaped: AniList's ids are `[A-Za-z0-9_-]`, and
  * anything else is not a trailer. That is what keeps a malformed payload from
@@ -563,6 +589,13 @@ private fun createNovaTrailerPlayer(
         settings.loadsImagesAutomatically = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.mediaPlaybackRequiresUserGesture = false
+        // Explicit, because the navigation rule depends on it: with no popup
+        // window a `target="_blank"` link - which is what "Watch on YouTube" is -
+        // is loaded in the frame that asked for it, so it reaches
+        // `shouldOverrideUrlLoading` as a subframe navigation and the watch-page
+        // check can send it out. With windows enabled and no `onCreateWindow`, the
+        // same tap would do nothing at all.
+        settings.setSupportMultipleWindows(false)
         webChromeClient = NovaTrailerChromeClient(this, onPlayerReady = reveal)
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
@@ -576,21 +609,23 @@ private fun createNovaTrailerPlayer(
             override fun shouldOverrideUrlLoading(
                 view: WebView?,
                 request: WebResourceRequest?
-            ): Boolean = handle(playerNav = request?.url?.toString())
-            // The deprecated `(WebView, String)` overload is gone rather
-            // than suppressed: the platform stopped calling it in API 24
-            // and `minSdk` is 31, so its `handle(playerNav = url)` was a
-            // second entry point to the same rule that could never fire.
-
-            private fun handle(playerNav: String?): Boolean {
-                // `true` for everything: this view is a player, not a
-                // browser. YouTube's own "watch on YouTube" button and any
-                // link inside the frame leave the app through the same
-                // opener the card used, and nothing else is followed at all.
-                if (playerNav != null && isNovaTrailerHost(playerNav)) return false
-                playerNav?.let { openExternalUrlOrCopy(context, it) }
+            ): Boolean {
+                val target = request?.url?.toString()
+                if (request != null && staysInNovaTrailer(target.orEmpty(), request.isForMainFrame)) {
+                    return false
+                }
+                // Only a web page is worth opening elsewhere. The player's own
+                // `about:blank` / `data:` frames are not links, and handing them to the
+                // opener copied their URL to the clipboard and announced it.
+                if (target != null && isNovaTrailerWebUrl(target)) {
+                    openExternalUrlOrCopy(context, target)
+                }
                 return true
             }
+            // The deprecated `(WebView, String)` overload is gone rather
+            // than suppressed: the platform stopped calling it in API 24
+            // and `minSdk` is 31, so a second entry point to the same rule
+            // could never fire.
         }
         loadDataWithBaseURL(
             NOVA_TRAILER_BASE_URL,
@@ -602,16 +637,45 @@ private fun createNovaTrailerPlayer(
     }
     // A player that says nothing at all - no WebView provider, a script the page
     // declined to run - still has to stop being a spinner eventually.
-    webView.postDelayed({ reveal() }, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    val timeout = Runnable { reveal() }
+    webView.postDelayed(timeout, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    // A dialog can be closed before it fires, and releasing the player calls
+    // `destroy()`. A callback still queued past that runs the reveal against a
+    // view the composition has already thrown away, and holds the WebView - with
+    // the page it decoded and its audio decoder - alive for the rest of the seven
+    // seconds. Removing it on detach is the one hook that fires both for a close
+    // and for the rotation that recreates the dialog.
+    webView.addOnAttachStateChangeListener(
+        object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) = Unit
+            override fun onViewDetachedFromWindow(view: View) {
+                view.removeCallbacks(timeout)
+                view.removeOnAttachStateChangeListener(this)
+            }
+        }
+    )
     return webView
 }
 
 /**
- * YouTube requires the API's origin to match the wrapper's secure base URL. The
- * old iframe omitted it, so some providers showed a player shell that never started.
+ * The origin the wrapper page is loaded under, and the one the player is told it
+ * is embedded in.
+ *
+ * This must not be a YouTube host. The player identifies its embedder by the
+ * page's origin, and a page whose origin is `https://www.youtube.com` is read as
+ * YouTube embedding itself: every trailer came back as error 152, "This video is
+ * unavailable", before a frame played. That was the whole trailer library, not one
+ * bad id. The app id is a real `https://` origin, is unique to this caller, and is
+ * the identifier Google documents for a WebView embed - `loadDataWithBaseURL`
+ * turns it into the `Referer` header, which is the identification YouTube now
+ * refuses embeds without (error 153). The iframe itself still loads from
+ * youtube-nocookie.com: the origin names the *page*, the host names the *player*,
+ * and they are not supposed to be the same value here.
  */
-private const val NOVA_TRAILER_BASE_URL = "https://www.youtube.com/"
-private const val NOVA_TRAILER_ORIGIN_QUERY = "https%3A%2F%2Fwww.youtube.com"
+internal const val NOVA_TRAILER_ORIGIN = "https://com.aistudio.anisequel.app"
+internal const val NOVA_TRAILER_BASE_URL = "$NOVA_TRAILER_ORIGIN/"
+private val NOVA_TRAILER_ORIGIN_QUERY: String =
+    URLEncoder.encode(NOVA_TRAILER_ORIGIN, Charsets.UTF_8.name())
 
 /** The console line the wrapper writes once the iframe's own `load` has fired. */
 private const val NOVA_TRAILER_READY_MESSAGE = "anisequel:trailer-ready"
@@ -673,12 +737,75 @@ private class NovaTrailerChromeClient(
 /** The hosts the player frame is allowed to load. */
 private val NOVA_TRAILER_HOSTS = listOf("youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com")
 
-/** Whether [url] belongs to the embed rather than to the web at large. */
+/**
+ * Whether [url] belongs to the embed rather than to the web at large.
+ *
+ * The authority is matched without its port and without user-info. Matching it whole
+ * meant `https://www.youtube.com:443/embed/x` read as the host `youtube.com:443`, which
+ * is not YouTube by this rule - so a navigation the player needed was handed to a
+ * browser mid-playback. The dot is anchored on both ends: `youtube.com.example.net`
+ * is not YouTube, and neither is a bare `notyoutube.com`.
+ */
 internal fun isNovaTrailerHost(url: String): Boolean {
-    val host = url.substringAfter("://", "").substringBefore('/').substringBefore('?').lowercase()
+    val authority = url.substringAfter("://", "")
+        .substringBefore('/')
+        .substringBefore('?')
+        .substringBefore('#')
+    val host = authority.substringAfterLast('@').substringBefore(':').lowercase()
     if (host.isEmpty()) return false
     return NOVA_TRAILER_HOSTS.any { host == it || host.endsWith(".$it") }
 }
+
+/**
+ * Whether [url] is a page worth handing to another app: an `http(s)` document.
+ *
+ * Everything else a player navigates to is its own scaffolding - `about:blank` for an
+ * ad slot, `data:` or `blob:` for a measurement frame. Those used to reach the shared
+ * opener too, so each one wrote its URL onto the reader's clipboard and showed the
+ * "nothing here can open that link, so it is copied instead" toast - about a link no
+ * reader chose, and while the trailer was still playing.
+ */
+internal fun isNovaTrailerWebUrl(url: String): Boolean =
+    url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)
+
+/**
+ * Whether [url] is YouTube's watch page rather than the player's own document.
+ *
+ * The player only ever lives at `youtube(-nocookie).com/embed/...`; the watch page is
+ * what a link resolves to. It is a separate question from [staysInNovaTrailer]'s frame
+ * test because the reported link is a `target="_blank"` one: this view has no popup
+ * window, so the navigation arrives *inside the iframe* - a subframe by
+ * `isForMainFrame` - and the frame rule alone followed it, putting the watch page in
+ * the 16:9 hole anyway.
+ */
+internal fun isNovaTrailerWatchPage(url: String): Boolean {
+    if (!isNovaTrailerHost(url)) return false
+    val path = url.substringAfter("://", "")
+        .substringAfter('/', "")
+        .substringBefore('?')
+        .substringBefore('#')
+        .trim('/')
+    return path.equals("watch", ignoreCase = true)
+}
+
+/**
+ * Whether a navigation belongs to the player and may stay inside its `WebView`.
+ *
+ * It has to be the player's own document: a **subframe**, on YouTube's hosts, that is
+ * not the watch page. Each of those three conditions is a way this went wrong.
+ *
+ *  - A **subframe** is the player itself - its error card, a consent interstitial, the
+ *    IFrame API's own pages. Nothing inside the embed works if those are not followed.
+ *  - A **main frame** is somewhere the reader chose to go: "Watch on YouTube" on a
+ *    refused video, the channel name, an ad. Following one replaced the video with the
+ *    watch page inside a 16:9 hole that has no back button - the reported dead link.
+ *  - A subframe **watch page** is that same reader choice arriving one layer lower. The
+ *    button is a `target="_blank"` link and this view has no popup window, so the
+ *    navigation happens in the iframe and passes the frame test; see
+ *    [isNovaTrailerWatchPage].
+ */
+internal fun staysInNovaTrailer(url: String, isForMainFrame: Boolean): Boolean =
+    !isForMainFrame && isNovaTrailerHost(url) && !isNovaTrailerWatchPage(url)
 
 /** Whether [id] is a YouTube video id and therefore safe to put in a page. */
 internal fun isNovaTrailerId(id: String): Boolean =
@@ -713,8 +840,18 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
             append("&enablejsapi=1&origin=")
             append(NOVA_TRAILER_ORIGIN_QUERY)
+            // The widget referrer is the same origin by definition; the embed
+            // API takes it separately, and it is the value the player uses for
+            // attribution when the page is not a public site.
+            append("&widget_referrer=")
+            append(NOVA_TRAILER_ORIGIN_QUERY)
             append("\"")
-            append(" referrerpolicy=\"origin\"")
+            // `strict-origin-when-cross-origin` is the policy YouTube documents
+            // and the one a browser sends by default. It still sends only the
+            // origin cross-origin, which is all YouTube needs, and it stopped
+            // being `origin` here so the attribute matches what the platform now
+            // recommends rather than a value that happened to work.
+            append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
             // One line back to Kotlin when the player itself has loaded. The

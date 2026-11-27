@@ -1,8 +1,10 @@
 package com.anisequel.ui.components.detail.info
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -134,6 +137,10 @@ private fun CharacterCard(
     // one, and a card that looks live and does nothing is worse than one that plainly
     // is not. This is the same rule the title page's studio credits follow.
     val id = character?.id
+    // The cast rail scrolls sideways, so the card's own press loop used to spring
+    // it on a swipe that started there. Sharing the clickable's source ends the
+    // press when the rail claims the gesture.
+    val pressSource = remember { MutableInteractionSource() }
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -162,8 +169,12 @@ private fun CharacterCard(
             .then(
                 if (id != null && onOpen != null) {
                     Modifier
-                        .bouncyPress(pressedScale = 0.98f)
-                        .clickable(role = Role.Button) { onOpen(id) }
+                        .bouncyPress(pressedScale = 0.98f, interactionSource = pressSource)
+                        .clickable(
+                            interactionSource = pressSource,
+                            indication = LocalIndication.current,
+                            role = Role.Button
+                        ) { onOpen(id) }
                 } else {
                     Modifier
                 }

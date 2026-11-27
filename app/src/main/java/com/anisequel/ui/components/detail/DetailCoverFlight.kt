@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
@@ -143,6 +144,14 @@ internal object DetailCoverFlight {
 internal val HERO_POSTER_ELEVATION = 18.dp
 
 /**
+ * The page's poster hairline width, shared with the copy for the same reason as
+ * [HERO_POSTER_ELEVATION]: the landing used to hide the page's poster and show a
+ * copy with no frame, so the frame re-appeared on the frame after the flight
+ * ended. Both heroes draw one dp; both record it so the copy cannot drift.
+ */
+internal val HERO_POSTER_BORDER_WIDTH = 1.dp
+
+/**
  * The page's poster place, written by whichever hero is on screen.
  *
  * Plain fields rather than `mutableStateOf` on purpose: [record] is called from
@@ -165,13 +174,29 @@ internal class DetailCoverTarget {
     // flicker at exactly the moment the flight is supposed to disappear.
     var elevation: Dp = 0.dp
         private set
+    // The poster's hairline. It used to be page-only, so a copy without it landed
+    // on a page whose frame then appeared in one frame - the one edge of the
+    // poster the flight could not make continuous.
+    var borderColor: Color = Color.Transparent
+        private set
+    var borderWidth: Dp = 0.dp
+        private set
 
-    fun record(rect: Rect, shape: Shape, tint: Color, elevation: Dp) {
+    fun record(
+        rect: Rect,
+        shape: Shape,
+        tint: Color,
+        elevation: Dp,
+        borderColor: Color,
+        borderWidth: Dp
+    ) {
         if (rect.width <= 0f || rect.height <= 0f) return
         this.rect = rect
         this.shape = shape
         this.tint = tint
         this.elevation = elevation
+        this.borderColor = borderColor
+        this.borderWidth = borderWidth
         filled = true
     }
 }
@@ -252,6 +277,10 @@ internal fun SheetCoverFlight(
      * is the only way its `AsyncImage` has time to decode before the flight starts.
      * It is drawn at alpha zero until then, so a request that never lands is an
      * invisible one rather than a tinted rectangle sitting on the list.
+     *
+     * It is also false between the landing and a close: the copy stays composed so
+     * the reverse flight has a decoded picture to start from, and is simply not
+     * drawn while the page's own poster is.
      */
     visible: Boolean,
     /** The copy's picture is on screen; the flight may start. */
@@ -275,6 +304,16 @@ internal fun SheetCoverFlight(
     // costs a margin on the first frames, which the page's scrim is still covering.
     val startScale = min(origin.width / targetWidth, origin.height / targetHeight)
     val context = LocalContext.current
+    // The copy asks for the picture at the size the card's own request resolved
+    // to, not at the hero's. A plain `rememberAsyncImagePainter` has no layout size
+    // resolver, so the copy used to decode the poster at its original size - a
+    // different cache key from the card that was on screen a frame earlier, and a
+    // decode that regularly outlived COPY_WAIT_FRAMES. The open then gave up and
+    // cut to the page, which is why the flight "sometimes" ran. Asking for the
+    // card's rectangle is a memory-cache hit, and the small upscale to the hero is
+    // the flight anyway: the same picture, growing.
+    val decodeWidth = origin.width.roundToInt().coerceAtLeast(1)
+    val decodeHeight = origin.height.roundToInt().coerceAtLeast(1)
 
     Box(
         modifier = Modifier
@@ -306,13 +345,23 @@ internal fun SheetCoverFlight(
             }
             .clip(target.shape)
             .background(target.tint)
+            // The page's hairline, carried for the whole flight. The copy used to
+            // land without one, so the hero's frame appeared a frame after the
+            // poster did - a flash of the only edge the flight did not draw. The
+            // stroke is inside the layer, so it scales with the artwork instead of
+            // sitting at a fixed width while the picture is still small.
+            .border(target.borderWidth, target.borderColor, target.shape)
             .testTag("detail_cover_flight")
     ) {
         if (url.isNotBlank()) {
             val painter = rememberAsyncImagePainter(
-                model = remember(url, context) {
+                model = remember(url, context, decodeWidth, decodeHeight) {
                     ImageRequest.Builder(context)
                         .data(url)
+                        // The card's own decode size: see [decodeWidth]. Without
+                        // this the request is full-resolution and misses the cache
+                        // entry the card just filled.
+                        .size(decodeWidth, decodeHeight)
                         // The flight is the transition; a crossfade here would
                         // arrive with a second, half-faded copy of the poster.
                         .crossfade(false)
@@ -373,6 +422,14 @@ internal class DetailCoverFlightState(
     // a poster.
     private val copyReady = mutableStateOf(false)
 
+    // The copy on screen has a picture, as opposed to merely being composed. The
+    // copy is put on stage the moment it is composed (so its request starts with
+    // no flight attached), and the painter arrives empty; drawing it then would be
+    // a tinted rectangle, and hiding the page's poster for it would be a hole.
+    // This is the flag that keeps the two frames together: neither side is swapped
+    // until the copy has something to show.
+    private val painting = mutableStateOf(false)
+
     // The page may start its own entrance. Latched on purpose - it must never fall
     // back to false when the copy lands, or the entrance spring would be cancelled
     // halfway and the page would stay half-transparent for the rest of its life.
@@ -398,21 +455,9 @@ internal class DetailCoverFlightState(
     /** Whether the copy has its picture; polled by the flight's launcher. */
     val copyIsReady: Boolean get() = copyReady.value
 
-    /**
-     * The copy has landed: the page draws the picture again and the copy is gone.
-     *
-     * A separate flag from [onStage], which only says *which side draws*. Landing
-     * used to clear `onStage` alone, so the copy stayed composed at `visible =
-     * false` - a second decoded full-size poster plus an 18dp elevation layer, kept
-     * alive for the rest of the session in a dialog that had already finished
-     * moving. [showable] is what composes the copy, so this is the flag that has to
-     * be cleared for it to actually go away.
-     */
-    private val landed = mutableStateOf(false)
-
     /** Whether the copy should be composed at all, visible or not. */
     private val showable: Boolean
-        get() = origin != null && armed.value && !abandoned.value && !landed.value
+        get() = origin != null && armed.value && !abandoned.value
 
     /**
      * 1 while the page's own poster is the one on screen, 0 while the copy is.
@@ -430,10 +475,22 @@ internal class DetailCoverFlightState(
      * of the poster at the hero's place while the flying copy shrank away from it:
      * a ghost that outlived the thing it was standing in for. Both are the same
      * question - is the copy the picture now? - and [onStage] is the answer.
+     *
+     * [painting] is part of the same answer. The copy is composed invisibly while
+     * its picture decodes, and `onCopyReady` is what releases the page's entrance,
+     * so without the flag the first frame after that release would hide the hero
+     * for a copy whose painter is still empty.
      */
-    val reveal: () -> Float = { if (onStage.value && !abandoned.value) 0f else 1f }
+    val reveal: () -> Float = { if (onStage.value && painting.value && !abandoned.value) 0f else 1f }
 
-    /** Puts the copy on stage before either side starts moving. */
+    /**
+     * Puts the copy on stage before either side starts moving.
+     *
+     * Called on the open, and again by [rememberSheetClose] before the page closes.
+     * The copy is still composed and still holds its picture at that point - see
+     * [land] - so this only flips which side draws, and the reverse flight starts
+     * on the very frame the close does.
+     */
     fun begin() {
         if (origin != null && target.filled && copyReady.value && !abandoned.value) {
             onStage.value = true
@@ -448,6 +505,7 @@ internal class DetailCoverFlightState(
     /** The copy's picture is on screen: the flight may start. */
     fun onCopyReady() {
         if (origin == null || abandoned.value) return
+        painting.value = true
         copyReady.value = true
         entranceReleased.value = true
         begin()
@@ -483,16 +541,29 @@ internal class DetailCoverFlightState(
             url = url,
             origin = start,
             target = target,
-            visible = onStage.value,
+            visible = onStage.value && painting.value,
             onReady = ::onCopyReady,
             onFailed = ::onCopyFailed,
             progress = { progress.value }
         )
     }
 
+    /**
+     * The copy has landed: the page draws the picture again.
+     *
+     * The copy stays composed, at alpha zero, and that is deliberate. v2.6.8 took it
+     * out of the composition here - a second decoded poster plus an 18dp layer kept
+     * alive for a session - and that was right about the decode: the copy was asking
+     * Coil for the poster at its original size, a different cache key from the card
+     * on screen a frame earlier. It now asks for the card's own rectangle (see
+     * [SheetCoverFlight]), so the bitmap it holds is the card's cache entry, not a
+     * second decode. Removing it then cost the close: [begin] had nothing to put
+     * back, so the page hid its poster for a copy that no longer existed and the
+     * sheet dismissed without a flight home. The layer is the price of a frame-perfect
+     * reverse flight; the second bitmap is no longer part of it.
+     */
     fun land() {
         onStage.value = false
-        landed.value = true
     }
 }
 

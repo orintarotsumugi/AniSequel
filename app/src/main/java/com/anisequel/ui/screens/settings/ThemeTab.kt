@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -716,6 +717,9 @@ private fun CanvasChip(
         label = "canvas_chip_outline"
     )
 
+    // Shared with the `clickable` below: the source cancels press the moment the
+    // gesture becomes a drag, so a scroll started on the chip does not spring it.
+    val pressSource = remember { MutableInteractionSource() }
     Surface(
         shape = ExpressiveShapes.pill,
         color = container,
@@ -725,8 +729,10 @@ private fun CanvasChip(
             // label and 8dp of padding came to roughly 34dp, so the smallest
             // colour control on the page had the smallest target.
             .heightIn(min = 48.dp)
-            .bouncyPress(pressedScale = 0.92f)
+            .bouncyPress(pressedScale = 0.92f, interactionSource = pressSource)
             .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
                 role = Role.RadioButton,
                 onClickLabel = "Use the $name canvas colour",
                 onClick = onClick

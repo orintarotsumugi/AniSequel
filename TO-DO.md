@@ -160,7 +160,7 @@ should measure the frame time before and after with a macrobenchmark; there is n
 benchmark module in the repo yet.
 
 **The bigger half of this is the `interactionSource` argument, not `composed`.**
-Of 69 call sites, 26 now pass a source and **43** do not. The other 43 get the
+Of 69 call sites, 37 now pass a source and **32** do not. The other 43 get the
 fallback path, which installs a second `pointerInput` node that sets "pressed" on
 every pointer-down — so a finger dragged across one of those elements springs it
 down and back up again: two springs per gesture.
@@ -174,7 +174,7 @@ have this problem because it cancels press the moment the gesture is *claimed*,
 which is information this heuristic does not have and cannot get later. So the
 fix is per-site, and it is one line each.
 
-Fixed so far, in three passes. The first two because they are the two a finger
+Fixed so far, in four passes. The first two because they are the two a finger
 meets most; then the controls a press *and* a scroll can both start on, which is
 where the fallback is wrong rather than merely wasteful:
 
@@ -185,8 +185,9 @@ where the fallback is wrong rather than merely wasteful:
 | `AniTopAppBar` (filter, refresh, settings) | The three actions sit above a feed the user scrolls constantly; a press that turns into a scroll used to keep the icon squashed until the finger lifted |
 | `SettingsButton` (all four variants) | Inside the settings scroll, and the variant chosen at runtime shares one source because only one of them is ever drawn |
 | The sign-in flow — `LoginScreen`'s demo button, `UsernameScanCard`'s Scan button, `OAuthCard`'s Connect / Paste Token / Client ID | The whole login screen is one `verticalScroll`, so starting a scroll on any of these was reachable on every launch. It is also the first screen a new user touches |
+| The four Settings colour controls (`PaletteCard`, `HueChip`, `CanvasChip`), the title page's `HeroChip` / `CharacterCard` / `InfoParentCard` / `TitleRow` copy button, `NotificationCard`, `SearchPoster` in the tier search, `JokeSavedLineAction` and `VoicedCharacterCard` | Eleven more rows and buttons inside scrolls, each one line to share the source. Found by the sweep above rather than by a report: none had a visible symptom beyond the press that the scroll should have cancelled |
 
-The remaining 33 are **not** all the same, and the split has not been measured —
+The remaining 32 are **not** all the same, and the split has not been measured —
 it needs reading each one rather than pattern-matching the file:
 
 - some have a `clickable` / `combinedClickable` / `Button(onClick=)` in the same

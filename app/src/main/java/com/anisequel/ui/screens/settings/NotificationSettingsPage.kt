@@ -46,6 +46,7 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.anisequel.data.model.ViewerProfile
+import com.anisequel.data.notifications.BatteryOptimisation
 import com.anisequel.data.notifications.NotificationAlertStore
 import com.anisequel.data.notifications.NotificationAlerts
 import com.anisequel.data.notifications.NotificationAlertsScheduler
@@ -111,6 +112,16 @@ internal fun NotificationSettingsPage(
         intervalMinutes = alertPreferences.intervalMinutes
     )
     val status by enabler.status
+
+    // The platform owns this switch, so it is read again on every resume instead of
+    // being remembered: the grant can arrive from the dialog *or* from a Settings
+    // screen this app never sees, and a cached value would keep the card describing
+    // a state the reader had already fixed.
+    var batteryExempt by remember { mutableStateOf(BatteryOptimisation.isExempt(context)) }
+    LifecycleResumeEffect(Unit) {
+        batteryExempt = BatteryOptimisation.isExempt(context)
+        onPauseOrDispose { }
+    }
 
     SettingsScrollColumn(modifier = modifier) {
         SectionCard(
@@ -330,6 +341,28 @@ internal fun NotificationSettingsPage(
                     },
                     Toast.LENGTH_LONG
                 ).show()
+            }
+        )
+
+        BatteryOptimisationCard(
+            exempt = batteryExempt,
+            onRequest = {
+                if (!BatteryOptimisation.request(context)) {
+                    Toast.makeText(
+                        context,
+                        "This device has no battery settings page.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            },
+            onOpenSettings = {
+                if (!BatteryOptimisation.openBatterySettings(context)) {
+                    Toast.makeText(
+                        context,
+                        "This device has no battery settings page.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         )
     }
@@ -777,8 +810,9 @@ private fun AndroidPermissionCard(
     }
 }
 
+/** A capsule status chip for a settings card's on/off state. */
 @Composable
-private fun StatusBadge(active: Boolean, onLabel: String, offLabel: String) {
+internal fun StatusBadge(active: Boolean, onLabel: String, offLabel: String) {
     Surface(
         shape = CircleShape,
         color = if (active) {

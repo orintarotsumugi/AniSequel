@@ -50,6 +50,7 @@ import com.anisequel.domain.tier.TierRowBox
 import com.anisequel.domain.tier.TierTitleLength
 import com.anisequel.domain.tier.TierTitlePosition
 import com.anisequel.domain.tier.tierCaption
+import com.anisequel.domain.tier.tierLabelInk
 import com.anisequel.domain.tier.tierTileCornerRadius
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.expressive.ExpressiveMotion
@@ -119,6 +120,12 @@ internal fun TierRowStrip(
     highlighted: Boolean
 ) {
     val tierColor = tierRowColor(row.colorArgb)
+    // Not white at every colour. The gutter is the tier's own colour, and on a
+    // light one - amber, gold, the grey, or any pale custom pick - white text is
+    // 1.6:1 against its own background and the label is a rumour. The ink is
+    // chosen by contrast in the domain so the exporters, which draw the same
+    // gutter, choose the same one.
+    val labelInk = tierRowColor(tierLabelInk(row.colorArgb))
     val shape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
     // At the 35% floor the gutter is under 20dp wide. A titleMedium label in it
     // is clipped to a few pixels of a letter, and the count underneath it has
@@ -173,7 +180,7 @@ internal fun TierRowStrip(
                         MaterialTheme.typography.titleMedium
                     },
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = labelInk,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -181,7 +188,12 @@ internal fun TierRowStrip(
                     Text(
                         text = memberCount.toString(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.82f),
+                        // Full ink, not 0.82 of it: the count is lighter because it
+                        // is smaller, and at 82% violet and indigo fell back under
+                        // the 4.5:1 floor that the ink was chosen to clear. The
+                        // alpha was the same mistake in miniature that the ink fix
+                        // exists for.
+                        color = labelInk,
                         maxLines = 1
                     )
                 }

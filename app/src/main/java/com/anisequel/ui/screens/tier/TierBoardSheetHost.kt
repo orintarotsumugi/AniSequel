@@ -83,7 +83,15 @@ internal data class TierBoardSheetData(
     val ranked: Int,
     val filter: TierFilter,
     val display: TierDisplay,
-    val zoom: Float,
+    /**
+     * The board's live zoom, as the holder rather than as a number.
+     *
+     * A copied `Float` meant the screen had to read the live value to build this
+     * object, which subscribed the whole page - and this host - to every frame of a
+     * pinch. The one sheet that reads it is the display sheet, and it is not open
+     * while a pinch is happening.
+     */
+    val zoom: TierZoomState,
     val boardLocked: Boolean
 )
 
@@ -199,7 +207,7 @@ internal fun TierBoardSheetsHost(
             // debounce, so the stored value can be up to a gesture behind the
             // board. Toggling a title in here must not write that stale number
             // back over the zoom the person just set.
-            display = data.display.copy(zoom = data.zoom),
+            display = data.display.copy(zoom = data.zoom.value),
             onDisplayChange = actions.onDisplayChange,
             // Reset goes through the same local value the stepper writes, so it
             // cannot lose a race with the debounced write of the zoom it replaced.

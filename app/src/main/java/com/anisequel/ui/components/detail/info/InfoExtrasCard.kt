@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -212,9 +211,12 @@ private fun ExtraTrailerRow(
             if (videoId != null) {
                 playing = true
             } else {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trailerUrl)))
-                }
+                // The same opener every other link in the app uses. The raw
+                // intent this replaced swallowed its own failure: a device with
+                // no browser got no browser, no message and no URL, which is the
+                // "opens on YouTube" subtitle being false in the one case the
+                // hand-off exists for.
+                openExternalUrlOrCopy(context, trailerUrl)
             }
         }
     )

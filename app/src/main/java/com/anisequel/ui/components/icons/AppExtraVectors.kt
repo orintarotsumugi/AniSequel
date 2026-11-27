@@ -795,6 +795,72 @@ object AppExtraVectors {
             }
         }.build()
     }
+
+    /**
+     * A battery with a bolt in it, for the card that asks Android to stop
+     * optimising the background check.
+     *
+     * Drawn here rather than borrowed: the vendored Material subset has no
+     * battery at all, and the two cards above it on the same page already wear
+     * the same bell - a third one would read as another notification preference
+     * instead of the platform switch this is.
+     *
+     * The body is stroked and the bolt filled. A stroked bolt at 20dp closes into
+     * a blob, the same failure [CalendarClock]'s hands had to avoid, and the two
+     * filled shapes keep their edges where a hairline would blur.
+     */
+    val BatteryBolt: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "BatteryBolt",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).apply {
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round
+            ) {
+                // Body: 14.2 units wide with 2.6 left for the cap on the right.
+                moveTo(5f, 7f)
+                horizontalLineTo(13.2f)
+                curveTo(14.9f, 7f, 16.2f, 8.3f, 16.2f, 10f)
+                verticalLineTo(14f)
+                curveTo(16.2f, 15.7f, 14.9f, 17f, 13.2f, 17f)
+                horizontalLineTo(5f)
+                curveTo(3.3f, 17f, 2f, 15.7f, 2f, 14f)
+                verticalLineTo(10f)
+                curveTo(2f, 8.3f, 3.3f, 7f, 5f, 7f)
+                close()
+            }
+            // The cap is its own stroke rather than a filled rect: two rounded
+            // ends are what read as a terminal at this size, and a rect's corners
+            // were the only hard angles in the glyph.
+            path(
+                stroke = SolidColor(Color.White),
+                strokeLineWidth = 2.4f,
+                strokeLineCap = StrokeCap.Round
+            ) {
+                moveTo(17.9f, 10.6f)
+                lineTo(17.9f, 13.4f)
+            }
+            path(
+                fill = SolidColor(Color.White),
+                pathFillType = PathFillType.NonZero
+            ) {
+                // Bolt, inside the body's rounded bore.
+                moveTo(11.3f, 8.6f)
+                lineTo(8.4f, 12.4f)
+                lineTo(10.2f, 12.4f)
+                lineTo(9.5f, 15.4f)
+                lineTo(12.7f, 11.5f)
+                lineTo(10.9f, 11.5f)
+                close()
+            }
+        }.build()
+    }
     /*
      * Nearly every glyph in this file is built the same way: a builder, one `path`
      * per stroke, and nothing but moveTo / lineTo / curveTo / close. Worth stating,

@@ -1,5 +1,12 @@
 package com.anisequel
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import com.anisequel.ui.components.detail.DetailCoverFlightState
+import com.anisequel.ui.components.detail.DetailCoverTarget
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -8,11 +15,13 @@ import java.io.File
 /**
  * The poster that flies between a list card and the title page.
  *
- * None of this is observable in a JVM test: the flight is two rectangles in two
- * windows, joined by a draw-phase transform. What can be pinned is the shape of
- * the join, and the three ways it used to break: a press listener that swallowed
- * the card's click, a copy that started from a rectangle measured elsewhere, and
- * a page poster still drawn under it, which turned the landing into a seam.
+ * The flight itself is two rectangles in two windows joined by a draw-phase
+ * transform, and a JVM test cannot see it. What can be pinned is the shape of the
+ * join - the press listener, the rectangles, the reveal, and the state machine
+ * that decides which side draws - and the ways it used to break: a press listener
+ * that swallowed the card's click, a copy that started from a rectangle measured
+ * elsewhere, a page poster still drawn under it, and a landing that took away the
+ * copy the close needed.
  */
 class DetailCoverFlightTest {
 
@@ -154,7 +163,7 @@ class DetailCoverFlightTest {
         assertTrue(
             "the page's own poster is hidden from the first frame, before there is a " +
                 "copy to cover it - a slow decode leaves a hole where the artwork is",
-            text.contains("if (onStage.value && !abandoned.value) 0f else 1f")
+            text.contains("if (onStage.value && painting.value && !abandoned.value) 0f else 1f")
         )
         assertTrue(
             "the flight never waits for the copy's picture",
@@ -196,6 +205,121 @@ class DetailCoverFlightTest {
             "the four-frame wait gives up without telling the page, so the poster " +
                 "it was hiding is never drawn again",
             text.contains("state.abandon()")
+        )
+    }
+
+    /**
+     * A close after a landing must still have the picture to fly home.
+     *
+     * v2.6.8 took the copy out of the composition at the landing to stop a second
+     * poster living for the whole session, but the close re-staged a copy that no
+     * longer existed: the page hid its own poster, the sheet dismissed, and the
+     * poster never travelled back to the card. The copy now stays composed at alpha
+     * zero and shares the card's decoded bitmap (it asks for the card's rectangle),
+     * so the landing does not remove it and [DetailCoverFlightState.begin] can put
+     * it back on the close's first frame.
+     */
+    @Test
+    fun `the close puts the same copy back after the landing`() {
+        val target = DetailCoverTarget().apply {
+            record(
+                rect = Rect(16f, 64f, 132f, 238f),
+                shape = RoundedCornerShape(12.dp),
+                tint = Color.DarkGray,
+                elevation = 18.dp,
+                borderColor = Color.White,
+                borderWidth = 1.dp
+            )
+        }
+        val state = DetailCoverFlightState(
+            origin = Rect(40f, 400f, 140f, 550f),
+            target = target,
+            progress = Animatable(1f)
+        )
+
+        state.arm()
+        state.onCopyReady()
+        assertTrue(
+            "the copy is not the one drawing after it reports its picture",
+            state.reveal() == 0f
+        )
+
+        state.land()
+        assertTrue(
+            "the landing leaves the page's poster hidden, so the page shows a hole",
+            state.reveal() == 1f
+        )
+
+        state.begin()
+        assertTrue(
+            "the close has no copy to stage, so the poster is hidden for a flight " +
+                "that cannot happen and the sheet dismisses around a missing picture",
+            state.reveal() == 0f
+        )
+    }
+
+    /**
+     * The poster's frame is part of the poster.
+     *
+     * The copy drew the artwork, the tint and the shadow but not the one dp white
+     * hairline the page draws around it, so the frame appeared a frame after the
+     * landing - the only edge the flight did not make continuous.
+     */
+    @Test
+    fun `the copy carries the poster's frame instead of landing without one`() {
+        val text = source(flight)
+
+        assertTrue(
+            "the copy lands without the page's hairline, so the frame pops in after " +
+                "the flight has already handed over",
+            text.contains(".border(target.borderWidth, target.borderColor, target.shape)")
+        )
+        assertTrue(
+            "the target does not carry the frame, so the copy has no number to draw",
+            text.contains("var borderColor: Color") && text.contains("var borderWidth: Dp")
+        )
+        assertTrue(
+            "a hero draws a frame literal the copy never sees",
+            source(novaHero).contains("HERO_POSTER_BORDER_WIDTH, posterBorder") &&
+                source(animeHero).contains("HERO_POSTER_BORDER_WIDTH, posterBorder")
+        )
+    }
+
+    /**
+     * The copy has to ask for the picture the card already has.
+     *
+     * A plain `rememberAsyncImagePainter` has no layout size resolver, so the copy
+     * decoded the poster at its original size: a different Coil cache key from the
+     * card on screen a frame earlier, and a decode that often outlived the six-frame
+     * wait. The open then abandoned the flight and cut to the page. Asking for the
+     * card's rectangle is a memory hit; growing that picture is the flight.
+     */
+    @Test
+    fun `the copy asks for the picture the card already decoded`() {
+        val text = source(flight)
+
+        assertTrue(
+            "the copy requests the poster at its original size, so it misses the " +
+                "card's cache entry and gives up before the second decode lands",
+            text.contains("val decodeWidth = origin.width.roundToInt().coerceAtLeast(1)") &&
+                text.contains(".size(decodeWidth, decodeHeight)")
+        )
+    }
+
+    /**
+     * A poster that has not decoded is a loading state, not a flat rectangle.
+     *
+     * The cards have drawn [com.anisequel.ui.components.cards.PosterPlaceholder]
+     * behind their artwork since the grid's first cold start; the two heroes drew a
+     * plain cover colour until the picture arrived, which reads as a missing image
+     * and leaves the same blank on a request that never resolves.
+     */
+    @Test
+    fun `a poster that is still loading shows the title`() {
+        assertTrue(
+            "the page's poster has no loading frame, so a cold open is a flat tint",
+            source(novaHero).contains("PosterPlaceholder(") &&
+                source(animeHero).contains("PosterPlaceholder(")
         )
     }
 

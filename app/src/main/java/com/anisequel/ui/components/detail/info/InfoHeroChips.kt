@@ -4,7 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -16,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -101,6 +104,9 @@ internal fun HeroChip(
         Color.Black.copy(alpha = 0.38f)
     }
     val content = if (accent) MaterialTheme.colorScheme.onPrimary else Color.White
+    // The hero scrolls with the page, and this chip used to spring on a drag that
+    // only started on it: one source for the press and the click.
+    val pressSource = remember { MutableInteractionSource() }
 
     Surface(
         shape = ExpressiveShapes.pill,
@@ -118,8 +124,13 @@ internal fun HeroChip(
             // tappable capsule has nothing else to distinguish it from the four
             // facts beside it.
             Modifier
-                .bouncyPress(pressedScale = 0.94f)
-                .clickable(role = Role.Button, onClick = onClick)
+                .bouncyPress(pressedScale = 0.94f, interactionSource = pressSource)
+                .clickable(
+                    interactionSource = pressSource,
+                    indication = LocalIndication.current,
+                    role = Role.Button,
+                    onClick = onClick
+                )
         } else {
             Modifier
         }

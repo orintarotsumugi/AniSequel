@@ -17,6 +17,14 @@
          never at launch or before the reader has chosen to allow alerts. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Lets Notification settings open Android's "ignore battery optimisation"
+         dialog for this package. The dialog is only offered to an app that declares
+         this; without it the request action has no target and the reader taps a
+         button that goes nowhere. The grant itself is the reader's, in a system
+         dialog, and some manufacturer builds ignore the platform list anyway -
+         which is why the card is a status plus a hand-off, not a switch. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <application
         android:name=".AniSequelApplication"
         android:allowBackup="true"

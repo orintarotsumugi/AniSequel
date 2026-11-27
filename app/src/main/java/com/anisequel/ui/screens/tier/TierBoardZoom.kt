@@ -3,6 +3,8 @@ package com.anisequel.ui.screens.tier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -17,6 +19,41 @@ import kotlinx.coroutines.delay
  * that a person who stops and looks has already had it kept.
  */
 internal const val TIER_ZOOM_WRITE_DELAY_MS = 600L
+
+/**
+ * The board's live zoom, held rather than declared as a `var` in the screen.
+ *
+ * It used to be a `var zoom by mutableFloatStateOf(...)` read by the screen's own
+ * body: the stepper's percentage, the sheet host's data, and the persistence
+ * effect below all read it, so every frame of a pinch recomposed the page around
+ * the board - its tray, its toolbars and the sheets it hosts - only to hand the
+ * board a number the board was already going to read itself. Subscribers now
+ * subscribe individually: the board and the stepper read [value], and the screen
+ * only passes the holder on.
+ *
+ * It saves as a `Float` rather than as serialised state, so the restored value and
+ * the stored preference are the same kind of number and share one clamp.
+ */
+@Stable
+internal class TierZoomState(initial: Float) {
+    var value by mutableFloatStateOf(clampTierZoom(initial))
+        private set
+
+    /** Sets the zoom, clamped: a pinch can ask for more than the board allows. */
+    fun set(zoom: Float) {
+        value = clampTierZoom(zoom)
+    }
+
+    companion object {
+        // Qualified on purpose: the property below is called `Saver` too, and an
+        // unqualified call in its own initialiser is the kind of resolution the
+        // reader has to run the compiler in their head to answer.
+        val Saver: Saver<TierZoomState, Float> = androidx.compose.runtime.saveable.Saver(
+            save = { it.value },
+            restore = { TierZoomState(it) }
+        )
+    }
+}
 
 /**
  * Keeps the board's live zoom and the stored zoom from writing over each other.
@@ -50,7 +87,7 @@ internal const val TIER_ZOOM_WRITE_DELAY_MS = 600L
 @Composable
 internal fun TierBoardZoomPersistence(
     documentId: String,
-    zoom: Float,
+    zoom: TierZoomState,
     storedZoom: Float,
     onLocalZoomChanged: (Float) -> Unit,
     onZoomChange: (Float) -> Unit
@@ -68,21 +105,24 @@ internal fun TierBoardZoomPersistence(
         val stored = clampTierZoom(storedZoom)
         if (stored == observedStoredZoom) return@LaunchedEffect
         observedStoredZoom = stored
-        if (stored != lastWrittenZoom && stored != zoom) onLocalZoomChanged(stored)
+        if (stored != lastWrittenZoom && stored != zoom.value) onLocalZoomChanged(stored)
     }
 
-    LaunchedEffect(zoom, storedZoom) {
-        if (zoom != clampTierZoom(storedZoom)) {
+    // Reading the holder here subscribes this effect - a composable that emits
+    // nothing - instead of the screen, which is the point of the holder.
+    LaunchedEffect(zoom.value, storedZoom) {
+        val live = zoom.value
+        if (live != clampTierZoom(storedZoom)) {
             delay(TIER_ZOOM_WRITE_DELAY_MS)
-            lastWrittenZoom = zoom
-            onZoomChange(zoom)
+            lastWrittenZoom = live
+            onZoomChange(live)
         }
     }
 
     // The flush reads the current values rather than the ones captured when the
     // effect was installed: a rotation disposes the composition after the last
-    // pinch of the session may already have moved on.
-    val latestZoom by rememberUpdatedState(zoom)
+    // pinch of the session may already have moved on. The zoom is read from the
+    // holder at dispose time for the same reason.
     val latestStoredZoom by rememberUpdatedState(storedZoom)
     val latestWriter by rememberUpdatedState(onZoomChange)
     val latestDocumentId by rememberUpdatedState(documentId)
@@ -90,9 +130,9 @@ internal fun TierBoardZoomPersistence(
         val ownedId = documentId
         onDispose {
             if (latestDocumentId == ownedId &&
-                latestZoom != clampTierZoom(latestStoredZoom)
+                zoom.value != clampTierZoom(latestStoredZoom)
             ) {
-                latestWriter(latestZoom)
+                latestWriter(zoom.value)
             }
         }
     }

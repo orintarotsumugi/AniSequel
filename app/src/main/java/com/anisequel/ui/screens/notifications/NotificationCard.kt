@@ -2,8 +2,10 @@ package com.anisequel.ui.screens.notifications
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -92,7 +94,15 @@ internal fun NotificationCard(
         ?.let { if (it.length > 240) it.take(240).trimEnd() + "..." else it }
     val headline = group.headline()
     val description = notificationDescription(group, headline, contextSummary, relative)
-    val press = if (hasTarget) Modifier.bouncyPress(pressedScale = 0.985f) else Modifier
+    // One source for the press and the click. The inbox is a scrolling list, and
+    // without it `bouncyPress` installs a pointer loop that springs the row on a
+    // drag that only started on it - the gesture belongs to the list, not the row.
+    val pressSource = remember { MutableInteractionSource() }
+    val press = if (hasTarget) {
+        Modifier.bouncyPress(pressedScale = 0.985f, interactionSource = pressSource)
+    } else {
+        Modifier
+    }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -102,6 +112,8 @@ internal fun NotificationCard(
             .then(
                 if (hasTarget) {
                     Modifier.clickable(
+                        interactionSource = pressSource,
+                        indication = LocalIndication.current,
                         role = Role.Button,
                         onClickLabel = "Open notification",
                         onClick = onClick
