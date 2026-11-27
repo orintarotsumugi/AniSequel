@@ -1,7 +1,9 @@
 package com.anisequel.ui.components.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -430,10 +432,18 @@ private fun VoicedCharacterCard(
     // Null is "this host cannot open a profile", not "a tap that does nothing": the
     // card reads it and draws a caption, the same distinction the sheet makes for
     // the cast and crew cards it sits beside.
+    //
+    // The rail scrolls sideways; the source makes the press end when the gesture
+    // is claimed as a drag instead of the card springing on its own pointer loop.
+    val pressSource = remember { MutableInteractionSource() }
     val tapTarget = if (onOpen != null) {
         Modifier
-            .bouncyPress(pressedScale = 0.97f)
-            .clickable(onClickLabel = "Open character") { onOpen(character) }
+            .bouncyPress(pressedScale = 0.97f, interactionSource = pressSource)
+            .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
+                onClickLabel = "Open character"
+            ) { onOpen(character) }
     } else {
         Modifier
     }

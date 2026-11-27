@@ -1,6 +1,8 @@
 package com.anisequel.ui.screens.settings
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -150,12 +153,20 @@ private fun JokeSavedLineAction(
     testTag: String
 ) {
     val haptics = LocalHapticFeedback.current
+    // The action sits in a scrolling list of saved jokes: sharing the clickable's
+    // source keeps a drag from springing the button.
+    val pressSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(48.dp)
             .clip(RoundedCornerShape(percent = 50))
-            .bouncyPress(pressedScale = 0.86f)
-            .clickable(onClickLabel = label, role = Role.Button) {
+            .bouncyPress(pressedScale = 0.86f, interactionSource = pressSource)
+            .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
+                onClickLabel = label,
+                role = Role.Button
+            ) {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 onClick()
             }

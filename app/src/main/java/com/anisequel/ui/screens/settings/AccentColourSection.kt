@@ -1,9 +1,11 @@
 package com.anisequel.ui.screens.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -267,11 +270,18 @@ private fun PaletteCard(
     val cardShape = RoundedCornerShape(ExpressiveShapes.MediumCorner)
     val swatchShape = RoundedCornerShape(ExpressiveShapes.SmallCorner)
 
+    // Shared with the `clickable` below so a drag that starts on the card does
+    // not spring it: the source reports press only until the gesture is claimed.
+    val pressSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .clip(cardShape)
-            .bouncyPress(pressedScale = 0.94f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.94f, interactionSource = pressSource)
+            .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
             .semantics(mergeDescendants = true) {
                 // The name is the one drawn under the swatch, and `clickable`
                 // already merges that in - so this adds what the card could not
@@ -363,6 +373,9 @@ private fun HueChip(
         label = "hue_chip_ring"
     )
 
+    // The chip's own source, as on the palette card above: one press, reported
+    // by the control that also owns the gesture.
+    val pressSource = remember { MutableInteractionSource() }
     Surface(
         shape = CircleShape,
         color = color,
@@ -371,8 +384,12 @@ private fun HueChip(
         modifier = Modifier
             // 48dp, not 44: a hue is a target, and the row has the width.
             .size(48.dp)
-            .bouncyPress(pressedScale = 0.88f)
-            .clickable(onClick = onClick)
+            .bouncyPress(pressedScale = 0.88f, interactionSource = pressSource)
+            .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
             // The chip is a colour and nothing else, so the name has to be spoken:
             // it used to hang off the check mark, which only exists once the chip is
             // selected, leaving every other hue as an unlabelled circle.

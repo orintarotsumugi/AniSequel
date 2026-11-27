@@ -1,5 +1,6 @@
 package com.anisequel.ui.screens.tier
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -280,11 +281,19 @@ private fun SearchPage(page: List<TierCandidate>, onPick: (TierCandidate) -> Uni
 @Composable
 private fun SearchPoster(candidate: TierCandidate, onPick: (TierCandidate) -> Unit) {
     val placeholder = rememberVectorPainter(AppVectorIcons.List)
+    // The grid scrolls, and a drag that started on a poster used to spring that
+    // poster down and back up on its own pointer loop. This source is the
+    // clickable's, so the press ends when the gesture is claimed as a drag.
+    val pressSource = remember { MutableInteractionSource() }
     Column(
         modifier = Modifier
             .width(SEARCH_CELL_WIDTH)
-            .bouncyPress(pressedScale = 0.96f)
-            .clickable(role = Role.Button) { onPick(candidate) }
+            .bouncyPress(pressedScale = 0.96f, interactionSource = pressSource)
+            .clickable(
+                interactionSource = pressSource,
+                indication = LocalIndication.current,
+                role = Role.Button
+            ) { onPick(candidate) }
             .testTag("tier_search_result_${candidate.mediaId}")
     ) {
         Box(

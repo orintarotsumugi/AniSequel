@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
@@ -282,6 +283,9 @@ private fun TitleRows(rows: List<Pair<String, String>>, border: BorderStroke) {
 @Composable
 private fun TitleRow(label: String, value: String, border: BorderStroke) {
     val context = LocalContext.current
+    // The sheet scrolls past these rows: sharing the clickable's source stops a
+    // drag from springing the copy button while the page moves.
+    val pressSource = remember { MutableInteractionSource() }
     var copied by remember { mutableStateOf(false) }
     // Keyed on the tap count rather than on `copied`: re-writing `true` changes
     // no state, so a boolean-keyed effect never restarts and a second tap
@@ -340,8 +344,12 @@ private fun TitleRow(label: String, value: String, border: BorderStroke) {
                     // 48dp: a copy control sized to its glyph is the
                     // smallest target on the sheet.
                     .size(48.dp)
-                    .bouncyPress(pressedScale = 0.9f)
-                    .clickable(role = Role.Button) {
+                    .bouncyPress(pressedScale = 0.9f, interactionSource = pressSource)
+                    .clickable(
+                        interactionSource = pressSource,
+                        indication = LocalIndication.current,
+                        role = Role.Button
+                    ) {
                         copy(context, label, value)
                         copyTick++
                     }

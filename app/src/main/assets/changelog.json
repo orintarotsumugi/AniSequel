@@ -52,6 +52,14 @@
           "detail": "A list in the tier library showed its name and how many titles it held and nothing about the tiers inside it, so two lists looked identical until one of them was opened. Each row now leads with a small stack of bars in the list's own tier colours - up to five, in the board's order - and the 'Carry on with' card does the same. Each stack is one canvas: no image is decoded and no five composables are laid out to draw five rectangles."
         },
         {
+          "title": "A press that becomes a scroll lets go",
+          "detail": "Eleven controls that draw their own press spring - the palette cards and hue chips under Appearance, the canvas chip, the title page's hero chips, a cast card, a sequel's parent card, a title row's copy button, a notification row, a tier search poster, a saved joke's action and a voiced-character card on a person's page - each installed a second pointer loop beside the tap they already had. A finger that started a scroll on one of them sprang it down and back up again, two gestures from one, and every row of every scrolling list paid for an extra pointer-input coroutine. They share the tap's own interaction source now, so the press ends the moment the gesture is claimed as a drag. The controls with no press state to share, a bare Button among them, keep the loop and their feedback."
+        },
+        {
+          "title": "A closed trailer stops holding its player",
+          "detail": "Closing the trailer destroyed its WebView but left the seven-second safety timer queued: the reveal could still fire against a view the composition had already thrown away, and the page - with the audio decoder behind it - stayed alive until the timer ran out. The timer is cancelled when the player's view detaches, which is the one hook that fires both for a close and for the rotation that recreates the dialog."
+        },
+        {
           "title": "A pinch no longer rebuilds the page around the board",
           "detail": "The board's zoom was a value read by the screen's own body, so the toolbar readout, the sheet host and the persistence effect all subscribed to it: every frame of a pinch recomposed the whole page - the tray, both toolbars and every sheet slot - only to pass the board a number it already had. The zoom now lives in a small saved holder that the board and the stepper read and the page merely carries. The board's measurement pass stopped building a list of row, poster and caret objects on each frame as well: it walks the same children in order twice, once to measure and once to place."
         }

@@ -3956,6 +3956,17 @@ under, already said by the heading above the card. The tile says one thing now,
 in one colour: *this row opens a page*. The silhouette still comes from the row's
 position, which is the one axis on which variety costs nothing.
 
+### The press a scroll cancels
+
+`bouncyPress` installs its own pointer loop only when no `InteractionSource` is
+passed, and that loop cannot tell a drag from a press until the finger leaves
+touch slop - so a scroll started on one of those rows springs it down first. Eleven
+sites inside scrolls that were still taking the fallback now pass the source their
+`clickable` already owns: the four Settings colour controls, the title page's hero
+chip, cast card, parent card and copy button, a notification row, a tier search
+poster, a saved joke's action and a person's voiced-character card. TO-DO §1.3
+counts what is left and why the remainder cannot be done centrally.
+
 ### A warning sign is the wrong shape for a missing picture
 
 A bio image that failed to load was drawn by Coil's `error` painter: a warning

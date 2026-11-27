@@ -637,7 +637,23 @@ private fun createNovaTrailerPlayer(
     }
     // A player that says nothing at all - no WebView provider, a script the page
     // declined to run - still has to stop being a spinner eventually.
-    webView.postDelayed({ reveal() }, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    val timeout = Runnable { reveal() }
+    webView.postDelayed(timeout, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    // A dialog can be closed before it fires, and releasing the player calls
+    // `destroy()`. A callback still queued past that runs the reveal against a
+    // view the composition has already thrown away, and holds the WebView - with
+    // the page it decoded and its audio decoder - alive for the rest of the seven
+    // seconds. Removing it on detach is the one hook that fires both for a close
+    // and for the rotation that recreates the dialog.
+    webView.addOnAttachStateChangeListener(
+        object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(view: View) = Unit
+            override fun onViewDetachedFromWindow(view: View) {
+                view.removeCallbacks(timeout)
+                view.removeOnAttachStateChangeListener(this)
+            }
+        }
+    )
     return webView
 }
 
