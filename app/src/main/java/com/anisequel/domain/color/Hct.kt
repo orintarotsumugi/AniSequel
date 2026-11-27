@@ -489,15 +489,18 @@ internal object HctSolver {
     }
 
     /**
-     * Whether [xyz] is inside sRGB, with a tolerance of half a percent.
+     * Whether [xyz] is inside sRGB, with a different tolerance at each end.
      *
-     * The tolerance used to be 0.01, which is tighter than the CAM16 round trip
+     * A single symmetric tolerance cannot be right here, and the first attempt at
+     * one was 0.01 at both ends, which is tighter than the CAM16 round trip
      * itself: the inverse of a tone-99 solve overshoots white by about three
-     * percent in red, and the transform back from CAM16 is only good to a few
-     * tenths of a unit. Rejecting a linear channel of 100.4 made the search
-     * believe the whole top of the tone scale was out of gamut. Half a percent is
-     * under one 8-bit step at the top of the ramp, so accepting it and letting
-     * [ColorMath.delinearized] clamp costs nothing visible.
+     * percent in red, so rejecting a channel of 100.4 made the search believe the
+     * whole top of the tone scale was out of gamut.
+     *
+     * Loosening both ends to the ceiling fixed the top and broke the bottom - see
+     * [GAMUT_FLOOR_EPSILON] - so the floor stays tight and the ceiling is loose.
+     * Both are under one 8-bit step from the end they guard, so accepting the
+     * overshoot and letting [ColorMath.delinearized] clamp costs nothing visible.
      */
     private fun isInGamut(xyz: DoubleArray): Boolean {
         val linear = ColorMath.linearRgbFromXyz(xyz[0], xyz[1], xyz[2])

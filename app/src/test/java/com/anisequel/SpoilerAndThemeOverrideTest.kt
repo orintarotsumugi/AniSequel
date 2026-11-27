@@ -43,6 +43,9 @@ import java.io.File
  *
  * ## The anime theme only overrode 21 of 36 roles
  *
+ * (The scheme carries 48 today - the twelve fixed roles were added with 2.7.0 -
+ * so the same "all of it or none of it" rule is asserted over all 48 below.)
+ *
  * `createDynamicSchemes` called `lightColorScheme(...)` and `darkColorScheme(...)`,
  * and those builders start from **Material's baseline scheme**, which is derived from
  * a purple seed. Every role the call did not name stayed purple: `onSurfaceVariant`
