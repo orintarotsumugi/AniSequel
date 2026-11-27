@@ -352,53 +352,68 @@ internal fun NovaTrailerViewer(
                     }
                 }
 
+                // The frame is 16:9 at the window's width *while that fits*, and by the
+                // room the chrome leaves otherwise. A full-width 16:9 rectangle on a
+                // phone on its side is 450dp tall on a 360dp screen, so the bottom of
+                // the picture and the escape hatch under it were off the display: the
+                // one surface in the app that takes the whole screen was the one that
+                // could not be watched in landscape. The weighted box is offered the
+                // leftover height and, because it is not forced to fill it, portrait
+                // keeps exactly the geometry it had - the aspect ratio fits the width
+                // there and the box wraps the picture.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(MaterialTheme.shapes.medium)
-                        .background(Color.Black)
+                        .weight(1f, fill = false),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // The loading mark is the page's own wavy ring, spinning: the
-                    // frame is a black rectangle for as long as the embed takes to
-                    // paint, and a spinner sitting in the middle of it is the
-                    // difference between "starting" and "broken".
-                    // The ring used to be dropped in the frame the embed reported
-                    // in - one frame before the player had any alpha of its own - so
-                    // the spinner vanished, the frame went black, and only then did
-                    // the video fade in. The two are one crossfade now: the ring
-                    // fades out over the spring the player fades in on, and stops
-                    // turning as it goes, so the hand-off reads as the video
-                    // arriving under the spinner instead of as a gap.
-                    val ringAlpha by animateFloatAsState(
-                        targetValue = if (loaded) 0f else 1f,
-                        animationSpec = ExpressiveMotion.FastEffects,
-                        label = "nova_trailer_ring"
-                    )
-                    // Composed while it is still visible, not while it is still
-                    // loading: dropping it at the start of the fade - which is what
-                    // the old `if (!loaded)` did - blinked the accent arc out one
-                    // frame into a 200ms fade. It leaves the tree when the last of
-                    // it does, and that is also what stops its spin.
-                    if (ringAlpha > 0f) {
-                        NovaWavyRing(
-                            progress = null,
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(44.dp)
-                                // Draw phase: the fade costs a layer update per
-                                // frame, not a redraw of the ring's geometry.
-                                .graphicsLayer { alpha = ringAlpha }
+                    Box(
+                        modifier = Modifier
+                            .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(Color.Black)
+                    ) {
+                        // The loading mark is the page's own wavy ring, spinning: the
+                        // frame is a black rectangle for as long as the embed takes to
+                        // paint, and a spinner sitting in the middle of it is the
+                        // difference between "starting" and "broken".
+                        // The ring used to be dropped in the frame the embed reported
+                        // in - one frame before the player had any alpha of its own - so
+                        // the spinner vanished, the frame went black, and only then did
+                        // the video fade in. The two are one crossfade now: the ring
+                        // fades out over the spring the player fades in on, and stops
+                        // turning as it goes, so the hand-off reads as the video
+                        // arriving under the spinner instead of as a gap.
+                        val ringAlpha by animateFloatAsState(
+                            targetValue = if (loaded) 0f else 1f,
+                            animationSpec = ExpressiveMotion.FastEffects,
+                            label = "nova_trailer_ring"
+                        )
+                        // Composed while it is still visible, not while it is still
+                        // loading: dropping it at the start of the fade - which is what
+                        // the old `if (!loaded)` did - blinked the accent arc out one
+                        // frame into a 200ms fade. It leaves the tree when the last of
+                        // it does, and that is also what stops its spin.
+                        if (ringAlpha > 0f) {
+                            NovaWavyRing(
+                                progress = null,
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(44.dp)
+                                    // Draw phase: the fade costs a layer update per
+                                    // frame, not a redraw of the ring's geometry.
+                                    .graphicsLayer { alpha = ringAlpha }
+                            )
+                        }
+                        NovaTrailerPlayer(
+                            videoId = videoId,
+                            modifier = Modifier.fillMaxSize(),
+                            presence = { entrance.value },
+                            onLoaded = { loaded = true }
                         )
                     }
-                    NovaTrailerPlayer(
-                        videoId = videoId,
-                        modifier = Modifier.fillMaxSize(),
-                        presence = { entrance.value },
-                        onLoaded = { loaded = true }
-                    )
                 }
 
                 Row(

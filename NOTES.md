@@ -270,6 +270,18 @@ YouTube's only action on a refused video is "Watch on YouTube", and letting that
 load in the player replaced the video with the watch page in a 16:9 hole with no
 back button.
 
+The frame is 16:9 at the window's width only *while that fits*. It was
+`fillMaxWidth().aspectRatio(16f / 9f)` with the title row above it and the escape
+hatch below, which is right in portrait and impossible in landscape: a
+full-width 16:9 rectangle on a 360dp-tall screen is 450dp, so the column
+(44dp of chrome, 450dp of picture, 48dp of chrome) overflowed and the close
+button, the bottom of the video and "Open on YouTube" were all off the display.
+The picture now sits in a `weight(1f, fill = false)` box - offered the height the
+chrome leaves, not forced to take it - and
+`aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)` fits inside. Portrait
+is unchanged because the ratio fits the width there and the box wraps the
+picture; landscape gets the whole player letterboxed between its two rows.
+
 **The poster is one picture in two windows.** A card records its rectangle on
 the *press* (`boundsInWindow`, `PointerEventPass.Initial`, consuming nothing), and
 the sheet draws a copy of that picture at the hero's measured rectangle, scaled
