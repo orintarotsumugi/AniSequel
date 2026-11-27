@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
@@ -68,8 +69,10 @@ internal fun Modifier.notificationGlow(
     val strength = glow.value
     if (strength <= 0.01f) return@drawWithContent
 
-    // 4dp out, an 8dp stroke: the halo's inner edge starts at the card's own
-    // outline, so there is no gap of background between the card and its light.
+    // 4dp out, an 8dp stroke: the stroke is centred on the inflated outline, so
+    // its inner edge sits on the card's own edge - no gap of background between
+    // the card and its light - and half of it falls outside the card where the
+    // press layer does not clip it.
     val spread = 4.dp.toPx()
     val halo = shape.createOutline(
         Size(size.width + spread * 2f, size.height + spread * 2f),
@@ -77,15 +80,19 @@ internal fun Modifier.notificationGlow(
         this
     )
     translate(left = -spread, top = -spread) {
-        drawPath(
-            path = halo.path,
-            color = color.copy(alpha = 0.30f * strength),
+        drawOutline(
+            outline = halo,
+            color = color,
+            alpha = 0.30f * strength,
             style = Stroke(width = 8.dp.toPx())
         )
     }
-    drawPath(
-        path = shape.createOutline(size, layoutDirection, this).path,
-        color = color.copy(alpha = 0.85f * strength),
+    // The crisp edge stays on the card's own outline rather than the inflated
+    // one: that is what makes the light read as attached to this row.
+    drawOutline(
+        outline = shape.createOutline(size, layoutDirection, this@drawWithContent),
+        color = color,
+        alpha = 0.85f * strength,
         style = Stroke(width = 1.5.dp.toPx())
     )
 }
