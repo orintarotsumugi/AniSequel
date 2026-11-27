@@ -107,6 +107,7 @@ fun ProfileAppearancesRow(
 @Composable
 private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppearance) -> Unit) {
     val title = appearance.title?.displayTitle ?: "Unknown"
+    val coverUrl = appearance.coverImage?.bestUrl
     Column(
         modifier = Modifier
             .width(APPEARANCE_CARD_WIDTH)
@@ -118,6 +119,15 @@ private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppear
             modifier = Modifier
                 .width(APPEARANCE_CARD_WIDTH)
                 .height(APPEARANCE_POSTER_HEIGHT)
+                // The title page flies its copy of this poster out of the rectangle
+                // the press recorded. This row recorded nothing, so opening a title
+                // from here had no origin at all and the copy borrowed whichever
+                // rectangle some *other* poster had written in the previous 750ms -
+                // a card in the grid behind this sheet - and flew in from there,
+                // floating over the window instead of growing out of the poster
+                // under the finger. Recorded here, like every other poster that
+                // opens a title.
+                .detailCoverPressOrigin(coverUrl)
                 // A cover, not a capsule. This was `ExpressiveShapes.pill`, which on a
                 // 112x158 box is an ellipse: every poster on the row had its corners
                 // rounded away and read as a placeholder. The corner is now
@@ -128,7 +138,7 @@ private fun AppearanceCard(appearance: ProfileAppearance, onOpen: (ProfileAppear
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
-                model = appearance.coverImage?.bestUrl,
+                model = coverUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -270,6 +280,7 @@ private fun AppearanceYearRow(
     onOpen: (ProfileAppearance) -> Unit
 ) {
     val title = appearance.title?.displayTitle ?: "Unknown"
+    val coverUrl = appearance.coverImage?.bestUrl
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -283,6 +294,10 @@ private fun AppearanceYearRow(
             modifier = Modifier
                 .width(YEAR_ROW_POSTER_WIDTH)
                 .height(YEAR_ROW_POSTER_HEIGHT)
+                // Same reason as the horizontal card above: this row opens the
+                // title page too, and a press with no rectangle left the flight
+                // with nothing to start from.
+                .detailCoverPressOrigin(coverUrl)
                 // The same cover corner as every other poster in the app - and at
                 // 54dp wide it is the one that shows `medium` at its worst: 20dp of
                 // radius on a 54dp poster is a lozenge, not a cover. See the note on
@@ -291,7 +306,7 @@ private fun AppearanceYearRow(
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
         ) {
             AsyncImage(
-                model = appearance.coverImage?.bestUrl,
+                model = coverUrl,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize()

@@ -27,14 +27,23 @@ import com.anisequel.data.repository.AniListRepository
  *
  * ## Why there is no post-save refresh here
  *
- * `DashboardViewModel` reloads the whole dashboard inside `save` and `delete`,
- * because every count on that screen is derived from the list it holds in
- * memory and a status moved to Completed has to leave "Currently arriving"
- * immediately. This editor's hosts hold no list of their own: the repository
- * already drops its list cache on every write
- * (`AniListRepositoryImpl.saveMediaListEntry` → `invalidateLists()`), so the
- * next pull-to-refresh or navigation re-reads the server's answer instead of a
- * copy this class would have had to know how to update.
+ * This editor has no list of its own to reload, so a refresh written into it would
+ * have to be a callback its hosts implement - three copies of the same "and now
+ * re-read the library", which is exactly how the two shapes this class replaced
+ * drifted apart in the first place.
+ *
+ * `DashboardViewModel` still reloads inside its own `save` and `delete`, because
+ * every count on that screen is derived from the list it holds in memory and a
+ * status moved to Completed has to leave "Currently arriving" immediately.
+ *
+ * Everywhere else the refresh is the repository's: a write drops its list caches
+ * (`AniListRepositoryImpl.saveMediaListEntry` → `invalidateLists()`) and bumps
+ * `listMutationVersion`, which the pages that draw a list follow for themselves -
+ * the Activity feed, and now the Library and profile pages through
+ * `UserOverviewViewModel.watchListMutations`. That comment used to say the next
+ * pull-to-refresh would re-read the server's answer, and it did: the list on screen
+ * was the one from before the save, so finishing a title from the Library left its
+ * row under Currently Watching until the reader pulled the grid down.
  */
 class RepositoryEntryEditor(
     private val repository: AniListRepository,

@@ -22,10 +22,24 @@ import com.anisequel.ui.components.novamarkdown.NovaMarkdown
 import com.anisequel.ui.components.novamarkdown.novaMediaCoverKeysIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+
+/**
+ * How long a burst of writes is given to finish before the lists are re-read.
+ *
+ * One edit is several mutations - a progress, then the status it completes into, then
+ * a score - and the repository bumps its version for each. Re-reading on every bump
+ * would spend three chunked downloads of the same list to land on one answer, so the
+ * fetch waits for the writes to stop arriving. Short enough to be invisible: the
+ * reader is looking at a sheet that has just closed.
+ */
+private const val MUTATION_SETTLE_MILLIS = 250L
 
 
 /**
@@ -121,6 +135,13 @@ class UserOverviewViewModel(
      * form.
      */
     private var listJob: Job? = null
+
+    /**
+     * The debounced re-read that follows a write made on another screen. Its own
+     * handle rather than [listJob]: a burst of mutations restarts this one - see
+     * [watchListMutations].
+     */
+    private var mutationJob: Job? = null
     private var loadedOverview: UserOverview? = null
     private var loadedList: MediaListCollection? = null
 
@@ -366,6 +387,24 @@ class UserOverviewViewModel(
     }
 
     /**
+     * Asks for the manga half before its chip has been tapped.
+     *
+     * The Library draws both halves of the same account's list, but only the anime
+     * half was ready when it opened - that one rides along with the profile - so the
+     * manga half waited for a tap and *then* spent a chunked download with an empty
+     * grid under it. One request per open, and none once the cache or the snapshot
+     * has the answer.
+     *
+     * Not in the demo, which has no manga list to read and whose chip says so. A
+     * borrowed profile's manga list stays lazy: there the request is on a page whose
+     * subject is not the list, the rule [fetchProfileListEagerly] states.
+     */
+    fun prefetchMangaLibrary() {
+        if (isDemo) return
+        loadMangaLibrary()
+    }
+
+    /**
      * Ask for the anime list, on a profile that did not fetch it with the overview.
      *
      * Guarded the same way [loadMangaLibrary] is, for the same reason times forty:
@@ -423,8 +462,80 @@ class UserOverviewViewModel(
         }
     }
 
+    /**
+     * Brings this page's lists forward after a write made somewhere else.
+     *
+     * The Library opens the same entry editor the dashboard does, but only the
+     * dashboard reloaded after a save. This page relied on the repository dropping
+     * its list caches on a write - a promise about the *next* read, not about what
+     * is on screen - so finishing a show left its row on the progress the page had
+     * loaded with, still under Currently Watching, until the grid was pulled down,
+     * while the dashboard's copy was right within the second.
+     *
+     * [AniListRepository.listMutationVersion] is what a write publishes (the
+     * Activity feed already follows it), so this page follows it for the two lists
+     * it draws - the halves it already holds, because a half nobody has asked for
+     * does not arrive sooner for a write elsewhere.
+     */
+    private fun watchListMutations() {
+        viewModelScope.launch {
+            aniListRepository.listMutationVersion.drop(1).collect {
+                // Restarted on every bump, so the burst of writes one edit produces
+                // is answered by the last one rather than by three downloads.
+                mutationJob?.cancel()
+                mutationJob = viewModelScope.launch {
+                    delay(MUTATION_SETTLE_MILLIS)
+                    refreshListsAfterMutation()
+                }
+            }
+        }
+    }
+
+    /**
+     * Re-reads the lists [watchListMutations] says are stale, in place.
+     *
+     * No spinner: blanking the grid for a chunked download to correct one row costs
+     * more than that row being seconds old. A failed re-read keeps what is on screen
+     * and says nothing - the write did land, and the next open or pull reads it.
+     *
+     * Not `forceRefresh`: the write already emptied the list cache and its snapshot,
+     * so the plain read cannot be served the pre-write answer.
+     */
+    private suspend fun refreshListsAfterMutation() {
+        val overview = loadedOverview ?: return
+        // A lazy library load in flight is already reading this list and would
+        // publish the same answer; a second download beside it is only two requests
+        // on a 30-a-minute budget. The page's own load is deliberately *not* in this
+        // guard: it started its list read before the write, so this one - started
+        // after it - lands second and wins, which is the order that leaves the
+        // fresh answer on screen.
+        val holdsList = loadedList != null || fetchListEagerly
+        if (holdsList && listJob?.isActive != true) {
+            val result = fetchList(forceRefresh = false)
+            val list = result.getOrNull() ?: loadedList
+            if (list != null) {
+                loadedList = list
+                _uiState.value = stateMapper.buildState(
+                    // The overview current *now*, not the one captured above: a
+                    // pull-to-refresh can land while this read is in flight, and
+                    // publishing the older document over it would take the bio and
+                    // the favourites backwards. The same reason [loadAnimeLibrary]
+                    // re-reads the field at its publish point.
+                    overview = loadedOverview ?: overview,
+                    list = list,
+                    isRefreshing = false,
+                    isLibraryLoading = false,
+                    libraryError = null,
+                    isCached = result.getOrNull() == null
+                )
+            }
+        }
+        refreshMangaLibraryIfLoaded()
+    }
+
     init {
         load()
+        watchListMutations()
     }
 
     fun load(forceRefresh: Boolean = false) {

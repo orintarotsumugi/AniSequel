@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -143,6 +144,14 @@ fun LibraryScreen(
         canWrite = entryEditor != null
     )
     val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
+
+    // The manga half used to be asked for only when its own chip was tapped, and
+    // on a cold start that tap spent a whole list download with an empty grid under
+    // it - the anime half never had that gap, because it rides along with the
+    // profile. This is the only screen that draws both halves of the reader's own
+    // list, so both are asked for here: one request per open, and none at all once
+    // the repository has the answer cached or on disk.
+    LaunchedEffect(Unit) { overviewViewModel.prefetchMangaLibrary() }
 
     // The poster that was tapped, as its own list node so the sheet has
     // something to draw on the first frame. The fetched detail supersedes it

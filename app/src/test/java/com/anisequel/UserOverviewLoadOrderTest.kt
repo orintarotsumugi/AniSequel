@@ -16,6 +16,8 @@ import com.anisequel.ui.viewmodel.UserOverviewViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -332,6 +334,77 @@ class UserOverviewLoadOrderTest {
         }
 
     /**
+     * A write made on another screen re-reads the list this page is showing.
+     *
+     * The Library page's entry editor writes through the repository, which drops
+     * its caches and bumps `listMutationVersion` - a signal only the Activity feed
+     * used to follow. So finishing a show from the Library left its row on the
+     * progress the page had loaded with, still under Currently Watching, until the
+     * grid was pulled down, while the dashboard's copy of the same title was right
+     * within the second.
+     *
+     * Both halves are asserted: that the bump is followed, and that what arrives is
+     * the server's answer. A change that only repainted the list already in memory
+     * would pass the first check while still showing the old progress.
+     */
+    @Test
+    fun `a write from another screen re-reads the list that is on screen`() =
+        runTest(testDispatcher) {
+            val repository = GatedListRepository(
+                listGate = CompletableDeferred<Unit>().apply { complete(Unit) }
+            )
+            val viewModel = UserOverviewViewModel(repository, userId = 1)
+            advanceUntilIdle()
+
+            assertEquals("the page loaded its list once", 1, repository.listCalls)
+            assertEquals(
+                12,
+                (viewModel.uiState.value as UserOverviewUiState.Success)
+                    .libraryAnime.single().progress ?: -1
+            )
+
+            // The edit landed: the server holds 13 now, and the write published it.
+            repository.listProgress = 13
+            repository.mutationVersion.value = 1L
+            advanceUntilIdle()
+
+            assertEquals(
+                "a write has to re-read the list, not repaint the one in memory",
+                2,
+                repository.listCalls
+            )
+            assertEquals(
+                "and publish what the server now says",
+                13,
+                (viewModel.uiState.value as UserOverviewUiState.Success)
+                    .libraryAnime.single().progress ?: -1
+            )
+        }
+
+    /**
+     * The prefetch leaves the demo alone.
+     *
+     * The demo has no manga list to read - `mangaLibraryProblem` says so on the
+     * chip - and asking for one at open would trade that note for a request that
+     * cannot succeed.
+     */
+    @Test
+    fun `the prefetch does not ask the demo for a manga list`() =
+        runTest(testDispatcher) {
+            val repository = GatedListRepository(
+                listGate = CompletableDeferred<Unit>().apply { complete(Unit) }
+            )
+            val viewModel = UserOverviewViewModel(repository, isDemo = true)
+            advanceUntilIdle()
+
+            viewModel.prefetchMangaLibrary()
+            advanceUntilIdle()
+
+            assertEquals("the demo is not asked", 0, repository.mangaCalls)
+            assertNull("and the chip keeps its own note", viewModel.mangaLibrary.value)
+        }
+
+    /**
      * A repository whose list fetch waits on [listGate].
      *
      * A gate rather than a delay: the point of the test is that the profile is
@@ -352,6 +425,18 @@ class UserOverviewLoadOrderTest {
         /** How many times the anime list was asked for, to pin *that* a retry happened. */
         var listCalls: Int = 0
             private set
+
+        /** How many times the manga half was asked for, to pin the demo guard. */
+        var mangaCalls: Int = 0
+            private set
+
+        /** The progress the fake's completed entry reports, so a save can change it. */
+        var listProgress: Int = 12
+
+        /** The write signal, bumped by a test that pretends an entry was saved. */
+        val mutationVersion = MutableStateFlow(0L)
+
+        override val listMutationVersion: StateFlow<Long> get() = mutationVersion
 
         /**
          * Every key the profile asked a cover for, in order.
@@ -382,7 +467,7 @@ class UserOverviewLoadOrderTest {
                             entries = listOf(
                                 MediaListEntryItem(
                                     status = "COMPLETED",
-                                    progress = 12,
+                                    progress = listProgress,
                                     media = MediaNode(
                                         id = 11,
                                         title = MediaTitle(english = "Bocchi the Rock!")
@@ -404,6 +489,7 @@ class UserOverviewLoadOrderTest {
             userId: Int,
             forceRefresh: Boolean
         ): Result<MediaListCollection> {
+            mangaCalls++
             if (mangaFails) {
                 return Result.failure(RuntimeException("rate limited"))
             }
@@ -454,6 +540,9 @@ class UserOverviewLoadOrderTest {
 
         override fun getDemoProfile(): ViewerProfile = ViewerProfile(1, "Demo", null, null)
         override fun getDemoAnimeList(): MediaListCollection = MediaListCollection(emptyList())
+
+        /** The demo path the prefetch test walks; the interface's default throws. */
+        override fun getDemoUserOverview(): UserOverview = UserOverview(id = 1, name = "Demo")
 
         private fun <T> failure(): Result<T> =
             Result.failure(UnsupportedOperationException("not used by this test"))

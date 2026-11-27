@@ -333,6 +333,18 @@ close the only picture it had to fly home. Sharing the card's cache entry makes
 the copy cheap enough to keep, so the close starts on its first frame. And the
 copy carries the hero's hairline, because a frame that appeared a frame after
 the landing was the one edge of the hand-off the flight did not draw.
+**Every poster that opens a title records its own rectangle.** The rectangle is
+handed between windows, and there is no second source for it: a page opened by a
+poster whose press recorded nothing has no origin to fly from. It used to borrow
+one - `DetailCoverFlight.take()` keeps the most recent rectangle for about 750ms,
+so that an open from a route or a notification can still start somewhere - and the
+person page's cover rows were exactly that case: a creator's filmography and the
+"Appears in" rows recorded no rectangle, so a title opened from one flew in from
+whichever *other* poster had been pressed in the previous three quarters of a
+second, usually a card in the grid behind the sheet. It read as the cover floating
+over the window instead of growing out of the poster under the finger. Both rows
+record theirs now, on the artwork rather than on the card, so the copy starts at
+the picture rather than at the caption beside it.
 
 The score in the summary strip is drawn inside a closed version of the same wave —
 `NovaWavyRing`, built on `WaveGeometry.ringRadius`, so the page's two wavy marks
@@ -1738,6 +1750,34 @@ again, so one dropped request cannot become a tight retry loop — the floor bin
 only when an attempt has already been made against the load being waited on,
 because a list that is merely overdue has failed nothing and waiting five minutes
 to notice is how the page coming back would have felt stuck.
+A write is the other way the list goes stale, and it does not go through any of
+that. Saving an entry empties the repository's list and overview caches and bumps
+`listMutationVersion`; the pages that draw a list follow it and re-read what they
+hold. It is not a preference and not a timer — the answer is known to have changed,
+so the only question is how many requests it costs to see it.
+
+That plumbing existed and only the Activity feed listened, so finishing a show from
+the Library left its row on the progress the page had loaded with — still under
+Currently Watching, still counted in the chip — until the reader pulled the grid
+down, while the dashboard's copy of the same title was right within the second. The
+Library and the profile page now follow the same signal. Three rules keep it cheap:
+the burst of writes one edit produces (progress, then the status it completes into,
+then a score) is debounced into a single re-read; only the halves already on screen
+are fetched, because a list nobody has asked for does not come sooner for a write
+elsewhere; and the answer is published in place, with no spinner — the page is
+correcting one row, not loading, and blanking a grid to do it would cost more than
+the row being a few seconds old. The read is deliberately not a `forceRefresh`: the
+write already emptied the cache and the snapshot, so the plain read cannot be served
+the pre-write answer. A failed re-read keeps the list on screen and says nothing —
+the write did land, and the next open or pull reads it.
+
+The same section is why the *manga* half of the Library is prefetched. The anime
+list arrives with the profile, so it is painted from the saved copy or the download;
+the manga list used to wait for its chip and then spend a chunked download with an
+empty grid under it, which is the whole difference between the two tabs' first
+loads. The Library asks for both when it opens — one request, none once the answer
+is cached — while a borrowed profile's manga list stays lazy, because there the
+request is on a page whose subject is not the list.
 
 ---
 

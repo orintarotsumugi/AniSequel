@@ -42,6 +42,18 @@
         {
           "title": "Quiet text clears AA on the brightest surface",
           "detail": "The emphasis roles - secondary text, captions, dividers, the progress track - are dimmed to a named floor against the worst surface they can be drawn on, which the palette took to be surfaceContainerHighest. It is not the worst: the dark scheme's surfaceBright is lighter (tone 24 against 22) and the light scheme's surfaceDim is darker (87 against 90). A red cover's secondary text measured 4.48:1 on surfaceBright in the dark theme, under the 4.5:1 it is named for. The surface is chosen by measured contrast across every surface role now - background, the deprecated surfaceVariant and the five containers included, because a surfaceVariant at tone 30 is lighter than surfaceBright's 24 in the dark theme -, so every emphasis role clears its floor on all of them, and surfaceTint rides the surface spring instead of arriving before the surfaces it tints."
+        },
+        {
+          "title": "A finished title leaves the list it was in",
+          "detail": "The Library page opens the same entry editor the dashboard does, but only the dashboard reloaded after a save. The write dropped the repository's list caches and published a mutation version that only the Activity feed followed, so finishing a show from the Library left its row on the progress it had when the page loaded - still under Currently Watching, with the chip count still counting it - until the grid was pulled down. The Library and profile pages follow that version now: the burst of writes one edit produces is debounced into a single re-read, only the list halves already on screen are fetched, and the answer is published in place, so nothing blanks or spins while it arrives."
+        },
+        {
+          "title": "The manga half is there before its chip is tapped",
+          "detail": "The Library page's two halves loaded differently: the anime list rode along with the profile and was on screen at once, while the manga list was not asked for until the reader tapped Manga and then spent a whole list download with an empty grid under the spinner. The Library asks for both halves when it opens now, so the first tap paints from a list already in hand - one request per open, and none at all once the repository has the answer cached or in its disk snapshot. The demo, which has no manga list, and somebody else's profile, whose list is not the page's subject, stay as they were."
+        },
+        {
+          "title": "A title opened from a person's page flies from its own poster",
+          "detail": "Every poster that opens a title records the rectangle the press started from, because the title page is a separate window and that rectangle is the only thing the cover can fly out of. The cover rows on a person's page - a creator's filmography, a character's and an actor's \"Appears in\" - recorded nothing, so the flight had no origin and fell back to whichever rectangle some other poster had written in the last 750ms: a card in the grid behind the sheet. The cover then flew in from there, floating over the window instead of growing out of the poster under the finger. Both rows record their own poster's bounds now, so the copy starts where the reader touched."
         }
       ]
     },
