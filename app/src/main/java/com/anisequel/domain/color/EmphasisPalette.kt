@@ -99,6 +99,12 @@ data class EmphasisPalette(
          * the surface with the *lowest* contrast against `onSurface` is the only
          * definition that is true in both modes, and it is what the comment
          * claimed all along.
+         *
+         * The list is every surface role the scheme generates, not the containers
+         * alone: the deprecated `surfaceVariant` is tone 30 in the dark scheme
+         * against `surfaceBright`'s 24, so a list without it measures the floor
+         * against a surface the caption does not sit on. Being short by one
+         * surface is indistinguishable from being right until someone measures.
          */
         fun worstSurface(onSurface: Int, surfaces: List<Int>): Int =
             surfaces.minByOrNull { Contrast.ratio(onSurface, it) } ?: surfaces.first()

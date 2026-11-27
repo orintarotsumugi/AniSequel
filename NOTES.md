@@ -3695,9 +3695,14 @@ drawn on, and the palette took that to be `surfaceContainerHighest`. It is not t
 worst: the dark scheme's `surfaceBright` is lighter (tone 24 against 22) and the
 light scheme's `surfaceDim` is darker (87 against 90). A red cover's secondary text
 measured 4.48:1 on `surfaceBright` in the dark theme, under the 4.5:1 it is named for.
-`EmphasisPalette.worstSurface` picks the surface by measured contrast across all eight
-surface roles, and `EmphasisColourTest` asserts every role and every chart series
-against each of them. `surfaceTint` also stopped arriving ahead of the surfaces it
+`EmphasisPalette.worstSurface` picks the surface by measured contrast across every
+surface role - the page `background`, the five containers, `surfaceDim`,
+`surfaceBright` and the deprecated `surfaceVariant`, which is tone 30 in the dark
+scheme against `surfaceBright`'s 24 and so is lighter still - and
+`EmphasisColourTest` asserts every role and every chart series against each of
+them. The list first named only the containers and grew a role at a time as each
+was caught: a list that is short by one surface is a floor measured against the
+wrong colour. `surfaceTint` also stopped arriving ahead of the surfaces it
 tints: it rode a fast effects spring while the surfaces cross-faded on the slower
 spatial one.
 
