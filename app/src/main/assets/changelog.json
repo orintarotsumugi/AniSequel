@@ -17,7 +17,7 @@
         },
         {
           "title": "Watch on YouTube leaves the app",
-          "detail": "The one link YouTube offers on a refused video - and any other main-frame link - stayed inside the player and replaced the trailer with the watch page in a 16:9 hole with no back button. Only the player's own subframes stay in the WebView now; a link the reader chose opens in the YouTube app or the browser, and if nothing can take it the URL is copied instead of the tap doing nothing."
+          "detail": "The one link YouTube offers on a refused video - and any other link a reader taps - stayed inside the player and replaced the trailer with the watch page in a 16:9 hole with no back button. That button is a new-window link and this player has no popup window, so it arrives in the player's own frame; the rule now keeps only the player's own pages - the embed, its error card, its consent screen - and sends the watch page out through the shared opener. If nothing can take the address it is copied instead of the tap doing nothing."
         },
         {
           "title": "A trailer with no id still leaves a link",

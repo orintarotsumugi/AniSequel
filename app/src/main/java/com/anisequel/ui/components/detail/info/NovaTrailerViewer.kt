@@ -564,6 +564,13 @@ private fun createNovaTrailerPlayer(
         settings.loadsImagesAutomatically = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.mediaPlaybackRequiresUserGesture = false
+        // Explicit, because the navigation rule depends on it: with no popup
+        // window a `target="_blank"` link - which is what "Watch on YouTube" is -
+        // is loaded in the frame that asked for it, so it reaches
+        // `shouldOverrideUrlLoading` as a subframe navigation and the watch-page
+        // check can send it out. With windows enabled and no `onCreateWindow`, the
+        // same tap would do nothing at all.
+        settings.setSupportMultipleWindows(false)
         webChromeClient = NovaTrailerChromeClient(this, onPlayerReady = reveal)
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
@@ -582,7 +589,12 @@ private fun createNovaTrailerPlayer(
                 if (request != null && staysInNovaTrailer(target.orEmpty(), request.isForMainFrame)) {
                     return false
                 }
-                target?.let { openExternalUrlOrCopy(context, it) }
+                // Only a web page is worth opening elsewhere. The player's own
+                // `about:blank` / `data:` frames are not links, and handing them to the
+                // opener copied their URL to the clipboard and announced it.
+                if (target != null && isNovaTrailerWebUrl(target)) {
+                    openExternalUrlOrCopy(context, target)
+                }
                 return true
             }
             // The deprecated `(WebView, String)` overload is gone rather
@@ -684,27 +696,75 @@ private class NovaTrailerChromeClient(
 /** The hosts the player frame is allowed to load. */
 private val NOVA_TRAILER_HOSTS = listOf("youtube.com", "youtube-nocookie.com", "ytimg.com", "googlevideo.com")
 
-/** Whether [url] belongs to the embed rather than to the web at large. */
+/**
+ * Whether [url] belongs to the embed rather than to the web at large.
+ *
+ * The authority is matched without its port and without user-info. Matching it whole
+ * meant `https://www.youtube.com:443/embed/x` read as the host `youtube.com:443`, which
+ * is not YouTube by this rule - so a navigation the player needed was handed to a
+ * browser mid-playback. The dot is anchored on both ends: `youtube.com.example.net`
+ * is not YouTube, and neither is a bare `notyoutube.com`.
+ */
 internal fun isNovaTrailerHost(url: String): Boolean {
-    val host = url.substringAfter("://", "").substringBefore('/').substringBefore('?').lowercase()
+    val authority = url.substringAfter("://", "")
+        .substringBefore('/')
+        .substringBefore('?')
+        .substringBefore('#')
+    val host = authority.substringAfterLast('@').substringBefore(':').lowercase()
     if (host.isEmpty()) return false
     return NOVA_TRAILER_HOSTS.any { host == it || host.endsWith(".$it") }
 }
 
 /**
+ * Whether [url] is a page worth handing to another app: an `http(s)` document.
+ *
+ * Everything else a player navigates to is its own scaffolding - `about:blank` for an
+ * ad slot, `data:` or `blob:` for a measurement frame. Those used to reach the shared
+ * opener too, so each one wrote its URL onto the reader's clipboard and showed the
+ * "nothing here can open that link, so it is copied instead" toast - about a link no
+ * reader chose, and while the trailer was still playing.
+ */
+internal fun isNovaTrailerWebUrl(url: String): Boolean =
+    url.startsWith("https://", ignoreCase = true) || url.startsWith("http://", ignoreCase = true)
+
+/**
+ * Whether [url] is YouTube's watch page rather than the player's own document.
+ *
+ * The player only ever lives at `youtube(-nocookie).com/embed/...`; the watch page is
+ * what a link resolves to. It is a separate question from [staysInNovaTrailer]'s frame
+ * test because the reported link is a `target="_blank"` one: this view has no popup
+ * window, so the navigation arrives *inside the iframe* - a subframe by
+ * `isForMainFrame` - and the frame rule alone followed it, putting the watch page in
+ * the 16:9 hole anyway.
+ */
+internal fun isNovaTrailerWatchPage(url: String): Boolean {
+    if (!isNovaTrailerHost(url)) return false
+    val path = url.substringAfter("://", "")
+        .substringAfter('/', "")
+        .substringBefore('?')
+        .substringBefore('#')
+        .trim('/')
+    return path.equals("watch", ignoreCase = true)
+}
+
+/**
  * Whether a navigation belongs to the player and may stay inside its `WebView`.
  *
- * Only a **subframe** does. The embed is one iframe inside the wrapper, so
- * everything the player does internally - its error card, a consent interstitial,
- * the IFrame API's own pages - is a subframe navigation and has to be followed or
- * the player cannot function at all. A main-frame navigation is always somewhere
- * the reader chose to go: YouTube's "Watch on YouTube" on a refused video, the
- * channel name, an ad. This view is a player, not a browser, and letting a
- * youtube.com main frame through replaced the video with the watch page inside a
- * 16:9 hole that has no back button - which is the link that was reported dead.
+ * It has to be the player's own document: a **subframe**, on YouTube's hosts, that is
+ * not the watch page. Each of those three conditions is a way this went wrong.
+ *
+ *  - A **subframe** is the player itself - its error card, a consent interstitial, the
+ *    IFrame API's own pages. Nothing inside the embed works if those are not followed.
+ *  - A **main frame** is somewhere the reader chose to go: "Watch on YouTube" on a
+ *    refused video, the channel name, an ad. Following one replaced the video with the
+ *    watch page inside a 16:9 hole that has no back button - the reported dead link.
+ *  - A subframe **watch page** is that same reader choice arriving one layer lower. The
+ *    button is a `target="_blank"` link and this view has no popup window, so the
+ *    navigation happens in the iframe and passes the frame test; see
+ *    [isNovaTrailerWatchPage].
  */
 internal fun staysInNovaTrailer(url: String, isForMainFrame: Boolean): Boolean =
-    !isForMainFrame && isNovaTrailerHost(url)
+    !isForMainFrame && isNovaTrailerHost(url) && !isNovaTrailerWatchPage(url)
 
 /** Whether [id] is a YouTube video id and therefore safe to put in a page. */
 internal fun isNovaTrailerId(id: String): Boolean =

@@ -4,6 +4,8 @@ import com.anisequel.ui.components.detail.info.NOVA_TRAILER_BASE_URL
 import com.anisequel.ui.components.detail.info.NOVA_TRAILER_ORIGIN
 import com.anisequel.ui.components.detail.info.isNovaTrailerHost
 import com.anisequel.ui.components.detail.info.isNovaTrailerId
+import com.anisequel.ui.components.detail.info.isNovaTrailerWatchPage
+import com.anisequel.ui.components.detail.info.isNovaTrailerWebUrl
 import com.anisequel.ui.components.detail.info.novaTrailerEmbedHtml
 import com.anisequel.ui.components.detail.info.staysInNovaTrailer
 import java.net.URLEncoder
@@ -93,7 +95,29 @@ class NovaTrailerViewerTest {
             "the watch page would replace the video with a page that has no back button",
             staysInNovaTrailer("https://www.youtube.com/watch?v=x", isForMainFrame = true)
         )
+        // The reported button is a `target="_blank"` link and this view has no popup
+        // window, so the navigation happens inside the iframe: the frame test alone
+        // followed it and the watch page replaced the trailer one layer down.
+        assertFalse(
+            "a target=_blank link arrives as a subframe navigation, not a main-frame one",
+            staysInNovaTrailer("https://www.youtube.com/watch?v=x", isForMainFrame = false)
+        )
         assertFalse(staysInNovaTrailer("https://example.com/", isForMainFrame = false))
+        assertFalse(staysInNovaTrailer("https://m.youtube.com/watch?v=x&t=4", isForMainFrame = false))
+        assertTrue(isNovaTrailerWatchPage("https://www.youtube.com/watch?v=x"))
+        assertFalse("the embed is the player, not a watch page", isNovaTrailerWatchPage("https://www.youtube-nocookie.com/embed/x"))
+    }
+
+    @Test
+    fun `a navigation that is not a web page is not a link`() {
+        assertTrue(isNovaTrailerWebUrl("https://www.youtube.com/watch?v=x"))
+        assertTrue(isNovaTrailerWebUrl("HTTP://example.com/"))
+        // The player's own ad and measurement frames: never handed to a browser,
+        // and never copied to the clipboard as a "link".
+        assertFalse(isNovaTrailerWebUrl("about:blank"))
+        assertFalse(isNovaTrailerWebUrl("data:text/html,<p></p>"))
+        assertFalse(isNovaTrailerWebUrl("blob:https://www.youtube-nocookie.com/1"))
+        assertFalse(isNovaTrailerWebUrl(""))
     }
 
     @Test
@@ -102,6 +126,11 @@ class NovaTrailerViewerTest {
         assertTrue(isNovaTrailerHost("https://www.youtube-nocookie.com/embed/x?autoplay=1"))
         assertTrue(isNovaTrailerHost("https://i.ytimg.com/vi/x/hqdefault.jpg"))
         assertTrue(isNovaTrailerHost("https://r4---sn-abc.googlevideo.com/videoplayback"))
+
+        // The authority with a port is still the host; matching it whole made the
+        // player's own frame look like a stranger and handed it to a browser.
+        assertTrue(isNovaTrailerHost("https://www.youtube.com:443/embed/x"))
+        assertTrue(isNovaTrailerHost("https://user@www.youtube.com/embed/x"))
 
         assertFalse(isNovaTrailerHost("https://example.com/youtube.com"))
         // A lookalike, which a `contains("youtube.com")` check would have allowed.

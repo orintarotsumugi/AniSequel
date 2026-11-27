@@ -57,12 +57,17 @@ internal fun BatteryOptimisationCard(
             ) {
                 Text("Turn off battery optimisation")
             }
-            TextButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.testTag("notification_battery_settings")
-            ) {
-                Text("Open Android's battery settings")
-            }
+        }
+        // Offered in both states, unlike the request button. The platform exemption
+        // is not the only manager on the phone, and a reader whose manufacturer's
+        // battery screen keeps killing the check still needs a way in - with the
+        // action hidden while exempt, the closing sentence below named a screen the
+        // card would not open.
+        TextButton(
+            onClick = onOpenSettings,
+            modifier = Modifier.testTag("notification_battery_settings")
+        ) {
+            Text("Open Android's battery settings")
         }
         Spacer(Modifier.height(2.dp))
         Text(
