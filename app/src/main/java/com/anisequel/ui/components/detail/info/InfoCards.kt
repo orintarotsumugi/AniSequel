@@ -228,7 +228,14 @@ fun InfoProgressCard(
                     // they drifted to different answers about a show whose episode
                     // total AniList has not announced.
                     text = if (isManga) {
-                        "Chapter ${airing.episodeDetail} publishes ${airing.countdown}"
+                        // The chapter number can be missing while the slot is
+                        // known - AniList schedules a chapter it has not numbered
+                        // - and string-building from it printed
+                        // "Chapter null publishes in 3d". The anime half never had
+                        // that hole because `sentence` falls back to "Next
+                        // episode"; this is the same fallback for the other noun.
+                        airing.episodeDetail?.let { "Chapter $it publishes ${airing.countdown}" }
+                            ?: "Next chapter publishes ${airing.countdown}"
                     } else {
                         airing.sentence
                     },
