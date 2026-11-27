@@ -209,12 +209,10 @@ fun InfoProgressCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    // Two bugs in one line, both of which the reader saw.
-                    //
-                    // The noun and verb were the anime half's: `isManga` was
-                    // already read above and used for the card's title, so a manga
-                    // drew a *Reading Progress* card over a sentence announcing
-                    // that its next episode would air.
+                    // Two bugs in one line, both of which the reader saw. The
+                    // noun and verb were the anime half's - `isManga` was already
+                    // read above for the card's title, so a manga drew a *Reading
+                    // Progress* card over a sentence announcing an episode.
                     //
                     // And the line read "airs in in 3d", because
                     // [com.anisequel.data.model.AiringCountdown] already returns
@@ -412,12 +410,10 @@ fun InfoSpecsCard(
     /**
      * Whether this card states the next episode.
      *
-     * The page has to be able to turn it off, because the row used to be gated on
-     * the data alone: whichever card sat above the grid took the sentence, and the
-     * grid was told "not mine" by asking [com.anisequel.data.model.hasProgressCard].
-     * The Nova page draws the countdown in its stats strip, which is *above* this
-     * card, so leaving the grid's gate to the old predicate printed the same
-     * countdown twice a scroll apart - ticking out of step by up to a minute.
+     * It used to be gated on the data alone, and the page told the grid "not mine"
+     * by asking [com.anisequel.data.model.hasProgressCard] - a question about a
+     * wave, not about who prints the sentence, so the Nova page printed the same
+     * ticking countdown twice, out of step by up to a minute.
      */
     showAiring: Boolean = true,
     modifier: Modifier = Modifier
@@ -427,17 +423,14 @@ fun InfoSpecsCard(
     // `filter`, not `firstOrNull()`: several studios routinely share the main flag.
     val mainStudios = remember(studios) { studios.filter { it.isMain } }
 
-    // The next episode, for a show the reader has *not* added to their list. The
-    // progress card states it for a title they have started; a currently airing
-    // show they have not started said nothing at all about when more of it
-    // arrives, which is one of the two reasons to open the page of a running show.
+    // The next episode, for a show the reader has *not* added to their list; a
+    // running show they have not started otherwise said nothing about when more of
+    // it arrives.
     //
-    // [showAiring] rather than `hasProgressCard`: the page that draws the sentence
-    // elsewhere says so, instead of this card guessing from a predicate about a
-    // wave. The guess is what left a tracked show with an unannounced episode count
-    // with no countdown anywhere - the wave could not be drawn, so the progress
-    // card did not exist, and this card had already decided the progress card was
-    // speaking.
+    // [showAiring] rather than `hasProgressCard`: guessing from a predicate about a
+    // wave left a tracked show with an unannounced episode count with no countdown
+    // anywhere - the wave could not be drawn, so no card held the sentence, and
+    // this grid had already decided that card was speaking.
     val untrackedAiring = if (showAiring) rememberAiringLine(media) else null
 
     // Memoised on the title and the countdown it embeds: the grid is a walk over
