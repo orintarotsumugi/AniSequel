@@ -64,8 +64,8 @@ class NovaTrailerViewerTest {
         // Both seek buttons share one bounded offset function, and playback
         // follows the real player's state rather than a local optimistic toggle.
         assertTrue(html.contains("p.getCurrentTime()+offset"))
-        assertTrue(html.contains("Math.max(0,p.getCurrentTime()+offset)"))
-        assertTrue(html.contains("Math.min(duration,target)"))
+        assertTrue(html.contains("Math.max(0,Math.min(duration,p.getCurrentTime()+offset))"))
+        assertTrue(html.contains("Math.min(duration,p.getCurrentTime()+offset)"))
         assertTrue(html.contains("p.seekTo(target,true)"))
         assertTrue(html.contains("p.pauseVideo()"))
         assertTrue(html.contains("p.playVideo()"))
