@@ -299,39 +299,42 @@ class AnimationWiringTest {
      * alpha from the same two states the window uses.
      */
     @Test
-    fun `the trailer player's alpha is driven in one place`() {
+    fun `the trailer video surface is revealed without alpha compositing`() {
         val code = source(
             "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
         )
 
-        assertTrue("the player must fade through its own alpha", code.contains("player.alpha ="))
         assertTrue(
-            "the reveal and the dialog's entrance must share one clock",
-            code.contains("snapshotFlow {") && code.contains("presence()")
+            "the WebView must stay opaque instead of fading through a compositing layer",
+            code.contains("alpha = 1f")
+        )
+        assertTrue(
+            "the video surface stays hidden until the player can be revealed",
+            code.contains("visibility = View.INVISIBLE")
+        )
+        assertTrue(
+            "the readiness callback reveals the real video surface discretely",
+            code.contains("webView.visibility = View.VISIBLE")
+        )
+        assertTrue(
+            "the WebView video surface requires its own hardware layer",
+            code.contains("setLayerType(View.LAYER_TYPE_HARDWARE, null)")
         )
         assertFalse(
-            "a platform animator is a second clock the dialog can neither cancel nor read",
+            "alpha animation on the native video surface can bring back the black-picture bug",
+            code.contains("player.alpha =") ||
+                (code.contains("snapshotFlow {") && code.contains("presence()"))
+        )
+        assertFalse(
+            "a platform animator is a second clock the dialog cannot cancel or read",
             code.contains(".animate().alpha(")
         )
-        // A spring stops inside its visibility threshold, not on its target: the
-        // reveal rested at 0.99, and since the player's alpha is that value the
-        // trailer was never drawn as an opaque view - it sat in a compositing layer
-        // for its whole life and played audio with no picture. Both drivers have to
-        // land, so the picture settles on exactly 1.
         assertTrue(
-            "the reveal must snap to 1 instead of resting inside the spring's threshold",
-            code.contains("reveal.snapTo(1f)")
-        )
-        assertTrue(
-            "the window, and the player alpha that follows it, must snap to 1 too",
+            "the dialog entrance must still settle exactly at 1",
             code.contains("entrance.snapTo(1f)")
         )
-        // `if (ringAlpha > 0f)` read as "while it is still visible" and was true
-        // forever: a spring rests inside its threshold, so the ring never left and
-        // kept its infinite spin running behind a player that had finished. The
-        // fade still runs to the end; a state change is what removes it.
         assertTrue(
-            "the ring must fade into the player instead of vanishing a frame early",
+            "the loading ring still fades out when the embed is revealed",
             code.contains("ringAlpha.animateTo(0f") && code.contains("if (!ringGone)")
         )
         assertTrue(
