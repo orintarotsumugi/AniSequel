@@ -599,7 +599,10 @@ data class ProfileAppearance(
     val formatLabel: String get() = formatLabelOf(format, isManga)
 
     /** Whether this appearance is a manga, from the `type` AniList sent. */
-    val isManga: Boolean get() = type?.uppercase() == "MANGA"
+    // `ignoreCase` rather than a case conversion: `uppercase()` is the device's
+    // locale, and this compares a token off the wire - the same reason the feed's
+    // status and `SequelSeason`'s numerals stopped lower-casing without a locale.
+    val isManga: Boolean get() = type.equals("MANGA", ignoreCase = true)
 }
 
 /**

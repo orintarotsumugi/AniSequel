@@ -2,6 +2,7 @@ package com.anisequel.data.model
 
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
+import java.util.Locale
 
 /**
  * The payload of the profile query: everything AniList holds about *who* a
@@ -372,7 +373,13 @@ data class ProfileActivity(
      * one for the same string; the card only ever called this one, so the other was
      * deleted rather than kept in step by a test.
      */
-    fun displayStatusFor(isManga: Boolean): String = when (status?.lowercase()) {
+    // Lower-cased with `Locale.ROOT`, not the device's: `"PLANNING".lowercase()` is
+    // `"plannıng"` on a Turkish phone (dotless i), so none of these branches matched
+    // and every row in the feed printed the raw enum - "CURRENT", "COMPLETED" - beside
+    // a title. The token comes off the wire in the API's own alphabet, so the
+    // comparison belongs to the root locale. `PersonProfile.isManga` and
+    // `SequelSeason`'s roman numerals had the same bug.
+    fun displayStatusFor(isManga: Boolean): String = when (status?.lowercase(Locale.ROOT)) {
         "current" -> if (isManga) "Read" else "Watched"
         "watched", "watched episode" -> if (isManga) "Read" else "Watched"
         "read", "read chapter" -> "Read"

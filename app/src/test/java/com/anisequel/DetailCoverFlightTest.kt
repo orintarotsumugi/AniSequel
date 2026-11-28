@@ -4,9 +4,13 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.detail.DetailCoverFlightState
 import com.anisequel.ui.components.detail.DetailCoverTarget
+import com.anisequel.ui.components.detail.toScreenRect
+import com.anisequel.ui.components.detail.toWindowRect
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -232,7 +236,8 @@ class DetailCoverFlightTest {
             )
         }
         val state = DetailCoverFlightState(
-            origin = Rect(40f, 400f, 140f, 550f),
+            // Screen pixels; the page converts it into its own window in `anchor`.
+            screenOrigin = Rect(40f, 400f, 140f, 550f),
             target = target,
             progress = Animatable(1f)
         )
@@ -320,6 +325,64 @@ class DetailCoverFlightTest {
             "the page's poster has no loading frame, so a cold open is a flat tint",
             source(novaHero).contains("PosterPlaceholder(") &&
                 source(animeHero).contains("PosterPlaceholder(")
+        )
+    }
+
+    /**
+     * The two windows do not share a frame of reference, and the flight does.
+     *
+     * The person sheet is anchored to the bottom edge of the display, so its window
+     * origin is most of a screen below the activity's. A poster 200px down that
+     * window is 1600px down the display, and the title page - spending the number as
+     * if it were already screen space - started the copy's flight near the top of the
+     * display instead of from the poster under the reader's finger. This is the
+     * "sometimes", too: how wrong it was depended on how tall the sheet was.
+     *
+     * The conversion is a pure function for that reason - a JVM test cannot open two
+     * windows, but it can pin what each one does with a rectangle at its edge.
+     */
+    @Test
+    fun `a rectangle from a sheet's window is converted, not spent as screen space`() {
+        val inSheetWindow = Rect(24f, 200f, 136f, 358f)
+        // A phone's height of sheet, bottom anchored: the window starts at y = 1400.
+        val sheetWindowOnScreen = IntOffset(0, 1400)
+
+        val onScreen = toScreenRect(inSheetWindow, sheetWindowOnScreen)
+
+        assertEquals("the x is already screen space in a full-width sheet", 24f, onScreen.left, 0.001f)
+        assertEquals("the y did not move with its window", 1600f, onScreen.top, 0.001f)
+        assertEquals("the size of the rectangle is not a position", inSheetWindow.width, onScreen.width, 0.001f)
+
+        // The page's dialog sits at the top of the display, so it subtracts nothing.
+        assertEquals(inSheetWindow, toWindowRect(onScreen, IntOffset(0, 0)))
+        // A page in a window of its own converts into that window's place instead.
+        assertEquals(
+            Rect(24f, 120f, 136f, 278f),
+            toWindowRect(onScreen, IntOffset(0, 1480))
+        )
+    }
+
+    /**
+     * Both edges of the flight convert, and neither one keeps its own window's space.
+     *
+     * The recording half is the one that regressed: the rectangle was stored exactly
+     * as `boundsInWindow()` returned it, which is right only when the card is in the
+     * same window as the page - true for the dashboard, wrong for every poster inside
+     * the character sheet and for the studio page's floating sheet rows.
+     */
+    @Test
+    fun `the press is recorded in screen space and anchored into the page's window`() {
+        val text = source(flight)
+
+        assertTrue(
+            "the press's rectangle is stored in the recording window's space, so a " +
+                "card inside a sheet flies in from the wrong place",
+            text.contains("toScreenRect(rect, view.screenOffset())")
+        )
+        assertTrue(
+            "the page spends the screen rectangle without moving it into its own " +
+                "window",
+            text.contains("state.anchor(view.screenOffset())")
         )
     }
 

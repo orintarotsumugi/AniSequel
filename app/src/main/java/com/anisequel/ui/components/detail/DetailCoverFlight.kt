@@ -1,6 +1,7 @@
 package com.anisequel.ui.components.detail
 
 import android.os.SystemClock
+import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -222,6 +224,40 @@ private class PressBounds {
 }
 
 /**
+ * Where this view's window sits on the display, in pixels.
+ *
+ * The app draws into more than one window - the activity's, the title page's own
+ * dialog, and the person sheet's bottom-sheet dialog - and [boundsInWindow] is
+ * measured from whichever one the composition is in. That matters most for the
+ * person sheet, which is anchored to the bottom edge: a poster 200px down its own
+ * window is well over 1000px down the display.
+ *
+ * ## Why this is the bug behind "the poster sometimes flies in from nowhere"
+ *
+ * A rectangle recorded inside the character sheet was spent by the title page as if
+ * it were screen space, so the flight started a screen's height below (or above) the
+ * poster the reader actually pressed - and because the sheet's window is bottom
+ * anchored, "sometimes" depended on how tall the sheet was. The flight itself was
+ * never wrong: the two numbers were in different frames of reference. The rectangle
+ * is recorded and kept in *screen* pixels now ([toScreenRect]), and each window
+ * converts once at its own edge ([toWindowRect]) - which is the only frame every
+ * window in this app agrees on.
+ */
+internal fun View.screenOffset(): IntOffset {
+    val location = IntArray(2)
+    getLocationOnScreen(location)
+    return IntOffset(location[0], location[1])
+}
+
+/** A window rect, moved into the screen space every window shares. */
+internal fun toScreenRect(rect: Rect, windowOrigin: IntOffset): Rect =
+    rect.translate(windowOrigin.x.toFloat(), windowOrigin.y.toFloat())
+
+/** A screen rect, moved into the coordinates of the window that sits at [windowOrigin]. */
+internal fun toWindowRect(rect: Rect, windowOrigin: IntOffset): Rect =
+    rect.translate(-windowOrigin.x.toFloat(), -windowOrigin.y.toFloat())
+
+/**
  * Records this poster's window rectangle when a finger lands on it.
  *
  * The `Initial` pass runs before children and before the scrollable, and this
@@ -233,6 +269,7 @@ private class PressBounds {
 internal fun Modifier.detailCoverPressOrigin(url: String?): Modifier {
     if (url.isNullOrBlank()) return this
     return composed {
+        val view = LocalView.current
         val bounds = remember(url) { PressBounds() }
         onGloballyPositioned { bounds.rect = it.boundsInWindow() }
             .pointerInput(url) {
@@ -240,7 +277,15 @@ internal fun Modifier.detailCoverPressOrigin(url: String?): Modifier {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.type == PointerEventType.Press) {
-                            bounds.rect?.let { DetailCoverFlight.record(url, it) }
+                            val rect = bounds.rect
+                            if (rect != null) {
+                                // Screen space, not this window's: the page that
+                                // spends it is another window. See `screenOffset`.
+                                DetailCoverFlight.record(
+                                    url,
+                                    toScreenRect(rect, view.screenOffset())
+                                )
+                            }
                         }
                     }
                 }
@@ -403,11 +448,28 @@ internal fun SheetCoverFlight(
  * flight than the others.
  */
 internal class DetailCoverFlightState(
-    val origin: Rect?,
+    /**
+     * The press's rectangle, in **screen** pixels - see [screenOffset] for why this
+     * one space and not the recording window's. Null when no press opened this page,
+     * which is every deep link and notification.
+     */
+    private val screenOrigin: Rect?,
     private val target: DetailCoverTarget,
     private val progress: Animatable<Float, AnimationVector1D>
 ) {
     private val onStage = mutableStateOf(false)
+
+    /**
+     * [screenOrigin] moved into the page's own window, once that window is on screen.
+     *
+     * Converted on the first frame the page has a measured poster rather than during
+     * composition: a dialog's window is not placed on the display until it is
+     * attached and laid out, so reading the window's own origin any earlier returns
+     * zero - and a flight starting from the top-left corner is the same bug as one
+     * starting from the bottom of the screen. Nothing draws from this until the copy
+     * is on stage, which happens after the conversion, so the delay costs no frame.
+     */
+    private val startRect = mutableStateOf<Rect?>(null)
 
     // Set when the page never measured a poster for this open - a text page, a
     // cover that failed to decode, or a hero that was more than four frames
@@ -430,10 +492,11 @@ internal class DetailCoverFlightState(
     // until the copy has something to show.
     private val painting = mutableStateOf(false)
 
-    // The page may start its own entrance. Latched on purpose - it must never fall
-    // back to false when the copy lands, or the entrance spring would be cancelled
-    // halfway and the page would stay half-transparent for the rest of its life.
-    private val entranceReleased = mutableStateOf(origin == null)
+    // The page's entrance may start immediately: there is no copy to wait for. See
+    // `entranceGate`. Latched on purpose - it must never fall back to false when the
+    // copy lands, or the entrance spring would be cancelled halfway and the page
+    // would stay half-transparent for the rest of its life.
+    private val entranceReleased = mutableStateOf(screenOrigin == null)
 
     // The copy is composed, invisibly, as soon as the page's poster is measured -
     // which is the only way its picture can decode before the flight starts. See
@@ -441,7 +504,7 @@ internal class DetailCoverFlightState(
     private val armed = mutableStateOf(false)
 
     /** No rectangle means nothing to fly, and the page keeps its own entrance. */
-    val travels: Boolean get() = origin != null && !abandoned.value
+    val travels: Boolean get() = screenOrigin != null && !abandoned.value
 
     /** The page's poster place, or null when this open has no copy to land. */
     val pageTarget: DetailCoverTarget? get() = target.takeIf { travels }
@@ -457,7 +520,7 @@ internal class DetailCoverFlightState(
 
     /** Whether the copy should be composed at all, visible or not. */
     private val showable: Boolean
-        get() = origin != null && armed.value && !abandoned.value
+        get() = screenOrigin != null && armed.value && !abandoned.value
 
     /**
      * 1 while the page's own poster is the one on screen, 0 while the copy is.
@@ -492,19 +555,33 @@ internal class DetailCoverFlightState(
      * on the very frame the close does.
      */
     fun begin() {
-        if (origin != null && target.filled && copyReady.value && !abandoned.value) {
+        if (screenOrigin != null && target.filled && copyReady.value && !abandoned.value) {
             onStage.value = true
         }
     }
 
     /** Composes the copy invisibly so its picture can decode before anything moves. */
     fun arm() {
-        if (origin != null && target.filled && !abandoned.value) armed.value = true
+        if (screenOrigin != null && target.filled && !abandoned.value) armed.value = true
+    }
+
+    /**
+     * Moves the press's rectangle into the page's window.
+     *
+     * Called once, on the frame the page's poster has been measured. Without it the
+     * copy flew toward a rectangle expressed in the *card's* window: for a poster in
+     * the character sheet that is most of a screen away from where the page thought
+     * it was, and the copy arrived from a corner of the display instead of from the
+     * artwork under the finger.
+     */
+    fun anchor(windowOrigin: IntOffset) {
+        val screen = screenOrigin ?: return
+        startRect.value = toWindowRect(screen, windowOrigin)
     }
 
     /** The copy's picture is on screen: the flight may start. */
     fun onCopyReady() {
-        if (origin == null || abandoned.value) return
+        if (screenOrigin == null || abandoned.value) return
         painting.value = true
         copyReady.value = true
         entranceReleased.value = true
@@ -535,7 +612,8 @@ internal class DetailCoverFlightState(
      */
     @Composable
     fun Overlay(url: String) {
-        val start = origin ?: return
+        // Null until the page's window has been placed; see [anchor].
+        val start = startRect.value ?: return
         if (!showable) return
         SheetCoverFlight(
             url = url,
@@ -576,6 +654,8 @@ internal class DetailCoverFlightState(
  */
 @Composable
 internal fun rememberDetailCoverFlight(urls: List<String?>): DetailCoverFlightState {
+    val view = LocalView.current
+    // Taken in screen space; see `DetailCoverFlightState.anchor` for the conversion.
     val origin = remember { DetailCoverFlight.take(urls) }
     val target = remember { DetailCoverTarget() }
     // 1 is "landed": a page with no origin starts settled, so every reader below
@@ -593,6 +673,10 @@ internal fun rememberDetailCoverFlight(urls: List<String?>): DetailCoverFlightSt
             state.abandon()
             return@LaunchedEffect
         }
+        // The page's window is on the display by now - its poster has just been
+        // measured inside it - so its own origin can be read and the press's
+        // rectangle moved into the same space. See `DetailCoverFlightState.anchor`.
+        state.anchor(view.screenOffset())
         // The copy is composed first and given a moment to decode. Starting the
         // flight on a request that has not landed yet slid the page's tint across
         // the screen for the whole animation and then popped the poster in at the

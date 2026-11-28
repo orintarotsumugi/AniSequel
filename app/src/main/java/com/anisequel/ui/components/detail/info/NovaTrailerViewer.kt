@@ -110,8 +110,19 @@ internal fun NovaTrailerCard(
     modifier: Modifier = Modifier
 ) {
     val url = media.trailerYoutubeUrl ?: return
-    val videoId = media.trailer?.id?.takeIf { it.isNotBlank() } ?: return
-    val thumbnail = remember(videoId) { "https://img.youtube.com/vi/$videoId/hqdefault.jpg" }
+    val trailerId = media.trailer?.id?.takeIf { it.isNotBlank() } ?: return
+    // Only an id YouTube could have is a video. The embed builder drops anything
+    // outside that alphabet, so a malformed id would open the viewer on an empty
+    // frame - a black player with no way to tell it from a trailer that refused to
+    // play. Those taps go to the browser instead: the card's own escape hatch,
+    // taken before the dead player is opened rather than from inside it.
+    val videoId = trailerId.takeIf { isNovaTrailerId(it) }
+    val context = LocalContext.current
+    // Keyed on [trailerId], not on the validated id: a trailer whose id YouTube could
+    // not have issued opens the browser instead of the player, and its card still
+    // draws - so the thumbnail has to be the one that was read, not the word "null"
+    // in a URL.
+    val thumbnail = remember(trailerId) { "https://img.youtube.com/vi/$trailerId/hqdefault.jpg" }
     val shape = MaterialTheme.shapes.large
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -137,7 +148,6 @@ internal fun NovaTrailerCard(
     // reloads from the start: a `WebView` belongs to the activity that created it
     // and cannot outlive a recreation, which is a restart, not a resume.
     var playing by rememberSaveable(videoId) { mutableStateOf(false) }
-
     Surface(
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
@@ -153,7 +163,13 @@ internal fun NovaTrailerCard(
                 interactionSource = interactionSource,
                 role = Role.Button,
                 onClickLabel = "Play the official trailer"
-            ) { playing = true }
+            ) {
+                if (videoId != null) {
+                    playing = true
+                } else {
+                    openExternalUrlOrCopy(context, url)
+                }
+            }
             .testTag("nova_info_trailer_card")
     ) {
         Box(
@@ -227,7 +243,7 @@ internal fun NovaTrailerCard(
         }
     }
 
-    if (playing) {
+    if (playing && videoId != null) {
         NovaTrailerViewer(
             videoId = videoId,
             title = media.displayName,
@@ -599,6 +615,21 @@ private fun createNovaTrailerPlayer(
         // and the exit could not reach it at all.
         alpha = 0f
         setBackgroundColor(AndroidColor.BLACK)
+        // A hardware layer, explicitly.
+        //
+        // The trailer played over a black rectangle: audio, the player's own chrome,
+        // the title - and no picture. This view is a video surface inside a floating
+        // dialog window, and without a layer of its own the platform composites it
+        // through a path that drops the video plane while the rest of the page draws
+        // normally, which is why it read as "the sound works and the picture does
+        // not" rather than as a failed load. A hardware layer puts the WebView's
+        // whole output, video included, through its render node as one texture.
+        //
+        // The opposite is the same report from the other side: `LAYER_TYPE_SOFTWARE`
+        // cannot hold a video surface at all, so a player forced into one plays audio
+        // and draws nothing. This is deliberately not that - and the app never sets a
+        // software layer on a view that shows video.
+        setLayerType(View.LAYER_TYPE_HARDWARE, null)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.allowFileAccess = false

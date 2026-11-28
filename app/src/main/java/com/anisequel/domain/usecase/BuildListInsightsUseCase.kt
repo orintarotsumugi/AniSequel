@@ -146,28 +146,38 @@ class BuildListInsightsUseCase {
      * status exists, and an underscore is a database leaking in place of it.
      */
     private fun statusDistribution(distribution: List<StatusAmount>?): StatusDistribution {
-        val present = distribution.orEmpty()
-            .filter { it.status != null }
-            .associateBy { it.status!! }
-            .toMutableMap()
+        // Grouped by the **canonical** token, with the counts added together.
+        //
+        // Grouping on the raw string was the bug: `ListStatuses` aliases the spellings
+        // API v1 used (`WATCHING`, `FINISHED`, `ON_HOLD`, `CLEARED`, ...), and this
+        // card never asked it - so an entry cached under one of those produced its own
+        // segment, and the strip read "Watching" twice with the account's count split
+        // between the two. The alias also sorted to the end, because `statusOrder`
+        // knows only the six current tokens. One account, one segment per status: the
+        // amounts are summed rather than one row winning, or the total would lose
+        // whichever half `associateBy` overwrote - and the total is what the chips
+        // underneath the strip are checked against.
+        val merged = LinkedHashMap<String, Int>()
+        distribution.orEmpty().forEach { row ->
+            val token = ListStatuses.normalize(row.status) ?: return@forEach
+            merged[token] = (merged[token] ?: 0) + (row.amount ?: 0)
+        }
 
-        // Anything AniList sent as zero is dropped from the strip but kept in the
-        // `withShares` denominator, so "128 completed" is not 128 out of a total
-        // that silently shrank.
-        val rows = present.values
-            .filter { (it.amount ?: 0) > 0 }
-            .sortedBy { statusOrder(it.status!!) }
+        // Anything AniList sent as zero is dropped from the strip and from the total,
+        // so "128 completed" is not 128 out of a total that silently shrank.
+        val rows = merged.entries
+            .filter { it.value > 0 }
+            .sortedBy { statusOrder(it.key) }
 
-        val total = rows.sumOf { it.amount ?: 0 }
+        val total = rows.sumOf { it.value }
         if (total <= 0) return StatusDistribution(emptyList(), 0)
 
         return StatusDistribution(
             segments = rows.mapIndexed { index, row ->
-                val count = row.amount ?: 0
                 SegmentTally(
-                    label = row.status!!.toStatusLabel(),
-                    count = count,
-                    share = count.toFloat() / total,
+                    label = row.key.toStatusLabel(),
+                    count = row.value,
+                    share = row.value.toFloat() / total,
                     slot = index
                 )
             },

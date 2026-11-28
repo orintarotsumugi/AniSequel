@@ -278,6 +278,28 @@ class SeasonArtworkTest {
         )
     }
 
+    /**
+     * A season numeral is English, not the phone's language.
+     *
+     * `uppercase()` with no locale is the device's, and `"IV".lowercase()` on a
+     * Turkish phone is `"ıv"` - so `IV` never matched a roman numeral and
+     * `numberIn` answered null. A null is this layer's "not a sequel", which silently
+     * hands a season the shared IMDb series poster this whole class exists to avoid.
+     */
+    @Test
+    fun `roman numerals and season words are read whatever the phone's language`() {
+        val original = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"))
+
+            assertEquals(4, SequelSeason.numberIn("Overlord IV"))
+            assertEquals(3, SequelSeason.numberIn("Mushoku Tensei III"))
+            assertEquals(2, SequelSeason.numberIn("Some Show Season Two"))
+        } finally {
+            java.util.Locale.setDefault(original)
+        }
+    }
+
     private fun findProjectRoot(): File {
         val start = File(System.getProperty("user.dir") ?: ".")
         var candidate: File? = start
