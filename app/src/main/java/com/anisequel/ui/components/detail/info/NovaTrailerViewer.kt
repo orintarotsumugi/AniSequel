@@ -295,9 +295,8 @@ internal fun NovaTrailerViewer(
 
     LaunchedEffect(videoId) {
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
-        // A spring stops inside its visibility threshold, not on its target: the window
-        // settled at 99% and the player's alpha follows this value. Snap the last
-        // hundredth; the fade is still the spring.
+        // Finish at the exact endpoint so a spring's visibility threshold cannot
+        // leave the dialog a fraction short of its settled state.
         entrance.snapTo(1f)
     }
     LaunchedEffect(videoId, isClosing) {
@@ -406,32 +405,11 @@ internal fun NovaTrailerViewer(
                             .clip(MaterialTheme.shapes.medium)
                             .background(Color.Black)
                     ) {
-                        // The loading mark is the page's own wavy ring, spinning: the
-                        // frame is a black rectangle for as long as the embed takes to
-                        // paint, and a spinner sitting in the middle of it is the
-                        // difference between "starting" and "broken".
-                        // The ring used to be dropped in the frame the embed reported
-                        // in - one frame before the player had any alpha of its own - so
-                        // the spinner vanished, the frame went black, and only then did
-                        // the video fade in. The two are one crossfade now: the ring
-                        // fades out over the spring the player fades in on, and stops
-                        // turning as it goes, so the hand-off reads as the video
-                        // arriving under the spinner instead of as a gap.
-                        // And the fade has to *end*: a spring stops inside its threshold,
-                        // so `if (ringAlpha > 0f)` stayed true for good and the ring kept
-                        // spinning at 1% alpha behind a loaded trailer. `ringGone` is what
-                        // takes it out of the tree, which is what stops the spin.
-                        val ringAlpha = remember(videoId) { Animatable(1f) }
-                        var ringGone by remember(videoId) { mutableStateOf(false) }
-                        LaunchedEffect(loaded) {
-                            if (!loaded) return@LaunchedEffect
-                            ringAlpha.animateTo(0f, ExpressiveMotion.FastEffects)
-                            ringGone = true
-                        }
-                        // Composed while it is still visible, not while it is still
-                        // loading: the old `if (!loaded)` blinked the arc out a frame
-                        // into a fade.
-                        if (!ringGone) {
+                        // The WebView starts invisible, so the ring occupies the
+                        // frame without being drawn over a live video surface. It leaves
+                        // as soon as YouTube reports the player ready (or the watchdog
+                        // reveals the fallback player).
+                        if (!loaded) {
                             NovaWavyRing(
                                 progress = null,
                                 color = Color.White,
@@ -439,9 +417,6 @@ internal fun NovaTrailerViewer(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .size(44.dp)
-                                    // Draw phase: the fade costs a layer update per
-                                    // frame, not a redraw of the ring's geometry.
-                                    .graphicsLayer { alpha = ringAlpha.value }
                             )
                         }
                         NovaTrailerPlayer(
@@ -776,17 +751,11 @@ internal const val NOVA_TRAILER_BASE_URL = "$NOVA_TRAILER_ORIGIN/"
 private val NOVA_TRAILER_ORIGIN_QUERY: String =
     URLEncoder.encode(NOVA_TRAILER_ORIGIN, Charsets.UTF_8.name())
 
-/** The console line emitted when the iframe has loaded enough to reveal its surface. */
-private const val NOVA_TRAILER_READY_MESSAGE = "anisequel:trailer-ready"
-
-/** Emitted by YouTube's IFrame API only after its player is ready for commands. */
+/** Emitted only when YouTube's IFrame API reports that the player is ready. */
 private const val NOVA_TRAILER_PLAYER_READY_MESSAGE = "anisequel:trailer-player-ready"
 
 /** Playback-state events forwarded from the IFrame API to Compose. */
 private const val NOVA_TRAILER_STATE_PREFIX = "anisequel:trailer-state:"
-
-/** The wrapper's own timer, for an `iframe` that never fires `load` at all. */
-private const val NOVA_TRAILER_WRAPPER_READY_MILLIS = 4500L
 
 /** The last-resort reveal: a player that never reports must not spin forever. */
 private const val NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS = 7000L
@@ -827,11 +796,8 @@ private class NovaTrailerChromeClient(
     override fun onConsoleMessage(message: ConsoleMessage): Boolean {
         val text = message.message()
         when {
-            text == NOVA_TRAILER_READY_MESSAGE -> {
-                onEmbedReady()
-                return true
-            }
             text == NOVA_TRAILER_PLAYER_READY_MESSAGE -> {
+                onEmbedReady()
                 onPlayerReady()
                 return true
             }
@@ -974,24 +940,20 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
-            // Reveal may follow the iframe load, but the native controls must wait
-            // for the IFrame API's onReady event. That keeps an early tap from
-            // sending a command to an iframe that has not built its player yet.
-            append("<script>(function(){var f=document.getElementById('p');var told=false;")
-            append("function ready(){if(told){return}told=true;console.log('")
-            append(NOVA_TRAILER_READY_MESSAGE)
-            append("');}")
-            append("if(f){f.addEventListener('load',ready);}")
+            // Readiness is the IFrame API's onReady event, not the iframe's earlier
+            // network load. Until then the WebView stays invisible and the ring stays
+            // visible; the independent WebView watchdog remains the last-resort escape.
+            append("<script>(function(){")
             append("window.anisequelTrailer={player:null,")
             append("seek:function(offset){var p=this.player;if(!p){return;}")
-            append("var duration=p.getDuration()||0;")
-            append("var target=Math.max(0,p.getCurrentTime()+offset);")
-            append("if(duration>0){target=Math.min(duration,target);}p.seekTo(target,true);},")
+            append("var duration=p.getDuration()||0;if(duration<=0){return;}")
+            append("var target=Math.max(0,Math.min(duration,p.getCurrentTime()+offset));")
+            append("p.seekTo(target,true);},")
             append("toggle:function(){var p=this.player;if(!p){return;}")
             append("if(p.getPlayerState()===1){p.pauseVideo();}else{p.playVideo();}}};")
             append("window.onYouTubeIframeAPIReady=function(){")
             append("window.anisequelTrailer.player=new YT.Player('p',{events:{")
-            append("onReady:function(){ready();console.log('")
+            append("onReady:function(){console.log('")
             append(NOVA_TRAILER_PLAYER_READY_MESSAGE)
             append("');},onStateChange:function(event){console.log('")
             append(NOVA_TRAILER_STATE_PREFIX)
@@ -1000,9 +962,7 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append("api.src='https://www.youtube.com/iframe_api';")
             append("var first=document.getElementsByTagName('script')[0];")
             append("first.parentNode.insertBefore(api,first);")
-            append("setTimeout(ready,")
-            append(NOVA_TRAILER_WRAPPER_READY_MILLIS.toString())
-            append(");})();</script>")
+            append("})();</script>")
         }
         append("</body></html>")
     }
