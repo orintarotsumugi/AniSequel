@@ -61,7 +61,6 @@ import com.anisequel.ui.components.expressive.ExpressivePrimaryButton
 import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.SegmentedOption
 import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.navigation.mainBarClearance
 import com.anisequel.ui.theme.AniSequelTheme
 import kotlin.math.max
 
@@ -89,7 +88,7 @@ internal data class TierLibrarySection(
 )
 
 /**
- * The tier lists themselves: the screen the trophy opens.
+ * The tier lists themselves: the screen the shortcut opens.
  *
  * ## Why this screen exists at all
  *
@@ -166,10 +165,12 @@ internal fun TierLibraryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(scaffoldPadding),
-            // The bar floats over this page - it is the library's, not an open
-            // board's, so it is drawn here - and the last row of lists has to be
-            // able to scroll clear of it rather than ending underneath it.
-            contentPadding = PaddingValues(bottom = 24.dp + mainBarClearance())
+            // The bar is not drawn over this page at all - see `showsMainBar` - so
+            // there is nothing to scroll clear of. This used to reserve the bar's
+            // clearance anyway, which left an empty strip the height of a control
+            // that was not there under the last row. The Scaffold's own padding
+            // already carries the device's navigation inset; this is only air.
+            contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item(key = "sections") {
                 TierLibrarySectionBar(
@@ -345,7 +346,7 @@ private fun TierContinueCard(list: TierListDocument, onOpen: () -> Unit) {
         ExpressivePrimaryButton(
             text = "Open",
             onClick = onOpen,
-            icon = AppVectorIcons.Trophy,
+            icon = AppVectorIcons.TierBoard,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -487,7 +488,7 @@ private fun TierLibraryEmptyState(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         ExpressiveEmptyOrb(
-            icon = AppVectorIcons.Trophy,
+            icon = AppVectorIcons.TierBoard,
             containerColor = AniSequelTheme.statusColors.infoContainer,
             iconTint = AniSequelTheme.statusColors.info
         )

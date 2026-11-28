@@ -1247,6 +1247,7 @@ object GraphQLQueries {
         coverImage { extraLarge large color }
         bannerImage
         nextAiringEpisode { episode airingAt }
+        airingSchedule(notYetAired: true, perPage: 25) { nodes { episode airingAt } }
         startDate { year month day }
         endDate { year month day }
         mediaListEntry { status progress }

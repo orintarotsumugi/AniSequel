@@ -11,6 +11,7 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.anisequel.domain.color.CoverColorQuantizer
 import com.anisequel.domain.color.CoverPalette
+import com.anisequel.domain.color.CoverPaletteMisses
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -34,7 +35,7 @@ import kotlinx.coroutines.withContext
  * ## Why Coil rather than a second HTTP client
  *
  * The hero is already loading this exact URL through Coil. Asking Coil again for
- * a 128px decode hits its memory or disk cache, so the colour costs one small
+ * a small decode hits its memory or disk cache, so the colour costs one small
  * bitmap instead of a second download, and it inherits the app's cache policy,
  * headers and GIF handling for free.
  *
@@ -42,9 +43,11 @@ import kotlinx.coroutines.withContext
  *
  *  - `allowHardware(false)` because a hardware bitmap cannot be read with
  *    `getPixels`, and Coil will happily return one on API 31+.
- *  - `size(128)` because a palette needs the broad regions of an image, not its
- *    detail. Downscaling is also what stops a 4000px cover from being a 16MB
- *    allocation per open.
+ *  - `size(SAMPLE_SIZE)` (96px) because a palette needs the broad regions of an
+ *    image, not its detail. Downscaling is also what stops a 4000px cover from
+ *    being a 16MB allocation per open. The documentation here used to say 128
+ *    twice while the constant said 96 - the number readers were told the cache
+ *    key implied was never the one that was decoded.
  *
  * ## The cache
  *
@@ -52,6 +55,11 @@ import kotlinx.coroutines.withContext
  * decode twice. A handful of entries is enough - only the open sheet's URL is
  * ever read - and the cap keeps a long session from retaining every cover the
  * reader has visited.
+ *
+ * Definitive *misses* are remembered too, in [CoverPaletteMisses]. This cache
+ * used to hold successes only, which made a grey cover the most expensive one in
+ * the app: it was decoded and quantized again on every open, twice, to produce
+ * the same null.
  */
 object CoverColorRepository {
 
@@ -59,6 +67,9 @@ object CoverColorRepository {
     private const val CACHE_ENTRIES = 96
 
     private val palettes = object : LruCache<String, CoverPalette>(CACHE_ENTRIES) {}
+
+    /** Covers that decoded but had no palette to give; see [CoverPaletteMisses]. */
+    private val misses = CoverPaletteMisses(CACHE_ENTRIES)
 
     /** The palette already extracted for [url], if this session has seen it. */
     fun cachedPalette(url: String?): CoverPalette? = url?.let(palettes::get)
@@ -87,6 +98,9 @@ object CoverColorRepository {
     suspend fun extractPalette(context: Context, url: String?): CoverPalette? {
         if (url.isNullOrBlank()) return null
         cachedPalette(url)?.let { return it }
+        // A cover that already decoded to nothing is not decoded again; see
+        // CoverPaletteMisses for why only definitive misses are kept.
+        if (misses.contains(url)) return null
 
         return withContext(Dispatchers.IO) {
             try {
@@ -102,15 +116,27 @@ object CoverColorRepository {
                 val result = context.imageLoader.execute(request)
                 if (result !is SuccessResult) return@withContext null
 
-                val bitmap = result.drawable.toSoftwareBitmap() ?: return@withContext null
+                // Everything below this point is a definitive answer: the image
+                // decoded, so "no palette" will be the answer next time too.
+                val bitmap = result.drawable.toSoftwareBitmap()
+                if (bitmap == null) {
+                    misses.remember(url)
+                    return@withContext null
+                }
                 val width = bitmap.width
                 val height = bitmap.height
-                if (width <= 0 || height <= 0) return@withContext null
+                if (width <= 0 || height <= 0) {
+                    misses.remember(url)
+                    return@withContext null
+                }
 
                 val pixels = IntArray(width * height)
                 bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
                 val palette = CoverColorQuantizer.paletteFrom(pixels)
-                    ?: return@withContext null
+                if (palette == null) {
+                    misses.remember(url)
+                    return@withContext null
+                }
                 palettes.put(url, palette)
                 palette
             } catch (cancellation: kotlinx.coroutines.CancellationException) {

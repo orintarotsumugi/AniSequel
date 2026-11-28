@@ -266,10 +266,17 @@ internal fun NovaTrailerViewer(
     var isClosing by remember(videoId) { mutableStateOf(false) }
     var loaded by remember(videoId) { mutableStateOf(false) }
 
-    LaunchedEffect(videoId) { entrance.animateTo(1f, ExpressiveMotion.SettleSpatial) }
+    LaunchedEffect(videoId) {
+        entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
+        // A spring stops inside its visibility threshold, not on its target: the window
+        // settled at 99% and the player's alpha follows this value. Snap the last
+        // hundredth; the fade is still the spring.
+        entrance.snapTo(1f)
+    }
     LaunchedEffect(videoId, isClosing) {
         if (!isClosing) return@LaunchedEffect
         entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        entrance.snapTo(0f)
         onDismiss()
     }
     val requestClose: () -> Unit = { if (!isClosing) isClosing = true }
@@ -392,17 +399,21 @@ internal fun NovaTrailerViewer(
                         // fades out over the spring the player fades in on, and stops
                         // turning as it goes, so the hand-off reads as the video
                         // arriving under the spinner instead of as a gap.
-                        val ringAlpha by animateFloatAsState(
-                            targetValue = if (loaded) 0f else 1f,
-                            animationSpec = ExpressiveMotion.FastEffects,
-                            label = "nova_trailer_ring"
-                        )
+                        // And the fade has to *end*: a spring stops inside its threshold,
+                        // so `if (ringAlpha > 0f)` stayed true for good and the ring kept
+                        // spinning at 1% alpha behind a loaded trailer. `ringGone` is what
+                        // takes it out of the tree, which is what stops the spin.
+                        val ringAlpha = remember(videoId) { Animatable(1f) }
+                        var ringGone by remember(videoId) { mutableStateOf(false) }
+                        LaunchedEffect(loaded) {
+                            if (!loaded) return@LaunchedEffect
+                            ringAlpha.animateTo(0f, ExpressiveMotion.FastEffects)
+                            ringGone = true
+                        }
                         // Composed while it is still visible, not while it is still
-                        // loading: dropping it at the start of the fade - which is what
-                        // the old `if (!loaded)` did - blinked the accent arc out one
-                        // frame into a 200ms fade. It leaves the tree when the last of
-                        // it does, and that is also what stops its spin.
-                        if (ringAlpha > 0f) {
+                        // loading: the old `if (!loaded)` blinked the arc out a frame
+                        // into a fade.
+                        if (!ringGone) {
                             NovaWavyRing(
                                 progress = null,
                                 color = Color.White,
@@ -412,7 +423,7 @@ internal fun NovaTrailerViewer(
                                     .size(44.dp)
                                     // Draw phase: the fade costs a layer update per
                                     // frame, not a redraw of the ring's geometry.
-                                    .graphicsLayer { alpha = ringAlpha }
+                                    .graphicsLayer { alpha = ringAlpha.value }
                             )
                         }
                         NovaTrailerPlayer(
@@ -493,11 +504,17 @@ private fun NovaTrailerPlayer(
     // motion gets the frame instead of a fade. The platform animator that used to
     // live here was a second clock: the dialog could neither cancel it nor ask how
     // far along it was.
-    val reveal by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
-        animationSpec = ExpressiveMotion.FastEffects,
-        label = "nova_trailer_reveal"
-    )
+    //
+    // It is an `Animatable`, not `animateFloatAsState`, because it has to *finish*:
+    // a spring stops inside its threshold, so the reveal rested at 0.99 - and the
+    // player's alpha, which only this drives, rested there too, leaving a media view
+    // composited through a layer for its whole life. The last hundredth is snapped.
+    val reveal = remember(videoId) { Animatable(0f) }
+    LaunchedEffect(revealed) {
+        if (!revealed) return@LaunchedEffect
+        reveal.animateTo(1f, ExpressiveMotion.FastEffects)
+        reveal.snapTo(1f)
+    }
     // Built here rather than inside `AndroidView`'s factory, because the reveal has
     // to be reachable from the watchdog as well as from the page's own signals.
     val player = remember(videoId) {
@@ -515,7 +532,7 @@ private fun NovaTrailerPlayer(
     // arriving. The view's own alpha is the one channel that works, and it carries
     // both halves of the picture.
     LaunchedEffect(player) {
-        snapshotFlow { reveal * presence() }.collect { alpha -> player.alpha = alpha }
+        snapshotFlow { reveal.value * presence() }.collect { alpha -> player.alpha = alpha }
     }
     AndroidView(
         modifier = modifier.testTag("nova_trailer_player"),
@@ -627,13 +644,23 @@ private fun createNovaTrailerPlayer(
             // and `minSdk` is 31, so a second entry point to the same rule
             // could never fire.
         }
-        loadDataWithBaseURL(
-            NOVA_TRAILER_BASE_URL,
-            html,
-            "text/html",
-            "UTF-8",
-            null
-        )
+        // Not loaded here: a view built during composition has not been measured,
+        // and this page's frame is sized in percentages of the viewport - so a load
+        // that starts now lays the wrapper out against a frame with no size, and the
+        // embed takes the picture's size from the frame it was given. It waits for
+        // the first layout that has one.
+        var loadPending = true
+        // Nine parameters, not the four that matter: this is
+        // `View.OnLayoutChangeListener`, and a shorter lambda is not a SAM
+        // conversion - it is a compile error the debug build caught.
+        addOnLayoutChangeListener { _, _, _, right, bottom, _, _, _, _ ->
+            if (loadPending && right > 0 && bottom > 0) {
+                loadPending = false
+                webView.loadDataWithBaseURL(
+                    NOVA_TRAILER_BASE_URL, html, "text/html", "UTF-8", null
+                )
+            }
+        }
     }
     // A player that says nothing at all - no WebView provider, a script the page
     // declined to run - still has to stop being a spinner eventually.

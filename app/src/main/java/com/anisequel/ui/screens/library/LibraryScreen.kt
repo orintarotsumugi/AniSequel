@@ -27,6 +27,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -144,6 +145,14 @@ fun LibraryScreen(
     )
     val quickAddStatuses by planningAdd.statuses.collectAsStateWithLifecycle()
 
+    // The manga half used to be asked for only when its own chip was tapped, and
+    // on a cold start that tap spent a whole list download with an empty grid under
+    // it - the anime half never had that gap, because it rides along with the
+    // profile. This is the only screen that draws both halves of the reader's own
+    // list, so both are asked for here: one request per open, and none at all once
+    // the repository has the answer cached or on disk.
+    LaunchedEffect(overviewViewModel) { overviewViewModel.prefetchMangaLibrary() }
+
     // The poster that was tapped, as its own list node so the sheet has
     // something to draw on the first frame. The fetched detail supersedes it
     // once it lands.
@@ -232,12 +241,12 @@ fun LibraryScreen(
                             }
                         }
                         // Beside the title rather than in `actions`, for the reason
-                        // the profile's trophy gives: the tier list ranks the
+                        // the profile's row gives: the tier list ranks the
                         // library this page is showing, so it is worth reaching
                         // while looking at that library. In the actions slot it
                         // would read as another place the page goes rather than as
                         // a way of ordering what is on it.
-                        // The trophy rides in a soft capsule of its own, so the
+                        // The button rides in a soft capsule of its own, so the
                         // bar's two controls read as one row of buttons rather
                         // than an icon stranded between two text lines.
                         Surface(
@@ -256,7 +265,7 @@ fun LibraryScreen(
                                 // target, so the button stays easy to hit while
                                 // reading as lighter than the avatar beside it.
                                 Icon(
-                                    imageVector = AppVectorIcons.Trophy,
+                                    imageVector = AppVectorIcons.TierBoard,
                                     contentDescription = "Open tier list",
                                     modifier = Modifier.size(20.dp)
                                 )

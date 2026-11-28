@@ -66,13 +66,30 @@ import kotlin.math.sin
  * wavy ring in the score cell instead of a shimmer over a number that does not exist
  * yet, and the same mark inside the trailer frame while the embed paints.
  *
+ * ## The wobble travels
+ *
+ * The outline is not a fixed squiggle. Its lobes drift around the ring the way the
+ * progress bar's crests travel along its track, through the same
+ * [WaveGeometry.phase] - which is what makes the page's two wavy marks one wave seen
+ * from two directions rather than a moving bar beside a frozen ring.
+ *
+ * It used to be built at phase zero, always: the entrance swept the share in and the
+ * loading arc turned, and between those two the score cell was static, so next to a
+ * progress bar whose crests were visibly travelling the ring read as a picture of a
+ * wave. The track and the accent are shifted by the *same* phase, because they are
+ * the same outline drawn twice - a second phase would float the accent off the ring
+ * it is supposed to be a share of, which is the mistake `WavyProgressBar` documents.
+ *
  * ## Motion rules this obeys
  *
- * The spin is one `rememberInfiniteTransition`, and it reads its value only inside
- * the draw lambda, so a frame invalidates this Canvas and nothing else. It exists
- * only while the view is resumed and the reader has not asked for Instant motion -
- * an idle loader behind another app is a loop nobody can see, which is exactly what
- * the motion rules cap.
+ * Two loops on **one** `rememberInfiniteTransition`: the loading arc's turn and the
+ * slow drift of the wobble, which the motion rules cap at one transition per screen.
+ * Both values are read only inside the draw lambda, so a frame invalidates this
+ * Canvas and nothing else, and both exist only while the view is resumed and the
+ * reader has not asked for Instant motion - an idle loader, or a score on a page
+ * nobody is looking at, is a loop the motion rules cap. The drift is slow on
+ * purpose: a seven lobe ring moving at a loader's rate reads as a spinner around a
+ * number that is not loading.
  *
  * The entrance, the spin and the drawing are each their own function, so this
  * composable is only the slot and the content inside the ring rather than the whole
@@ -98,10 +115,12 @@ internal fun NovaWavyRing(
 ) {
     val target = progress?.coerceIn(0f, 1f)
     val fill = rememberNovaRingFill(target = target, animate = animate, entranceKey = entranceKey)
-    val spin = rememberNovaRingSpin(
-        loading = target == null,
-        enabled = animate && rememberIsResumed() && ExpressiveMotion.speed != MotionStyle.INSTANT
-    )
+    // One question, asked once: every loop this ring can run is gated on the same
+    // three facts - the caller allows motion, the view is on screen, and the reader
+    // has not asked for Instant.
+    val motionEnabled = animate && rememberIsResumed() &&
+        ExpressiveMotion.speed != MotionStyle.INSTANT
+    val loops = rememberNovaRingLoops(enabled = motionEnabled)
 
     // Two paths for the life of the ring, rewound in place: the outline and the
     // accent share the arithmetic but not the object, and allocating either per
@@ -111,14 +130,15 @@ internal fun NovaWavyRing(
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.matchParentSize()) {
-            // `fill.value` and `spin?.value` are read here, in the draw lambda: the
+            // `fill.value` and both loop values are read here, in the draw lambda: the
             // animations redraw this Canvas and nothing else.
             drawNovaRing(
                 outline = outline,
                 accent = accent,
                 target = target,
                 fill = fill.value,
-                spin = spin?.value,
+                spin = loops?.spin?.value,
+                wave = loops?.wave?.value ?: 0f,
                 color = color,
                 trackColor = trackColor,
                 strokeWidth = strokeWidth.toPx()
@@ -160,33 +180,54 @@ private fun rememberNovaRingFill(
     return fill
 }
 
+/** The two phases [NovaWavyRing] draws with. See [rememberNovaRingLoops]. */
+private class NovaRingLoops(val spin: State<Float>, val wave: State<Float>)
+
 /**
- * The loading arc's clock, or null when there is nothing to spin.
+ * The ring's two clocks - the loading arc's turn and the wobble's drift - or null
+ * when there is nothing to drive.
  *
- * Null rather than a stopped transition: whether the loop may exist at all is a
- * visibility and a motion-style question, and a ring drawing a settled score should
- * not cost a running animation at all.
+ * **One transition for both.** The motion rules cap indefinite animations at one per
+ * screen because a second transition is a second clock; here the two values are read
+ * in the same draw lambda and draw one mark, so they come out of one transition and
+ * are animated by the same frame.
+ *
+ * Null rather than a stopped transition, which is the other half of that rule: a
+ * ring on a page nobody is looking at, or one whose reader asked for Instant motion,
+ * must not cost a running animation at all. The spin is animated even when the ring
+ * is drawing a settled score and has no use for it - one float on a transition that
+ * already exists for the wave, rather than a second transition gated separately.
  */
 @Composable
-private fun rememberNovaRingSpin(loading: Boolean, enabled: Boolean): State<Float>? {
-    if (!loading || !enabled) return null
-    val transition = rememberInfiniteTransition(label = "nova_wavy_ring_spin")
-    return transition.animateFloat(
+private fun rememberNovaRingLoops(enabled: Boolean): NovaRingLoops? {
+    if (!enabled) return null
+    val transition = rememberInfiniteTransition(label = "nova_wavy_ring")
+    val wave = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = WAVE_MILLIS, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "nova_wavy_ring_wave_phase"
+    )
+    val spin = transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = SPIN_MILLIS, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "nova_wavy_ring_phase"
+        label = "nova_wavy_ring_spin_phase"
     )
+    return NovaRingLoops(spin = spin, wave = wave)
 }
 
 /**
  * The ring itself: the whole outline, then the accent share on top of it.
  *
- * [fill] and [spin] arrive as plain values from the caller's draw lambda, so the
- * animations redraw the caller's Canvas and nothing else.
+ * [fill], [spin] and [wave] arrive as plain values from the caller's draw lambda, so
+ * the animations redraw the caller's Canvas and nothing else.
  */
 private fun DrawScope.drawNovaRing(
     outline: Path,
@@ -194,6 +235,7 @@ private fun DrawScope.drawNovaRing(
     target: Float?,
     fill: Float,
     spin: Float?,
+    wave: Float,
     color: Color,
     trackColor: Color,
     strokeWidth: Float
@@ -205,8 +247,12 @@ private fun DrawScope.drawNovaRing(
     val radius = (minOf(size.width, size.height) - stroke.width) / 2f / (1f + WOBBLE)
     if (radius <= 0f) return
     val centre = Offset(size.width / 2f, size.height / 2f)
+    // Negated because the accent grows clockwise from twelve o'clock: the wave has to
+    // travel the way the sweep moves, or the ring reads as two motions fighting over
+    // one shape. One phase for both paths - they are the same outline drawn twice.
+    val wobblePhase = -WaveGeometry.phase(wave)
 
-    buildRingPath(outline, radius, 0f, 360f, centre)
+    buildRingPath(outline, radius, 0f, 360f, centre, wobblePhase)
     drawPath(path = outline, color = trackColor, style = stroke)
 
     if (target == null) {
@@ -214,7 +260,7 @@ private fun DrawScope.drawNovaRing(
         // closed - there is nowhere for it to travel to, so the whole mark turns,
         // which is how a circular loader has always been read.
         rotate(degrees = (spin ?: 0f) * 360f, pivot = centre) {
-            buildRingPath(accent, radius, 0f, LOADING_SWEEP_DEGREES, centre)
+            buildRingPath(accent, radius, 0f, LOADING_SWEEP_DEGREES, centre, wobblePhase)
             drawPath(path = accent, color = color, style = stroke)
         }
         return
@@ -224,7 +270,7 @@ private fun DrawScope.drawNovaRing(
     if (degrees > 0.5f) {
         // From twelve o'clock, clockwise: a share of a ring is read from the top,
         // the way a clock face is.
-        buildRingPath(accent, radius, START_DEGREES, degrees, centre)
+        buildRingPath(accent, radius, START_DEGREES, degrees, centre, wobblePhase)
         drawPath(path = accent, color = color, style = stroke)
     }
 }
@@ -242,7 +288,9 @@ private fun buildRingPath(
     radius: Float,
     startDegrees: Float,
     sweepDegrees: Float,
-    centre: Offset
+    centre: Offset,
+    /** Where the wobble has travelled to, in radians. See [drawNovaRing]. */
+    phase: Float
 ) {
     path.rewind()
     val steps = maxOf(MIN_SEGMENTS, (abs(sweepDegrees) / DEGREES_PER_SEGMENT).toInt())
@@ -254,7 +302,8 @@ private fun buildRingPath(
             baseRadius = radius,
             wobble = WOBBLE,
             lobes = LOBES,
-            angle = angle
+            angle = angle,
+            phase = phase
         )
         val x = centre.x + cos(angle) * r
         val y = centre.y + sin(angle) * r
@@ -277,6 +326,15 @@ private const val LOADING_SWEEP_DEGREES = 110f
 
 /** How long the loading arc takes to come round. */
 private const val SPIN_MILLIS = 1500
+
+/**
+ * How long the wobble takes to travel one lobe's spacing.
+ *
+ * Five seconds, against the loading arc's 1.5: the arc is a clock and this is water.
+ * Fast enough that the score cell is visibly alive beside a travelling progress bar,
+ * slow enough that it is not a spinner around a number that has already arrived.
+ */
+private const val WAVE_MILLIS = 5000
 
 private const val DEGREES_PER_SEGMENT = 6f
 

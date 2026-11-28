@@ -122,6 +122,32 @@ class NovaArtworkLoadingTest {
         )
     }
 
+    /**
+     * The countdown was gated on the progress card, and the progress card needs the
+     * episode *total* to draw its wave - so a currently airing show whose length
+     * AniList has not announced had no countdown anywhere on this page, and neither
+     * did any show the reader had not added.
+     */
+    @Test
+    fun `the countdown is drawn for any airing anime, not only a tracked one`() {
+        val code = source(cards)
+
+        assertTrue(
+            "the stats strip is gated on the progress card again, so a show with no " +
+                "announced episode count loses its countdown:",
+            code.contains("val airing = if (media.isManga) null else rememberAiringLine(media)")
+        )
+        assertTrue(
+            "the strip no longer prints the sentence the model builds",
+            code.contains("targetState = airing?.sentence.orEmpty()")
+        )
+        assertTrue(
+            "the page does not tell the details grid to skip its own airing row, so " +
+                "the same countdown is printed twice, ticking out of step:",
+            source(page).contains("showAiring = false")
+        )
+    }
+
     private fun findProjectRoot(): File {
         var candidate = File(System.getProperty("user.dir") ?: ".").absoluteFile
         while (!File(candidate, "gradle.properties").isFile) {

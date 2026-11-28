@@ -492,15 +492,6 @@ fun AppNavigation(
         )
     }
 
-    // Whether the tier list has a board open, which is the one thing that hides the
-    // bar on a page that is otherwise one of its own. It lives here because the bar
-    // is drawn here and the board is inside a destination: the screen reports the
-    // change, the host owns the answer. Not `rememberSaveable` - a board is
-    // restored from the ViewModel, which reports itself open again on the first
-    // composition, and a stale `true` surviving process death would hide the bar
-    // over the library.
-    var tierBoardOpen by remember { mutableStateOf(false) }
-
     // The disk tier under the repository's caches. Process-wide rather than
     // per-screen because the auth ViewModel's repository writes and clears the
     // same files - see [AniListSnapshots] - and it lives in private app storage
@@ -994,7 +985,6 @@ fun AppNavigation(
                         authenticated = authenticated,
                         dashboardError = dashboardError,
                         mainDashboardViewModel = mainDashboardViewModel,
-                        onBoardOpenChange = { tierBoardOpen = it },
                         onSignInAgain = authViewModel::logout
                     )
 
@@ -1094,9 +1084,7 @@ fun AppNavigation(
                     // The largest the viewer's avatar has; the bar falls back to a glyph
                     // while it is still unknown.
                     profileAvatarUrl = signedInViewer?.avatar?.large ?: signedInViewer?.avatar?.medium,
-                    signedIn = authenticated != null,
-                    tierBoardOpen = tierBoardOpen,
-                    onTierBoardOpenChange = { tierBoardOpen = it }
+                    signedIn = authenticated != null
                 )
 
                 JokeHost(

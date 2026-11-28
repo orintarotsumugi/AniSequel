@@ -164,6 +164,34 @@ class WaveGeometryTest {
         assertEquals(lobes, crests)
     }
 
+    /**
+     * A phase has to slide the outline, not reshape it.
+     *
+     * That is the whole difference between an animated ring and a ring that
+     * breathes: the score cell became the one wavy mark on the page that stood
+     * still - a picture of a wave rather than water - because the path was built
+     * without a phase. Sliding it is safe precisely because the phase cannot change
+     * the crest height, and a phase that also altered it would read as the ring
+     * pulsing at whatever rate the reader happened to look at it.
+     */
+    @Test
+    fun `a phase slides the ring and leaves its shape alone`() {
+        val base = 20f
+        val wobble = 0.07f
+        val lobes = 7
+        val phase = WaveGeometry.phase(0.25f)
+        var angle = 0f
+        while (angle < TWO_PI) {
+            assertEquals(
+                "the shifted outline has to be the unshifted one, moved",
+                WaveGeometry.ringRadius(base, wobble, lobes, angle),
+                WaveGeometry.ringRadius(base, wobble, lobes, angle - phase / lobes, phase),
+                1e-4f
+            )
+            angle += 0.1f
+        }
+    }
+
     @Test
     fun `a full share closes the ring, and an empty one draws none of it`() {
         assertEquals(0f, WaveGeometry.ringSweepDegrees(0f), 1e-4f)

@@ -142,6 +142,14 @@ internal fun DetailRefreshEffect(
         while (true) {
             delay(MediaDetailStore.DETAIL_REFRESH_INTERVAL_MILLIS)
             onLoadDetail(mediaId, mediaType)
+            // The friends row refreshes on the same beat. It used to be loaded once
+            // for the life of the page: the loop behind this line refreshed the
+            // synopsis beside it, so a page left open showed a live detail over a
+            // friends card frozen at whatever it said when the sheet opened - and a
+            // friend who started the show while the reader was looking at it never
+            // appeared, even though this effect's own doc claimed the page stayed
+            // fresh.
+            onLoadFriends(mediaId, mediaType)
         }
     }
 }

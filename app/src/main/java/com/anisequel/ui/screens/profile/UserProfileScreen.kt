@@ -180,7 +180,7 @@ fun UserProfileScreen(
      *
      * The tier list is a single personal ranking, stored keyed on the signed-in
      * account - it is a judgement about the reader's own library, not about
-     * whoever this profile happens to be about. So the trophy only means
+     * whoever this profile happens to be about. So the button only means
      * something here when the profile *is* the reader's own.
      *
      * It used to be drawn on every profile, including a follower's and a scanned
@@ -356,7 +356,7 @@ fun UserProfileScreen(
                             transitionSpec = {
                                 // `using null` drops the default size transform. The
                                 // two titles are different widths, so animating the
-                                // container's measured width slid the trophy beside
+                                // container's measured width slid the button beside
                                 // the name and re-measured the bar on every frame -
                                 // the text crossfade should move nothing but alpha.
                                 fadeIn(animationSpec = ExpressiveMotion.FastEffects) togetherWith
@@ -371,13 +371,13 @@ fun UserProfileScreen(
                                 // `maxLines` alone is `TextOverflow.Clip`, so a
                                 // long display name was cut through a glyph
                                 // instead of ending in an ellipsis. The bar has
-                                // a trophy beside it on the reader's own page,
+                                // a button beside it on the reader's own page,
                                 // which leaves less room than the name assumes.
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                         // Only on the reader's own profile: the tier list is their
-                        // personal ranking, and the trophy used to appear here on
+                        // personal ranking, and the button used to appear here on
                         // everyone's - tapping it from a follower's page opened the
                         // viewer's own list over somebody else's library.
                         if (isOwnProfile) {
@@ -396,12 +396,12 @@ fun UserProfileScreen(
                                 // 24dp, the size of every other icon in this bar.
                                 // It was 20dp, with a comment claiming the smaller
                                 // glyph read as "lighter" - but the neighbours are
-                                // all at the default 24dp, so the trophy did not
-                                // read as lighter, it read as the one control that
-                                // had been shrunk. The 48dp IconButton target was
-                                // never the problem; the ink was.
+                                // all at the default 24dp, so the smaller glyph did
+                                // not read as lighter - it read as the one control
+                                // that had been shrunk. The 48dp IconButton target
+                                // was never the problem; the ink was.
                                 Icon(
-                                    imageVector = AppVectorIcons.Trophy,
+                                    imageVector = AppVectorIcons.TierBoard,
                                     contentDescription = "Open tier list"
                                 )
                             }

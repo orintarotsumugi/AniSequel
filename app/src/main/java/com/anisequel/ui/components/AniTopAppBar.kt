@@ -167,7 +167,7 @@ fun AniTopAppBar(
                     interactionSource = tiersSource
                 ) {
                     Icon(
-                        imageVector = AppVectorIcons.Trophy,
+                        imageVector = AppVectorIcons.TierBoard,
                         contentDescription = "Tier lists"
                     )
                 }

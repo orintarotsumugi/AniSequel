@@ -266,7 +266,7 @@ fun NovaTopBar(
                         interactionSource = tiersSource
                     ) {
                         Icon(
-                            imageVector = AppVectorIcons.Trophy,
+                            imageVector = AppVectorIcons.TierBoard,
                             contentDescription = "Tier lists",
                             modifier = Modifier.size(20.dp)
                         )

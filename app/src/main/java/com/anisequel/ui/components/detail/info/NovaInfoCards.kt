@@ -50,9 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.anisequel.data.model.MediaNode
 import com.anisequel.data.model.airingCountdown
-import com.anisequel.data.model.airingEpisodeNumber
 import com.anisequel.data.model.compactCount
-import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.isManga
 import com.anisequel.data.model.progressCountLabel
 import com.anisequel.data.model.watchFraction
@@ -107,7 +105,7 @@ private data class NovaStat(
  * The countdown is the fifth fact and is not a fifth column: it is a sentence, not
  * a number, so it gets its own line across the strip. It is also the one value on
  * the page that changes while the reader is looking at it - see
- * [rememberAiringCountdown] - and a sentence that ticks is easier to read across a
+ * [rememberAiringLine] - and a sentence that ticks is easier to read across a
  * full line than inside a quarter-width cell.
  */
 @Composable
@@ -164,28 +162,30 @@ internal fun NovaStatsCard(
             }
         }
     }
-    // Only anime carry `nextAiringEpisode`, and only a *tracked* title has the
-    // classic page's progress card to state the countdown in. An untracked title
-    // gets it from the Details card instead, so drawing it here too would print
-    // the same sentence twice on one scroll - the duplication the classic page's
-    // KDoc already guards against.
+    // Only anime carry `nextAiringEpisode`.
+    //
+    // This used to be gated on `hasProgressCard` as well, because the classic
+    // page's progress card states the sentence for a tracked title and this strip
+    // was told to stay out of its way. But `hasProgressCard` means "a wave can be
+    // drawn", and a wave needs the episode *total* - so for a currently airing show
+    // whose length AniList has not announced, and for every show the reader has not
+    // added, the strip dropped the one fact a running show is opened for. The
+    // progress card cannot exist without the total either, so the countdown was
+    // simply gone on this page. It is drawn here for any anime with an airing now,
+    // and the Details card is told to skip its own row (see `InfoSpecsCard`'s
+    // `showAiring`), so there is still exactly one clock per page.
     //
     // The gate is `stats.isEmpty() && countdown == null`, not `stats.isEmpty()`:
-    // a tracked show with no score, popularity or length still has a countdown to
-    // print, and returning before it would leave the page's item list holding a
-    // card that draws nothing - a 14dp hole, which is the failure the section
-    // gating above exists to prevent.
-    val countdown = if (media.isManga || !media.hasProgressCard) {
-        null
-    } else {
-        rememberAiringCountdown(media)
-    }
+    // a show with no score, popularity or length still has a countdown to print,
+    // and returning before it would leave the page's item list holding a card that
+    // draws nothing - a 14dp hole, which is the failure the section gating above
+    // exists to prevent.
+    val airing = if (media.isManga) null else rememberAiringLine(media)
     // Loading and *empty*: a summary node that already carries some numbers keeps
     // them on screen while the rest arrives, rather than replacing live data with
     // shimmer it already has.
-    val placeholder = isLoading && stats.isEmpty() && countdown == null
-    if (stats.isEmpty() && countdown == null && !placeholder) return
-    val episode = media.airingEpisodeNumber
+    val placeholder = isLoading && stats.isEmpty() && airing == null
+    if (stats.isEmpty() && airing == null && !placeholder) return
 
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -232,7 +232,7 @@ internal fun NovaStatsCard(
             }
 
             AnimatedVisibility(
-                visible = countdown != null,
+                visible = airing != null,
                 enter = fadeIn(animationSpec = ExpressiveMotion.FastEffects) +
                     expandVertically(animationSpec = ExpressiveMotion.FastSpatialSize),
                 exit = fadeOut(animationSpec = ExpressiveMotion.FastEffects) +
@@ -265,11 +265,10 @@ internal fun NovaStatsCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         AnimatedContent(
-                            targetState = if (episode != null) {
-                                "Episode $episode airs $countdown"
-                            } else {
-                                "Next episode $countdown"
-                            },
+                            // The whole sentence is the model's, so the strip,
+                            // the progress card and the details grid cannot
+                            // disagree about a show whose total is unannounced.
+                            targetState = airing?.sentence.orEmpty(),
                             // The only thing that changes every minute is the
                             // countdown itself, and that is an update to one
                             // sentence, not a new state. Keyed on the sentence's
@@ -585,5 +584,9 @@ internal fun novaHasStats(media: MediaNode): Boolean =
         // Current time, not merely a scheduled one: an episode whose air time has
         // passed has no countdown to draw, and the card would return early into an
         // empty item - the 14dp hole this predicate exists to avoid.
-        (!media.isManga && media.hasProgressCard && media.airingCountdown() != null)
+        //
+        // No `hasProgressCard` here: the card draws the countdown for any airing
+        // anime now, and this predicate has to answer for what the card draws or it
+        // gates away the one item that would have said when the next episode is.
+        (!media.isManga && media.airingCountdown() != null)
 

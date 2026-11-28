@@ -148,7 +148,7 @@ fun NovaOtherScreen(
                 }
                 item(key = "tiers", span = { GridItemSpan(maxLineSpan) }) {
                     NovaFeatureCard(
-                        icon = AppVectorIcons.Trophy,
+                        icon = AppVectorIcons.TierBoard,
                         title = "Tier Lists",
                         subtitle = "Rank what you have watched or read, then share the board",
                         onClick = onOpenTiers,

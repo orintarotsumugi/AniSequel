@@ -313,9 +313,26 @@ class AnimationWiringTest {
             "a platform animator is a second clock the dialog can neither cancel nor read",
             code.contains(".animate().alpha(")
         )
+        // A spring stops inside its visibility threshold, not on its target: the
+        // reveal rested at 0.99, and since the player's alpha is that value the
+        // trailer was never drawn as an opaque view - it sat in a compositing layer
+        // for its whole life and played audio with no picture. Both drivers have to
+        // land, so the picture settles on exactly 1.
+        assertTrue(
+            "the reveal must snap to 1 instead of resting inside the spring's threshold",
+            code.contains("reveal.snapTo(1f)")
+        )
+        assertTrue(
+            "the window, and the player alpha that follows it, must snap to 1 too",
+            code.contains("entrance.snapTo(1f)")
+        )
+        // `if (ringAlpha > 0f)` read as "while it is still visible" and was true
+        // forever: a spring rests inside its threshold, so the ring never left and
+        // kept its infinite spin running behind a player that had finished. The
+        // fade still runs to the end; a state change is what removes it.
         assertTrue(
             "the ring must fade into the player instead of vanishing a frame early",
-            code.contains("nova_trailer_ring") && code.contains("if (ringAlpha > 0f)")
+            code.contains("ringAlpha.animateTo(0f") && code.contains("if (!ringGone)")
         )
         assertTrue(
             "the platform's own dim is the hard cut this dialog must not draw",

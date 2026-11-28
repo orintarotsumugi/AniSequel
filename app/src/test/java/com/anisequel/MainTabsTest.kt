@@ -28,9 +28,8 @@ import org.junit.Test
  *    selected tab the reader never chose) over somebody else's dashboard or a
  *    Settings page.
  *  - **Which of those pages draw the bar.** `showsMainBar` is the exception the
- *    tier list needs, and it is a *state* rather than a route: the library of
- *    lists keeps the bar, and only an open board hides it because its own tray is
- *    pinned over the same edge.
+ *    tier list needs: that page draws no bar at all, because its shelf, its board
+ *    and the board's tray already own the bottom edge.
  *  - **The order of the destinations matches the list `MainBar` indexes.** `MainBar`
  *    passes `selectedIndex = tabs.indexOf(selected)` and turns the bar's index back
  *    into a `MainTab` with `tabs[index]`; the two only agree while the destination
@@ -93,40 +92,48 @@ class MainTabsTest {
         assertNull(mainTabForRoute("somewhere_new"))
     }
 
+    /**
+     * The tier list is still one of the bar's *pages* - it is a tab, and the joke
+     * rule and the tab-change announcement read it as one - but it draws no bar.
+     *
+     * Both directions of this have been wrong and shipped. It once hid the bar only
+     * while a board was open, on the theory that the shelf was an ordinary page; the
+     * shelf then reserved the bar's clearance and drew the bar over its own bottom
+     * edge. Before that it was a bare route test, and the argument against it was
+     * that the shelf became the one page you cannot leave by the bar - true, and
+     * accepted: the shelf has a Back arrow in its own top bar and the system back
+     * gesture, and a floating tab pill under a board being dragged is a second set
+     * of controls in the same strip.
+     */
     @Test
-    fun `the tier library draws the bar and an open board does not`() {
+    fun `the tier list is one of the bar's pages and draws no bar`() {
         assertEquals(MainTab.TIERS, mainTabForRoute(AppRoutes.TIER_LIST))
-        assertTrue(
-            "the library of lists is one of the bar's pages; without the bar it " +
-                "was the only page in the app you could not leave by the bar",
-            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST), tierBoardOpen = false)
-        )
         assertFalse(
-            "the board's tray is pinned over the bottom edge; a floating bar " +
-                "under it would be a second set of controls in the same strip",
-            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST), tierBoardOpen = true)
+            "the tier list owns its own bottom edge: its shelf, its board and the " +
+                "board's tray are all drawn there",
+            showsMainBar(mainTabForRoute(AppRoutes.TIER_LIST))
         )
     }
 
     @Test
     fun `every other page of the bar draws it`() {
-        listOf(AppRoutes.DASHBOARD, AppRoutes.LIBRARY, ProfileRoutes.OWN_ROUTE)
-            .forEach { route ->
-                assertTrue(
-                    "$route must draw the bar",
-                    showsMainBar(mainTabForRoute(route), tierBoardOpen = false)
-                )
-            }
+        listOf(
+            AppRoutes.DASHBOARD,
+            AppRoutes.DASHBOARD_DEMO,
+            AppRoutes.LIBRARY,
+            AppRoutes.SEARCH,
+            ProfileRoutes.OWN_ROUTE
+        ).forEach { route ->
+            assertTrue(
+                "$route must draw the bar",
+                showsMainBar(mainTabForRoute(route))
+            )
+        }
         assertFalse(
             "a pushed screen draws no bar",
-            showsMainBar(mainTabForRoute(AppRoutes.SETTINGS), tierBoardOpen = false)
+            showsMainBar(mainTabForRoute(AppRoutes.SETTINGS))
         )
-        assertFalse(showsMainBar(null, tierBoardOpen = false))
-        assertTrue(
-            "a board left open while the route changed must not hide the bar on " +
-                "whatever page comes next - the flag only means anything on TIERS",
-            showsMainBar(MainTab.LIBRARY, tierBoardOpen = true)
-        )
+        assertFalse(showsMainBar(null))
     }
 
     @Test

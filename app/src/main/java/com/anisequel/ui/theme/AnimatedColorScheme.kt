@@ -27,7 +27,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  *
  * `animateColorAsState(...).value` is read during composition, so each frame
  * produces a new [ColorScheme] and `MaterialExpressiveTheme` re-provides it. That
- * is the cost of a cross-fade: 36 short animations, once per colour change, on
+ * is the cost of a cross-fade: 48 short animations, once per colour change, on
  * the composables that actually read a role. It is bounded - a spring settles in
  * a few hundred milliseconds - and the alternative, animating only a draw-time
  * tint, cannot reach the M3 components that consume the roles.
@@ -53,7 +53,7 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
 internal fun rememberAnimatedColorScheme(target: ColorScheme): ColorScheme {
     // Both tokens are `snap()` under MotionStyle.INSTANT, so this stays a stable
     // sequence of composable calls whatever the motion setting is. A conditional
-    // early return here would insert and remove 36 animation slots when the style
+    // early return here would insert and remove 48 animation slots when the style
     // changed, resetting them to their targets.
     val spec: FiniteAnimationSpec<Color> = ExpressiveMotion.ThemeColorEffects
     val surfaceSpec: FiniteAnimationSpec<Color> = ExpressiveMotion.SurfaceColorEffects
@@ -78,7 +78,11 @@ internal fun rememberAnimatedColorScheme(target: ColorScheme): ColorScheme {
         onSurface = target.onSurface.animated("theme_on_surface", surfaceSpec),
         surfaceVariant = target.surfaceVariant.animated("theme_surface_variant", surfaceSpec),
         onSurfaceVariant = target.onSurfaceVariant.animated("theme_on_surface_variant", surfaceSpec),
-        surfaceTint = target.surfaceTint.animated("theme_surface_tint", spec),
+        // The elevation tint is composited over the surfaces, so it rides the
+        // surface spring: on the accent spring it used to finish recolouring a beat
+        // before the surface it tints did, which shifted every elevated card's hue
+        // for that beat.
+        surfaceTint = target.surfaceTint.animated("theme_surface_tint", surfaceSpec),
         inverseSurface = target.inverseSurface.animated("theme_inverse_surface", surfaceSpec),
         inverseOnSurface = target.inverseOnSurface.animated("theme_inverse_on_surface", surfaceSpec),
         error = target.error.animated("theme_error", spec),
@@ -94,7 +98,22 @@ internal fun rememberAnimatedColorScheme(target: ColorScheme): ColorScheme {
         surfaceContainerHighest = target.surfaceContainerHighest.animated("theme_surface_container_highest", surfaceSpec),
         surfaceContainerLow = target.surfaceContainerLow.animated("theme_surface_container_low", surfaceSpec),
         surfaceContainerLowest = target.surfaceContainerLowest.animated("theme_surface_container_lowest", surfaceSpec),
-        surfaceDim = target.surfaceDim.animated("theme_surface_dim", surfaceSpec)
+        surfaceDim = target.surfaceDim.animated("theme_surface_dim", surfaceSpec),
+        // Fixed roles still move on the accent spring: a component that opts out
+        // of the mode switch still sits next to primary/secondary content, so it
+        // has to arrive with them.
+        primaryFixed = target.primaryFixed.animated("theme_primary_fixed", spec),
+        primaryFixedDim = target.primaryFixedDim.animated("theme_primary_fixed_dim", spec),
+        onPrimaryFixed = target.onPrimaryFixed.animated("theme_on_primary_fixed", spec),
+        onPrimaryFixedVariant = target.onPrimaryFixedVariant.animated("theme_on_primary_fixed_variant", spec),
+        secondaryFixed = target.secondaryFixed.animated("theme_secondary_fixed", spec),
+        secondaryFixedDim = target.secondaryFixedDim.animated("theme_secondary_fixed_dim", spec),
+        onSecondaryFixed = target.onSecondaryFixed.animated("theme_on_secondary_fixed", spec),
+        onSecondaryFixedVariant = target.onSecondaryFixedVariant.animated("theme_on_secondary_fixed_variant", spec),
+        tertiaryFixed = target.tertiaryFixed.animated("theme_tertiary_fixed", spec),
+        tertiaryFixedDim = target.tertiaryFixedDim.animated("theme_tertiary_fixed_dim", spec),
+        onTertiaryFixed = target.onTertiaryFixed.animated("theme_on_tertiary_fixed", spec),
+        onTertiaryFixedVariant = target.onTertiaryFixedVariant.animated("theme_on_tertiary_fixed_variant", spec)
     )
 }
 

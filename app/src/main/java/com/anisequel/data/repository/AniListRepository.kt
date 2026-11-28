@@ -43,6 +43,14 @@ interface AniListRepository {
      * dashboard left the Activity feed claiming nothing had happened until the
      * profile was closed and reopened.
      *
+     * The same gap has a second reader: the Library and profile pages keep the
+     * list they painted, and a write made from the entry editor is on the server
+     * before the next pull. Finishing a show there left its row under Currently
+     * Watching until the grid was pulled down, while the dashboard's copy of the
+     * same title was right within the second. `UserOverviewViewModel` follows
+     * this too - see `watchListMutations` - which is what makes the two screens
+     * agree.
+     *
      * A counter rather than an event: there is no replay, no queue, and a
      * collector that starts late reads the current value instead of missing the
      * write. [AniListRepositoryImpl] overrides it; the demo and test doubles keep

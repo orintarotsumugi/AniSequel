@@ -225,8 +225,8 @@ private fun TopBarSectionCard(mainTabPreferences: MainTabPreferences) {
         } else {
             SwitchRow(
                 title = "Tier lists shortcut",
-                subtitle = "Show the trophy in the top bar in both layouts. This does " +
-                    "not add a Tiers tab; the two switches are separate.",
+                subtitle = "Show the tier lists button in the top bar in both layouts. " +
+                    "This does not add a Tiers tab; the two switches are separate.",
                 checked = tierTopBar == true,
                 onCheckedChange = { enabled ->
                     scope.launch { mainTabPreferences.setTierTopBar(enabled) }
@@ -310,7 +310,7 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
             SwitchRow(
                 title = "Tier lists tab",
                 subtitle = "Add Tiers between Library and Profile. Turning this off hides " +
-                    "only the tab; the trophy shortcut and your lists remain available.",
+                    "only the tab; the shortcut and your lists remain available.",
                 checked = tierListTab == true,
                 onCheckedChange = { enabled ->
                     scope.launch { mainTabPreferences.setTierListTab(enabled) }
@@ -321,7 +321,7 @@ private fun BottomBarSectionCard(mainTabPreferences: MainTabPreferences) {
             Spacer(modifier = Modifier.height(12.dp))
 
             // The search tab is the one optional page with no second door: the tier
-            // list is reachable from the Library's trophy and the profile's row, but
+            // list is reachable from the Library's button and the profile's row, but
             // catalogue search exists here and nowhere else. The subtitle says so,
             // because a switch that reads like a shortcut for something already
             // available would be understood as cosmetic.

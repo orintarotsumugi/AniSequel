@@ -68,21 +68,68 @@ data class EmphasisPalette(
         /**
          * The emphasis roles for one scheme.
          *
-         * The backdrop is `surfaceContainerHighest` rather than `surface`: it is
-         * the furthest the surface ramp moves from `onSurface` in *both* modes
-         * (darker than white in the light theme, lighter than the page in the
-         * dark one), so a role that clears its floor there clears it everywhere.
+         * The backdrop is [worstSurface], which is the surface a role can be drawn
+         * on where it will read worst - not `surfaceContainerHighest`, which this
+         * used to assume was that surface. See [worstSurface] for what the
+         * assumption got wrong.
          */
         fun of(scheme: MaterialScheme): EmphasisPalette = of(
             onSurface = scheme.onSurface,
             onSurfaceVariant = scheme.onSurfaceVariant,
-            surfaceContainerHighest = scheme.surfaceContainerHighest,
+            worstSurface = worstSurface(scheme),
             outline = scheme.outline,
             outlineVariant = scheme.outlineVariant,
             primary = scheme.primary,
             secondary = scheme.secondary,
             tertiary = scheme.tertiary,
             error = scheme.error
+        )
+
+        /**
+         * The surface a role drawn on a card can land on where it reads worst.
+         *
+         * This used to be `surfaceContainerHighest` on the claim that it is the
+         * furthest the surface ramp moves from `onSurface` in both modes. It is
+         * not: the light theme's `surfaceDim` (tone 87) is darker than
+         * `surfaceContainerHighest` (tone 90), and the dark theme's
+         * `surfaceBright` (24) is lighter than it (22). A role dimmed to 4.5:1 on
+         * the highest container measured 4.48:1 on `surfaceBright` for a red seed
+         * in the dark theme - the secondary text missed AA on the brightest
+         * surface. Picking
+         * the surface with the *lowest* contrast against `onSurface` is the only
+         * definition that is true in both modes, and it is what the comment
+         * claimed all along.
+         *
+         * The list is every surface role the scheme generates, not the containers
+         * alone: the deprecated `surfaceVariant` is tone 30 in the dark scheme
+         * against `surfaceBright`'s 24, so a list without it measures the floor
+         * against a surface the caption does not sit on. Being short by one
+         * surface is indistinguishable from being right until someone measures.
+         */
+        fun worstSurface(onSurface: Int, surfaces: List<Int>): Int =
+            surfaces.minByOrNull { Contrast.ratio(onSurface, it) } ?: surfaces.first()
+
+        /** [worstSurface] over every surface role of [scheme]. */
+        fun worstSurface(scheme: MaterialScheme): Int = worstSurface(
+            scheme.onSurface,
+            listOf(
+                scheme.surface,
+                // The plain page background is a tone away from `surface` at most,
+                // and it is the surface a caption outside any card sits on.
+                scheme.background,
+                scheme.surfaceDim,
+                scheme.surfaceBright,
+                // Deprecated in Material 3 but still generated and still a
+                // background some components draw on, and it is tone 30 in dark -
+                // lighter than surfaceBright's 24, so omitting it would measure
+                // the floor against a surface the text does not actually sit on.
+                scheme.surfaceVariant,
+                scheme.surfaceContainer,
+                scheme.surfaceContainerHigh,
+                scheme.surfaceContainerHighest,
+                scheme.surfaceContainerLow,
+                scheme.surfaceContainerLowest
+            )
         )
 
         /**
@@ -95,7 +142,7 @@ data class EmphasisPalette(
         fun of(
             onSurface: Int,
             onSurfaceVariant: Int,
-            surfaceContainerHighest: Int,
+            worstSurface: Int,
             outline: Int,
             outlineVariant: Int,
             primary: Int,
@@ -103,7 +150,7 @@ data class EmphasisPalette(
             tertiary: Int,
             error: Int
         ): EmphasisPalette {
-            val worst = surfaceContainerHighest
+            val worst = worstSurface
             val strongest = onSurface
 
             /**

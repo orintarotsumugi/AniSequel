@@ -762,63 +762,6 @@ val MediaNode.seasonLabel: String?
     }
 
 /**
- * How many episodes of this entry the viewer has already watched.
- *
- * AniList returns it as `mediaListEntry { progress }` for anything on their
- * list; for an entry the app is offering to add, that is only ever
- * `progress`/`current`, which is what makes a card able to say "you're 4
- * episodes in" rather than only "not on your list".
- */
-val MediaNode.watchedEpisodeCount: Int? get() = mediaListEntry?.progress
-val MediaNode.airingEpisodeNumber: Int? get() = nextAiringEpisode?.episode
-
-/** AniList's `airingAt`: seconds since the epoch, not milliseconds. */
-val MediaNode.airingAtSeconds: Long? get() = nextAiringEpisode?.airingAt
-
-/** How long until the next episode, or null when nothing is scheduled. */
-fun MediaNode.airingCountdown(nowMillis: Long = System.currentTimeMillis()): String? =
-    AiringCountdown.format(airingAtSeconds, nowMillis)
-
-/**
- * How far through this entry the viewer is, as a 0..1 fraction.
- *
- * Null when there is nothing meaningful to show - no total episode count, or no
- * progress recorded - so callers can skip the bar entirely rather than drawing
- * an empty one.
- */
-fun MediaNode.watchFraction(): Float? {
-    if (isManga) {
-        val total = chapters ?: return null
-        if (total <= 0) return null
-        val read = watchedEpisodeCount ?: return null
-        return (read.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-    }
-    val total = episodes ?: return null
-    if (total <= 0) return null
-    val watched = watchedEpisodeCount ?: return null
-    return (watched.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-}
-
-/** "6 / 12 eps watched" or "14 / 32 chs read" - null when the viewer has not started it. */
-fun MediaNode.watchFractionLabel(): String? {
-    // `total > 0`, like [watchFraction] and [progressCountLabel]. AniList reports
-    // a zero episode count for a show whose length is not announced yet, and the
-    // unguarded label printed "3 / 0 eps" for exactly those titles.
-    if (isManga) {
-        val total = chapters ?: return null
-        if (total <= 0) return null
-        val read = watchedEpisodeCount ?: return null
-        if (read <= 0) return null
-        return "$read / $total chs read"
-    }
-    val total = episodes ?: return null
-    if (total <= 0) return null
-    val watched = watchedEpisodeCount ?: return null
-    if (watched <= 0) return null
-    return "$watched / $total eps"
-}
-
-/**
  * The full record once the sheet's detail query has answered, keeping the
  * viewer's progress from the summary the tap came from.
  *

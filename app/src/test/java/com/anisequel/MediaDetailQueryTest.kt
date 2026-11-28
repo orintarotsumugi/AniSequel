@@ -364,6 +364,35 @@ class MediaDetailQueryTest {
     }
 
     /**
+     * The airing schedule, filtered to slots that have not aired.
+     *
+     * `nextAiringEpisode` is documented as the media's next episode and is still
+     * null on a currently airing show whose length AniList has not announced, so
+     * the Info page had nothing to print for a show that is visibly airing.
+     * `airingSchedule` is the documented fallback, and the docs only promise that
+     * *future* airing data is present and accurate - which is why the filter is
+     * part of the contract rather than a narrowing. `perPage: 25` is the
+     * documented maximum; a weekly show's next six months fit in one page.
+     */
+    @Test
+    fun `the detail query asks for the upcoming airing schedule`() {
+        listOf(
+            GraphQLQueries.getMediaDetailQuery("ANIME"),
+            GraphQLQueries.getMediaDetailQuery(null)
+        ).forEach { query ->
+            assertTrue(
+                "the schedule is not asked for, so a show without `nextAiringEpisode` " +
+                    "has no countdown at all:\n$query",
+                query.contains("airingSchedule(notYetAired: true, perPage: 25)")
+            )
+            assertTrue(
+                "the schedule's nodes are not selected:\n$query",
+                query.contains("nodes { episode airingAt }")
+            )
+        }
+    }
+
+    /**
      * Braces and parens balanced, in both forms.
      *
      * The document is assembled from a shared field list and a conditional

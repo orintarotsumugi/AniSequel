@@ -35,6 +35,15 @@ class MediaDetailStore(
     private val scope: CoroutineScope,
     private val isDemo: Boolean,
     /**
+     * The clock the freshness windows read.
+     *
+     * Injected because the windows are ten minutes wide and the only way to test
+     * what happens after one is to move the clock: a test that slept would be a
+     * test nobody runs. Defaulted to the wall clock, which is the shipped answer;
+     * nothing outside a test passes anything else.
+     */
+    private val now: () -> Long = { System.currentTimeMillis() },
+    /**
      * Called with a node the first time it is fetched, so a list that shows the
      * same entry can fold the detail into it without re-fetching.
      */
@@ -163,6 +172,17 @@ class MediaDetailStore(
         ): Boolean = size > MAX_ENTRIES
     }
 
+    /**
+     * When each entry of [friendsCache] was fetched, for the freshness window.
+     *
+     * A map beside the cache rather than a field on the value, because the value is
+     * the list the screens draw: wrapping it would mean publishing a pair to every
+     * card that only ever wants the list. Trimmed to the same size as the cache by
+     * the same "drop the oldest timestamp" loop [load] runs, so a long session on
+     * one account cannot grow it without bound.
+     */
+    private val friendsFetchedAt = mutableMapOf<MediaCoverKey, Long>()
+
     /** The generation matters when a clear is followed by a new request for this key. */
     private val friendsInFlight = mutableMapOf<MediaCoverKey, Int>()
 
@@ -192,25 +212,51 @@ class MediaDetailStore(
      */
     fun loadFriends(mediaId: Int, mediaType: String? = null) {
         val key = cacheKey(mediaId, mediaType)
-        friendsCache[key]?.let { known ->
-            publishFriends(key, known)
-            return
+        val known = friendsCache[key]
+        var stale = false
+        known?.let { list ->
+            // Published on the first frame, so reopening a title never draws an empty
+            // row over a list the session already has - and then the same ten-minute
+            // window the detail uses decides whether that list still answers "who
+            // follows this *now*". This used to return here unconditionally, which
+            // made the first successful fetch the answer for the whole session: the
+            // open page refreshed its detail every ten minutes and left the friends
+            // card saying what it had said when the sheet opened.
+            publishFriends(key, list)
+            val lastFetch = friendsFetchedAt[key] ?: 0L
+            if (now() - lastFetch < DETAIL_REFRESH_INTERVAL_MILLIS) return
+            stale = true
         }
         if (isDemo || key in friendsInFlight) return
 
         val startedAtGeneration = generation
         friendsInFlight[key] = startedAtGeneration
-        _friendsLoading.value = _friendsLoading.value + key
+        // A stale copy is already on screen, so this is a background refresh like
+        // [load]'s: the card keeps drawing what it has and must not flash a spinner.
+        if (!stale) _friendsLoading.value = _friendsLoading.value + key
         scope.launch {
             try {
                 repositoryResult {
-                    repository.getMediaFriends(mediaId, mediaType)
+                    // Forced only when this is a refresh of an answer we already have.
+                    // The repository caches this query for the reader's own list
+                    // interval, which can be longer than this store's ten minutes - and
+                    // without the bypass the "refresh" would be handed back the very
+                    // list it is replacing, for up to that interval.
+                    repository.getMediaFriends(mediaId, mediaType, forceRefresh = stale)
                 }.onSuccess { list ->
                     // Dropped when the store was cleared while this was on the wire,
                     // because the answer belongs to a session that has ended - see
                     // [generation] for what filing it anyway showed the next reader.
                     if (startedAtGeneration == this@MediaDetailStore.generation) {
                         friendsCache[key] = list
+                        friendsFetchedAt[key] = now()
+                        // The *oldest* timestamp, for the reason [load] documents on
+                        // its own trim: a missing one reads as "never fetched" and
+                        // spends the session re-requesting this title.
+                        while (friendsFetchedAt.size > MAX_ENTRIES) {
+                            val oldest = friendsFetchedAt.minByOrNull { (_, at) -> at }?.key ?: break
+                            friendsFetchedAt.remove(oldest)
+                        }
                         publishFriends(key, list)
                     }
                 }
@@ -220,7 +266,10 @@ class MediaDetailStore(
                 // starts; only its own generation may clear the new loading marker.
                 if (friendsInFlight[key] == startedAtGeneration) {
                     friendsInFlight.remove(key)
-                    _friendsLoading.value = _friendsLoading.value - key
+                    // Only a fetch that claimed the spinner may clear it; a
+                    // background refresh never added this key, and re-assigning the
+                    // set anyway would emit a state change on every refresh.
+                    if (!stale) _friendsLoading.value = _friendsLoading.value - key
                 }
             }
         }
@@ -254,7 +303,7 @@ class MediaDetailStore(
             // first successful fetch as valid for the whole session.
             publish(key, known)
             val lastFetch = fetchedAt[key] ?: 0L
-            if (System.currentTimeMillis() - lastFetch < DETAIL_REFRESH_INTERVAL_MILLIS) return
+            if (now() - lastFetch < DETAIL_REFRESH_INTERVAL_MILLIS) return
         }
         // Demo data is already complete, and there is no session to fetch with.
         //
@@ -291,7 +340,7 @@ class MediaDetailStore(
                     // cleans up either way.
                     if (startedAtGeneration == this@MediaDetailStore.generation) {
                         cache[key] = detail
-                        fetchedAt[key] = System.currentTimeMillis()
+                        fetchedAt[key] = now()
                         // The *oldest* timestamp. This used to take
                         // `fetchedAt.entries.first()` - HashMap iteration order,
                         // which is arbitrary and could be the entry written on the
@@ -375,6 +424,7 @@ class MediaDetailStore(
         _details.value = emptyMap()
         _loading.value = emptySet()
         friendsCache.clear()
+        friendsFetchedAt.clear()
         friendsInFlight.clear()
         _friendsLoading.value = emptySet()
         _friends.value = emptyMap()

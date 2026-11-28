@@ -18,6 +18,7 @@ import com.anisequel.data.model.genreList
 import com.anisequel.data.model.hasProgressCard
 import com.anisequel.data.model.hasRankings
 import com.anisequel.data.model.isManga
+import com.anisequel.data.model.progressCardStatesAiring
 import com.anisequel.data.model.relatedMedia
 import com.anisequel.data.model.staffList
 import com.anisequel.data.model.streamingLinks
@@ -175,6 +176,12 @@ internal fun LazyListScope.infoPageItems(
             media = media,
             isDetailLoading = isDetailLoading,
             onOpenStudio = onOpenStudio,
+            // This page has no stats strip, so the grid is the only place an
+            // untracked title can state its next episode. "Tracked" is not the
+            // question - `progressCardStatesAiring` asks whether the progress card
+            // above will actually print the sentence, which also needs the episode
+            // number and an airing time.
+            showAiring = !media.progressCardStatesAiring,
             modifier = it
         )
     }
