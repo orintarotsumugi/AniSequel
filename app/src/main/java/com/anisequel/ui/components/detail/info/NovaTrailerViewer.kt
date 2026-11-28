@@ -307,7 +307,6 @@ internal fun NovaTrailerViewer(
 
     NovaTrailerDialog(
         title = title,
-        fallbackUrl = fallbackUrl,
         entranceProgress = entrance.value,
         player = player,
         loaded = loaded,
@@ -324,7 +323,6 @@ internal fun NovaTrailerViewer(
 @Composable
 private fun NovaTrailerDialog(
     title: String,
-    fallbackUrl: String,
     entranceProgress: Float,
     player: WebView,
     loaded: Boolean,
@@ -387,7 +385,11 @@ private fun NovaTrailerViewerContent(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             NovaTrailerHeader(title = title, onClose = onClose)
-            NovaTrailerFrame(player = player, loaded = loaded)
+            NovaTrailerFrame(
+                modifier = Modifier.weight(1f, fill = false),
+                player = player,
+                loaded = loaded
+            )
             NovaTrailerPlaybackControls(
                 player = player,
                 playerReady = playerReady,
@@ -437,14 +439,13 @@ private fun NovaTrailerHeader(
 
 @Composable
 private fun NovaTrailerFrame(
+    modifier: Modifier,
     player: WebView,
     loaded: Boolean
 ) {
     // Let the frame use the available height first on a phone held in landscape.
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .weight(1f, fill = false),
+        modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -486,8 +487,7 @@ private fun NovaTrailerPlaybackControls(
             label = "−5s",
             description = "Rewind 5 seconds",
             testTag = "nova_trailer_rewind",
-            playerReady = playerReady,
-            command = "window.anisequelTrailer.seek(-5)"
+            playerReady = playerReady
         ) {
             player.evaluateJavascript("window.anisequelTrailer.seek(-5)", null)
         }
@@ -502,8 +502,7 @@ private fun NovaTrailerPlaybackControls(
             label = "+5s",
             description = "Forward 5 seconds",
             testTag = "nova_trailer_forward",
-            playerReady = playerReady,
-            command = "window.anisequelTrailer.seek(5)"
+            playerReady = playerReady
         ) {
             player.evaluateJavascript("window.anisequelTrailer.seek(5)", null)
         }
@@ -516,7 +515,6 @@ private fun NovaTrailerSkipButton(
     description: String,
     testTag: String,
     playerReady: Boolean,
-    command: String,
     onClick: () -> Unit
 ) {
     Surface(
