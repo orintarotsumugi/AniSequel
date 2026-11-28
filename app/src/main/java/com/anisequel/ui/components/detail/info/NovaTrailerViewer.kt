@@ -41,7 +41,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -338,8 +337,7 @@ internal fun NovaTrailerViewer(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.Center)
-                    ,
+                    .align(Alignment.Center),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -437,8 +435,7 @@ internal fun NovaTrailerViewer(
                         NovaTrailerPlayer(
                             videoId = videoId,
                             modifier = Modifier.fillMaxSize(),
-                            presence = { entrance.value },
-                            onLoaded = { loaded = true }
+                                            onLoaded = { loaded = true }
                         )
                     }
                 }
@@ -501,12 +498,10 @@ private fun NovaTrailerPlayer(
      * caller animates it, this composable only forwards it to the view's own alpha,
      * and nothing here has to recompose on the frames it changes.
      */
-    presence: () -> Float,
     onLoaded: () -> Unit
 ) {
     val context = LocalContext.current
     val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
-    var revealed by remember(videoId) { mutableStateOf(false) }
     // The reveal is a Compose spring rather than the view's own animator, so the
     // ring above it can fade out on the same clock and a reader who chose Instant
     // motion gets the frame instead of a fade. The platform animator that used to
@@ -522,7 +517,6 @@ private fun NovaTrailerPlayer(
     // to be reachable from the watchdog as well as from the page's own signals.
     val player = remember(videoId) {
         createNovaTrailerPlayer(context = context, html = html) {
-            revealed = true
             onLoaded()
         }
     }
@@ -590,7 +584,7 @@ private fun createNovaTrailerPlayer(
     val reveal: () -> Unit = {
         if (!revealed) {
             revealed = true
-            visibility = View.VISIBLE
+            webView.visibility = View.VISIBLE
             onReady()
         }
     }
