@@ -211,12 +211,12 @@ private fun ExtraTrailerRow(
             if (videoId != null) {
                 playing = true
             } else {
-                // The same opener every other link in the app uses. The raw
-                // intent this replaced swallowed its own failure: a device with
-                // no browser got no browser, no message and no URL, which is the
-                // "opens on YouTube" subtitle being false in the one case the
+                // The YouTube app first, then the shared opener - so the "opens on
+                // YouTube" subtitle is true. The raw intent this replaced swallowed
+                // its own failure: a device with no browser got no browser, no message
+                // and no URL, which is that subtitle being false in the one case the
                 // hand-off exists for.
-                openExternalUrlOrCopy(context, trailerUrl)
+                openTrailerExternally(context, trailerUrl)
             }
         }
     )

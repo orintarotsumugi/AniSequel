@@ -16,56 +16,74 @@ import java.net.URLEncoder
 /**
  * The player view, and the one place that decides when it may be seen.
  *
+ * ## Why a WebView and not a native player
+ *
+ * AniList hands the app a YouTube **id**, not a stream. The YouTube Android Player API
+ * that used to play one was withdrawn, and what is left is either YouTube's own embed (a
+ * web page) or a stream extractor - a dependency whose whole job is to break when YouTube
+ * changes, fetching content the API did not license this app to serve. The embed is the
+ * same answer the rest of the app already gives for a live SVG card: the one leaf of
+ * Chromium that does the job nothing else can, contained. It is also why this is the one
+ * `WebView` in the app with JavaScript enabled: the player *is* a web app, and without
+ * scripting the embed is a black rectangle. Everything a document could do with that is
+ * closed off instead - the page is a fixed wrapper holding one iframe, the only hosts it
+ * may load are YouTube's, and a navigation that is not the player's own pages is
+ * cancelled here.
+ *
  * ## Why visibility changes, not alpha
  *
  * A `WebView` is a real Android view in Compose's interop layer. Applying alpha or
  * scale compositing around its video surface can leave audio and player chrome
  * visible while the video plane is black. The view therefore stays fully opaque and
- * hardware-backed; it starts `INVISIBLE` and becomes `VISIBLE` only when it is
- * ready to draw (or the watchdog has to reveal the fallback surface). The Compose
- * loading ring sits above it only while it is invisible, rather than trying to fade
- * through a native video surface.
+ * hardware-backed; it starts `INVISIBLE` and becomes `VISIBLE` only when the page
+ * says the player is ready (or the reveal watchdog decides a slow load has to show
+ * something). The Compose loading ring sits above it only while it is invisible,
+ * rather than trying to fade through a native video surface.
  *
- * ## What counts as player-ready
+ * ## The protocol: console in, script out
  *
- * The wrapper's own load event only says that the local HTML document loaded; it
- * does not say YouTube can accept playback commands. The YouTube IFrame Player API's
- * `onReady` event is the signal used for both revealing the player and enabling the
- * native controls. Its `onStateChange` event keeps the play/pause button in sync.
- * No JavaScript interface is exposed to the remote frame: the wrapper reports these
- * two events through the WebView console. [NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS] remains
- * the last-resort escape if the provider or remote API never reports readiness.
+ * Events come *out* of the page as console lines, because a `JavascriptInterface` is a
+ * callable surface exposed to a frame this app does not control, and all this needs is
+ * for one string to arrive. Commands and readings go *in* through
+ * `evaluateJavascript`, which is a one-shot call the page cannot reach back through.
  *
- * ## A reveal that arrives after the close
- *
- * `isDismissing` is what keeps readiness from undoing a close. The viewer hides this
- * surface on the frame the close is tapped, but a slow first load can report ready a
- * few hundred milliseconds later - and a reveal then switched the video back on for
- * the tail of the fade. It is the same glitch the close exists to remove, arriving
- * from the other side.
+ * The old protocol only had the events - so the viewer could tell whether the video was
+ * playing but not where it was, and a seek bar was impossible. `snapshot()` now returns
+ * `[position, duration, state]` as a JSON array (`evaluateJavascript` hands back the
+ * value serialised, and an array needs no un-escaping; a string would arrive
+ * double-quoted and escaped) and the viewer polls it while playing.
  */
 @Suppress("SetJavaScriptEnabled", "OVERRIDE_DEPRECATION")
 internal fun createNovaTrailerPlayer(
     context: Context,
     html: String,
     isDismissing: () -> Boolean,
-    onReady: () -> Unit,
-    onPlayerReady: () -> Unit,
-    onPlaybackStateChanged: (Int) -> Unit,
-    onPlayerError: (Int) -> Unit
+    onReveal: () -> Unit,
+    onSignal: (NovaTrailerSignal) -> Unit
 ): WebView {
     val webView = WebView(context)
     var revealed = false
-    // Idempotent: the IFrame API's ready event and the watchdog can both request reveal.
+    // Set by the page's onReady. Until then the failure watchdog has work to do.
+    var ready = false
+    // Idempotent: the IFrame API's ready event and the reveal watchdog can both ask.
     val reveal: () -> Unit = {
         if (!revealed && !isDismissing()) {
             revealed = true
             webView.visibility = View.VISIBLE
-            onReady()
+            onReveal()
         }
     }
+    // Everything the page says is dropped once the window is on its way out: a state
+    // change arriving mid-fade would repaint a panel the reader has already closed.
+    val deliver: (NovaTrailerSignal) -> Unit = { signal ->
+        if (signal is NovaTrailerSignal.Ready) {
+            ready = true
+            reveal()
+        }
+        if (!isDismissing()) onSignal(signal)
+    }
     webView.apply {
-        // Keep the native video surface opaque. The visibility switch below is the
+        // Keep the native video surface opaque. The visibility switch above is the
         // only reveal mechanism; a fractional alpha can put the video through a
         // compositing layer and reproduce the audio-with-black-picture failure.
         alpha = 1f
@@ -102,10 +120,7 @@ internal fun createNovaTrailerPlayer(
         settings.setSupportMultipleWindows(false)
         webChromeClient = NovaTrailerChromeClient(
             webView = this,
-            onEmbedReady = reveal,
-            onPlayerReady = onPlayerReady,
-            onPlaybackStateChanged = onPlaybackStateChanged,
-            onPlayerError = onPlayerError
+            onSignal = deliver
         )
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
@@ -155,21 +170,37 @@ internal fun createNovaTrailerPlayer(
             }
         }
     }
-    // A player that says nothing at all - no WebView provider, a script the page
-    // declined to run - still has to stop being a spinner eventually.
-    val timeout = Runnable { reveal() }
-    webView.postDelayed(timeout, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
-    // A dialog can be closed before it fires, and releasing the player calls
-    // `destroy()`. A callback still queued past that runs the reveal against a
-    // view the composition has already thrown away, and holds the WebView - with
-    // the page it decoded and its audio decoder - alive for the rest of the seven
-    // seconds. Removing it on detach is the one hook that fires both for a close
-    // and for the rotation that recreates the dialog.
+    // Two watchdogs, not one, because they answer different questions.
+    //
+    // The first is the old last-resort reveal: a page that says nothing at all - no
+    // WebView provider, a script the page declined to run - must stop being a spinner
+    // eventually. Showing the surface at that point is right even on a slow network: the
+    // reader sees YouTube's own loading state rather than an error that may not be true.
+    //
+    // The second is the new failure deadline. A player that never reports ready is a
+    // player that will not play this video here, and the reader may only learn that from
+    // the panel with a retry - a black frame and a spinner forever is the failure this
+    // replaces. It is deliberately much later than the reveal, so a slow connection is
+    // not mistaken for a broken one.
+    val revealTimeout = Runnable { reveal() }
+    val failureTimeout = Runnable {
+        if (!ready && !isDismissing()) {
+            onSignal(NovaTrailerSignal.Failed(NOVA_TRAILER_CODE_TIMEOUT))
+        }
+    }
+    webView.postDelayed(revealTimeout, NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS)
+    webView.postDelayed(failureTimeout, NOVA_TRAILER_FAILURE_TIMEOUT_MILLIS)
+    // A dialog can be closed before either fires, and releasing the player calls
+    // `destroy()`. A callback still queued past that runs against a view the composition
+    // has already thrown away, and holds the WebView - with the page it decoded and its
+    // audio decoder - alive for the rest of the deadline. Removing them on detach is the
+    // one hook that fires both for a close and for the rotation that recreates the dialog.
     webView.addOnAttachStateChangeListener(
         object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) = Unit
             override fun onViewDetachedFromWindow(view: View) {
-                view.removeCallbacks(timeout)
+                view.removeCallbacks(revealTimeout)
+                view.removeCallbacks(failureTimeout)
                 view.removeOnAttachStateChangeListener(this)
             }
         }
@@ -197,14 +228,19 @@ internal const val NOVA_TRAILER_BASE_URL = "$NOVA_TRAILER_ORIGIN/"
 private val NOVA_TRAILER_ORIGIN_QUERY: String =
     URLEncoder.encode(NOVA_TRAILER_ORIGIN, Charsets.UTF_8.name())
 
-/** Emitted only when YouTube's IFrame API reports that the player is ready. */
-private const val NOVA_TRAILER_PLAYER_READY_MESSAGE = "anisequel:trailer-player-ready"
+/** The page's handle, mirrored in the script below. */
+private const val NOVA_TRAILER_HANDLE = "window.anisequelTrailer"
+
+/** The IFrame API reported that the player can be commanded. Carries its duration. */
+private const val NOVA_TRAILER_READY_PREFIX = "anisequel:trailer-ready:"
 
 /** Playback-state events forwarded from the IFrame API to Compose. */
 private const val NOVA_TRAILER_STATE_PREFIX = "anisequel:trailer-state:"
 
 /**
- * The IFrame API's `onError` code, forwarded so Compose can stop showing the frame.
+ * A refusal: either the IFrame API's `onError` code, or one of the two codes this app
+ * raises for a player that never appeared ([NOVA_TRAILER_CODE_TIMEOUT],
+ * [NOVA_TRAILER_CODE_NO_PLAYER]).
  *
  * Without this a refused video (101/150 owner blocked embeds, 100 removed, 153 a
  * missing referer) rendered YouTube's own "Video unavailable" card inside the 16:9
@@ -215,14 +251,149 @@ private const val NOVA_TRAILER_ERROR_PREFIX = "anisequel:trailer-error:"
 /** The last-resort reveal: a player that never reports must not spin forever. */
 private const val NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS = 7000L
 
-/** Routes YouTube's full-screen video surface above the Compose dialog. */
+/** How long a player that never reports ready may stay in the loading state. */
+private const val NOVA_TRAILER_FAILURE_TIMEOUT_MILLIS = 20000L
+
+/**
+ * One event from the wrapper page.
+ *
+ * A sealed type rather than three nullable fields on a lambda: the viewer has to react
+ * to each of these differently - ready reveals and starts the progress clock, a state
+ * change drives one glyph, a failure replaces the frame - and a bare `(Int) -> Unit`
+ * with three callbacks is how the previous version ended up with five `mutableStateOf`
+ * values that could disagree.
+ */
+internal sealed interface NovaTrailerSignal {
+    /** The IFrame API's `onReady`. [durationSeconds] is 0 when the video has none. */
+    data class Ready(val durationSeconds: Float) : NovaTrailerSignal
+
+    /** `onStateChange`: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued. */
+    data class StateChanged(val state: Int) : NovaTrailerSignal
+
+    /** `onError`, or one of this app's own codes. */
+    data class Failed(val code: Int) : NovaTrailerSignal
+}
+
+/**
+ * Reads one console line as a player event, or null for YouTube's own noise.
+ *
+ * Pure and separate from the [WebChromeClient] because this is the part that can be
+ * wrong in ways a device would hide: a prefix that drifts, a payload that stops
+ * parsing, a code that arrives as a float. The page and the viewer are on opposite
+ * sides of a language boundary, and this is the only place that boundary is crossed.
+ */
+internal fun parseNovaTrailerSignal(message: String): NovaTrailerSignal? = when {
+    message.startsWith(NOVA_TRAILER_READY_PREFIX) -> NovaTrailerSignal.Ready(
+        message.removePrefix(NOVA_TRAILER_READY_PREFIX).toFloatOrNull() ?: 0f
+    )
+    message.startsWith(NOVA_TRAILER_STATE_PREFIX) -> message
+        .removePrefix(NOVA_TRAILER_STATE_PREFIX)
+        .toIntOrNull()
+        ?.let { NovaTrailerSignal.StateChanged(it) }
+    message.startsWith(NOVA_TRAILER_ERROR_PREFIX) -> message
+        .removePrefix(NOVA_TRAILER_ERROR_PREFIX)
+        .toIntOrNull()
+        ?.let { NovaTrailerSignal.Failed(it) }
+    else -> null
+}
+
+/** One reading of the player: where it is, how long it is, what it is doing. */
+internal data class NovaTrailerSnapshot(
+    val positionSeconds: Float,
+    val durationSeconds: Float,
+    val state: Int
+)
+
+/**
+ * Parses the JSON array `snapshot()` returns, or null when the page has no player yet.
+ *
+ * Hand-parsed rather than through `org.json`: the payload is three numbers this app
+ * wrote, and a parser that accepts only that cannot be surprised by what a page
+ * returns. `[0,0,-1]` is the page's "not ready" answer and reads as state -1.
+ */
+internal fun parseNovaTrailerSnapshot(raw: String?): NovaTrailerSnapshot? {
+    val text = raw?.trim().orEmpty()
+    if (!text.startsWith("[") || !text.endsWith("]")) return null
+    val parts = text.substring(1, text.length - 1).split(',')
+    if (parts.size != 3) return null
+    val position = parts[0].trim().toFloatOrNull() ?: return null
+    val duration = parts[1].trim().toFloatOrNull() ?: return null
+    val state = parts[2].trim().toFloatOrNull()?.toInt() ?: return null
+    // NaN and Infinity are valid Float conversions and not valid readings. A page that
+    // answers with one would otherwise set the clock to a number no bar can draw.
+    if (!position.isFinite() || !duration.isFinite()) return null
+    return NovaTrailerSnapshot(position, duration, state)
+}
+
+/**
+ * Every command is guarded, because every command can arrive before the page has a
+ * player: the close runs on the frame the reader taps it, a lifecycle stop can follow
+ * the activity straight into the background, and either can land while the document
+ * is still empty. `evaluateJavascript` against an empty document has nothing to call,
+ * and the throw it raises is a console error in a page nobody is reading.
+ */
+internal fun novaTrailerCall(call: String): String = "if($NOVA_TRAILER_HANDLE){$NOVA_TRAILER_HANDLE.$call}"
+
+/** The close and a lifecycle stop both ask for this, and neither wants a toggle. */
+internal val NOVA_TRAILER_PAUSE_JS: String = novaTrailerCall("pause()")
+
+private val NOVA_TRAILER_PLAY_JS: String = novaTrailerCall("play()")
+private val NOVA_TRAILER_TOGGLE_JS: String = novaTrailerCall("toggle()")
+private val NOVA_TRAILER_SNAPSHOT_JS: String = novaTrailerCall("snapshot()")
+
+/** Runs one guarded command. A destroyed `WebView` cannot evaluate at all, hence the wrap. */
+private fun sendNovaTrailerCommand(player: WebView, script: String) {
+    runCatching { player.evaluateJavascript(script, null) }
+}
+
+internal fun playNovaTrailer(player: WebView) = sendNovaTrailerCommand(player, NOVA_TRAILER_PLAY_JS)
+
+/**
+ * Stops the embed's playback, wherever it is and whatever state it is in.
+ *
+ * A pause, never a toggle: the player may already be paused (or paused by the system)
+ * when this is called, and a toggle would start it in exactly that case.
+ */
+internal fun pauseNovaTrailer(player: WebView) =
+    sendNovaTrailerCommand(player, NOVA_TRAILER_PAUSE_JS)
+
+internal fun toggleNovaTrailer(player: WebView) =
+    sendNovaTrailerCommand(player, NOVA_TRAILER_TOGGLE_JS)
+
+/** Seeks to an absolute second. The page clamps to the video's own duration. */
+internal fun seekNovaTrailer(player: WebView, seconds: Float) {
+    if (!seconds.isFinite()) return
+    sendNovaTrailerCommand(player, novaTrailerCall("seekTo($seconds)"))
+}
+
+/**
+ * Asks the page where playback is, and hands the answer back if there is an answer.
+ *
+ * The callback runs on the main thread after the document has evaluated the script, so
+ * a closed viewer simply never receives it. A page with no player answers `[-1,...]`
+ * and [parseNovaTrailerSnapshot] passes that on; the session ignores a negative position.
+ */
+internal fun readNovaTrailerSnapshot(
+    player: WebView,
+    onSnapshot: (NovaTrailerSnapshot) -> Unit
+) {
+    runCatching {
+        player.evaluateJavascript(NOVA_TRAILER_SNAPSHOT_JS) { raw ->
+            parseNovaTrailerSnapshot(raw)?.let(onSnapshot)
+        }
+    }
+}
+
+/**
+ * Routes YouTube's full-screen video surface above the Compose dialog.
+ *
+ * `fs=1` is on the frame, so a reader who taps fullscreen in the embed gets the real
+ * thing: YouTube hands the platform a view, and it is attached to the dialog's root.
+ */
 @Suppress("OVERRIDE_DEPRECATION")
 internal class NovaTrailerChromeClient(
     private val webView: WebView,
-    private val onEmbedReady: () -> Unit,
-    private val onPlayerReady: () -> Unit,
-    private val onPlaybackStateChanged: (Int) -> Unit,
-    private val onPlayerError: (Int) -> Unit
+    private val onSignal: (NovaTrailerSignal) -> Unit
 ) : WebChromeClient() {
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
@@ -250,27 +421,10 @@ internal class NovaTrailerChromeClient(
     // JavaScript interface: a bridge is a callable surface exposed to a frame this
     // app does not control, and all this needs is for one string to arrive.
     override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-        val text = message.message()
-        when {
-            text == NOVA_TRAILER_PLAYER_READY_MESSAGE -> {
-                onEmbedReady()
-                onPlayerReady()
-                return true
-            }
-            text.startsWith(NOVA_TRAILER_ERROR_PREFIX) -> {
-                val code = text.substringAfter(NOVA_TRAILER_ERROR_PREFIX).toIntOrNull()
-                    ?: return super.onConsoleMessage(message)
-                onPlayerError(code)
-                return true
-            }
-            text.startsWith(NOVA_TRAILER_STATE_PREFIX) -> {
-                val state = text.substringAfter(NOVA_TRAILER_STATE_PREFIX).toIntOrNull()
-                    ?: return super.onConsoleMessage(message)
-                onPlaybackStateChanged(state)
-                return true
-            }
-        }
-        return super.onConsoleMessage(message)
+        val signal = parseNovaTrailerSignal(message.message())
+            ?: return super.onConsoleMessage(message)
+        onSignal(signal)
+        return true
     }
 
     fun hideCustomView() {
@@ -360,30 +514,6 @@ internal fun isNovaTrailerId(id: String): Boolean =
     id.isNotEmpty() && id.length <= 20 && id.all { it.isLetterOrDigit() || it == '_' || it == '-' }
 
 /**
- * Stops the embed's playback, wherever it is and whatever state it is in.
- *
- * The guard is deliberate: this is called on the frame the close is tapped and
- * again when the app leaves the foreground, and either can land before the page
- * has built `window.anisequelTrailer` (a cold open, or a stop that follows the
- * activity straight into the background). `evaluateJavascript` before the document
- * exists has nothing to pause, and the throw it would raise is a console error in a
- * page nobody is reading.
- *
- * A destroyed `WebView` cannot evaluate at all, which is why the call is wrapped:
- * the close animation and a lifecycle stop can arrive together, and an
- * `IllegalStateException` on the way out would turn a dismissed trailer into a
- * crash.
- */
-internal fun pauseNovaTrailer(player: WebView) {
-    runCatching {
-        player.evaluateJavascript(NOVA_TRAILER_PAUSE_JS, null)
-    }
-}
-
-internal const val NOVA_TRAILER_PAUSE_JS =
-    "if(window.anisequelTrailer){window.anisequelTrailer.pause()}"
-
-/**
  * The wrapper page: one iframe, filling it, and nothing else.
  *
  * `playsinline` is what keeps the video inside the frame instead of handing it to
@@ -391,9 +521,19 @@ internal const val NOVA_TRAILER_PAUSE_JS =
  * top of the trailer once it ends, and `modestbranding` drops the badge that sits
  * over the picture. The frame is `allow="autoplay; encrypted-media"` because without
  * those the player starts muted or refuses to start at all.
+ *
+ * The id is validated rather than escaped: AniList's ids are `[A-Za-z0-9_-]`, and
+ * anything else is not a trailer. That is what keeps a malformed payload from
+ * becoming markup in a page with JavaScript on.
  */
 internal fun novaTrailerEmbedHtml(videoId: String): String {
     val safeId = if (isNovaTrailerId(videoId)) videoId else ""
+    if (safeId.isEmpty()) {
+        // An empty document rather than an escaped string: the card only offers a
+        // viewer for an id it just read, so this is the malformed case, and the escape
+        // hatch in the viewer is where the reader goes next.
+        return "<!doctype html><html><head><style>html,body{margin:0;background:#000}</style></head><body></body></html>"
+    }
     return buildString {
         append("<!doctype html><html><head>")
         append("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,maximum-scale=1\">")
@@ -401,64 +541,115 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
         append("html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden;}")
         append("iframe{display:block;width:100%;height:100%;border:0;}")
         append("</style></head><body>")
-        if (safeId.isEmpty()) {
-            // An empty frame rather than an error string: the card only offers a
-            // viewer for an id it just read, so this is the malformed case, and
-            // the escape hatch under the frame is where the reader goes next.
-            append("<div></div>")
-        } else {
-            append("<iframe id=\"p\" src=\"https://www.youtube-nocookie.com/embed/")
-            append(safeId)
-            append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
-            append("&enablejsapi=1&origin=")
-            append(NOVA_TRAILER_ORIGIN_QUERY)
-            // The widget referrer is the same origin by definition; the embed
-            // API takes it separately, and it is the value the player uses for
-            // attribution when the page is not a public site.
-            append("&widget_referrer=")
-            append(NOVA_TRAILER_ORIGIN_QUERY)
-            append("\"")
-            // `strict-origin-when-cross-origin` is the policy YouTube documents
-            // and the one a browser sends by default. It still sends only the
-            // origin cross-origin, which is all YouTube needs, and it stopped
-            // being `origin` here so the attribute matches what the platform now
-            // recommends rather than a value that happened to work.
-            append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
-            append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
-            append(" allowfullscreen frameborder=\"0\"></iframe>")
-            // Readiness is the IFrame API's onReady event, not the iframe's earlier
-            // network load. Until then the WebView stays invisible and the ring stays
-            // visible; the independent WebView watchdog remains the last-resort escape.
-            append("<script>(function(){")
-            append("window.anisequelTrailer={player:null,")
-            // Pausing is its own command rather than `toggle`: the caller asks to
-            // stop, and the player may already be paused (or paused by the system)
-            // when it does. A toggle would start playback in exactly that case.
-            // The platform keeps the video playing under a window that is on its way
-            // out, so this is what the close and a lifecycle pause both call.
-            append("pause:function(){var p=this.player;if(!p){return;}p.pauseVideo();},")
-            append("seek:function(offset){var p=this.player;if(!p){return;}")
-            append("var duration=p.getDuration()||0;")
-            append("var target=Math.max(0,p.getCurrentTime()+offset);")
-            append("if(duration>0){target=Math.min(duration,target);}")
-            append("p.seekTo(target,true);},")
-            append("toggle:function(){var p=this.player;if(!p){return;}")
-            append("if(p.getPlayerState()===1){p.pauseVideo();}else{p.playVideo();}}};")
-            append("window.onYouTubeIframeAPIReady=function(){")
-            append("window.anisequelTrailer.player=new YT.Player('p',{events:{")
-            append("onReady:function(){console.log('")
-            append(NOVA_TRAILER_PLAYER_READY_MESSAGE)
-            append("');},onStateChange:function(event){console.log('")
-            append(NOVA_TRAILER_STATE_PREFIX)
-            append("'+event.data);},onError:function(event){console.log('")
-            append(NOVA_TRAILER_ERROR_PREFIX)
-            append("'+event.data);}}});};")
-            append("var api=document.createElement('script');")
-            append("api.src='https://www.youtube.com/iframe_api';")
-            append("var first=document.getElementsByTagName('script')[0];")
-            append("first.parentNode.insertBefore(api,first);")
-            append("})();</script>")
-        }
+        append("<iframe id=\"p\" src=\"https://www.youtube-nocookie.com/embed/")
+        append(safeId)
+        append("?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1")
+        append("&enablejsapi=1&origin=")
+        append(NOVA_TRAILER_ORIGIN_QUERY)
+        // The widget referrer is the same origin by definition; the embed
+        // API takes it separately, and it is the value the player uses for
+        // attribution when the page is not a public site.
+        append("&widget_referrer=")
+        append(NOVA_TRAILER_ORIGIN_QUERY)
+        append("\"")
+        // `strict-origin-when-cross-origin` is the policy YouTube documents
+        // and the one a browser sends by default. It still sends only the
+        // origin cross-origin, which is all YouTube needs, and it stopped
+        // being `origin` here so the attribute matches what the platform now
+        // recommends rather than a value that happened to work.
+        append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
+        append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
+        append(" allowfullscreen frameborder=\"0\"></iframe>")
+        append("<script>")
+        append(NOVA_TRAILER_WRAPPER_JS)
+        append("</script>")
         append("</body></html>")
     }
 }
+
+/**
+ * The script that turns the frame into something the app can command.
+ *
+ * It binds to the iframe the HTML already created (`YT.Player('p')`) rather than letting
+ * the API build one, because the iframe starts loading with the document: waiting for a
+ * second script before even asking for the video was the difference between a spinner
+ * and a picture on a slow connection.
+ *
+ * Three things here are load-bearing:
+ *
+ *  - **`onReady` reports the duration and calls `playVideo()`.** The embed is asked to
+ *    autoplay, but a WebView can still hold the first frame in `cued`; the explicit
+ *    play is what turns "ready" into "playing". It is idempotent.
+ *  - **Every command is guarded and wrapped.** A command can arrive between the
+ *    document existing and the player existing, and an exception there would surface as
+ *    a console error in a page nobody is reading.
+ *  - **`snapshot()` returns an array, not a string.** `evaluateJavascript` serialises
+ *    its result as JSON, so a string arrives double-quoted and escaped; an array of
+ *    three numbers arrives as `[t,d,s]` and parses without a JSON reader.
+ *
+ * The API script is inserted with an `onerror` hook: a network that refuses
+ * `youtube.com/iframe_api` used to leave the spinner running until the failure
+ * watchdog, which reads exactly like a slow connection. Here it is a reported failure.
+ */
+private val NOVA_TRAILER_WRAPPER_JS = """
+    (function () {
+      "use strict";
+      var player = null;
+      function say(line) { try { console.log(line); } catch (e) {} }
+      function report(kind, value) { say("anisequel:trailer-" + kind + ":" + value); }
+      function state() { try { return player ? (player.getPlayerState() | 0) : -1; } catch (e) { return -1; } }
+      function duration() { try { return player ? (player.getDuration() || 0) : 0; } catch (e) { return 0; } }
+      function now() { try { return player ? (player.getCurrentTime() || 0) : 0; } catch (e) { return 0; } }
+      function seek(seconds) {
+        try {
+          if (!player) { return; }
+          var end = duration();
+          var target = Math.max(0, seconds);
+          if (end > 0) { target = Math.min(end, target); }
+          player.seekTo(target, true);
+        } catch (e) {}
+      }
+      window.anisequelTrailer = {
+        player: null,
+        play: function () { try { if (player) { player.playVideo(); } } catch (e) {} },
+        pause: function () { try { if (player) { player.pauseVideo(); } } catch (e) {} },
+        toggle: function () {
+          try {
+            if (!player) { return; }
+            if (state() === 1) { player.pauseVideo(); } else { player.playVideo(); }
+          } catch (e) {}
+        },
+        seekTo: function (seconds) { seek(seconds); },
+        seekBy: function (offset) { seek(now() + offset); },
+        snapshot: function () {
+          var position = now();
+          var end = duration();
+          if (!isFinite(position)) { position = 0; }
+          if (!isFinite(end)) { end = 0; }
+          return [position, end, state()];
+        }
+      };
+      window.onYouTubeIframeAPIReady = function () {
+        if (!window.YT || !window.YT.Player) { report("error", -2); return; }
+        try {
+          new YT.Player("p", {
+            events: {
+              onReady: function (event) {
+                player = event.target;
+                window.anisequelTrailer.player = player;
+                report("ready", duration());
+                try { player.playVideo(); } catch (e) {}
+              },
+              onStateChange: function (event) { report("state", event.data); },
+              onError: function (event) { report("error", event.data); }
+            }
+          });
+        } catch (e) { report("error", -2); }
+      };
+      var api = document.createElement("script");
+      api.src = "https://www.youtube.com/iframe_api";
+      api.onerror = function () { report("error", -2); };
+      var first = document.getElementsByTagName("script")[0];
+      first.parentNode.insertBefore(api, first);
+    })();
+""".trimIndent()

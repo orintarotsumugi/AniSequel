@@ -339,7 +339,7 @@ class AnimationWiringTest {
         )
         assertTrue(
             "the loading ring stays mounted only while the WebView is hidden",
-            viewer.contains("if (!loaded)") && viewer.contains("NovaWavyRing(")
+            viewer.contains("if (!session.revealed)") && viewer.contains("NovaWavyRing(")
         )
         assertTrue(
             "the platform's own dim is the hard cut this dialog must not draw",

@@ -1,18 +1,8 @@
 package com.anisequel.ui.components.detail.info
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.view.View
-import android.webkit.WebView
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,24 +16,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -51,232 +44,46 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import com.anisequel.ui.components.AppVectorIcons
+import com.anisequel.ui.components.expressive.ExpressiveMotion
+import com.anisequel.ui.components.rememberBoundSliderState
+import com.anisequel.ui.components.rememberIsResumed
 import com.anisequel.ui.theme.DialogImmersiveEffect
 import com.anisequel.ui.theme.LocalImmersiveMode
 import com.anisequel.ui.theme.immersiveDisplayInsets
-import coil.compose.AsyncImage
-import com.anisequel.data.model.MediaNode
-import com.anisequel.data.model.displayName
-import com.anisequel.data.model.trailerYoutubeUrl
-import com.anisequel.ui.components.AppVectorIcons
-import com.anisequel.ui.components.cards.unseamedCover
-import com.anisequel.ui.components.expressive.ExpressiveMotion
-import com.anisequel.ui.components.expressive.bouncyPress
-import com.anisequel.ui.components.openExternalUrlOrCopy
-import com.anisequel.ui.components.rememberIsResumed
+import kotlinx.coroutines.delay
 
 /**
- * The official trailer: the card that advertises it, and the player it opens.
+ * The trailer, playing over the page, in a window the reader can actually drive.
  *
- * ## Why the player is in the app now
+ * ## The shape of it
  *
- * Tapping this card used to hand the video to whatever browser the device had -
- * which left the app, lost the title, and on a phone with no browser silently
- * copied a URL to the clipboard instead. A trailer is one of the two things a
- * reader of a title page came for, and leaving the app for it is the sort of
- * hand-off that makes an app feel like a directory of other apps. The card opens
- * [NovaTrailerViewer] now, and the external route is still there as the *escape
- * hatch* inside it: a player that will not play must never be the end of the
- * story, so "Open on YouTube" sits under the frame.
+ * A `Dialog` and not a sheet: this is a video, and a sheet that can be dragged down to a
+ * third of the screen is a way to watch a trailer in a letterbox the size of a thumbnail.
+ * The window is the whole display, the page behind it is dimmed, and the frame is 16:9 in
+ * the middle of the safe area with everything else *under* it rather than over it.
  *
- * ## Why a WebView and not a native player
+ * The controls are below the frame on purpose, and they are the app's, not a second copy
+ * of YouTube's. Drawing play/pause and a seek bar on top of the embed is what the previous
+ * design did, and it put the same two controls a thumb's width apart - two pause buttons
+ * that could disagree. The embed keeps its own chrome (its play button, its ad skip, its
+ * settings) because those can only live inside the player; the app's bar adds what the
+ * embed cannot know: how much of *this* trailer is left, ten-second jumps for a thumb on
+ * a phone, and one place that says why a video will not play.
  *
- * AniList gives the app a YouTube **id**, not a stream. Playing that id needs either
- * YouTube's embed (a web page) or a stream extractor, i.e. a dependency whose whole
- * job is to break when YouTube changes, to fetch content the API did not licence
- * this app to serve. The embed is the same answer the rest of the app already gives
- * for a live SVG card: the one leaf of Chromium that does the job nothing else can,
- * contained. It is also why this is the one `WebView` in the app with JavaScript
- * enabled - the player *is* a web app, and without scripting the embed is a black
- * rectangle. Everything a document could do with that is closed off instead: the
- * page is a fixed wrapper holding one iframe, the only hosts it may load are
- * YouTube's, and a navigation that is not one of the player's own pages is
- * cancelled here - a web page among them is handed to the external opener, and
- * anything that is not a web page is simply stopped.
- */
-@Composable
-internal fun NovaTrailerCard(
-    media: MediaNode,
-    modifier: Modifier = Modifier
-) {
-    val url = media.trailerYoutubeUrl ?: return
-    val trailerId = media.trailer?.id?.takeIf { it.isNotBlank() } ?: return
-    // Only an id YouTube could have is a video. The embed builder drops anything
-    // outside that alphabet, so a malformed id would open the viewer on an empty
-    // frame - a black player with no way to tell it from a trailer that refused to
-    // play. Those taps go to the browser instead: the card's own escape hatch,
-    // taken before the dead player is opened rather than from inside it.
-    val videoId = trailerId.takeIf { isNovaTrailerId(it) }
-    val context = LocalContext.current
-    // Keyed on [trailerId], not on the validated id: a trailer whose id YouTube could
-    // not have issued opens the browser instead of the player, and its card still
-    // draws - so the thumbnail has to be the one that was read, not the word "null"
-    // in a URL.
-    val thumbnail = remember(trailerId) { "https://img.youtube.com/vi/$trailerId/hqdefault.jpg" }
-    val shape = MaterialTheme.shapes.large
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val playScale by animateFloatAsState(
-        targetValue = if (pressed) 0.92f else 1f,
-        animationSpec = ExpressiveMotion.FastSpatial,
-        label = "nova_trailer_play_scale"
-    )
-    val playContainer by animateColorAsState(
-        targetValue = if (pressed) Color.Black.copy(alpha = 0.68f) else Color.Black.copy(alpha = 0.52f),
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "nova_trailer_play_container"
-    )
-    val scrimBottom by animateColorAsState(
-        targetValue = if (pressed) Color.Black.copy(alpha = 0.82f) else Color.Black.copy(alpha = 0.76f),
-        animationSpec = ExpressiveMotion.FastColorEffects,
-        label = "nova_trailer_scrim"
-    )
-    // Saved, not remembered: the reason to rotate a phone with this open is to
-    // watch the trailer on its side, and a configuration change rebuilt the tree -
-    // so the one moment the reader asked for landscape was the moment the player
-    // closed, leaving the page they came from. The dialog reopens and the embed
-    // reloads from the start: a `WebView` belongs to the activity that created it
-    // and cannot outlive a recreation, which is a restart, not a resume.
-    var playing by rememberSaveable(videoId) { mutableStateOf(false) }
-    Surface(
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.78f),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-        ),
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .bouncyPress(pressedScale = 0.98f, interactionSource = interactionSource)
-            .clickable(
-                interactionSource = interactionSource,
-                role = Role.Button,
-                onClickLabel = "Play the official trailer"
-            ) {
-                if (videoId != null) {
-                    playing = true
-                } else {
-                    openTrailerExternally(context, url)
-                }
-            }
-            .testTag("nova_info_trailer_card")
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-        ) {
-            AsyncImage(
-                model = thumbnail,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .unseamedCover()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Black.copy(alpha = 0.05f),
-                            0.55f to Color.Black.copy(alpha = 0.22f),
-                            1f to scrimBottom
-                        )
-                    )
-            )
-            Surface(
-                shape = CircleShape,
-                color = playContainer,
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(54.dp)
-                    .graphicsLayer {
-                        scaleX = playScale
-                        scaleY = playScale
-                    }
-                    .testTag("nova_info_trailer_play")
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = AppVectorIcons.Play,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier
-                            .padding(start = 3.dp)
-                            .size(26.dp)
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = "Official trailer",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = media.displayName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.82f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-
-    if (playing && videoId != null) {
-        NovaTrailerViewer(
-            videoId = videoId,
-            title = media.displayName,
-            fallbackUrl = url,
-            onDismiss = { playing = false }
-        )
-    }
-}
-
-/**
- * The trailer, playing over the page.
+ * ## Motion
  *
- * A `Dialog` and not a sheet: this is a video, and a sheet that can be dragged
- * down to a third of the screen is a way to watch a trailer in a letterbox the size
- * of a thumbnail. The window is the whole display, the page behind it is dimmed, and
- * the frame is 16:9 at the top of the safe area so the controls sit where a thumb
- * can reach them.
- *
- * ## Open and close are both animated, and the close finishes before the dismiss
- *
- * `playing` in the card goes false the moment the viewer is popped, so a dialog
- * that simply unmounted would blink out of existence - the one frame that reads as
- * a crash rather than as an exit. [entrance] runs one way for the open and the other
- * for the close, and only then does [onDismiss] tell the caller, which is the same
- * handover `SequelDetailSheet` makes for the title page itself.
- *
- * ## The video stops when the window starts to leave
- *
- * The entrance value drives a fade of the chrome and the frame's backing, never of
- * the `WebView` itself: see [createNovaTrailerPlayer] for why a composited video
- * surface plays sound over a black picture. So the surface is switched off instead,
- * on the same frame the close is requested, and the soundtrack is paused then too.
- * Both used to wait for the window: the picture and the audio stayed at full
- * strength through the exit spring and disappeared in its last frame.
- *
- * The same pause runs when the app leaves the foreground. A `Dialog` is not a
- * destination the platform stops, so the trailer kept playing behind the home
- * screen.
+ * Open and close are one spring, run in opposite directions; the close finishes before the
+ * caller is told, so the dialog never disappears on the frame the tap landed. Only the
+ * chrome fades - the header, the bar, the frame's black backing. The `WebView` is never
+ * alpha-composited: see [createNovaTrailerPlayer] for the audio-with-a-black-picture
+ * failure that comes from it.
  */
 @Composable
 internal fun NovaTrailerViewer(
@@ -287,64 +94,44 @@ internal fun NovaTrailerViewer(
 ) {
     val context = LocalContext.current
     val entrance = remember(videoId) { Animatable(0f) }
+    val session = remember(videoId) { NovaTrailerSession() }
     var isClosing by remember(videoId) { mutableStateOf(false) }
-    var loaded by remember(videoId) { mutableStateOf(false) }
-    var playerReady by remember(videoId) { mutableStateOf(false) }
-    var playbackState by remember(videoId) { mutableStateOf(-1) }
-    var playerError by remember(videoId) { mutableStateOf<Int?>(null) }
-    val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
-    val player = remember(videoId) {
-        createNovaTrailerPlayer(
-            context = context,
-            html = html,
-            isDismissing = { isClosing },
-            onReady = { loaded = true },
-            onPlayerReady = { playerReady = true },
-            onPlaybackStateChanged = { playbackState = it },
-            onPlayerError = { playerError = it }
-        )
-    }
 
     LaunchedEffect(videoId) {
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
         entrance.snapTo(1f)
     }
 
-    // The video is paused when the app is not on screen. Without this the sound
-    // kept playing behind the home screen - the WebView is in a dialog, and a
-    // dialog is not what the platform stops. It is not a dismissal: the reader
-    // comes back to the frame exactly as they left it, paused, and presses play.
+    // A dialog is not a destination, so the platform never stops it: the trailer kept
+    // playing behind the home screen. The first reading of `rememberIsResumed` is not a
+    // transition - it reports false until the activity's own ON_RESUME arrives - and
+    // acting on it would pause the player on the frame it was opened.
     val resumed = rememberIsResumed()
+    var lastResumed by remember(videoId) { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(resumed) {
-        if (!resumed) pauseNovaTrailer(player)
+        val previous = lastResumed
+        lastResumed = resumed
+        if (previous == null) return@LaunchedEffect
+        if (resumed) session.resumeFromBackground() else session.pauseForBackground()
     }
 
     LaunchedEffect(videoId, isClosing) {
-        if (isClosing) {
-            // Sound first. The exit spring runs for a few hundred milliseconds,
-            // and the video used to play over all of it - the window faded around
-            // a picture and a soundtrack that were still going at full strength.
-            pauseNovaTrailer(player)
-            // The native video surface cannot be faded (see
-            // `createNovaTrailerPlayer`), so it is taken out whole on the frame the
-            // close starts. What is left fades: the chrome, the frame's black
-            // backing and the scrim.
-            player.visibility = View.INVISIBLE
-            entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
-            entrance.snapTo(0f)
-            onDismiss()
-        }
+        if (!isClosing) return@LaunchedEffect
+        // Sound first: the exit spring runs for a few hundred milliseconds, and the
+        // trailer used to play over all of it. Stopping here takes the picture out
+        // whole (the surface cannot be faded), then the chrome fades around nothing.
+        session.stop()
+        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        entrance.snapTo(0f)
+        onDismiss()
     }
 
     NovaTrailerDialog(
         title = title,
+        videoId = videoId,
+        session = session,
         entranceProgress = entrance.value,
         closing = isClosing,
-        player = player,
-        loaded = loaded,
-        playerReady = playerReady,
-        playbackState = playbackState,
-        playerError = playerError,
         onClose = { isClosing = true },
         onOpenYouTube = {
             openTrailerExternally(context, fallbackUrl)
@@ -356,13 +143,10 @@ internal fun NovaTrailerViewer(
 @Composable
 private fun NovaTrailerDialog(
     title: String,
+    videoId: String,
+    session: NovaTrailerSession,
     entranceProgress: Float,
     closing: Boolean,
-    player: WebView,
-    loaded: Boolean,
-    playerReady: Boolean,
-    playbackState: Int,
-    playerError: Int?,
     onClose: () -> Unit,
     onOpenYouTube: () -> Unit
 ) {
@@ -382,13 +166,10 @@ private fun NovaTrailerDialog(
         DialogImmersiveEffect()
         NovaTrailerViewerContent(
             title = title,
+            videoId = videoId,
+            session = session,
             entranceProgress = entranceProgress,
             closing = closing,
-            player = player,
-            loaded = loaded,
-            playerReady = playerReady,
-            playbackState = playbackState,
-            playerError = playerError,
             onClose = onClose,
             onOpenYouTube = onOpenYouTube
         )
@@ -398,33 +179,41 @@ private fun NovaTrailerDialog(
 @Composable
 private fun NovaTrailerViewerContent(
     title: String,
+    videoId: String,
+    session: NovaTrailerSession,
     entranceProgress: Float,
     closing: Boolean,
-    player: WebView,
-    loaded: Boolean,
-    playerReady: Boolean,
-    playbackState: Int,
-    playerError: Int?,
     onClose: () -> Unit,
     onOpenYouTube: () -> Unit
 ) {
     val immersive = LocalImmersiveMode.current
-    // The chrome fades with the window around it, in both directions.
-    //
-    // It used to be drawn at full strength from the first frame over a scrim that
-    // was still transparent, so the header and the controls popped in before the
-    // black behind them existed; on the way out they stayed solid until the window
-    // was removed, which is what made the close a cut. Only the chrome is faded:
-    // the frame holds the `WebView`, and alpha-compositing a native video surface
-    // is the audio-with-a-black-picture failure `createNovaTrailerPlayer` records.
-    // The frame's own black backing fades via its background, which is drawn under
-    // its child and so never touches the video plane.
+    // The chrome fades with the window around it, in both directions. It used to be
+    // drawn at full strength from the first frame over a scrim that was still
+    // transparent - the header and the controls popped in before the black behind them
+    // existed - and on the way out it stayed solid until the window was removed, which
+    // is what made the close read as a cut.
     val chromeFade = Modifier.graphicsLayer { alpha = entranceProgress }
-    // The frame's black backing only fades on the way out. Fading it in would put
-    // the loading ring over the page showing through the frame instead of over
-    // black, and a black rectangle over a nearly-black scrim is not the pop that
-    // full-strength text is.
+    // The frame's black backing only fades on the way out. Fading it in would put the
+    // loading ring over the page showing through the frame instead of over black. A
+    // background is painted beneath its child and never composites it, so this is not
+    // the video-plane fade that `createNovaTrailerPlayer` rules out.
     val backingFade = if (closing) entranceProgress else 1f
+    val failed = session.phase as? NovaTrailerPhase.Failed
+    var scrubSeconds by remember { mutableStateOf<Float?>(null) }
+
+    // While the finger is on the timeline the page is not asked where it is: the thumb
+    // belongs to the reader, and a reading landing mid-drag would pull it back out from
+    // under them. Polling rather than the IFrame API's own progress callback, because
+    // that callback is not exposed to an embed that only has the player handle.
+    LaunchedEffect(session.isPlaying, scrubSeconds != null) {
+        session.syncPosition()
+        if (!session.isPlaying || scrubSeconds != null) return@LaunchedEffect
+        while (true) {
+            delay(NOVA_TRAILER_PROGRESS_TICK_MILLIS)
+            session.syncPosition()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -440,26 +229,39 @@ private fun NovaTrailerViewerContent(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             NovaTrailerHeader(title = title, onClose = onClose, modifier = chromeFade)
-            if (playerError == null) {
-                NovaTrailerFrame(
-                    modifier = Modifier.weight(1f, fill = false),
-                    player = player,
-                    loaded = loaded,
-                    backingAlpha = backingFade
+            if (failed == null) {
+                NovaTrailerStage(
+                    videoId = videoId,
+                    session = session,
+                    closing = closing,
+                    backingAlpha = backingFade,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Column(
                     modifier = chromeFade,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    NovaTrailerPlaybackControls(
-                        player = player,
-                        playerReady = playerReady,
-                        playbackState = playbackState
+                    NovaTrailerTimeline(
+                        session = session,
+                        scrubSeconds = scrubSeconds,
+                        onScrub = { scrubSeconds = it },
+                        onScrubFinished = {
+                            scrubSeconds?.let(session::seekTo)
+                            scrubSeconds = null
+                        }
                     )
+                    NovaTrailerTransport(session = session)
                     NovaTrailerExternalLink(onClick = onOpenYouTube)
                 }
             } else {
-                NovaTrailerUnavailable(code = playerError, onOpenYouTube = onOpenYouTube)
+                // The frame is gone, not hidden behind a message: a player that cannot
+                // play is unmounted, its `WebView` released, and the retry builds a new
+                // one - see `NovaTrailerSession.retry`.
+                NovaTrailerNotice(
+                    code = failed.code,
+                    onRetry = session::retry,
+                    onOpenYouTube = onOpenYouTube
+                )
             }
         }
     }
@@ -503,14 +305,28 @@ private fun NovaTrailerHeader(
     }
 }
 
+/**
+ * The 16:9 hole, the ring that fills it, and the page that replaces both.
+ *
+ * The frame is sized before its contents: [createNovaTrailerPlayer] loads the wrapper on
+ * the first layout that has a size, because the embed takes the picture's dimensions from
+ * the frame it was given. [aspectRatio] with `matchHeightConstraintsFirst` is what lets a
+ * phone held in landscape give the video the height it has.
+ */
 @Composable
-private fun NovaTrailerFrame(
-    modifier: Modifier,
-    player: WebView,
-    loaded: Boolean,
-    backingAlpha: Float
+private fun NovaTrailerStage(
+    videoId: String,
+    session: NovaTrailerSession,
+    closing: Boolean,
+    backingAlpha: Float,
+    modifier: Modifier = Modifier
 ) {
-    // Let the frame use the available height first on a phone held in landscape.
+    val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
+    // The factory below runs once and keeps the lambda it was handed, so a captured
+    // `closing` would be the value from the frame the player was built - false, for the
+    // rest of the dialog's life - and every reveal would be treated as "not dismissing".
+    // The state object is what the close writes; the lambda reads it when it is called.
+    val dismissing by rememberUpdatedState(closing)
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
@@ -519,12 +335,9 @@ private fun NovaTrailerFrame(
             modifier = Modifier
                 .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                 .clip(MaterialTheme.shapes.medium)
-                // Drawn under the `WebView`, so this fades the black backing and
-                // not the video: a background is painted beneath its child and
-                // never composites it. A `graphicsLayer` here would.
                 .background(Color.Black.copy(alpha = backingAlpha))
         ) {
-            if (!loaded) {
+            if (!session.revealed) {
                 NovaWavyRing(
                     progress = null,
                     color = Color.White,
@@ -534,47 +347,130 @@ private fun NovaTrailerFrame(
                         .size(44.dp)
                 )
             }
-            NovaTrailerPlayer(
-                player = player,
-                modifier = Modifier.fillMaxSize()
-            )
+            // Keyed on the attempt: a retry must build a new `WebView`, not reload the
+            // one that just failed. The old view is released first, so its page is
+            // destroyed before the new one is created.
+            key(session.attempt) {
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("nova_trailer_player"),
+                    factory = { context ->
+                        createNovaTrailerPlayer(
+                            context = context,
+                            html = html,
+                            isDismissing = { dismissing },
+                            onReveal = session::onRevealed,
+                            onSignal = session::onSignal
+                        ).also { session.attach(it) }
+                    },
+                    onRelease = { view ->
+                        session.detach(view)
+                        // Remove a fullscreen surface first, or it would outlive its
+                        // `WebView` in the dialog. Then stop before destroy: an embed
+                        // still buffering when the reader closes the viewer would tear
+                        // down a live media pipeline otherwise.
+                        (view.webChromeClient as? NovaTrailerChromeClient)?.hideCustomView()
+                        view.stopLoading()
+                        view.destroy()
+                    }
+                )
+            }
         }
     }
 }
 
+/**
+ * Elapsed, a draggable track, and the total.
+ *
+ * The slider follows a draft only while it is being dragged: [scrubSeconds] is what the
+ * finger says, and the committed seek happens on release, so a slow network cannot fight
+ * the thumb. It is a Slider bound with `rememberBoundSliderState` rather than the retired
+ * value-first form: Material 3 replaced that one because a state object which only reads
+ * its initial value stops following an external write, and this slider is written by the
+ * player four times a second.
+ */
 @Composable
-private fun NovaTrailerPlaybackControls(
-    player: WebView,
-    playerReady: Boolean,
-    playbackState: Int
+private fun NovaTrailerTimeline(
+    session: NovaTrailerSession,
+    scrubSeconds: Float?,
+    onScrub: (Float) -> Unit,
+    onScrubFinished: () -> Unit
 ) {
+    val end = session.durationSeconds
+    val limit = if (end > 0f) end else 1f
+    val shown = (scrubSeconds ?: session.positionSeconds).coerceIn(0f, limit)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = formatNovaTrailerTime(shown),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.82f),
+            // A fixed lane on both clocks: "0:09" growing into "0:10" while the thumb
+            // is down would move the track under the finger.
+            modifier = Modifier.width(NOVA_TRAILER_TIME_LANE)
+        )
+        Slider(
+            state = rememberBoundSliderState(value = shown, trackRange = 0f..limit),
+            onValueChange = onScrub,
+            onValueChangeFinished = onScrubFinished,
+            enabled = session.seekEnabled,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = Color.White,
+                inactiveTrackColor = Color.White.copy(alpha = 0.24f),
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
+                disabledThumbColor = Color.White.copy(alpha = 0.38f),
+                disabledActiveTrackColor = Color.White.copy(alpha = 0.38f),
+                disabledInactiveTrackColor = Color.White.copy(alpha = 0.16f)
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .testTag("nova_trailer_timeline")
+        )
+        Text(
+            text = if (end > 0f) formatNovaTrailerTime(end) else "--:--",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.82f),
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(NOVA_TRAILER_TIME_LANE)
+        )
+    }
+}
+
+@Composable
+private fun NovaTrailerTransport(session: NovaTrailerSession) {
+    val enabled = session.controlsEnabled
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
         NovaTrailerSkipButton(
-            label = "−5s",
-            description = "Rewind 5 seconds",
+            label = "−10s",
+            description = "Rewind 10 seconds",
             testTag = "nova_trailer_rewind",
-            playerReady = playerReady
+            enabled = enabled
         ) {
-            player.evaluateJavascript("window.anisequelTrailer.seek(-5)", null)
+            session.seekBy(-NOVA_TRAILER_SKIP_SECONDS)
         }
         NovaTrailerPlayPauseButton(
-            playerReady = playerReady,
-            isPlaying = playbackState == 1,
-            onClick = {
-                player.evaluateJavascript("window.anisequelTrailer.toggle()", null)
-            }
+            enabled = enabled,
+            isPlaying = session.isPlaying,
+            hasEnded = session.hasEnded,
+            onClick = session::togglePlayback
         )
         NovaTrailerSkipButton(
-            label = "+5s",
-            description = "Forward 5 seconds",
+            label = "+10s",
+            description = "Forward 10 seconds",
             testTag = "nova_trailer_forward",
-            playerReady = playerReady
+            enabled = enabled
         ) {
-            player.evaluateJavascript("window.anisequelTrailer.seek(5)", null)
+            session.seekBy(NOVA_TRAILER_SKIP_SECONDS)
         }
     }
 }
@@ -584,17 +480,17 @@ private fun NovaTrailerSkipButton(
     label: String,
     description: String,
     testTag: String,
-    playerReady: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
         shape = CircleShape,
-        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
+        color = Color.White.copy(alpha = if (enabled) 0.14f else 0.06f),
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
             .clickable(
-                enabled = playerReady,
+                enabled = enabled,
                 role = Role.Button,
                 onClickLabel = description,
                 onClick = onClick
@@ -606,7 +502,7 @@ private fun NovaTrailerSkipButton(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
+                color = Color.White.copy(alpha = if (enabled) 1f else 0.38f)
             )
         }
     }
@@ -614,20 +510,26 @@ private fun NovaTrailerSkipButton(
 
 @Composable
 private fun NovaTrailerPlayPauseButton(
-    playerReady: Boolean,
+    enabled: Boolean,
     isPlaying: Boolean,
+    hasEnded: Boolean,
     onClick: () -> Unit
 ) {
+    val label = when {
+        hasEnded -> "Replay the trailer"
+        isPlaying -> "Pause trailer"
+        else -> "Play trailer"
+    }
     Surface(
         shape = CircleShape,
-        color = Color.White.copy(alpha = if (playerReady) 0.2f else 0.08f),
+        color = Color.White.copy(alpha = if (enabled) 0.2f else 0.08f),
         modifier = Modifier
             .size(56.dp)
             .clip(CircleShape)
             .clickable(
-                enabled = playerReady,
+                enabled = enabled,
                 role = Role.Button,
-                onClickLabel = if (isPlaying) "Pause trailer" else "Play trailer",
+                onClickLabel = label,
                 onClick = onClick
             )
             .testTag("nova_trailer_play_pause")
@@ -635,51 +537,30 @@ private fun NovaTrailerPlayPauseButton(
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = if (isPlaying) AppVectorIcons.Pause else AppVectorIcons.Play,
-                contentDescription = if (isPlaying) "Pause trailer" else "Play trailer",
-                tint = Color.White.copy(alpha = if (playerReady) 1f else 0.38f),
+                contentDescription = label,
+                tint = Color.White.copy(alpha = if (enabled) 1f else 0.38f),
                 modifier = Modifier.size(28.dp)
             )
         }
     }
 }
 
-/** The YouTube app's package. A trailer goes there before it goes to a browser. */
-private const val YOUTUBE_APP_PACKAGE = "com.google.android.youtube"
-
 /**
- * Hands a trailer to the YouTube app when it is installed, and to the shared opener when not.
+ * What the reader sees when YouTube refuses the video: the reason, and the ways out.
  *
- * This is what other Android apps do with a YouTube link: the YouTube app plays it
- * with its own controls, its own background rules and the reader's account, where a
- * browser tab shows a web page. The package is set on the intent rather than checked
- * beforehand, because the attempt is the check: `startActivity` throws when no app is
- * installed for it, and that exception is the signal to use the browser instead.
- */
-internal fun openTrailerExternally(context: Context, url: String) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        .setPackage(YOUTUBE_APP_PACKAGE)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    if (runCatching { context.startActivity(intent) }.isSuccess) return
-    openExternalUrlOrCopy(context, url)
-}
-
-/**
- * What the reader sees when YouTube refuses the video: the reason, and the way out.
- *
- * A frame that cannot play is not left on screen with its controls live over it.
- * Code 101 and 150 mean the owner has blocked embedded playback, which is the one
- * refusal a retry can never fix, so the wording says so.
+ * A frame that cannot play is not left on screen with its controls live over it - that
+ * was the old behaviour, and it made a refusal look like a player with a broken picture.
+ * The retry is only offered when it could plausibly answer differently
+ * ([isNovaTrailerRetryable]); "the owner has turned off playback outside YouTube" is the
+ * one refusal that can never be retried, and the button beside it is the way that always
+ * works.
  */
 @Composable
-private fun NovaTrailerUnavailable(
+private fun NovaTrailerNotice(
     code: Int,
+    onRetry: () -> Unit,
     onOpenYouTube: () -> Unit
 ) {
-    val reason = if (code == 101 || code == 150) {
-        "The owner has turned off playback outside YouTube."
-    } else {
-        "YouTube could not play this trailer here."
-    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -691,16 +572,36 @@ private fun NovaTrailerUnavailable(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text(
-            text = reason,
+            text = novaTrailerFailureReason(code),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.86f),
             textAlign = TextAlign.Center
         )
-        Button(
-            onClick = onOpenYouTube,
-            modifier = Modifier.testTag("nova_trailer_external")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Watch on YouTube")
+            if (isNovaTrailerRetryable(code)) {
+                TextButton(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                    modifier = Modifier.testTag("nova_trailer_retry")
+                ) {
+                    Icon(
+                        imageVector = AppVectorIcons.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Try again")
+                }
+            }
+            Button(
+                onClick = onOpenYouTube,
+                modifier = Modifier.testTag("nova_trailer_external")
+            ) {
+                Text("Watch on YouTube")
+            }
         }
     }
 }
@@ -713,11 +614,7 @@ private fun NovaTrailerExternalLink(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         // The escape hatch for region locks, age gates or a missing WebView provider.
-        Text(
-            text = "Open on YouTube",
-            style = MaterialTheme.typography.labelLarge,
-            color = Color.White.copy(alpha = 0.86f),
-            textAlign = TextAlign.Center,
+        Row(
             modifier = Modifier
                 .clip(MaterialTheme.shapes.small)
                 .clickable(
@@ -726,42 +623,37 @@ private fun NovaTrailerExternalLink(onClick: () -> Unit) {
                     onClick = onClick
                 )
                 .padding(horizontal = 14.dp, vertical = 12.dp)
-                .testTag("nova_trailer_external")
-        )
+                .testTag("nova_trailer_external"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = AppVectorIcons.YouTube,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.86f),
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = "Open on YouTube",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color.White.copy(alpha = 0.86f),
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
-/**
- * The embed, in the one `WebView` that may run scripting.
- *
- * Loaded from a wrapper page rather than pointed at the embed URL directly: the
- * wrapper is the document that can carry an origin and a referer, and they are the
- * app's own id - see [NOVA_TRAILER_ORIGIN] for why that is the whole fix for error
- * 152. A `WebView` asked for the embed with no referer is served "Video
- * unavailable" often enough that the direct route is not worth taking. The wrapper
- * is a string this function builds from a validated id - no remote document is ever
- * composed into it.
- *
- * The id is validated rather than escaped: AniList's ids are `[A-Za-z0-9_-]`, and
- * anything else is not a trailer. That is what keeps a malformed payload from
- * becoming markup in a page with JavaScript on.
- */
-@Composable
-private fun NovaTrailerPlayer(
-    player: WebView,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier.testTag("nova_trailer_player"),
-        factory = { player },
-        onRelease = { view ->
-            // Stop before destroy: an embed still buffering when the reader closes
-            // the viewer tears down a live media pipeline otherwise. Remove a
-            // fullscreen surface first, or it would outlive its WebView in the dialog.
-            (view.webChromeClient as? NovaTrailerChromeClient)?.hideCustomView()
-            view.stopLoading()
-            view.destroy()
-        }
-    )
-}
+/** Ten seconds: long enough to skip a recap, short enough to land inside a scene. */
+private const val NOVA_TRAILER_SKIP_SECONDS = 10f
 
+/**
+ * How often the page is asked where playback is.
+ *
+ * Four readings a second is the coarsest clock that still looks continuous under a
+ * thumb, and each one is an `evaluateJavascript` round trip - a faster poll would spend
+ * the reader's battery redrawing a number nobody can read.
+ */
+private const val NOVA_TRAILER_PROGRESS_TICK_MILLIS = 250L
+
+/** One lane for each clock, so the track does not move while a digit changes. */
+private val NOVA_TRAILER_TIME_LANE: Dp = 44.dp

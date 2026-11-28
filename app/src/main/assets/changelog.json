@@ -4,6 +4,14 @@
       "version": "2.7.3",
       "entries": [
         {
+          "title": "The trailer viewer, rebuilt around its own controls",
+          "detail": "The in-app trailer is now a full-screen viewer with the app's own transport under the picture: a draggable seek bar with elapsed and total time, ten-second rewind and forward buttons, and a play/pause button that becomes a replay when the video ends. YouTube's own controls stay inside the frame for its ads and settings, and nothing is drawn over the video any more."
+        },
+        {
+          "title": "A trailer that cannot play says why",
+          "detail": "A video YouTube refuses - private, removed, blocked from embeds, or missing its referrer - now replaces the frame with one plain sentence, a Try again button only when a retry could help, and Watch on YouTube. A player that never reports back is treated the same way after twenty seconds instead of leaving a spinner running."
+        },
+        {
           "title": "Trailers open in the YouTube app",
           "detail": "Tapping a trailer's external link now opens the YouTube app when it is installed, and the browser only when it is not. When YouTube refuses a video inside the app, the frame is replaced with a plain message and a Watch on YouTube button instead of YouTube's own error card under live controls."
         },

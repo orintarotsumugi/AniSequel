@@ -4624,3 +4624,125 @@ disabled category, cursor preservation on a failed request, and route encoding f
 names containing route characters. The WorkManager schedule, the tray, the
 permission dialog and a real AniList account still need a device; CI compiles and
 runs the JVM suite, and the PR says which of those were not executed locally.
+
+## 2.7.3: the trailer plays here, and the app drives it
+
+The trailer was the one thing on a title page that still left the app. It now opens a
+viewer over the page, and the viewer is three files because it has three reasons to
+change: a web page that can only speak in strings, a state machine that has to agree
+with that page, and a layout. The old one was a single 767-line file that owned all
+three at once, and most of what follows is a list of the ways that showed.
+
+### What was wrong
+
+- Four controls drawn *over* the embed: a play/pause, a rewind, a forward, and
+  YouTube's own chrome underneath them, twelve pixels away. Two pause buttons that
+  could disagree, because the app's copy was optimistic and the embed's was not.
+- No seek bar, because the page had no way to say *where* playback was: the old
+  protocol only reported events, never a position.
+- A refused video (101/150 owner blocked, 100 removed, 153 no referrer) drew YouTube's
+  own "Video unavailable" card inside the 16:9 hole with the app's live controls still
+  over it, and no explanation.
+- Closing the viewer faded the window out while the video kept playing and drawing at
+  full strength for the whole exit, so the last thing the reader saw was a cut.
+- Nothing paused it when the app went to the background: a dialog is not a destination,
+  so the platform never stops it, and the trailer kept playing behind the home screen.
+- "The audio is working but nothing is showing" — the picture was gone and the sound
+  was not. That is the compositing failure described below, not a load failure.
+
+### Why a `WebView` embed at all
+
+The YouTube Android Player API is withdrawn: it cannot be depended on by a current
+build. The supported way to play a YouTube video inside an Android app is the IFrame
+player inside a `WebView`, which is what this is. Google's newer in-app path is the
+WebView Media Integrity API, which needs an attested app id issued through Play
+services; that is the direction, not something this change could adopt.
+
+The embed is a **nocookie** frame (`youtube-nocookie.com/embed/ID`) with
+`playsinline=1`, `rel=0`, `fs=1` and `enablejsapi=1`. Inline playback is what keeps the
+video in the frame instead of handing the screen to the system player; `fs=1` keeps the
+embed's own fullscreen button, which is routed to the dialog's window by
+`NovaTrailerChromeClient`.
+
+### The two errors that made every trailer fail
+
+Both were visible only on a device, and both are pinned in notes here because they look
+like "the video is unavailable" rather than like a bug in the app:
+
+- **153, "no referrer".** `loadDataWithBaseURL` sets the page's base URL, and that is
+  what `WebView` turns into the `Referer` request header. With a `null` base URL the
+  header is absent and YouTube refuses the embed. The page is loaded under
+  `NOVA_TRAILER_BASE_URL` for exactly this.
+- **152, "unavailable".** The player identifies its embedder by the page's origin. An
+  origin of `https://www.youtube.com` is read as YouTube embedding itself, and the
+  whole library comes back as 152. The origin here is
+  `https://com.aistudio.anisequel.app` — a real `https` origin, unique to this app, and
+  not a YouTube host. The iframe still loads from `youtube-nocookie.com`; the origin
+  names the page, the host names the player, and they are not the same value.
+
+### The protocol: console out, script in
+
+Events leave the page as console lines (`anisequel:trailer-ready:<seconds>`,
+`anisequel:trailer-state:<code>`, `anisequel:trailer-error:<code>`) and every command and
+reading goes in through `evaluateJavascript`. There is no `@JavascriptInterface`: a
+bridge is a callable surface exposed to a frame this app does not control, and all this
+needs is for one string to arrive. `parseNovaTrailerSignal` is the only place the
+boundary is crossed, so a prefix that drifts fails a JVM test instead of a device.
+
+`snapshot()` returns `[position, duration, state]` as a **JSON array**, not a string:
+`evaluateJavascript` hands its result back serialised, so a string arrives double-quoted
+and escaped, and an array parses without a JSON reader. That is why the viewer polls it
+four times a second while playing (`NOVA_TRAILER_PROGRESS_TICK_MILLIS`) and not at all
+while the reader is dragging the timeline.
+
+A refusal is final for the attempt: YouTube can emit `onReady` *after* `onError` for the
+same frame, and accepting it hid the explanation while its error card sat in the hole.
+A timeout (`-1`, "the player never reported") is not final, because it is a statement
+about the clock rather than about the video.
+
+### Why the video is never faded
+
+A native video surface cannot be alpha- or scale-composited: the platform drops the
+video plane and draws the rest of the page, which is the "audio works, the picture is
+black" report. So:
+
+- `alpha = 1f` always, and the reveal is a `visibility` switch
+  (`WebView.visibility = View.VISIBLE` once YouTube says ready), never a fade.
+- `setLayerType(View.LAYER_TYPE_HARDWARE, null)` explicitly, because a view inside a
+  floating dialog window is otherwise composited down a path that drops the video plane.
+  `LAYER_TYPE_SOFTWARE` cannot hold a video surface at all — the same report from the
+  other side, and the app never sets it.
+- The black backing behind the frame does fade, which is safe: a background is painted
+  *beneath* its child and never composites it. It fades only on the way out; faded in, the
+  loading ring would sit over the page showing through the frame.
+
+### The close, the background, and the retry
+
+`NovaTrailerSession` is the state machine: one `phase` (`Loading`, `Ready`, `Ended`,
+`Failed(code)`), the position, the duration, the playing flag and the attempt counter. It
+is deliberately not a ViewModel — it lives exactly as long as the dialog, its source of
+truth is a `WebView` the composition owns, and it needs no scope.
+
+- **Close**: `session.stop()` (pause, then `View.INVISIBLE`), *then* the exit spring, *then*
+  `onDismiss()`. Sound first, because the spring runs for a few hundred milliseconds and
+  the trailer used to play over all of it.
+- **Background**: `rememberIsResumed()` reports false on its first frame, so only a
+  transition counts; on leaving, the page is sent a pause *and* `WebView.onPause()` (the
+  view call stops timers and releases audio focus but does not pause the `<video>`, which
+  was started inside the iframe).
+- **Retry**: increments `attempt`, which re-keys the `AndroidView` so a *new* `WebView` is
+  built. Reloading the same page would reuse the script state that just failed.
+
+### What the tests pin, and what they cannot
+
+`NovaTrailerViewerTest` pins the protocol strings, the id alphabet (an id is
+interpolated into markup, so it is validated rather than escaped), the host allowlist and
+the watch-page rule, the hardware layer, the close order and the bound-slider form.
+`NovaTrailerSessionTest` drives the state machine: refusal-is-final, timeout-is-not,
+buffering keeps the glyph, ended parks at the duration, a snapshot moves the clock
+without becoming a second source of truth, a retry clears everything, and every command is
+harmless before the page exists.
+
+Playback itself — the decoder, fullscreen, pre-roll ads, a region lock — needs a device.
+CI compiles and runs the JVM suite; nothing here claims a device run.
+
