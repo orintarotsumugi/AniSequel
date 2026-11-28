@@ -395,8 +395,10 @@ private fun ActivityListDetails(
         Spacer(modifier = Modifier.height(4.dp))
         // Scrolls rather than wrapping: the feed is already dense, and the second
         // line a long title took pushed the controls down a row on every other card.
+        // `displayName`, not `title?.displayTitle`: a node with no title object read
+        // as an empty line here too.
         MarqueeText(
-            text = titleLabel,
+            text = media.displayName,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
