@@ -81,7 +81,9 @@ internal fun formatNovaTrailerTime(seconds: Float): String {
     if (!seconds.isFinite() || seconds <= 0f) return "0:00"
     val total = seconds.toInt()
     val hours = total / 3600
-    val minutes = (total % 3600) / 60
+    // Left-associative, so this is the same as the discarded brackets:
+    // detekt reads them as noise on an operator chain.
+    val minutes = total % 3600 / 60
     val remainder = total % 60
     return if (hours > 0) {
         String.format(Locale.US, "%d:%02d:%02d", hours, minutes, remainder)
