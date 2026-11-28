@@ -353,14 +353,15 @@ class DetailCoverFlightTest {
         assertEquals("the y did not move with its window", 1600f, onScreen.top, 0.001f)
         assertEquals("the size of the rectangle is not a position", inSheetWindow.width, onScreen.width, 0.001f)
 
-        // The page's dialog sits at the top of the display, so it subtracts nothing.
+        // The page's dialog sits at the top of the display, so it subtracts nothing and
+        // the copy starts at the screen rectangle itself.
         // Edge by edge rather than rect against rect: `Rect` is a value class over a
         // `FloatArray`, and two rects built from equal numbers are not equal objects.
-        val backInSheet = toWindowRect(onScreen, IntOffset(0, 0))
-        assertEquals(24f, backInSheet.left, 0.001f)
-        assertEquals(200f, backInSheet.top, 0.001f)
-        assertEquals(136f, backInSheet.right, 0.001f)
-        assertEquals(358f, backInSheet.bottom, 0.001f)
+        val inTopWindow = toWindowRect(onScreen, IntOffset(0, 0))
+        assertEquals(24f, inTopWindow.left, 0.001f)
+        assertEquals(1600f, inTopWindow.top, 0.001f)
+        assertEquals(136f, inTopWindow.right, 0.001f)
+        assertEquals(1758f, inTopWindow.bottom, 0.001f)
         // A page in a window of its own converts into that window's place instead.
         val inPageWindow = toWindowRect(onScreen, IntOffset(0, 1480))
         assertEquals(24f, inPageWindow.left, 0.001f)
