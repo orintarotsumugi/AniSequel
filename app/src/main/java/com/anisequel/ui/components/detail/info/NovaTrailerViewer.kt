@@ -574,31 +574,25 @@ private fun NovaTrailerPlayer(
 /**
  * The player view, and the one place that decides when it may be seen.
  *
- * ## Why it starts transparent
+ * ## Why visibility changes, not alpha
  *
- * The frame used to be a `WebView` painted opaque black from its first frame, with
- * the page's wavy ring composed *behind* it in the same `Box`. A `WebView` is a real
- * Android view in Compose's interop layer, and that layer draws above every Compose
- * node in the window - so the ring ran, span, and could not be seen: what the reader
- * got was the black rectangle the ring existed to explain. That is the "the circle
- * loading is not wavy" report; the wave was correct and one view layer too low. The
- * view now starts at `alpha` 0 and fades in when it has something to show, so the
- * ring *is* the loading state rather than a decoration under an opaque surface.
+ * A `WebView` is a real Android view in Compose's interop layer. Applying alpha or
+ * scale compositing around its video surface can leave audio and player chrome
+ * visible while the video plane is black. The view therefore stays fully opaque and
+ * hardware-backed; it starts `INVISIBLE` and becomes `VISIBLE` only when it is
+ * ready to draw (or the watchdog has to reveal the fallback surface). The Compose
+ * loading ring sits above it only while it is invisible, rather than trying to fade
+ * through a native video surface.
  *
- * That alpha is owned by the caller, not by this function: the dialog's entrance
- * fades the whole window, and a layer cannot fade an interop view - so the entrance,
- * the reveal and the ring's crossfade are one driver writing one property.
+ * ## What counts as player-ready
  *
- * ## What counts as loaded
- *
- * `onPageFinished` fires for the wrapper - the local HTML string - not for the
- * player inside it, so it hid the ring a frame after the viewer opened and left a
- * black frame for however long the embed took. The authoritative signal is the
- * iframe's own `load` event, which the wrapper reports with one console line: not an
- * `addJavascriptInterface` bridge, because a bridge is a callable surface handed to a
- * remote frame and all this needs is one string. The wrapper also reports on a timer,
- * and [NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS] is the last resort, so a player that never
- * reports cannot leave a spinner turning forever.
+ * The wrapper's own load event only says that the local HTML document loaded; it
+ * does not say YouTube can accept playback commands. The YouTube IFrame Player API's
+ * `onReady` event is the signal used for both revealing the player and enabling the
+ * native controls. Its `onStateChange` event keeps the play/pause button in sync.
+ * No JavaScript interface is exposed to the remote frame: the wrapper reports these
+ * two events through the WebView console. [NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS] remains
+ * the last-resort escape if the provider or remote API never reports readiness.
  */
 @Suppress("SetJavaScriptEnabled", "OVERRIDE_DEPRECATION")
 private fun createNovaTrailerPlayer(
@@ -610,7 +604,7 @@ private fun createNovaTrailerPlayer(
 ): WebView {
     val webView = WebView(context)
     var revealed = false
-    // Idempotent: three signals can fire the reveal and the first one wins.
+    // Idempotent: the IFrame API's ready event and the watchdog can both request reveal.
     val reveal: () -> Unit = {
         if (!revealed) {
             revealed = true
@@ -619,10 +613,9 @@ private fun createNovaTrailerPlayer(
         }
     }
     webView.apply {
-        // Zero until the caller's driver raises it. The driver owns this property
-        // now (see `NovaTrailerPlayer`): an animator here would be a second,
-        // uncancellable clock fighting the dialog's entrance for the same value,
-        // and the exit could not reach it at all.
+        // Keep the native video surface opaque. The visibility switch below is the
+        // only reveal mechanism; a fractional alpha can put the video through a
+        // compositing layer and reproduce the audio-with-black-picture failure.
         alpha = 1f
         visibility = View.INVISIBLE
         setBackgroundColor(AndroidColor.BLACK)
