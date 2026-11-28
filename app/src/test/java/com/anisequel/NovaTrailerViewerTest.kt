@@ -8,6 +8,7 @@ import com.anisequel.ui.components.detail.info.isNovaTrailerWatchPage
 import com.anisequel.ui.components.detail.info.isNovaTrailerWebUrl
 import com.anisequel.ui.components.detail.info.novaTrailerEmbedHtml
 import com.anisequel.ui.components.detail.info.staysInNovaTrailer
+import java.io.File
 import java.net.URLEncoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -136,5 +137,51 @@ class NovaTrailerViewerTest {
         // A lookalike, which a `contains("youtube.com")` check would have allowed.
         assertFalse(isNovaTrailerHost("https://youtube.com.example.net/embed/x"))
         assertFalse(isNovaTrailerHost(""))
+    }
+
+    /**
+     * The player must not be left to the platform's default compositing.
+     *
+     * The report was "the audio is working but nothing is showing": the trailer
+     * played - sound, the player's chrome, the title - over a black rectangle. This is
+     * a video surface inside a floating dialog window, and without a layer of its own
+     * the video plane is dropped while the rest of the page draws normally. A hardware
+     * layer carries the whole output, video included, as one texture; a software layer
+     * cannot hold a video surface at all, which is the same symptom from the other
+     * side. Neither can be seen from a JVM test, so the call itself is pinned.
+     */
+    @Test
+    fun `the player asks for a hardware layer`() {
+        val text = File(root, PLAYER).readText()
+            .replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
+            .replace(Regex("//[^\\n]*"), "")
+
+        assertTrue(
+            "the player is composited by the platform default, so the video surface " +
+                "can be dropped while the audio plays",
+            text.contains("setLayerType(View.LAYER_TYPE_HARDWARE, null)")
+        )
+        assertFalse(
+            "a software layer cannot hold a video surface: the audio plays and the " +
+                "frame stays black",
+            text.contains("LAYER_TYPE_SOFTWARE")
+        )
+    }
+
+    private val root: File = findProjectRoot()
+
+    private fun findProjectRoot(): File {
+        val start = File(System.getProperty("user.dir") ?: ".")
+        var candidate: File? = start
+        while (candidate != null) {
+            if (File(candidate, "gradle.properties").isFile) return candidate
+            candidate = candidate.parentFile
+        }
+        error("could not locate gradle.properties from $start")
+    }
+
+    private companion object {
+        const val PLAYER =
+            "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
     }
 }

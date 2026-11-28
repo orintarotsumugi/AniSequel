@@ -552,4 +552,33 @@ class UserActivityJsonTest {
         val activities = parse<ActivityFeedData>(json).page!!.activities!!
         assertEquals("7", activities[0].progress)
     }
+
+    /**
+     * The feed's verbs survive a Turkish phone.
+     *
+     * `"PLANNING".lowercase()` is `"plannıng"` there - the dotless i - so none of
+     * `displayStatusFor`'s branches matched and every row printed its raw enum:
+     * "CURRENT", "COMPLETED", "PLANNING", beside a title the reader had just watched.
+     * The token comes off the wire in the API's alphabet, so the comparison belongs to
+     * the root locale.
+     */
+    @Test
+    fun `an activity's verb is read whatever the phone's language`() {
+        val json = """
+            {"data":{"Page":{"activities":[
+              {"id":5,"status":"PLANNING","progress":0,"media":{"id":103}}
+            ]}}}
+        """.trimIndent()
+
+        val activity = parse<ActivityFeedData>(json).page!!.activities!!.single()
+        val original = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"))
+
+            assertEquals("Plans to watch", activity.displayStatusFor(isManga = false))
+            assertEquals("Plans to read", activity.displayStatusFor(isManga = true))
+        } finally {
+            java.util.Locale.setDefault(original)
+        }
+    }
 }

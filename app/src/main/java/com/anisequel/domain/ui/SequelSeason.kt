@@ -1,5 +1,7 @@
 package com.anisequel.domain.ui
 
+import java.util.Locale
+
 /**
  * The season a title's own name declares, if it declares one.
  *
@@ -108,7 +110,12 @@ object SequelSeason {
     /** True when [title] names a season after the first one. */
     fun isSequel(title: String?): Boolean = (numberIn(title) ?: 0) >= 2
 
-    private fun wordNumber(value: String): Int? = when (value.lowercase()) {
+    // `Locale.ROOT` on both: the word and the numeral are matched against English
+    // spellings, and the device's locale turns `IV` into `İV` on a Turkish phone -
+    // which made every roman-numeral sequel ("Mushoku Tensei II", "Overlord IV")
+    // answer null and silently keep the shared series poster this class exists to
+    // avoid.
+    private fun wordNumber(value: String): Int? = when (value.lowercase(Locale.ROOT)) {
         "one" -> 1
         "two" -> 2
         "three" -> 3
@@ -122,7 +129,7 @@ object SequelSeason {
         else -> null
     }
 
-    private fun romanOrNumber(value: String): Int? = value.toIntOrNull() ?: when (value.uppercase()) {
+    private fun romanOrNumber(value: String): Int? = value.toIntOrNull() ?: when (value.uppercase(Locale.ROOT)) {
         "I" -> 1
         "II" -> 2
         "III" -> 3

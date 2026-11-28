@@ -1,5 +1,6 @@
 package com.anisequel.ui.components.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -144,6 +145,18 @@ fun PersonProfileSheet(
      */
     onOpenCharacter: ((VoicedCharacter) -> Unit)? = null
 ) {
+    // Back closes this sheet and nothing else.
+    //
+    // It did neither: a back press while a character was open closed the sheet *and*
+    // the title page under it, leaving the reader on Home - the page they were reading
+    // gone, in one press, from the one control that is supposed to step back one
+    // layer. The window's own dismissal is not reached here, so the press fell through
+    // to the screen's back handler and popped the destination the title page was drawn
+    // over. Registered while the sheet is composed, this callback is the newest one on
+    // the dispatcher, so it answers first; the second press then leaves the title page,
+    // which is the order the appearance editor and My Entry already unwind in.
+    BackHandler { onDismiss() }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
