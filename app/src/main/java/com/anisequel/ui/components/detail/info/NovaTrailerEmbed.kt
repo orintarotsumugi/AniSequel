@@ -283,9 +283,17 @@ internal sealed interface NovaTrailerSignal {
  * sides of a language boundary, and this is the only place that boundary is crossed.
  */
 internal fun parseNovaTrailerSignal(message: String): NovaTrailerSignal? = when {
-    message.startsWith(NOVA_TRAILER_READY_PREFIX) -> NovaTrailerSignal.Ready(
-        message.removePrefix(NOVA_TRAILER_READY_PREFIX).toFloatOrNull() ?: 0f
-    )
+    message.startsWith(NOVA_TRAILER_READY_PREFIX) -> {
+        // An empty payload is a real answer - the player exists but does not know its
+        // duration yet - and the viewer can start on it. Anything else that does not
+        // parse is not a signal: the `?: 0f` this used to end with turned a truncated
+        // line or a page comment that happens to carry the prefix into "ready, zero
+        // seconds long", which is a video that can only be replayed. `isFinite` for the
+        // same reason: `"NaN".toFloatOrNull()` is NaN, not a null.
+        val payload = message.removePrefix(NOVA_TRAILER_READY_PREFIX)
+        val seconds = if (payload.isEmpty()) 0f else payload.toFloatOrNull()
+        seconds?.takeIf { it.isFinite() }?.let { NovaTrailerSignal.Ready(it) }
+    }
     message.startsWith(NOVA_TRAILER_STATE_PREFIX) -> message
         .removePrefix(NOVA_TRAILER_STATE_PREFIX)
         .toIntOrNull()
