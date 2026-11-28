@@ -295,20 +295,46 @@ internal fun NovaTrailerViewer(
 
     LaunchedEffect(videoId) {
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
-        // Finish at the exact endpoint so a spring's visibility threshold cannot
-        // leave the dialog a fraction short of its settled state.
         entrance.snapTo(1f)
     }
     LaunchedEffect(videoId, isClosing) {
-        if (!isClosing) return@LaunchedEffect
-        entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
-        entrance.snapTo(0f)
-        onDismiss()
+        if (isClosing) {
+            entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
+            entrance.snapTo(0f)
+            onDismiss()
+        }
     }
-    val requestClose: () -> Unit = { if (!isClosing) isClosing = true }
 
+    NovaTrailerDialog(
+        title = title,
+        fallbackUrl = fallbackUrl,
+        entranceProgress = entrance.value,
+        player = player,
+        loaded = loaded,
+        playerReady = playerReady,
+        playbackState = playbackState,
+        onClose = { isClosing = true },
+        onOpenYouTube = {
+            openExternalUrlOrCopy(context, fallbackUrl)
+            isClosing = true
+        }
+    )
+}
+
+@Composable
+private fun NovaTrailerDialog(
+    title: String,
+    fallbackUrl: String,
+    entranceProgress: Float,
+    player: WebView,
+    loaded: Boolean,
+    playerReady: Boolean,
+    playbackState: Int,
+    onClose: () -> Unit,
+    onOpenYouTube: () -> Unit
+) {
     Dialog(
-        onDismissRequest = requestClose,
+        onDismissRequest = onClose,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             dismissOnClickOutside = false,
@@ -316,224 +342,263 @@ internal fun NovaTrailerViewer(
         )
     ) {
         val dialogView = LocalView.current
-        // The platform draws a hard, undimmable scrim behind every dialog, so the
-        // reader got a 60%-black cut on the frame the viewer opened while this
-        // dialog's own scrim faded in behind it - and the same cut backwards on the
-        // way out, which made the exit a fade followed by a flick. Zeroing the
-        // window's dim leaves one scrim, and it is the one that animates. The cover
-        // viewer makes the same call for the same reason.
+        // Zero the platform dim so this window has a single animated scrim.
         LaunchedEffect(Unit) {
             (dialogView.parent as? DialogWindowProvider)?.window?.setDimAmount(0f)
         }
-        // A dialog is its own window, so the Activity's bars do not follow it: the
-        // player came back with the status and navigation bars drawn over the video,
-        // which is the one screen in the app that cannot have them. Every other
-        // full-screen surface already opts in; this dialog was the exception.
         DialogImmersiveEffect()
-        val immersive = LocalImmersiveMode.current
+        NovaTrailerViewerContent(
+            title = title,
+            entranceProgress = entranceProgress,
+            player = player,
+            loaded = loaded,
+            playerReady = playerReady,
+            playbackState = playbackState,
+            onClose = onClose,
+            onOpenYouTube = onOpenYouTube
+        )
+    }
+}
 
-        // The scrim, the frame and the chrome move as one window: fading only the
-        // player would leave a black page pretending to be closed.
-        Box(
+@Composable
+private fun NovaTrailerViewerContent(
+    title: String,
+    entranceProgress: Float,
+    player: WebView,
+    loaded: Boolean,
+    playerReady: Boolean,
+    playbackState: Int,
+    onClose: () -> Unit,
+    onOpenYouTube: () -> Unit
+) {
+    val immersive = LocalImmersiveMode.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.94f * entranceProgress))
+            .then(Modifier.immersiveDisplayInsets(immersive))
+            .padding(horizontal = 12.dp)
+            .testTag("nova_trailer_viewer")
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                
-                // Full bleed, then the cutout: the scrim has to cover the display,
-                // while the chrome has to stay out from under a camera hole.
-                .background(Color.Black.copy(alpha = 0.94f * entrance.value))
-                .then(Modifier.immersiveDisplayInsets(immersive))
-                .padding(horizontal = 12.dp)
-                .testTag("nova_trailer_viewer")
+                .fillMaxWidth()
+                .align(Alignment.Center),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.Center),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.12f),
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable(role = Role.Button, onClickLabel = "Close the trailer") {
-                                requestClose()
-                            }
-                            .testTag("nova_trailer_close")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = AppVectorIcons.Close,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                    }
-                }
+            NovaTrailerHeader(title = title, onClose = onClose)
+            NovaTrailerFrame(player = player, loaded = loaded)
+            NovaTrailerPlaybackControls(
+                player = player,
+                playerReady = playerReady,
+                playbackState = playbackState
+            )
+            NovaTrailerExternalLink(onClick = onOpenYouTube)
+        }
+    }
+}
 
-                // The frame is 16:9 at the window's width *while that fits*, and by the
-                // room the chrome leaves otherwise. A full-width 16:9 rectangle on a
-                // phone on its side is 450dp tall on a 360dp screen, so the bottom of
-                // the picture and the escape hatch under it were off the display: the
-                // one surface in the app that takes the whole screen was the one that
-                // could not be watched in landscape. The weighted box is offered the
-                // leftover height and, because it is not forced to fill it, portrait
-                // keeps exactly the geometry it had - the aspect ratio fits the width
-                // there and the box wraps the picture.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = false),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
-                            .clip(MaterialTheme.shapes.medium)
-                            .background(Color.Black)
-                    ) {
-                        // The WebView starts invisible, so the ring occupies the
-                        // frame without being drawn over a live video surface. It leaves
-                        // as soon as YouTube reports the player ready (or the watchdog
-                        // reveals the fallback player).
-                        if (!loaded) {
-                            NovaWavyRing(
-                                progress = null,
-                                color = Color.White,
-                                trackColor = Color.White.copy(alpha = 0.2f),
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .size(44.dp)
-                            )
-                        }
-                        NovaTrailerPlayer(
-                            player = player,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .clickable(
-                                enabled = playerReady,
-                                role = Role.Button,
-                                onClickLabel = "Rewind 5 seconds"
-                            ) {
-                                player.evaluateJavascript("window.anisequelTrailer.seek(-5)", null)
-                            }
-                            .testTag("nova_trailer_rewind")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "−5s",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
-                            )
-                        }
-                    }
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = if (playerReady) 0.2f else 0.08f),
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .clickable(
-                                enabled = playerReady,
-                                role = Role.Button,
-                                onClickLabel = if (playbackState == 1) "Pause trailer" else "Play trailer"
-                            ) {
-                                player.evaluateJavascript("window.anisequelTrailer.toggle()", null)
-                            }
-                            .testTag("nova_trailer_play_pause")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (playbackState == 1) AppVectorIcons.Pause else AppVectorIcons.Play,
-                                contentDescription = if (playbackState == 1) "Pause trailer" else "Play trailer",
-                                tint = Color.White.copy(alpha = if (playerReady) 1f else 0.38f),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .clickable(
-                                enabled = playerReady,
-                                role = Role.Button,
-                                onClickLabel = "Forward 5 seconds"
-                            ) {
-                                player.evaluateJavascript("window.anisequelTrailer.seek(5)", null)
-                            }
-                            .testTag("nova_trailer_forward")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "+5s",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // The escape hatch. An embed can be refused - region locks,
-                    // age gates, a build with no WebView provider - and a player
-                    // with no way out of it is a dead end in the one screen that
-                    // took over the whole display.
-                    Text(
-                        text = "Open on YouTube",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.86f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable(
-                                role = Role.Button,
-                                onClickLabel = "Open the trailer on YouTube"
-                            ) {
-                                openExternalUrlOrCopy(context, fallbackUrl)
-                                requestClose()
-                            }
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                            .testTag("nova_trailer_external")
-                    )
-                }
+@Composable
+private fun NovaTrailerHeader(
+    title: String,
+    onClose: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+            shape = CircleShape,
+            color = Color.White.copy(alpha = 0.12f),
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClickLabel = "Close the trailer", onClick = onClose)
+                .testTag("nova_trailer_close")
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = AppVectorIcons.Close,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(19.dp)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun NovaTrailerFrame(
+    player: WebView,
+    loaded: Boolean
+) {
+    // Let the frame use the available height first on a phone held in landscape.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f, fill = false),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                .clip(MaterialTheme.shapes.medium)
+                .background(Color.Black)
+        ) {
+            if (!loaded) {
+                NovaWavyRing(
+                    progress = null,
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.2f),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(44.dp)
+                )
+            }
+            NovaTrailerPlayer(
+                player = player,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovaTrailerPlaybackControls(
+    player: WebView,
+    playerReady: Boolean,
+    playbackState: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NovaTrailerSkipButton(
+            label = "−5s",
+            description = "Rewind 5 seconds",
+            testTag = "nova_trailer_rewind",
+            playerReady = playerReady,
+            command = "window.anisequelTrailer.seek(-5)"
+        ) {
+            player.evaluateJavascript("window.anisequelTrailer.seek(-5)", null)
+        }
+        NovaTrailerPlayPauseButton(
+            playerReady = playerReady,
+            isPlaying = playbackState == 1,
+            onClick = {
+                player.evaluateJavascript("window.anisequelTrailer.toggle()", null)
+            }
+        )
+        NovaTrailerSkipButton(
+            label = "+5s",
+            description = "Forward 5 seconds",
+            testTag = "nova_trailer_forward",
+            playerReady = playerReady,
+            command = "window.anisequelTrailer.seek(5)"
+        ) {
+            player.evaluateJavascript("window.anisequelTrailer.seek(5)", null)
+        }
+    }
+}
+
+@Composable
+private fun NovaTrailerSkipButton(
+    label: String,
+    description: String,
+    testTag: String,
+    playerReady: Boolean,
+    command: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .clickable(
+                enabled = playerReady,
+                role = Role.Button,
+                onClickLabel = description,
+                onClick = onClick
+            )
+            .testTag(testTag)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovaTrailerPlayPauseButton(
+    playerReady: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color.White.copy(alpha = if (playerReady) 0.2f else 0.08f),
+        modifier = Modifier
+            .size(56.dp)
+            .clip(CircleShape)
+            .clickable(
+                enabled = playerReady,
+                role = Role.Button,
+                onClickLabel = if (isPlaying) "Pause trailer" else "Play trailer",
+                onClick = onClick
+            )
+            .testTag("nova_trailer_play_pause")
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (isPlaying) AppVectorIcons.Pause else AppVectorIcons.Play,
+                contentDescription = if (isPlaying) "Pause trailer" else "Play trailer",
+                tint = Color.White.copy(alpha = if (playerReady) 1f else 0.38f),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NovaTrailerExternalLink(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // This remains the escape hatch for region locks, age gates or a missing
+        // Android WebView provider: the reader can always open the source video.
+        Text(
+            text = "Open on YouTube",
+            style = MaterialTheme.typography.labelLarge,
+            color = Color.White.copy(alpha = 0.86f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .clip(MaterialTheme.shapes.small)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = "Open the trailer on YouTube",
+                    onClick = onClick
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .testTag("nova_trailer_external")
+        )
     }
 }
 
