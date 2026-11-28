@@ -288,15 +288,12 @@ class AnimationWiringTest {
     }
 
     /**
-     * A dialog cannot fade an interop view, so the view has to fade itself.
+     * A video WebView must not be faded through a Compose compositing layer.
      *
-     * `WebView` is a real Android view in the interop layer: it draws above every
-     * Compose node and ignores their alpha. The trailer viewer animated its scrim and
-     * its chrome through `graphicsLayer { alpha }` and left the player alone, so the
-     * close faded everything except the video - which stayed at full strength until
-     * the dialog was torn down - and an embed that reported early could appear inside
-     * a frame that was still arriving. The fix is one driver writing the view's own
-     * alpha from the same two states the window uses.
+     * The native view draws above Compose content and its video plane can be lost when
+     * alpha or scale compositing is applied around it. The viewer therefore keeps the
+     * view fully opaque and switches visibility only after the player is ready; the
+     * loading ring remains visible until that hand-off (or the watchdog fallback).
      */
     @Test
     fun `the trailer video surface is revealed without alpha compositing`() {
