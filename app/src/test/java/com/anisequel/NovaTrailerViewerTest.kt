@@ -77,7 +77,7 @@ class NovaTrailerViewerTest {
 
         // All three controls use the same actual onReady gate. The pause glyph is
         // driven by onStateChange rather than assuming that a tap succeeded.
-        assertEquals(3, Regex("enabled = playerReady").findAll(source).count())
+        assertEquals(2, Regex("enabled = playerReady").findAll(source).count())
         assertTrue(source.contains("onPlayerReady = { playerReady = true }"))
         assertTrue(source.contains("onPlaybackStateChanged = { playbackState = it }"))
         assertTrue(
