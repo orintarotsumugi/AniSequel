@@ -334,8 +334,8 @@ class AnimationWiringTest {
             code.contains("entrance.snapTo(1f)")
         )
         assertTrue(
-            "the loading ring still fades out when the embed is revealed",
-            code.contains("ringAlpha.animateTo(0f") && code.contains("if (!ringGone)")
+            "the loading ring stays mounted only while the WebView is hidden",
+            code.contains("if (!loaded)") && code.contains("NovaWavyRing(")
         )
         assertTrue(
             "the platform's own dim is the hard cut this dialog must not draw",
