@@ -4,6 +4,14 @@
       "version": "2.7.3",
       "entries": [
         {
+          "title": "The poster flies home to the card it came from",
+          "detail": "Closing a title no longer pops its cover. The travelling poster was shrunk by a single scale factor, so on a square or wide card it landed inside the card's rectangle with the page's own crop of the picture showing around it, and swapped to the card's crop in the one frame the window closed. It is measured at the rectangle between the card and the page now - exactly the card on the first frame of an open, exactly the hero on the last - and the picture is re-cropped as that rectangle changes shape instead of stretched. Opening from a small card and from a big one both start on the artwork under the finger for the same reason."
+        },
+        {
+          "title": "The artwork goes back to its poster when the viewer closes",
+          "detail": "The full-screen cover viewer scaled its copy by one factor per axis, which stretched a wide banner or a square render for the whole flight and handed the wrong crop over on the way out. It travels on the same measured rectangles as the title page now: the copy is the frame on the first frame of the close and the poster on the last, whatever shape the artwork is."
+        },
+        {
           "title": "The trailer viewer, rebuilt around its own controls",
           "detail": "The in-app trailer is now a full-screen viewer with the app's own transport under the picture: a draggable seek bar with elapsed and total time, ten-second rewind and forward buttons, and a play/pause button that becomes a replay when the video ends. YouTube's own controls stay inside the frame for its ads and settings, and nothing is drawn over the video any more."
         },

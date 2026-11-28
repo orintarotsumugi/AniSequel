@@ -4746,3 +4746,34 @@ harmless before the page exists.
 Playback itself — the decoder, fullscreen, pre-roll ads, a region lock — needs a device.
 CI compiles and runs the JVM suite; nothing here claims a device run.
 
+### The cover's return: a scale cannot land on a card
+
+`DetailCoverFlight` and `CoverRevealOverlay` both join two windows with a copy of the
+picture drawn at one rectangle and moved to another. Both used to move it with a *scale*:
+the sheet by one shared factor (fitted *inside* the card, so a square card's last frame
+showed the page's 2:3 crop standing inside the card's own), the viewer by one factor per
+axis (exact at both ends, but stretched for the whole flight whenever the frame and the
+poster are different shapes - a wide banner, a square render).
+
+A scale is a statement about the size of a shape that is not changing, so a flight between
+two differently-shaped rectangles is either wrong at one end or distorted throughout.
+`CoverTravel.kt` moves the *rectangle* instead: `coverTravelRect` interpolates it, and
+`coverTravelBounds` measures the copy at it every frame, so `ContentScale.Crop` re-cuts
+the picture for the shape it is being drawn into. Both ends are then pixel-identical to
+the side they hand over to - the same box, the same crop - and nothing in between is
+stretched.
+
+Two things about that modifier are load-bearing:
+
+- **The progress is read in the layout block**, not during composition: a spring would
+  otherwise recompose the copy (and ask Coil for its painter) sixty times.
+- **The node still measures to its constraints; only the child is placed at the
+  rectangle.** A copy that reported the *travelling* size would be centred by the page's
+  `fillMaxSize` root Box on the frames where it is small, so the flight would drift
+  toward the middle of the screen instead of landing on the card.
+
+`DetailCoverFlightTest` pins the rectangle itself (a square card and a 2:3 hero: 0 is
+the card, 1 is the hero, 0.5 is halfway, out-of-range progress clamps) and both call
+sites, because both of those mistakes are invisible in a screenshot and obvious on a
+device.
+

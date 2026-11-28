@@ -8,8 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -23,7 +21,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -32,13 +29,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
 import androidx.compose.foundation.Image
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
@@ -46,7 +41,6 @@ import coil.request.ImageRequest
 import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import kotlin.math.PI
-import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -296,19 +290,24 @@ internal fun Modifier.detailCoverPressOrigin(url: String?): Modifier {
 /**
  * The poster in flight, drawn above the page for as long as the flight runs.
  *
- * Laid out at the page's poster rectangle and scaled and translated back toward
- * the list's, the same geometry [CoverRevealOverlay] uses: one Box whose
- * transform starts where the reader's finger was and ends at 1:1. It reads the
- * progress inside the layer block, so a flight is a draw-phase change and the
- * page behind it never recomposes.
+ * The copy is laid out at the *travelling* rectangle - the card's at rest, the
+ * page's poster at the far end - and the layer only fades it and lifts it. It used
+ * to be laid out at the page's poster and scaled there by one layer factor, which
+ * kept a square card's thumbnail from stretching but could not land on it: a 2:3
+ * poster shrunk onto a square card covers its height and two thirds of its width,
+ * so the last frames of a close showed the page's crop standing inside the card's
+ * own crop and then swapped in one frame when the window went. The same mismatch
+ * was the first thing an open showed, before the page's scrim had faded at all.
  *
- * One scale factor for both axes, unlike [CoverRevealOverlay]: the viewer's
- * bounds and the page's poster are the same crop, but a list card can be square
- * or wide, and two factors would stretch the poster until it landed.
+ * Sizing the box instead of scaling the picture means `ContentScale.Crop`
+ * re-cuts the artwork for whatever shape the box has on that frame: no frame is
+ * stretched, and both hand-offs are exact - the copy *is* the card at one end and
+ * *is* the hero at the other. The measurement is in the layout phase (see
+ * [coverTravelBounds]), so a flight still never recomposes the page behind it.
  *
- * The rounded corner is the page's shape, and the clip sits *inside* the scale,
- * so the corners grow with the artwork instead of staying at the page's radius
- * while the picture is still small.
+ * The rounded corner is the page's shape and the clip is outside the picture, so
+ * the corners travel with it; a card with a different radius gets its own corners
+ * back when the copy is removed, which is a corner rather than a picture.
  */
 @Composable
 internal fun SheetCoverFlight(
@@ -335,19 +334,6 @@ internal fun SheetCoverFlight(
     progress: () -> Float
 ) {
     if (!target.filled || target.rect.width <= 0f || target.rect.height <= 0f) return
-    val density = LocalDensity.current
-    val width = with(density) { target.rect.width.toDp() }
-    val height = with(density) { target.rect.height.toDp() }
-    val left = target.rect.left
-    val top = target.rect.top
-    val targetWidth = target.rect.width
-    val targetHeight = target.rect.height
-    // One scale factor, not one per axis: the card's artwork and the page's poster
-    // are the same picture but not always the same crop - a square list thumbnail,
-    // a wide sequel card - and scaling each axis to its own rectangle stretches the
-    // poster for the whole flight. The smaller factor keeps it undistorted and only
-    // costs a margin on the first frames, which the page's scrim is still covering.
-    val startScale = min(origin.width / targetWidth, origin.height / targetHeight)
     val context = LocalContext.current
     // The copy asks for the picture at the size the card's own request resolved
     // to, not at the hero's. A plain `rememberAsyncImagePainter` has no layout size
@@ -362,23 +348,16 @@ internal fun SheetCoverFlight(
 
     Box(
         modifier = Modifier
-            .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
-            .size(width, height)
+            // The travelling rectangle, measured in the layout phase: the card's
+            // on the first frame of an open, the page's poster at the far end, and
+            // the rectangle between them on every frame after. The picture is
+            // measured at that size, so `ContentScale.Crop` re-cuts it for the
+            // shape the box has on this frame - see the KDoc for what the old
+            // one-factor layer scale did to the hand-off.
+            .coverTravelBounds(origin = origin, target = target.rect, progress = progress)
             .graphicsLayer {
-                // Top-left origin: the transform is a scale around the layout's
-                // corner, and the translation below puts that corner where the
-                // scaled picture has to start.
-                transformOrigin = TransformOrigin(0f, 0f)
                 alpha = if (visible) 1f else 0f
                 val p = progress().coerceIn(0f, 1f)
-                val scale = lerp(startScale, 1f, p)
-                scaleX = scale
-                scaleY = scale
-                // Centred on the card's rectangle rather than aligned to its
-                // corner: with one scale factor the copy is smaller than the card
-                // on one axis, and a top-left anchor would hang it off the corner.
-                translationX = lerp(origin.center.x - (targetWidth * startScale / 2f) - left, 0f, p)
-                translationY = lerp(origin.center.y - (targetHeight * startScale / 2f) - top, 0f, p)
                 // The shadow ends at the page's own elevation and starts at the
                 // card's, so neither hand-off changes it; the extra lift in the
                 // middle is what reads as carried rather than resized. Zero over
@@ -392,9 +371,11 @@ internal fun SheetCoverFlight(
             .background(target.tint)
             // The page's hairline, carried for the whole flight. The copy used to
             // land without one, so the hero's frame appeared a frame after the
-            // poster did - a flash of the only edge the flight did not draw. The
-            // stroke is inside the layer, so it scales with the artwork instead of
-            // sitting at a fixed width while the picture is still small.
+            // poster did - a flash of the only edge the flight did not draw. It is
+            // drawn at the travelling rectangle now, which is where a one-dp stroke
+            // is also what the card draws: a stroke that scaled with the old layer
+            // went thinner than a hairline over the list, on the frames the
+            // hand-off happens on.
             .border(target.borderWidth, target.borderColor, target.shape)
             .testTag("detail_cover_flight")
     ) {
