@@ -118,11 +118,11 @@ class NovaTrailerViewerTest {
         assertTrue("the close must stop playback", pause >= 0)
         assertTrue(
             "the video surface must leave before the chrome starts fading",
-            hide in (pause + 1) until exit
+            pause < hide && hide < exit
         )
         assertTrue(
             "the window may only be removed once the exit has settled",
-            exit in (hide + 1) until dismiss
+            hide < exit && exit < dismiss
         )
 
         // Readiness can arrive after the reader has given up on the load. Without
