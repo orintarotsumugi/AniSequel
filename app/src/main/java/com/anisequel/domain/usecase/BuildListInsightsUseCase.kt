@@ -159,7 +159,14 @@ class BuildListInsightsUseCase {
         // underneath the strip are checked against.
         val merged = LinkedHashMap<String, Int>()
         distribution.orEmpty().forEach { row ->
-            val token = ListStatuses.normalize(row.status) ?: return@forEach
+            // A token this build has never seen keeps its own row: AniList can add
+            // a status without telling the app, the account still has it, and
+            // dropping it here would make the strip disagree with the total printed
+            // under it. Only the aliases are folded - and grouped on the trimmed raw
+            // token so two spellings of one unknown status still add up.
+            val token = ListStatuses.normalize(row.status)
+                ?: row.status?.trim()?.takeIf(String::isNotEmpty)
+                ?: return@forEach
             merged[token] = (merged[token] ?: 0) + (row.amount ?: 0)
         }
 
