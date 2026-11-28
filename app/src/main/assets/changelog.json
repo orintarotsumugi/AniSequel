@@ -1,6 +1,51 @@
 {
   "versions": [
     {
+      "version": "2.7.3",
+      "entries": [
+        {
+          "title": "The ring stays on the post the notification opened",
+          "detail": "Opening an activity alert scrolls the profile's Activity tab to the post it names and marks that one card with a ring. The ring began fading the moment it arrived, so by the time a slow scroll landed - or the reader looked up from the alert - the one thing that answered \"which post was this?\" had already gone, and every later look at the feed found a row indistinguishable from its neighbours. The mark holds at full strength until the reader touches that card: the press that opens the post is also the press that puts the ring away, and nothing else dismisses it."
+        },
+        {
+          "title": "Background alerts stop switching themselves off",
+          "detail": "The periodic AniList check could remove its own schedule. A run that could not read the stored session - the app woken for a job before the device had finished unlocking, a keystore still opening - cancelled the unique periodic request, and every later check was gone until the app was opened again, with nothing on screen to say why. It skips that turn instead; the app cancels when the reader actually signs out. A run whose retries were spent also returned success before checking, so a whole period passed with nothing posted and no failure recorded - it ends that run as failed now, and the next period is scheduled as usual."
+        },
+        {
+          "title": "The inbox's clock keeps ticking",
+          "detail": "The relative time on every notification row was read once, when the page arrived, so an inbox left open while the reader read a thread kept saying \"2m ago\" about rows an hour old, and a pull that returned the page already on screen never moved it at all. The labels are read against the same minute clock the profile's feeds use now, so they keep up while the screen is visible and refresh on resume."
+        },
+        {
+          "title": "A card for a title AniList could not name still names it",
+          "detail": "An activity row whose media came back without a title object drew an empty title line and, to a screen reader, \"Open  details\" with two spaces where the name belongs. The card uses the app's existing Unknown Title fallback for the line and for the spoken label now."
+        },
+        {
+          "title": "The poster flies home to the card it came from",
+          "detail": "Closing a title no longer pops its cover. The travelling poster was shrunk by a single scale factor, so on a square or wide card it landed inside the card's rectangle with the page's own crop of the picture showing around it, and swapped to the card's crop in the one frame the window closed. It is measured at the rectangle between the card and the page now - exactly the card on the first frame of an open, exactly the hero on the last - and the picture is re-cropped as that rectangle changes shape instead of stretched. Opening from a small card and from a big one both start on the artwork under the finger for the same reason."
+        },
+        {
+          "title": "The artwork goes back to its poster when the viewer closes",
+          "detail": "The full-screen cover viewer scaled its copy by one factor per axis, which stretched a wide banner or a square render for the whole flight and handed the wrong crop over on the way out. It travels on the same measured rectangles as the title page now: the copy is the frame on the first frame of the close and the poster on the last, whatever shape the artwork is."
+        },
+        {
+          "title": "The trailer viewer, rebuilt around its own controls",
+          "detail": "The in-app trailer is now a full-screen viewer with the app's own transport under the picture: a draggable seek bar with elapsed and total time, ten-second rewind and forward buttons, and a play/pause button that becomes a replay when the video ends. YouTube's own controls stay inside the frame for its ads and settings, and nothing is drawn over the video any more."
+        },
+        {
+          "title": "A trailer that cannot play says why",
+          "detail": "A video YouTube refuses - private, removed, blocked from embeds, or missing its referrer - now replaces the frame with one plain sentence, a Try again button only when a retry could help, and Watch on YouTube. A player that never reports back is treated the same way after twenty seconds instead of leaving a spinner running."
+        },
+        {
+          "title": "Trailers open in the YouTube app",
+          "detail": "Tapping a trailer's external link now opens the YouTube app when it is installed, and the browser only when it is not. When YouTube refuses a video inside the app, the frame is replaced with a plain message and a Watch on YouTube button instead of YouTube's own error card under live controls."
+        },
+        {
+          "title": "The trailer stops when the viewer closes",
+          "detail": "Closing the trailer left the sound playing and the picture at full strength for the whole exit animation, and the header and controls were drawn solid over a scrim that was still transparent. Playback now stops on the frame the close starts, the video surface is taken out so it cannot flash back when a slow load finishes, and the header, controls and the frame's black backing fade with the window. Leaving the app pauses the video instead of letting it play on behind the home screen."
+        }
+      ]
+    },
+    {
       "version": "2.7.2",
       "entries": [
         {

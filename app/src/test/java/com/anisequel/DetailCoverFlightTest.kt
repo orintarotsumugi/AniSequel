@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.detail.DetailCoverFlightState
 import com.anisequel.ui.components.detail.DetailCoverTarget
+import com.anisequel.ui.components.detail.coverTravelRect
 import com.anisequel.ui.components.detail.toScreenRect
 import com.anisequel.ui.components.detail.toWindowRect
 import org.junit.Assert.assertEquals
@@ -19,8 +20,8 @@ import java.io.File
 /**
  * The poster that flies between a list card and the title page.
  *
- * The flight itself is two rectangles in two windows joined by a draw-phase
- * transform, and a JVM test cannot see it. What can be pinned is the shape of the
+ * The flight itself is two rectangles in two windows joined by a layout-phase
+ * rectangle, and a JVM test cannot see it. What can be pinned is the shape of the
  * join - the press listener, the rectangles, the reveal, and the state machine
  * that decides which side draws - and the ways it used to break: a press listener
  * that swallowed the card's click, a copy that started from a rectangle measured
@@ -33,6 +34,10 @@ class DetailCoverFlightTest {
 
     private val flight =
         "app/src/main/java/com/anisequel/ui/components/detail/DetailCoverFlight.kt"
+    private val travel =
+        "app/src/main/java/com/anisequel/ui/components/detail/CoverTravel.kt"
+    private val viewerReveal =
+        "app/src/main/java/com/anisequel/ui/components/detail/CoverViewerReveal.kt"
     private val sheet =
         "app/src/main/java/com/anisequel/ui/components/detail/SequelDetailSheet.kt"
     private val pageFile =
@@ -66,35 +71,124 @@ class DetailCoverFlightTest {
     }
 
     @Test
-    fun `the copy is drawn at the page's rectangle and scaled in the draw phase`() {
+    fun `the copy is measured at the rectangle between the card and the page`() {
         val source = source(flight)
 
         assertTrue(
-            "the transform is animated through layout, so the page relayouts every " +
-                "frame of the flight",
-            source.contains("transformOrigin = TransformOrigin(0f, 0f)") &&
-                source.contains("scaleX = scale")
+            "the copy is a fixed-shape picture scaled by a layer again, so it lands " +
+                "on the page's crop shrunk into the card's rectangle - the pop this " +
+                "fixed",
+            source.contains(
+                "coverTravelBounds(origin = origin, target = target.rect, progress = progress)"
+            )
+        )
+        assertFalse(
+            "one shared layer factor fits the poster inside the card instead of on " +
+                "it, so a square card's last frames show the page's crop standing " +
+                "inside the card's own",
+            source.contains("val startScale = min(")
         )
         assertTrue(
-            "one scale per axis stretches a square card's thumbnail into the " +
-                "portrait poster for the whole flight",
-            source.contains("val startScale = min(origin.width / targetWidth, ") &&
-                source.contains("scaleY = scale")
+            "the picture is not cropped into the travelling rectangle, so the two " +
+                "ends of the flight disagree with the card and the hero",
+            source.contains("contentScale = ContentScale.Crop")
         )
         assertTrue(
-            "the copy is anchored to the card's corner, so a wider card leaves it " +
-                "hanging outside the rectangle the reader pressed",
-            source.contains("translationX = lerp(origin.center.x - ")
-        )
-        assertTrue(
-            "the corner radius is applied before the scale, so the corners stay " +
-                "the page's size while the copy is still small",
+            "the corner radius is not the page's shape, so the copy's corners do " +
+                "not travel with the frame the stroke draws",
             source.contains(".clip(target.shape)")
         )
         assertTrue(
             "the copy carries the page's own poster shadow at the landing, so the " +
                 "hand-off drops a halo off a poster that had one a frame earlier",
             source.contains("target.elevation.toPx() * p + 6.dp.toPx() * sin(p * PI).toFloat()")
+        )
+    }
+
+    @Test
+    fun `the rectangle is the card's at rest and the page's when it lands`() {
+        // A square grid card and a 2:3 hero: the pair a shared scale factor could
+        // not land on. It fitted the poster's height inside the card and left a
+        // third of the card's width uncovered, which is the close's last frame.
+        val card = Rect(24f, 1900f, 224f, 2100f)
+        val hero = Rect(122f, 320f, 238f, 494f)
+
+        // Edge by edge rather than rect against rect: `Rect` is a value class over a
+        // packed value, and two rects built from equal numbers are not equal objects.
+        assertRect(
+            "the copy must start on the rectangle the reader pressed",
+            card,
+            coverTravelRect(card, hero, 0f)
+        )
+        assertRect(
+            "the copy must end on the poster the page measures",
+            hero,
+            coverTravelRect(card, hero, 1f)
+        )
+        assertRect(
+            "the flight is a straight line between the two rectangles, not a " +
+                "curve that slides sideways",
+            Rect(73f, 1110f, 231f, 1297f),
+            coverTravelRect(card, hero, 0.5f)
+        )
+        assertRect(
+            "a press that starts mid-spring must not jump",
+            card,
+            coverTravelRect(card, hero, -1f)
+        )
+        assertRect(
+            "a spring that overshoots must not fly past the poster",
+            hero,
+            coverTravelRect(card, hero, 2f)
+        )
+    }
+
+    private fun assertRect(message: String, expected: Rect, actual: Rect) {
+        assertEquals("$message - left", expected.left, actual.left, 0.001f)
+        assertEquals("$message - top", expected.top, actual.top, 0.001f)
+        assertEquals("$message - right", expected.right, actual.right, 0.001f)
+        assertEquals("$message - bottom", expected.bottom, actual.bottom, 0.001f)
+    }
+
+    @Test
+    fun `the travelling node still fills its parent so the copy cannot drift`() {
+        val helper = source(travel)
+
+        assertTrue(
+            "the copy reports the travelling size, so the page's centred root Box " +
+                "moves it toward the middle of the screen on the frames where it " +
+                "is small",
+            helper.contains("layout(nodeWidth, nodeHeight)") &&
+                helper.contains("constraints.hasBoundedWidth")
+        )
+        assertTrue(
+            "the picture is not measured at the travelling size, so Crop cannot " +
+                "re-cut it and the box just clips a fixed crop",
+            helper.contains("Constraints.fixed(width, height)")
+        )
+        assertTrue(
+            "the rectangle is read while composing rather than while measuring, " +
+                "so every frame of the flight recomposes the copy and asks Coil " +
+                "for the poster again",
+            helper.contains("coverTravelRect(origin, target, progress())")
+        )
+    }
+
+    @Test
+    fun `the cover viewer's copy travels on the same rectangles`() {
+        val reveal = source(viewerReveal)
+
+        assertTrue(
+            "the viewer still scales one fixed crop, so a wide banner is stretched " +
+                "for the whole flight and the poster's crop swaps in at the end",
+            reveal.contains(
+                "coverTravelBounds(origin = origin, target = target, progress = progress)"
+            )
+        )
+        assertTrue(
+            "the viewer's copy is still cropped, so the frame it lands on is " +
+                "letterboxed instead of full bleed",
+            reveal.contains("contentScale = ContentScale.Crop")
         )
     }
 

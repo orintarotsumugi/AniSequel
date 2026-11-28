@@ -203,11 +203,20 @@ internal fun ActivityTextCard(
     /** Opens the conversation with the author; null where there is no one to message. */
     onMessageAuthor: (() -> Unit)? = null,
     /** See [ActivityCard.highlighted]. */
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    /** See [ActivityCard.onGlowTouched]. */
+    onGlowTouched: () -> Unit = {}
 ) {
     val text = activity.text ?: return
     val interactionSource = remember { MutableInteractionSource() }
     val glow = rememberNotificationGlow(highlighted)
+    // Same rule as the list card: the mark ends when this row is touched, not on a
+    // timer that can finish before the reader has looked at the feed.
+    DismissGlowOnTouch(
+        highlighted = highlighted,
+        interactionSource = interactionSource,
+        onDismiss = onGlowTouched
+    )
     // Saveable, and keyed on the post: `remember` dropped the expansion on the
     // first configuration change, so rotating the phone closed a long post the
     // reader had just opened and threw them back to the top of the feed's layout.

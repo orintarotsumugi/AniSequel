@@ -1,11 +1,14 @@
 package com.anisequel.ui.components
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /**
  * Whether the Activity is in the `RESUMED` state right now.
@@ -32,12 +35,24 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
  * that starts a clock should wait one frame rather than start one it may have to
  * cancel. In practice the first `ON_RESUME` lands in the same frame as the first
  * composition, so nothing visible is delayed.
+ *
+ * ## The owner is the Activity, not whatever the composition provides
+ *
+ * Inside a `Dialog` the default owner is the dialog window's own lifecycle, which
+ * follows the window rather than the screen: a dialog left open while the app goes
+ * to the home screen can keep its owner `RESUMED`. Every clock that trusts it - the
+ * trailer's playback, an airing countdown, a wavy bar - then keeps running off
+ * screen, which is the one thing this helper exists to stop. The Activity is
+ * reached through `LocalActivity`, and the provided owner stays as the fallback for
+ * a host that is not an Activity (a preview, a test).
  */
 @Composable
 fun rememberIsResumed(): Boolean {
     var resumed by remember { mutableStateOf(false) }
+    val owner: LifecycleOwner = LocalActivity.current as? LifecycleOwner
+        ?: LocalLifecycleOwner.current
 
-    LifecycleResumeEffect(Unit) {
+    LifecycleResumeEffect(Unit, owner) {
         resumed = true
         onPauseOrDispose { resumed = false }
     }

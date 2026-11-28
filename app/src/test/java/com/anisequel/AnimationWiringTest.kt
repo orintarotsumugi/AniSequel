@@ -297,46 +297,53 @@ class AnimationWiringTest {
      */
     @Test
     fun `the trailer video surface is revealed without alpha compositing`() {
-        val code = source(
+        // The two files split by responsibility: the view and its layer rules live
+        // in the embed, and everything the dialog draws around it lives in the
+        // viewer. Reading one file for both was the assertion, not the requirement -
+        // and it failed the build the moment the WebView moved.
+        val player = source(
+            "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerEmbed.kt"
+        )
+        val viewer = source(
             "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
         )
 
         assertTrue(
             "the WebView must stay opaque instead of fading through a compositing layer",
-            code.contains("alpha = 1f")
+            player.contains("alpha = 1f")
         )
         assertTrue(
             "the video surface stays hidden until the player can be revealed",
-            code.contains("visibility = View.INVISIBLE")
+            player.contains("visibility = View.INVISIBLE")
         )
         assertTrue(
             "the readiness callback reveals the real video surface discretely",
-            code.contains("webView.visibility = View.VISIBLE")
+            player.contains("webView.visibility = View.VISIBLE")
         )
         assertTrue(
             "the WebView video surface requires its own hardware layer",
-            code.contains("setLayerType(View.LAYER_TYPE_HARDWARE, null)")
+            player.contains("setLayerType(View.LAYER_TYPE_HARDWARE, null)")
         )
         assertFalse(
             "alpha animation on the native video surface can bring back the black-picture bug",
-            code.contains("player.alpha =") ||
-                (code.contains("snapshotFlow {") && code.contains("presence()"))
+            viewer.contains("player.alpha =") ||
+                (viewer.contains("snapshotFlow {") && viewer.contains("presence()"))
         )
         assertFalse(
             "a platform animator is a second clock the dialog cannot cancel or read",
-            code.contains(".animate().alpha(")
+            player.contains(".animate().alpha(") || viewer.contains(".animate().alpha(")
         )
         assertTrue(
             "the dialog entrance must still settle exactly at 1",
-            code.contains("entrance.snapTo(1f)")
+            viewer.contains("entrance.snapTo(1f)")
         )
         assertTrue(
             "the loading ring stays mounted only while the WebView is hidden",
-            code.contains("if (!loaded)") && code.contains("NovaWavyRing(")
+            viewer.contains("if (!session.revealed)") && viewer.contains("NovaWavyRing(")
         )
         assertTrue(
             "the platform's own dim is the hard cut this dialog must not draw",
-            code.contains("setDimAmount(0f)")
+            viewer.contains("setDimAmount(0f)")
         )
     }
 

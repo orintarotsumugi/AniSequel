@@ -4494,6 +4494,29 @@ same work instead of stacking a second request, and WorkManager's own persistenc
 is what survives a reboot - there is no `BOOT_COMPLETED` receiver and therefore no
 second source of truth about whether the feature is on.
 
+### A check never cancels its own schedule
+
+Cancelling the unique request is the app's own decision: signing out, switching
+account and turning the switch off in Settings. The worker does not do it on the
+reader's behalf, and two runs that used to are why alerts could go quiet with
+nothing to point at.
+
+The first was a run that could not read a session. `getAccessToken()` returning
+blank is indistinguishable from the worker's side between a reader who signed out
+and a device that could not produce the token yet - the app woken for a job
+before the first unlock, a keystore still opening - so a blank read cancelled the
+periodic request and every later check was gone until the app was next opened.
+It skips that turn and leaves the schedule alone now; a genuinely signed-out
+account is already cancelled by the screen that signed it out.
+
+The second was the give-up guard. `runAttemptCount >= MAX_ATTEMPTS` returned
+`Result.success()` *before* the check ran, which is not "stopped retrying", it is
+"this period posts nothing and reports nothing" - the exact shape of an account
+with no new activity. The limit is applied to the retry now: the last attempt ends
+the run as a failure, and because periodic work is only ever cancelled and never
+finished, the next period is scheduled as usual. "Gave up for this period" is
+then a fact the system records instead of one this app keeps to itself.
+
 Signing out, switching account and turning the switch off all call
 `NotificationAlertsScheduler.cancel`. Cancelling scheduled work is not deleting
 data: the per-account cursor stays, so turning alerts back on resumes from the
@@ -4532,9 +4555,21 @@ Tapping an activity alert opens the profile's Activity tab through the real feed
 and scrolls to the activity it names. Landing is not the same as arriving: on a
 feed of near-identical cards the reader could not tell which row the alert was
 about, so the tap read as "the app opened somewhere in the list". The focused row
-draws a ring for about two seconds after the scroll lands - two strokes of the
-card's own outline, the wide one outside the bounds - and the mark is cleared
-afterwards so it does not compete with every later like or refresh.
+draws a ring until the reader touches it - two strokes of the card's own outline,
+the wide one outside the bounds - and the touch that opens the post is the touch
+that ends the mark.
+
+The ring began as a pulse: full strength on arrival, then a spring back to nothing
+over a couple of seconds. That is a self-dismissing highlight on the one screen
+where nothing else marks a row, and it was ending while the feed was still
+scrolling to the post - the reader looked up from the alert and the answer was
+already gone. It cannot be on a timer for the same reason a toast cannot: the only
+honest signal that the reader has found the row is that they touched it, so
+`DismissGlowOnTouch` watches the card's own interaction source for the first
+`PressInteraction` and the tab clears the mark then. A scroll does not end it
+(the `clickable` cancels the press when the gesture becomes a drag, and the flow
+never sees one), so a reader scrolling past a row they did not mean to touch keeps
+the mark.
 
 The ring is drawn in the draw phase (`Modifier.drawWithContent`) and not blurred.
 A blur is the obvious way to make a glow and the expensive one: it is a render
@@ -4624,3 +4659,156 @@ disabled category, cursor preservation on a failed request, and route encoding f
 names containing route characters. The WorkManager schedule, the tray, the
 permission dialog and a real AniList account still need a device; CI compiles and
 runs the JVM suite, and the PR says which of those were not executed locally.
+
+## 2.7.3: the trailer plays here, and the app drives it
+
+The trailer was the one thing on a title page that still left the app. It now opens a
+viewer over the page, and the viewer is three files because it has three reasons to
+change: a web page that can only speak in strings, a state machine that has to agree
+with that page, and a layout. The old one was a single 767-line file that owned all
+three at once, and most of what follows is a list of the ways that showed.
+
+### What was wrong
+
+- Four controls drawn *over* the embed: a play/pause, a rewind, a forward, and
+  YouTube's own chrome underneath them, twelve pixels away. Two pause buttons that
+  could disagree, because the app's copy was optimistic and the embed's was not.
+- No seek bar, because the page had no way to say *where* playback was: the old
+  protocol only reported events, never a position.
+- A refused video (101/150 owner blocked, 100 removed, 153 no referrer) drew YouTube's
+  own "Video unavailable" card inside the 16:9 hole with the app's live controls still
+  over it, and no explanation.
+- Closing the viewer faded the window out while the video kept playing and drawing at
+  full strength for the whole exit, so the last thing the reader saw was a cut.
+- Nothing paused it when the app went to the background: a dialog is not a destination,
+  so the platform never stops it, and the trailer kept playing behind the home screen.
+- "The audio is working but nothing is showing" — the picture was gone and the sound
+  was not. That is the compositing failure described below, not a load failure.
+
+### Why a `WebView` embed at all
+
+The YouTube Android Player API is withdrawn: it cannot be depended on by a current
+build. The supported way to play a YouTube video inside an Android app is the IFrame
+player inside a `WebView`, which is what this is. Google's newer in-app path is the
+WebView Media Integrity API, which needs an attested app id issued through Play
+services; that is the direction, not something this change could adopt.
+
+The embed is a **nocookie** frame (`youtube-nocookie.com/embed/ID`) with
+`playsinline=1`, `rel=0`, `fs=1` and `enablejsapi=1`. Inline playback is what keeps the
+video in the frame instead of handing the screen to the system player; `fs=1` keeps the
+embed's own fullscreen button, which is routed to the dialog's window by
+`NovaTrailerChromeClient`.
+
+### The two errors that made every trailer fail
+
+Both were visible only on a device, and both are pinned in notes here because they look
+like "the video is unavailable" rather than like a bug in the app:
+
+- **153, "no referrer".** `loadDataWithBaseURL` sets the page's base URL, and that is
+  what `WebView` turns into the `Referer` request header. With a `null` base URL the
+  header is absent and YouTube refuses the embed. The page is loaded under
+  `NOVA_TRAILER_BASE_URL` for exactly this.
+- **152, "unavailable".** The player identifies its embedder by the page's origin. An
+  origin of `https://www.youtube.com` is read as YouTube embedding itself, and the
+  whole library comes back as 152. The origin here is
+  `https://com.aistudio.anisequel.app` — a real `https` origin, unique to this app, and
+  not a YouTube host. The iframe still loads from `youtube-nocookie.com`; the origin
+  names the page, the host names the player, and they are not the same value.
+
+### The protocol: console out, script in
+
+Events leave the page as console lines (`anisequel:trailer-ready:<seconds>`,
+`anisequel:trailer-state:<code>`, `anisequel:trailer-error:<code>`) and every command and
+reading goes in through `evaluateJavascript`. There is no `@JavascriptInterface`: a
+bridge is a callable surface exposed to a frame this app does not control, and all this
+needs is for one string to arrive. `parseNovaTrailerSignal` is the only place the
+boundary is crossed, so a prefix that drifts fails a JVM test instead of a device.
+
+`snapshot()` returns `[position, duration, state]` as a **JSON array**, not a string:
+`evaluateJavascript` hands its result back serialised, so a string arrives double-quoted
+and escaped, and an array parses without a JSON reader. That is why the viewer polls it
+four times a second while playing (`NOVA_TRAILER_PROGRESS_TICK_MILLIS`) and not at all
+while the reader is dragging the timeline.
+
+A refusal is final for the attempt: YouTube can emit `onReady` *after* `onError` for the
+same frame, and accepting it hid the explanation while its error card sat in the hole.
+A timeout (`-1`, "the player never reported") is not final, because it is a statement
+about the clock rather than about the video.
+
+### Why the video is never faded
+
+A native video surface cannot be alpha- or scale-composited: the platform drops the
+video plane and draws the rest of the page, which is the "audio works, the picture is
+black" report. So:
+
+- `alpha = 1f` always, and the reveal is a `visibility` switch
+  (`WebView.visibility = View.VISIBLE` once YouTube says ready), never a fade.
+- `setLayerType(View.LAYER_TYPE_HARDWARE, null)` explicitly, because a view inside a
+  floating dialog window is otherwise composited down a path that drops the video plane.
+  `LAYER_TYPE_SOFTWARE` cannot hold a video surface at all — the same report from the
+  other side, and the app never sets it.
+- The black backing behind the frame does fade, which is safe: a background is painted
+  *beneath* its child and never composites it. It fades only on the way out; faded in, the
+  loading ring would sit over the page showing through the frame.
+
+### The close, the background, and the retry
+
+`NovaTrailerSession` is the state machine: one `phase` (`Loading`, `Ready`, `Ended`,
+`Failed(code)`), the position, the duration, the playing flag and the attempt counter. It
+is deliberately not a ViewModel — it lives exactly as long as the dialog, its source of
+truth is a `WebView` the composition owns, and it needs no scope.
+
+- **Close**: `session.stop()` (pause, then `View.INVISIBLE`), *then* the exit spring, *then*
+  `onDismiss()`. Sound first, because the spring runs for a few hundred milliseconds and
+  the trailer used to play over all of it.
+- **Background**: `rememberIsResumed()` reports false on its first frame, so only a
+  transition counts; on leaving, the page is sent a pause *and* `WebView.onPause()` (the
+  view call stops timers and releases audio focus but does not pause the `<video>`, which
+  was started inside the iframe).
+- **Retry**: increments `attempt`, which re-keys the `AndroidView` so a *new* `WebView` is
+  built. Reloading the same page would reuse the script state that just failed.
+
+### What the tests pin, and what they cannot
+
+`NovaTrailerViewerTest` pins the protocol strings, the id alphabet (an id is
+interpolated into markup, so it is validated rather than escaped), the host allowlist and
+the watch-page rule, the hardware layer, the close order and the bound-slider form.
+`NovaTrailerSessionTest` drives the state machine: refusal-is-final, timeout-is-not,
+buffering keeps the glyph, ended parks at the duration, a snapshot moves the clock
+without becoming a second source of truth, a retry clears everything, and every command is
+harmless before the page exists.
+
+Playback itself — the decoder, fullscreen, pre-roll ads, a region lock — needs a device.
+CI compiles and runs the JVM suite; nothing here claims a device run.
+
+### The cover's return: a scale cannot land on a card
+
+`DetailCoverFlight` and `CoverRevealOverlay` both join two windows with a copy of the
+picture drawn at one rectangle and moved to another. Both used to move it with a *scale*:
+the sheet by one shared factor (fitted *inside* the card, so a square card's last frame
+showed the page's 2:3 crop standing inside the card's own), the viewer by one factor per
+axis (exact at both ends, but stretched for the whole flight whenever the frame and the
+poster are different shapes - a wide banner, a square render).
+
+A scale is a statement about the size of a shape that is not changing, so a flight between
+two differently-shaped rectangles is either wrong at one end or distorted throughout.
+`CoverTravel.kt` moves the *rectangle* instead: `coverTravelRect` interpolates it, and
+`coverTravelBounds` measures the copy at it every frame, so `ContentScale.Crop` re-cuts
+the picture for the shape it is being drawn into. Both ends are then pixel-identical to
+the side they hand over to - the same box, the same crop - and nothing in between is
+stretched.
+
+Two things about that modifier are load-bearing:
+
+- **The progress is read in the layout block**, not during composition: a spring would
+  otherwise recompose the copy (and ask Coil for its painter) sixty times.
+- **The node still measures to its constraints; only the child is placed at the
+  rectangle.** A copy that reported the *travelling* size would be centred by the page's
+  `fillMaxSize` root Box on the frames where it is small, so the flight would drift
+  toward the middle of the screen instead of landing on the card.
+
+`DetailCoverFlightTest` pins the rectangle itself (a square card and a 2:3 hero: 0 is
+the card, 1 is the hero, 0.5 is halfway, out-of-range progress clamps) and both call
+sites, because both of those mistakes are invisible in a screenshot and obvious on a
+device.
+
