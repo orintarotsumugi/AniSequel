@@ -81,9 +81,8 @@ class NovaTrailerViewerTest {
         assertTrue(source.contains("onPlayerReady = { playerReady = true }"))
         assertTrue(source.contains("onPlaybackStateChanged = { playbackState = it }"))
         assertTrue(
-            source.contains(
-                "imageVector = if (playbackState == 1) AppVectorIcons.Pause else AppVectorIcons.Play"
-            )
+            source.contains("isPlaying = playbackState == 1") &&
+                source.contains("imageVector = if (isPlaying) AppVectorIcons.Pause else AppVectorIcons.Play")
         )
     }
 
