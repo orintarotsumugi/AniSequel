@@ -280,6 +280,18 @@ internal fun NovaTrailerViewer(
     val entrance = remember(videoId) { Animatable(0f) }
     var isClosing by remember(videoId) { mutableStateOf(false) }
     var loaded by remember(videoId) { mutableStateOf(false) }
+    var playerReady by remember(videoId) { mutableStateOf(false) }
+    var playbackState by remember(videoId) { mutableStateOf(-1) }
+    val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
+    val player = remember(videoId) {
+        createNovaTrailerPlayer(
+            context = context,
+            html = html,
+            onReady = { loaded = true },
+            onPlayerReady = { playerReady = true },
+            onPlaybackStateChanged = { playbackState = it }
+        )
+    }
 
     LaunchedEffect(videoId) {
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
@@ -433,10 +445,88 @@ internal fun NovaTrailerViewer(
                             )
                         }
                         NovaTrailerPlayer(
-                            videoId = videoId,
-                            modifier = Modifier.fillMaxSize(),
-                                            onLoaded = { loaded = true }
+                            player = player,
+                            modifier = Modifier.fillMaxSize()
                         )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                enabled = playerReady,
+                                role = Role.Button,
+                                onClickLabel = "Rewind 5 seconds"
+                            ) {
+                                player.evaluateJavascript("window.anisequelTrailer.seek(-5)", null)
+                            }
+                            .testTag("nova_trailer_rewind")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "−5s",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = if (playerReady) 0.2f else 0.08f),
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                enabled = playerReady,
+                                role = Role.Button,
+                                onClickLabel = if (playbackState == 1) "Pause trailer" else "Play trailer"
+                            ) {
+                                player.evaluateJavascript("window.anisequelTrailer.toggle()", null)
+                            }
+                            .testTag("nova_trailer_play_pause")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (playbackState == 1) AppVectorIcons.Pause else AppVectorIcons.Play,
+                                contentDescription = if (playbackState == 1) "Pause trailer" else "Play trailer",
+                                tint = Color.White.copy(alpha = if (playerReady) 1f else 0.38f),
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = if (playerReady) 0.14f else 0.06f),
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                enabled = playerReady,
+                                role = Role.Button,
+                                onClickLabel = "Forward 5 seconds"
+                            ) {
+                                player.evaluateJavascript("window.anisequelTrailer.seek(5)", null)
+                            }
+                            .testTag("nova_trailer_forward")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "+5s",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = if (playerReady) 1f else 0.38f)
+                            )
+                        }
                     }
                 }
 
@@ -489,46 +579,9 @@ internal fun NovaTrailerViewer(
  */
 @Composable
 private fun NovaTrailerPlayer(
-    videoId: String,
-    modifier: Modifier = Modifier,
-    /**
-     * The dialog's entrance, 0..1, read per frame rather than passed as a value.
-     *
-     * A lambda for the same reason every other transform in this app is one: the
-     * caller animates it, this composable only forwards it to the view's own alpha,
-     * and nothing here has to recompose on the frames it changes.
-     */
-    onLoaded: () -> Unit
+    player: WebView,
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val html = remember(videoId) { novaTrailerEmbedHtml(videoId) }
-    // The reveal is a Compose spring rather than the view's own animator, so the
-    // ring above it can fade out on the same clock and a reader who chose Instant
-    // motion gets the frame instead of a fade. The platform animator that used to
-    // live here was a second clock: the dialog could neither cancel it nor ask how
-    // far along it was.
-    //
-    // It is an `Animatable`, not `animateFloatAsState`, because it has to *finish*:
-    // a spring stops inside its threshold, so the reveal rested at 0.99 - and the
-    // player's alpha, which only this drives, rested there too, leaving a media view
-    // composited through a layer for its whole life. The last hundredth is snapped.
-    // Reveal the video surface discretely to avoid alpha compositing artifacts.
-    // Built here rather than inside `AndroidView`'s factory, because the reveal has
-    // to be reachable from the watchdog as well as from the page's own signals.
-    val player = remember(videoId) {
-        createNovaTrailerPlayer(context = context, html = html) {
-            onLoaded()
-        }
-    }
-    // A `WebView` is a real view in the interop layer: it draws above every Compose
-    // node and ignores their alpha, so the dialog's `graphicsLayer { alpha }` never
-    // reached it. That is what the close looked like - the scrim and the chrome
-    // faded while the video stayed at full strength until the node was torn down, a
-    // window that ignored its own exit - and on the way in it is how a player that
-    // reported early could appear at full strength inside a frame that was still
-    // arriving. The view's own alpha is the one channel that works, and it carries
-    // both halves of the picture.
-    // Keep the native video surface opaque; alpha compositing is a common cause of black video with audio.
     AndroidView(
         modifier = modifier.testTag("nova_trailer_player"),
         factory = { player },
@@ -576,7 +629,9 @@ private fun NovaTrailerPlayer(
 private fun createNovaTrailerPlayer(
     context: Context,
     html: String,
-    onReady: () -> Unit
+    onReady: () -> Unit,
+    onPlayerReady: () -> Unit,
+    onPlaybackStateChanged: (Int) -> Unit
 ): WebView {
     val webView = WebView(context)
     var revealed = false
@@ -625,7 +680,12 @@ private fun createNovaTrailerPlayer(
         // check can send it out. With windows enabled and no `onCreateWindow`, the
         // same tap would do nothing at all.
         settings.setSupportMultipleWindows(false)
-        webChromeClient = NovaTrailerChromeClient(this, onPlayerReady = reveal)
+        webChromeClient = NovaTrailerChromeClient(
+            webView = this,
+            onEmbedReady = reveal,
+            onPlayerReady = onPlayerReady,
+            onPlaybackStateChanged = onPlaybackStateChanged
+        )
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
@@ -716,8 +776,14 @@ internal const val NOVA_TRAILER_BASE_URL = "$NOVA_TRAILER_ORIGIN/"
 private val NOVA_TRAILER_ORIGIN_QUERY: String =
     URLEncoder.encode(NOVA_TRAILER_ORIGIN, Charsets.UTF_8.name())
 
-/** The console line the wrapper writes once the iframe's own `load` has fired. */
+/** The console line emitted when the iframe has loaded enough to reveal its surface. */
 private const val NOVA_TRAILER_READY_MESSAGE = "anisequel:trailer-ready"
+
+/** Emitted by YouTube's IFrame API only after its player is ready for commands. */
+private const val NOVA_TRAILER_PLAYER_READY_MESSAGE = "anisequel:trailer-player-ready"
+
+/** Playback-state events forwarded from the IFrame API to Compose. */
+private const val NOVA_TRAILER_STATE_PREFIX = "anisequel:trailer-state:"
 
 /** The wrapper's own timer, for an `iframe` that never fires `load` at all. */
 private const val NOVA_TRAILER_WRAPPER_READY_MILLIS = 4500L
@@ -729,7 +795,9 @@ private const val NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS = 7000L
 @Suppress("OVERRIDE_DEPRECATION")
 private class NovaTrailerChromeClient(
     private val webView: WebView,
-    private val onPlayerReady: () -> Unit
+    private val onEmbedReady: () -> Unit,
+    private val onPlayerReady: () -> Unit,
+    private val onPlaybackStateChanged: (Int) -> Unit
 ) : WebChromeClient() {
     private var customView: View? = null
     private var customViewCallback: CustomViewCallback? = null
@@ -757,9 +825,22 @@ private class NovaTrailerChromeClient(
     // JavaScript interface: a bridge is a callable surface exposed to a frame this
     // app does not control, and all this needs is for one string to arrive.
     override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-        if (message.message() == NOVA_TRAILER_READY_MESSAGE) {
-            onPlayerReady()
-            return true
+        val text = message.message()
+        when {
+            text == NOVA_TRAILER_READY_MESSAGE -> {
+                onEmbedReady()
+                return true
+            }
+            text == NOVA_TRAILER_PLAYER_READY_MESSAGE -> {
+                onPlayerReady()
+                return true
+            }
+            text.startsWith(NOVA_TRAILER_STATE_PREFIX) -> {
+                val state = text.substringAfter(NOVA_TRAILER_STATE_PREFIX).toIntOrNull()
+                    ?: return super.onConsoleMessage(message)
+                onPlaybackStateChanged(state)
+                return true
+            }
         }
         return super.onConsoleMessage(message)
     }
@@ -893,14 +974,32 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             append(" referrerpolicy=\"strict-origin-when-cross-origin\"")
             append(" allow=\"autoplay; encrypted-media; picture-in-picture\"")
             append(" allowfullscreen frameborder=\"0\"></iframe>")
-            // One line back to Kotlin when the player itself has loaded. The
-            // wrapper's own `onPageFinished` fires before the embed has painted,
-            // so it cannot be the signal that ends the loading state; this can.
+            // Reveal may follow the iframe load, but the native controls must wait
+            // for the IFrame API's onReady event. That keeps an early tap from
+            // sending a command to an iframe that has not built its player yet.
             append("<script>(function(){var f=document.getElementById('p');var told=false;")
             append("function ready(){if(told){return}told=true;console.log('")
             append(NOVA_TRAILER_READY_MESSAGE)
             append("');}")
             append("if(f){f.addEventListener('load',ready);}")
+            append("window.anisequelTrailer={player:null,")
+            append("seek:function(offset){var p=this.player;if(!p){return;}")
+            append("var duration=p.getDuration()||0;")
+            append("var target=Math.max(0,p.getCurrentTime()+offset);")
+            append("if(duration>0){target=Math.min(duration,target);}p.seekTo(target,true);},")
+            append("toggle:function(){var p=this.player;if(!p){return;}")
+            append("if(p.getPlayerState()===1){p.pauseVideo();}else{p.playVideo();}}};")
+            append("window.onYouTubeIframeAPIReady=function(){")
+            append("window.anisequelTrailer.player=new YT.Player('p',{events:{")
+            append("onReady:function(){ready();console.log('")
+            append(NOVA_TRAILER_PLAYER_READY_MESSAGE)
+            append("');},onStateChange:function(event){console.log('")
+            append(NOVA_TRAILER_STATE_PREFIX)
+            append("'+event.data);}}});};")
+            append("var api=document.createElement('script');")
+            append("api.src='https://www.youtube.com/iframe_api';")
+            append("var first=document.getElementsByTagName('script')[0];")
+            append("first.parentNode.insertBefore(api,first);")
             append("setTimeout(ready,")
             append(NOVA_TRAILER_WRAPPER_READY_MILLIS.toString())
             append(");})();</script>")
