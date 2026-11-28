@@ -237,6 +237,40 @@ class BuildListInsightsUseCaseTest {
         assertTrue(insights.genres.isEmpty())
         assertTrue(insights.tags.isEmpty())
     }
+
+    /**
+     * One account, one segment per status - whatever spelling the tokens arrived in.
+     *
+     * `ListStatuses` aliases the tokens API v1 used (`WATCHING`, `FINISHED`,
+     * `ON_HOLD`, ...). This card grouped on the raw string, so an entry cached under
+     * one of those produced its own segment: the strip read "Watching" twice with the
+     * account's count split between the two, and the alias sorted to the end because
+     * `statusOrder` knows only the six current tokens.
+     */
+    @Test
+    fun `a legacy status token joins its current one instead of splitting the strip`() {
+        val insights = build(
+            statuses = listOf(
+                StatusAmount(status = "CURRENT", amount = 4),
+                StatusAmount(status = "WATCHING", amount = 3),
+                StatusAmount(status = "FINISHED", amount = 2)
+            )
+        )
+
+        assertEquals(
+            "a v1 token made a second segment for a status the app already had",
+            listOf("Watching", "Completed"),
+            insights.status.segments.map { it.label }
+        )
+        assertEquals(7, insights.status.segments[0].count)
+        assertEquals(2, insights.status.segments[1].count)
+        assertEquals(
+            "the segments no longer add up to the total the chips are checked against",
+            insights.status.total,
+            insights.status.segments.sumOf { it.count }
+        )
+    }
+
 }
 
 /**
@@ -448,38 +482,5 @@ class BuildListEntryInsightsUseCaseTest {
         assertTrue(insights.watchYears.isEmpty())
         assertEquals(5, insights.episodeBuckets.size)
         assertEquals(0, insights.entriesCounted)
-    }
-
-    /**
-     * One account, one segment per status - whatever spelling the tokens arrived in.
-     *
-     * `ListStatuses` aliases the tokens API v1 used (`WATCHING`, `FINISHED`,
-     * `ON_HOLD`, ...). This card grouped on the raw string, so an entry cached under
-     * one of those produced its own segment: the strip read "Watching" twice with the
-     * account's count split between the two, and the alias sorted to the end because
-     * `statusOrder` knows only the six current tokens.
-     */
-    @Test
-    fun `a legacy status token joins its current one instead of splitting the strip`() {
-        val insights = build(
-            statuses = listOf(
-                StatusAmount(status = "CURRENT", amount = 4),
-                StatusAmount(status = "WATCHING", amount = 3),
-                StatusAmount(status = "FINISHED", amount = 2)
-            )
-        )
-
-        assertEquals(
-            "a v1 token made a second segment for a status the app already had",
-            listOf("Watching", "Completed"),
-            insights.status.segments.map { it.label }
-        )
-        assertEquals(7, insights.status.segments[0].count)
-        assertEquals(2, insights.status.segments[1].count)
-        assertEquals(
-            "the segments no longer add up to the total the chips are checked against",
-            insights.status.total,
-            insights.status.segments.sumOf { it.count }
-        )
     }
 }
