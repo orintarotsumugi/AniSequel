@@ -35,11 +35,20 @@ import java.net.URLEncoder
  * No JavaScript interface is exposed to the remote frame: the wrapper reports these
  * two events through the WebView console. [NOVA_TRAILER_REVEAL_TIMEOUT_MILLIS] remains
  * the last-resort escape if the provider or remote API never reports readiness.
+ *
+ * ## A reveal that arrives after the close
+ *
+ * `isDismissing` is what keeps readiness from undoing a close. The viewer hides this
+ * surface on the frame the close is tapped, but a slow first load can report ready a
+ * few hundred milliseconds later - and a reveal then switched the video back on for
+ * the tail of the fade. It is the same glitch the close exists to remove, arriving
+ * from the other side.
  */
 @Suppress("SetJavaScriptEnabled", "OVERRIDE_DEPRECATION")
 internal fun createNovaTrailerPlayer(
     context: Context,
     html: String,
+    isDismissing: () -> Boolean,
     onReady: () -> Unit,
     onPlayerReady: () -> Unit,
     onPlaybackStateChanged: (Int) -> Unit,
@@ -49,7 +58,7 @@ internal fun createNovaTrailerPlayer(
     var revealed = false
     // Idempotent: the IFrame API's ready event and the watchdog can both request reveal.
     val reveal: () -> Unit = {
-        if (!revealed) {
+        if (!revealed && !isDismissing()) {
             revealed = true
             webView.visibility = View.VISIBLE
             onReady()
@@ -351,6 +360,30 @@ internal fun isNovaTrailerId(id: String): Boolean =
     id.isNotEmpty() && id.length <= 20 && id.all { it.isLetterOrDigit() || it == '_' || it == '-' }
 
 /**
+ * Stops the embed's playback, wherever it is and whatever state it is in.
+ *
+ * The guard is deliberate: this is called on the frame the close is tapped and
+ * again when the app leaves the foreground, and either can land before the page
+ * has built `window.anisequelTrailer` (a cold open, or a stop that follows the
+ * activity straight into the background). `evaluateJavascript` before the document
+ * exists has nothing to pause, and the throw it would raise is a console error in a
+ * page nobody is reading.
+ *
+ * A destroyed `WebView` cannot evaluate at all, which is why the call is wrapped:
+ * the close animation and a lifecycle stop can arrive together, and an
+ * `IllegalStateException` on the way out would turn a dismissed trailer into a
+ * crash.
+ */
+internal fun pauseNovaTrailer(player: WebView) {
+    runCatching {
+        player.evaluateJavascript(NOVA_TRAILER_PAUSE_JS, null)
+    }
+}
+
+internal const val NOVA_TRAILER_PAUSE_JS =
+    "if(window.anisequelTrailer){window.anisequelTrailer.pause()}"
+
+/**
  * The wrapper page: one iframe, filling it, and nothing else.
  *
  * `playsinline` is what keeps the video inside the frame instead of handing it to
@@ -398,6 +431,12 @@ internal fun novaTrailerEmbedHtml(videoId: String): String {
             // visible; the independent WebView watchdog remains the last-resort escape.
             append("<script>(function(){")
             append("window.anisequelTrailer={player:null,")
+            // Pausing is its own command rather than `toggle`: the caller asks to
+            // stop, and the player may already be paused (or paused by the system)
+            // when it does. A toggle would start playback in exactly that case.
+            // The platform keeps the video playing under a window that is on its way
+            // out, so this is what the close and a lifecycle pause both call.
+            append("pause:function(){var p=this.player;if(!p){return;}p.pauseVideo();},")
             append("seek:function(offset){var p=this.player;if(!p){return;}")
             append("var duration=p.getDuration()||0;")
             append("var target=Math.max(0,p.getCurrentTime()+offset);")

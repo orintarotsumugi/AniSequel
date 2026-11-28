@@ -3,6 +3,7 @@ package com.anisequel.ui.components.detail.info
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.webkit.WebView
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -67,6 +68,7 @@ import com.anisequel.ui.components.cards.unseamedCover
 import com.anisequel.ui.components.expressive.ExpressiveMotion
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.openExternalUrlOrCopy
+import com.anisequel.ui.components.rememberIsResumed
 
 /**
  * The official trailer: the card that advertises it, and the player it opens.
@@ -262,6 +264,19 @@ internal fun NovaTrailerCard(
  * a crash rather than as an exit. [entrance] runs one way for the open and the other
  * for the close, and only then does [onDismiss] tell the caller, which is the same
  * handover `SequelDetailSheet` makes for the title page itself.
+ *
+ * ## The video stops when the window starts to leave
+ *
+ * The entrance value drives a fade of the chrome and the frame's backing, never of
+ * the `WebView` itself: see [createNovaTrailerPlayer] for why a composited video
+ * surface plays sound over a black picture. So the surface is switched off instead,
+ * on the same frame the close is requested, and the soundtrack is paused then too.
+ * Both used to wait for the window: the picture and the audio stayed at full
+ * strength through the exit spring and disappeared in its last frame.
+ *
+ * The same pause runs when the app leaves the foreground. A `Dialog` is not a
+ * destination the platform stops, so the trailer kept playing behind the home
+ * screen.
  */
 @Composable
 internal fun NovaTrailerViewer(
@@ -282,6 +297,7 @@ internal fun NovaTrailerViewer(
         createNovaTrailerPlayer(
             context = context,
             html = html,
+            isDismissing = { isClosing },
             onReady = { loaded = true },
             onPlayerReady = { playerReady = true },
             onPlaybackStateChanged = { playbackState = it },
@@ -293,8 +309,27 @@ internal fun NovaTrailerViewer(
         entrance.animateTo(1f, ExpressiveMotion.SettleSpatial)
         entrance.snapTo(1f)
     }
+
+    // The video is paused when the app is not on screen. Without this the sound
+    // kept playing behind the home screen - the WebView is in a dialog, and a
+    // dialog is not what the platform stops. It is not a dismissal: the reader
+    // comes back to the frame exactly as they left it, paused, and presses play.
+    val resumed = rememberIsResumed()
+    LaunchedEffect(resumed) {
+        if (!resumed) pauseNovaTrailer(player)
+    }
+
     LaunchedEffect(videoId, isClosing) {
         if (isClosing) {
+            // Sound first. The exit spring runs for a few hundred milliseconds,
+            // and the video used to play over all of it - the window faded around
+            // a picture and a soundtrack that were still going at full strength.
+            pauseNovaTrailer(player)
+            // The native video surface cannot be faded (see
+            // `createNovaTrailerPlayer`), so it is taken out whole on the frame the
+            // close starts. What is left fades: the chrome, the frame's black
+            // backing and the scrim.
+            player.visibility = View.INVISIBLE
             entrance.animateTo(0f, ExpressiveMotion.SettleSpatial)
             entrance.snapTo(0f)
             onDismiss()
@@ -304,6 +339,7 @@ internal fun NovaTrailerViewer(
     NovaTrailerDialog(
         title = title,
         entranceProgress = entrance.value,
+        closing = isClosing,
         player = player,
         loaded = loaded,
         playerReady = playerReady,
@@ -321,6 +357,7 @@ internal fun NovaTrailerViewer(
 private fun NovaTrailerDialog(
     title: String,
     entranceProgress: Float,
+    closing: Boolean,
     player: WebView,
     loaded: Boolean,
     playerReady: Boolean,
@@ -346,6 +383,7 @@ private fun NovaTrailerDialog(
         NovaTrailerViewerContent(
             title = title,
             entranceProgress = entranceProgress,
+            closing = closing,
             player = player,
             loaded = loaded,
             playerReady = playerReady,
@@ -361,6 +399,7 @@ private fun NovaTrailerDialog(
 private fun NovaTrailerViewerContent(
     title: String,
     entranceProgress: Float,
+    closing: Boolean,
     player: WebView,
     loaded: Boolean,
     playerReady: Boolean,
@@ -370,6 +409,22 @@ private fun NovaTrailerViewerContent(
     onOpenYouTube: () -> Unit
 ) {
     val immersive = LocalImmersiveMode.current
+    // The chrome fades with the window around it, in both directions.
+    //
+    // It used to be drawn at full strength from the first frame over a scrim that
+    // was still transparent, so the header and the controls popped in before the
+    // black behind them existed; on the way out they stayed solid until the window
+    // was removed, which is what made the close a cut. Only the chrome is faded:
+    // the frame holds the `WebView`, and alpha-compositing a native video surface
+    // is the audio-with-a-black-picture failure `createNovaTrailerPlayer` records.
+    // The frame's own black backing fades via its background, which is drawn under
+    // its child and so never touches the video plane.
+    val chromeFade = Modifier.graphicsLayer { alpha = entranceProgress }
+    // The frame's black backing only fades on the way out. Fading it in would put
+    // the loading ring over the page showing through the frame instead of over
+    // black, and a black rectangle over a nearly-black scrim is not the pop that
+    // full-strength text is.
+    val backingFade = if (closing) entranceProgress else 1f
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -384,19 +439,25 @@ private fun NovaTrailerViewerContent(
                 .align(Alignment.Center),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            NovaTrailerHeader(title = title, onClose = onClose)
+            NovaTrailerHeader(title = title, onClose = onClose, modifier = chromeFade)
             if (playerError == null) {
                 NovaTrailerFrame(
                     modifier = Modifier.weight(1f, fill = false),
                     player = player,
-                    loaded = loaded
+                    loaded = loaded,
+                    backingAlpha = backingFade
                 )
-                NovaTrailerPlaybackControls(
-                    player = player,
-                    playerReady = playerReady,
-                    playbackState = playbackState
-                )
-                NovaTrailerExternalLink(onClick = onOpenYouTube)
+                Column(
+                    modifier = chromeFade,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    NovaTrailerPlaybackControls(
+                        player = player,
+                        playerReady = playerReady,
+                        playbackState = playbackState
+                    )
+                    NovaTrailerExternalLink(onClick = onOpenYouTube)
+                }
             } else {
                 NovaTrailerUnavailable(code = playerError, onOpenYouTube = onOpenYouTube)
             }
@@ -407,9 +468,10 @@ private fun NovaTrailerViewerContent(
 @Composable
 private fun NovaTrailerHeader(
     title: String,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
@@ -445,7 +507,8 @@ private fun NovaTrailerHeader(
 private fun NovaTrailerFrame(
     modifier: Modifier,
     player: WebView,
-    loaded: Boolean
+    loaded: Boolean,
+    backingAlpha: Float
 ) {
     // Let the frame use the available height first on a phone held in landscape.
     Box(
@@ -456,7 +519,10 @@ private fun NovaTrailerFrame(
             modifier = Modifier
                 .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                 .clip(MaterialTheme.shapes.medium)
-                .background(Color.Black)
+                // Drawn under the `WebView`, so this fades the black backing and
+                // not the video: a background is painted beneath its child and
+                // never composites it. A `graphicsLayer` here would.
+                .background(Color.Black.copy(alpha = backingAlpha))
         ) {
             if (!loaded) {
                 NovaWavyRing(

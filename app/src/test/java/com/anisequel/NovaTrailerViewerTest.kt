@@ -88,6 +88,60 @@ class NovaTrailerViewerTest {
         assertTrue(viewer.contains("NovaTrailerUnavailable(code = playerError"))
     }
 
+    /**
+     * The close is the part the reader hears.
+     *
+     * The exit spring runs for a few hundred milliseconds. It used to run over a
+     * video that was still playing and still drawing, so closing a trailer kept the
+     * sound going and then removed a picture at full strength - an exit that reads
+     * as a cut. The order below is the fix, not a preference: pause, hide, fade,
+     * dismiss. The surface cannot fade with everything else (that would put the video
+     * through a compositing layer and bring the black-picture bug back), so it is
+     * switched off first while the chrome and the scrim do the fading.
+     */
+    @Test
+    fun `closing the viewer stops the video before the window leaves`() {
+        val viewer = File(root, PLAYER).readText()
+        val embed = File(root, EMBED).readText()
+
+        // A pause, not a toggle: the close can land on a player that is already
+        // paused, and a toggle would start it instead of stopping it.
+        assertTrue(embed.contains("pause:function(){"))
+        assertTrue(embed.contains("p.pauseVideo();"))
+        assertTrue(embed.contains("if(window.anisequelTrailer){window.anisequelTrailer.pause()}"))
+
+        val close = viewer.substringAfter("if (isClosing) {")
+        val pause = close.indexOf("pauseNovaTrailer(player)")
+        val hide = close.indexOf("player.visibility = View.INVISIBLE")
+        val exit = close.indexOf("entrance.animateTo(0f")
+        val dismiss = close.indexOf("onDismiss()")
+        assertTrue("the close must stop playback", pause >= 0)
+        assertTrue(
+            "the video surface must leave before the chrome starts fading",
+            hide in (pause + 1) until exit
+        )
+        assertTrue(
+            "the window may only be removed once the exit has settled",
+            exit in (hide + 1) until dismiss
+        )
+
+        // Readiness can arrive after the reader has given up on the load. Without
+        // the check it switched the surface back on for the tail of the fade.
+        assertTrue(embed.contains("!revealed && !isDismissing()"))
+        assertTrue(viewer.contains("isDismissing = { isClosing }"))
+
+        // Leaving the app is not a dismissal, but it must stop the sound: a dialog
+        // is not a destination the platform pauses for us.
+        assertTrue(viewer.contains("val resumed = rememberIsResumed()"))
+        assertTrue(viewer.contains("if (!resumed) pauseNovaTrailer(player)"))
+
+        // The chrome follows the window. The video area's black backing follows it
+        // only on the way out: faded in, the loading ring would sit over the page
+        // showing through the frame instead of over black.
+        assertTrue(viewer.contains("graphicsLayer { alpha = entranceProgress }"))
+        assertTrue(viewer.contains("if (closing) entranceProgress else 1f"))
+    }
+
     @Test
     fun `native trailer controls stay disabled until the player is ready`() {
         val source = File(root, PLAYER).readText()
