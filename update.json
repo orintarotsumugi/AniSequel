@@ -1,6 +1,6 @@
 {
-  "version": "2.7.2",
-  "version_code": 707,
+  "version": "2.7.3",
+  "version_code": 708,
   "release_url": "https://github.com/orintarotsumugi/AniSequel/releases/tag/v2.6.8",
   "download_url": "https://github.com/orintarotsumugi/AniSequel/releases/download/v2.6.8/anisequel-universal.apk",
   "notes": "- Control the trailer without leaving the viewer: The official trailer now has in-app rewind and forward controls that jump five seconds, plus a play/pause toggle. The controls stay disabled until YouTube's IFrame Player API reports that the player is ready, and the play/pause icon follows the real playback state. Seeking is kept within the start and end of the video.\n- The trailer picture stays visible: The embedded WebView keeps its video surface opaque and hardware-backed, and reveals it without alpha or scale compositing. This avoids the black-picture, audio-only failure that can happen when an extra compositing layer drops the video plane."

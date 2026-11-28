@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "2.7.3",
+      "entries": [
+        {
+          "title": "Trailers open in the YouTube app",
+          "detail": "Tapping a trailer's external link now opens the YouTube app when it is installed, and the browser only when it is not. When YouTube refuses a video inside the app, the frame is replaced with a plain message and a Watch on YouTube button instead of YouTube's own error card under live controls."
+        }
+      ]
+    },
+    {
       "version": "2.7.2",
       "entries": [
         {

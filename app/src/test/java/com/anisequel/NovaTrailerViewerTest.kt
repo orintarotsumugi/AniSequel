@@ -71,6 +71,23 @@ class NovaTrailerViewerTest {
         assertTrue(html.contains("p.playVideo()"))
     }
 
+    /**
+     * A refused video must leave the frame, not sit under live controls.
+     *
+     * The IFrame API's `onError` is the only signal that YouTube refused the video; the
+     * frame itself shows YouTube's own error card. The page has to forward the code, and
+     * the viewer has to swap the frame for the unavailable panel when it arrives.
+     */
+    @Test
+    fun `a refused video is reported and replaces the frame`() {
+        val html = novaTrailerEmbedHtml("VQGCKyvzIM4")
+        assertTrue(html.contains("onError:function(event){console.log('anisequel:trailer-error:'+event.data);}"))
+
+        val viewer = File(root, PLAYER).readText()
+        assertTrue(viewer.contains("if (playerError == null) {"))
+        assertTrue(viewer.contains("NovaTrailerUnavailable(code = playerError"))
+    }
+
     @Test
     fun `native trailer controls stay disabled until the player is ready`() {
         val source = File(root, PLAYER).readText()
@@ -187,7 +204,7 @@ class NovaTrailerViewerTest {
      */
     @Test
     fun `the player asks for a hardware layer`() {
-        val text = File(root, PLAYER).readText()
+        val text = File(root, EMBED).readText()
             .replace(Regex("/\\*[\\s\\S]*?\\*/"), "")
             .replace(Regex("//[^\\n]*"), "")
 
@@ -218,5 +235,7 @@ class NovaTrailerViewerTest {
     private companion object {
         const val PLAYER =
             "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
+        const val EMBED =
+            "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerEmbed.kt"
     }
 }
