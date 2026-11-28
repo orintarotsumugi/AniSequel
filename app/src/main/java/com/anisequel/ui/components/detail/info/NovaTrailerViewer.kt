@@ -327,7 +327,7 @@ internal fun NovaTrailerViewer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = entrance.value }
+                
                 // Full bleed, then the cutout: the scrim has to cover the display,
                 // while the chrome has to stay out from under a camera hole.
                 .background(Color.Black.copy(alpha = 0.94f * entrance.value))
@@ -339,15 +339,7 @@ internal fun NovaTrailerViewer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
-                    .graphicsLayer {
-                        // A player that grows into place rather than one that
-                        // appears: 0.92 to 1 on the settling spring, no overshoot -
-                        // a video frame that passes its own size and comes back
-                        // reads as the window resizing, not as the frame arriving.
-                        val scale = 0.92f + 0.08f * entrance.value
-                        scaleX = scale
-                        scaleY = scale
-                    },
+                    ,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -525,12 +517,7 @@ private fun NovaTrailerPlayer(
     // a spring stops inside its threshold, so the reveal rested at 0.99 - and the
     // player's alpha, which only this drives, rested there too, leaving a media view
     // composited through a layer for its whole life. The last hundredth is snapped.
-    val reveal = remember(videoId) { Animatable(0f) }
-    LaunchedEffect(revealed) {
-        if (!revealed) return@LaunchedEffect
-        reveal.animateTo(1f, ExpressiveMotion.FastEffects)
-        reveal.snapTo(1f)
-    }
+    // Reveal the video surface discretely to avoid alpha compositing artifacts.
     // Built here rather than inside `AndroidView`'s factory, because the reveal has
     // to be reachable from the watchdog as well as from the page's own signals.
     val player = remember(videoId) {
@@ -547,9 +534,7 @@ private fun NovaTrailerPlayer(
     // reported early could appear at full strength inside a frame that was still
     // arriving. The view's own alpha is the one channel that works, and it carries
     // both halves of the picture.
-    LaunchedEffect(player) {
-        snapshotFlow { reveal.value * presence() }.collect { alpha -> player.alpha = alpha }
-    }
+    // Keep the native video surface opaque; alpha compositing is a common cause of black video with audio.
     AndroidView(
         modifier = modifier.testTag("nova_trailer_player"),
         factory = { player },
@@ -605,6 +590,7 @@ private fun createNovaTrailerPlayer(
     val reveal: () -> Unit = {
         if (!revealed) {
             revealed = true
+            visibility = View.VISIBLE
             onReady()
         }
     }
@@ -613,7 +599,8 @@ private fun createNovaTrailerPlayer(
         // now (see `NovaTrailerPlayer`): an animator here would be a second,
         // uncancellable clock fighting the dialog's entrance for the same value,
         // and the exit could not reach it at all.
-        alpha = 0f
+        alpha = 1f
+        visibility = View.INVISIBLE
         setBackgroundColor(AndroidColor.BLACK)
         // A hardware layer, explicitly.
         //
