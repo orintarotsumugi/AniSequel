@@ -9,7 +9,7 @@
         },
         {
           "title": "The trailer stops when the viewer closes",
-          "detail": "Closing the trailer left the sound playing and the picture at full strength for the whole exit animation, and the header and controls were drawn solid over a scrim that was still transparent. Playback now stops on the frame the close starts, the video surface is taken out so it cannot flash back when a slow load finishes, and the header, controls and the frame's black backing fade with the window. Leaving the app for another screen pauses the video too, instead of playing on behind the home screen."
+          "detail": "Closing the trailer left the sound playing and the picture at full strength for the whole exit animation, and the header and controls were drawn solid over a scrim that was still transparent. Playback now stops on the frame the close starts, the video surface is taken out so it cannot flash back when a slow load finishes, and the header, controls and the frame's black backing fade with the window. Leaving the app pauses the video instead of letting it play on behind the home screen."
         }
       ]
     },
