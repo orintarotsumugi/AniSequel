@@ -52,6 +52,41 @@ class NovaTrailerViewerTest {
     }
 
     @Test
+    fun `native controls wait for YouTube and seek in five second steps`() {
+        val html = novaTrailerEmbedHtml("VQGCKyvzIM4")
+
+        // The IFrame API's onReady event is the gate for the Compose controls;
+        // the wrapper's earlier iframe-load signal is not enough to send commands.
+        assertTrue(html.contains("new YT.Player('p'"))
+        assertTrue(html.contains("anisequel:trailer-player-ready"))
+        assertTrue(html.contains("anisequel:trailer-state:"))
+
+        // Both seek buttons share one bounded offset function, and playback
+        // follows the real player's state rather than a local optimistic toggle.
+        assertTrue(html.contains("p.getCurrentTime()+offset"))
+        assertTrue(html.contains("Math.max(0,p.getCurrentTime()+offset)"))
+        assertTrue(html.contains("if(duration>0){target=Math.min(duration,target);}"))
+        assertTrue(html.contains("p.seekTo(target,true)"))
+        assertTrue(html.contains("p.pauseVideo()"))
+        assertTrue(html.contains("p.playVideo()"))
+    }
+
+    @Test
+    fun `native trailer controls stay disabled until the player is ready`() {
+        val source = File(root, PLAYER).readText()
+
+        // All three controls use the same actual onReady gate. The pause glyph is
+        // driven by onStateChange rather than assuming that a tap succeeded.
+        assertEquals(2, Regex("enabled = playerReady").findAll(source).count())
+        assertTrue(source.contains("onPlayerReady = { playerReady = true }"))
+        assertTrue(source.contains("onPlaybackStateChanged = { playbackState = it }"))
+        assertTrue(
+            source.contains("isPlaying = playbackState == 1") &&
+                source.contains("imageVector = if (isPlaying) AppVectorIcons.Pause else AppVectorIcons.Play")
+        )
+    }
+
+    @Test
     fun `an id outside YouTube's alphabet produces no frame`() {
         // `"` would close the src attribute, `<` would open an element.
         val html = novaTrailerEmbedHtml("""x" onload="alert(1)""")

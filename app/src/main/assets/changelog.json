@@ -1,6 +1,19 @@
 {
   "versions": [
     {
+      "version": "2.7.2",
+      "entries": [
+        {
+          "title": "Control the trailer without leaving the viewer",
+          "detail": "The official trailer now has in-app rewind and forward controls that jump five seconds, plus a play/pause toggle. The controls stay disabled until YouTube's IFrame Player API reports that the player is ready, and the play/pause icon follows the real playback state. Seeking is kept within the start and end of the video."
+        },
+        {
+          "title": "The trailer picture stays visible",
+          "detail": "The embedded WebView keeps its video surface opaque and hardware-backed, and reveals it without alpha or scale compositing. This avoids the black-picture, audio-only failure that can happen when an extra compositing layer drops the video plane."
+        }
+      ]
+    },
+    {
       "version": "2.7.1",
       "entries": [
         {

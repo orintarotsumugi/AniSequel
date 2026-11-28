@@ -288,51 +288,51 @@ class AnimationWiringTest {
     }
 
     /**
-     * A dialog cannot fade an interop view, so the view has to fade itself.
+     * A video WebView must not be faded through a Compose compositing layer.
      *
-     * `WebView` is a real Android view in the interop layer: it draws above every
-     * Compose node and ignores their alpha. The trailer viewer animated its scrim and
-     * its chrome through `graphicsLayer { alpha }` and left the player alone, so the
-     * close faded everything except the video - which stayed at full strength until
-     * the dialog was torn down - and an embed that reported early could appear inside
-     * a frame that was still arriving. The fix is one driver writing the view's own
-     * alpha from the same two states the window uses.
+     * The native view draws above Compose content and its video plane can be lost when
+     * alpha or scale compositing is applied around it. The viewer therefore keeps the
+     * view fully opaque and switches visibility only after the player is ready; the
+     * loading ring remains visible until that hand-off (or the watchdog fallback).
      */
     @Test
-    fun `the trailer player's alpha is driven in one place`() {
+    fun `the trailer video surface is revealed without alpha compositing`() {
         val code = source(
             "app/src/main/java/com/anisequel/ui/components/detail/info/NovaTrailerViewer.kt"
         )
 
-        assertTrue("the player must fade through its own alpha", code.contains("player.alpha ="))
         assertTrue(
-            "the reveal and the dialog's entrance must share one clock",
-            code.contains("snapshotFlow {") && code.contains("presence()")
+            "the WebView must stay opaque instead of fading through a compositing layer",
+            code.contains("alpha = 1f")
+        )
+        assertTrue(
+            "the video surface stays hidden until the player can be revealed",
+            code.contains("visibility = View.INVISIBLE")
+        )
+        assertTrue(
+            "the readiness callback reveals the real video surface discretely",
+            code.contains("webView.visibility = View.VISIBLE")
+        )
+        assertTrue(
+            "the WebView video surface requires its own hardware layer",
+            code.contains("setLayerType(View.LAYER_TYPE_HARDWARE, null)")
         )
         assertFalse(
-            "a platform animator is a second clock the dialog can neither cancel nor read",
+            "alpha animation on the native video surface can bring back the black-picture bug",
+            code.contains("player.alpha =") ||
+                (code.contains("snapshotFlow {") && code.contains("presence()"))
+        )
+        assertFalse(
+            "a platform animator is a second clock the dialog cannot cancel or read",
             code.contains(".animate().alpha(")
         )
-        // A spring stops inside its visibility threshold, not on its target: the
-        // reveal rested at 0.99, and since the player's alpha is that value the
-        // trailer was never drawn as an opaque view - it sat in a compositing layer
-        // for its whole life and played audio with no picture. Both drivers have to
-        // land, so the picture settles on exactly 1.
         assertTrue(
-            "the reveal must snap to 1 instead of resting inside the spring's threshold",
-            code.contains("reveal.snapTo(1f)")
-        )
-        assertTrue(
-            "the window, and the player alpha that follows it, must snap to 1 too",
+            "the dialog entrance must still settle exactly at 1",
             code.contains("entrance.snapTo(1f)")
         )
-        // `if (ringAlpha > 0f)` read as "while it is still visible" and was true
-        // forever: a spring rests inside its threshold, so the ring never left and
-        // kept its infinite spin running behind a player that had finished. The
-        // fade still runs to the end; a state change is what removes it.
         assertTrue(
-            "the ring must fade into the player instead of vanishing a frame early",
-            code.contains("ringAlpha.animateTo(0f") && code.contains("if (!ringGone)")
+            "the loading ring stays mounted only while the WebView is hidden",
+            code.contains("if (!loaded)") && code.contains("NovaWavyRing(")
         )
         assertTrue(
             "the platform's own dim is the hard cut this dialog must not draw",
