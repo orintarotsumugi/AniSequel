@@ -72,6 +72,22 @@ class NovaTrailerViewerTest {
     }
 
     @Test
+    fun `native trailer controls stay disabled until the player is ready`() {
+        val source = File(root, PLAYER).readText()
+
+        // All three controls use the same actual onReady gate. The pause glyph is
+        // driven by onStateChange rather than assuming that a tap succeeded.
+        assertEquals(3, Regex("enabled = playerReady").findAll(source).count())
+        assertTrue(source.contains("onPlayerReady = { playerReady = true }"))
+        assertTrue(source.contains("onPlaybackStateChanged = { playbackState = it }"))
+        assertTrue(
+            source.contains(
+                "imageVector = if (playbackState == 1) AppVectorIcons.Pause else AppVectorIcons.Play"
+            )
+        )
+    }
+
+    @Test
     fun `an id outside YouTube's alphabet produces no frame`() {
         // `"` would close the src attribute, `<` would open an element.
         val html = novaTrailerEmbedHtml("""x" onload="alert(1)""")
