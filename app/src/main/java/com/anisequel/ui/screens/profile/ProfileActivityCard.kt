@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.anisequel.data.model.ProfileActivity
 import com.anisequel.data.model.MediaNode
+import com.anisequel.data.model.displayName
 import com.anisequel.ui.components.AppVectorIcons
 import com.anisequel.ui.components.MarqueeText
 import com.anisequel.ui.components.EngagementAction
@@ -110,7 +111,9 @@ fun ActivityCard(
      * [rememberNotificationGlow] for why the target wears a ring and why it is
      * drawn rather than blurred.
      */
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    /** Called when the reader touches the glowing row; see [DismissGlowOnTouch]. */
+    onGlowTouched: () -> Unit = {}
 ) {
     when {
         activity.media != null -> ActivityListCard(
@@ -126,7 +129,8 @@ fun ActivityCard(
             nowEpochSecond = nowEpochSecond,
             onOpenAuthor = onOpenAuthor,
             onMessageAuthor = onMessageAuthor,
-            highlighted = highlighted
+            highlighted = highlighted,
+            onGlowTouched = onGlowTouched
         )
         activity.isTextPost -> ActivityTextCard(
             activity = activity,
@@ -140,7 +144,8 @@ fun ActivityCard(
             nowEpochSecond = nowEpochSecond,
             onOpenAuthor = onOpenAuthor,
             onMessageAuthor = onMessageAuthor,
-            highlighted = highlighted
+            highlighted = highlighted,
+            onGlowTouched = onGlowTouched
         )
     }
 }
@@ -169,7 +174,9 @@ private fun ActivityListCard(
     /** Opens the conversation with the author; null where there is no one to message. */
     onMessageAuthor: (() -> Unit)? = null,
     /** See [ActivityCard.highlighted]. */
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    /** See [ActivityCard.onGlowTouched]. */
+    onGlowTouched: () -> Unit = {}
 ) {
     // Read before the early return below rather than after it: the card has nothing
     // to draw without a media node, and a `Local` read that only happens on some
@@ -188,6 +195,12 @@ private fun ActivityListCard(
     // discriminator the whole feed depends on, so a case difference must not be
     // what decides whether a manga row reads "Episode" or "Chapter".
     val isManga = media.type.equals("MANGA", ignoreCase = true)
+    // One label for the marquee and for the click label. `title?.displayTitle`
+    // already avoids a blank name, but the whole title object can be absent - a
+    // row AniList could not resolve - and `.orEmpty()` turned that into an empty
+    // title line and a talkback label reading "Open  details", with two spaces
+    // where the name belongs. [displayName] is this app's fallback for the node.
+    val titleLabel = media.displayName
 
     // Shared with [bouncyPress] rather than kept to itself: the `clickable`
     // cancels its press as soon as the gesture becomes a scroll, so dragging the
@@ -195,6 +208,13 @@ private fun ActivityListCard(
     // animation costs one pointer-input node instead of two on every row.
     val interactionSource = remember { MutableInteractionSource() }
     val glow = rememberNotificationGlow(highlighted)
+    // The ring stays until the reader acts on it, so the gesture that ends it is
+    // the one the card already listens for: a press on this row.
+    DismissGlowOnTouch(
+        highlighted = highlighted,
+        interactionSource = interactionSource,
+        onDismiss = onGlowTouched
+    )
 
     Card(
         modifier = modifier
@@ -209,7 +229,7 @@ private fun ActivityListCard(
             )
             .clickable(
                 interactionSource = interactionSource,
-                onClickLabel = "Open ${media.title?.displayTitle.orEmpty()} details",
+                onClickLabel = "Open $titleLabel details",
                 onClick = { onOpenDetail(media) }
             )
             .testTag("activity_card"),
@@ -376,7 +396,7 @@ private fun ActivityListDetails(
         // Scrolls rather than wrapping: the feed is already dense, and the second
         // line a long title took pushed the controls down a row on every other card.
         MarqueeText(
-            text = media.title?.displayTitle.orEmpty(),
+            text = titleLabel,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,

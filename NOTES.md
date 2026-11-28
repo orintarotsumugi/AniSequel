@@ -4494,6 +4494,29 @@ same work instead of stacking a second request, and WorkManager's own persistenc
 is what survives a reboot - there is no `BOOT_COMPLETED` receiver and therefore no
 second source of truth about whether the feature is on.
 
+### A check never cancels its own schedule
+
+Cancelling the unique request is the app's own decision: signing out, switching
+account and turning the switch off in Settings. The worker does not do it on the
+reader's behalf, and two runs that used to are why alerts could go quiet with
+nothing to point at.
+
+The first was a run that could not read a session. `getAccessToken()` returning
+blank is indistinguishable from the worker's side between a reader who signed out
+and a device that could not produce the token yet - the app woken for a job
+before the first unlock, a keystore still opening - so a blank read cancelled the
+periodic request and every later check was gone until the app was next opened.
+It skips that turn and leaves the schedule alone now; a genuinely signed-out
+account is already cancelled by the screen that signed it out.
+
+The second was the give-up guard. `runAttemptCount >= MAX_ATTEMPTS` returned
+`Result.success()` *before* the check ran, which is not "stopped retrying", it is
+"this period posts nothing and reports nothing" - the exact shape of an account
+with no new activity. The limit is applied to the retry now: the last attempt ends
+the run as a failure, and because periodic work is only ever cancelled and never
+finished, the next period is scheduled as usual. "Gave up for this period" is
+then a fact the system records instead of one this app keeps to itself.
+
 Signing out, switching account and turning the switch off all call
 `NotificationAlertsScheduler.cancel`. Cancelling scheduled work is not deleting
 data: the per-account cursor stays, so turning alerts back on resumes from the
@@ -4532,9 +4555,21 @@ Tapping an activity alert opens the profile's Activity tab through the real feed
 and scrolls to the activity it names. Landing is not the same as arriving: on a
 feed of near-identical cards the reader could not tell which row the alert was
 about, so the tap read as "the app opened somewhere in the list". The focused row
-draws a ring for about two seconds after the scroll lands - two strokes of the
-card's own outline, the wide one outside the bounds - and the mark is cleared
-afterwards so it does not compete with every later like or refresh.
+draws a ring until the reader touches it - two strokes of the card's own outline,
+the wide one outside the bounds - and the touch that opens the post is the touch
+that ends the mark.
+
+The ring began as a pulse: full strength on arrival, then a spring back to nothing
+over a couple of seconds. That is a self-dismissing highlight on the one screen
+where nothing else marks a row, and it was ending while the feed was still
+scrolling to the post - the reader looked up from the alert and the answer was
+already gone. It cannot be on a timer for the same reason a toast cannot: the only
+honest signal that the reader has found the row is that they touched it, so
+`DismissGlowOnTouch` watches the card's own interaction source for the first
+`PressInteraction` and the tab clears the mark then. A scroll does not end it
+(the `clickable` cancels the press when the gesture becomes a drag, and the flow
+never sees one), so a reader scrolling past a row they did not mean to touch keeps
+the mark.
 
 The ring is drawn in the draw phase (`Modifier.drawWithContent`) and not blurred.
 A blur is the obvious way to make a glow and the expensive one: it is a render

@@ -71,6 +71,7 @@ import com.anisequel.ui.components.expressive.ExpressiveShapes
 import com.anisequel.ui.components.expressive.ExpressiveStateChip
 import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberShimmerPhase
+import com.anisequel.ui.screens.profile.rememberNowEpochSecond
 import com.anisequel.ui.viewmodel.NotificationUiState
 import com.anisequel.ui.viewmodel.NotificationViewModel
 import java.time.Instant
@@ -103,9 +104,18 @@ fun NotificationCenterScreen(
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     // One clock for the whole visible page. Calling Instant.now() inside every
     // timestamp is the same value 40 times and a recomposition hazard besides.
-    // Keying on the list and the refresh flag, not its size, also refreshes
-    // the clock when a pull returns the same page it already showed.
-    val now = remember(state.items, state.refreshing) { Instant.now() }
+    //
+    // It has to keep ticking. This was
+    // `remember(state.items, state.refreshing) { Instant.now() }`, which froze the
+    // clock at the moment the page arrived: the inbox left open while the reader
+    // read a thread kept saying "2m ago" about every row an hour later, and a
+    // pull whose reply carried the same ids as the page on screen (a refresh with
+    // nothing new, which is the common case) never moved it at all. A relative
+    // label that is confidently wrong is worse than a coarse one. The shared
+    // minute ticker is what the profile's feeds already use for the same labels,
+    // and a minute is the smallest unit any of them prints.
+    val nowEpochSecond = rememberNowEpochSecond()
+    val now = remember(nowEpochSecond) { Instant.ofEpochSecond(nowEpochSecond) }
     val slices = remember(state.groups, now) {
         buildNotificationSections(state.groups, now)
     }

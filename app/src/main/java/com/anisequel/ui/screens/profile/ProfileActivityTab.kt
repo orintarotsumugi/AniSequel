@@ -54,7 +54,6 @@ import com.anisequel.ui.components.expressive.bouncyPress
 import com.anisequel.ui.components.rememberShimmerPhase
 import com.anisequel.ui.theme.AniSequelTheme
 import com.anisequel.ui.viewmodel.UserActivityViewModel
-import kotlinx.coroutines.delay
 
 /**
  * Everything that differs between the two feeds the Activity tab can show.
@@ -207,18 +206,19 @@ fun ProfileActivityTab(
     // error: the retry below re-reads page one, where the footer's retry appends.
     val refreshError = (source.state as? UserActivityViewModel.ActivityState.Success)?.refreshError
 
-    // The row the notification opened. Set when the scroll lands, cleared once the
-    // ring has faded: the mark is about the arrival, not about the post being special
-    // for as long as the screen is open, and a ring left on would fight every later
-    // like and refresh for attention.
+    // The row the notification opened. Set when the scroll lands, cleared when the
+    // reader touches that card and not before.
+    //
+    // It was cleared on a 2.6-second timer, which made the ring a pulse: it started
+    // fading the moment it arrived, so a scroll that landed slowly - or a reader who
+    // looked at the feed first and the ring second - saw either a faint edge or
+    // nothing, and the answer to "which post was this alert about?" was gone before
+    // the question was asked. A mark that outlives the arrival can only end on the
+    // reader's own signal, and the card's press is that signal.
+    //
+    // Saveable, and keyed on the request, because rotating the phone must not lose a
+    // mark the reader has not dismissed yet.
     val glowActivityId = rememberSaveable(focusActivityId) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(glowActivityId.value) {
-        val target = glowActivityId.value ?: return@LaunchedEffect
-        delay(ACTIVITY_GLOW_MILLIS)
-        // A second tap can land while this wait is running; only clear the mark
-        // this effect was started for.
-        if (glowActivityId.value == target) glowActivityId.value = null
-    }
 
     FocusActivityEffect(
         focusActivityId = focusActivityId,
@@ -308,7 +308,10 @@ fun ProfileActivityTab(
             nowEpochSecond = nowEpochSecond,
             viewerId = viewerId,
             onOpenDetail = onOpenDetail,
-            highlightedActivityId = glowActivityId.value
+            highlightedActivityId = glowActivityId.value,
+            // Keyed on the row: a stale press from a card that is no longer the
+            // target must not take the ring off the row that is.
+            onGlowTouched = { id -> if (glowActivityId.value == id) glowActivityId.value = null }
         )
     }
 
@@ -447,7 +450,8 @@ private fun LazyListScope.activityFeedItems(
     nowEpochSecond: Long,
     viewerId: Int?,
     onOpenDetail: (MediaNode) -> Unit,
-    highlightedActivityId: Int?
+    highlightedActivityId: Int?,
+    onGlowTouched: (Int) -> Unit
 ) {
     when (val activityState = source.state) {
         is UserActivityViewModel.ActivityState.Idle,
@@ -529,7 +533,8 @@ private fun LazyListScope.activityFeedItems(
                         } else {
                             null
                         },
-                        highlighted = activity.id == highlightedActivityId
+                        highlighted = activity.id == highlightedActivityId,
+                        onGlowTouched = { onGlowTouched(activity.id) }
                     )
                 }
 
@@ -567,14 +572,6 @@ private fun LazyListScope.activityFeedItems(
 }
 
 private const val PAGE_TRIGGER_ROWS = 6
-
-/**
- * How long the focused card keeps its glow before the mark is cleared.
- *
- * Long enough for the spring to fade out on its own (about two seconds), plus a
- * beat, so clearing the mark is not what ends the animation.
- */
-private const val ACTIVITY_GLOW_MILLIS = 2_600L
 
 /**
  * The feed's first page, sketched as the cards that are coming.

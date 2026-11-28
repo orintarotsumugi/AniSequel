@@ -2,6 +2,8 @@ package com.anisequel.ui.screens.profile
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.foundation.interaction.InteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -15,6 +17,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import com.anisequel.ui.components.expressive.ExpressiveMotion
+import kotlinx.coroutines.flow.first
 
 /**
  * The ring that answers "which post was the alert about?".
@@ -24,8 +27,16 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  * scroll lands the post under the reader's eye, but nothing there is different from
  * the row above it, so the arrival reads as "the app opened at some activity" rather
  * than as "this one". The glow is the difference - a ring that arrives at full
- * strength and settles out over a couple of seconds, drawn over the card rather than
- * replacing any of its own colour.
+ * strength and then stays, drawn over the card rather than replacing any of its own
+ * colour, until the reader touches the card it marks.
+ *
+ * It used to fade itself out on a timer the moment it arrived, and that was wrong
+ * for the reason every self-dismissing highlight is wrong on a feed: the reader is
+ * looking at a scrolled list, not at the alert they tapped a second ago, and a ring
+ * that is already leaving when the scroll lands is indistinguishable from a rendering
+ * artifact. Nothing else in the app marks one row out of dozens, so the mark has to
+ * outlast the arrival - and it ends on the only signal that means the reader has
+ * found it, a touch on that card ([DismissGlowOnTouch]).
  *
  * It is deliberately not a `Modifier.blur`, which is the obvious way to make a glow
  * and the expensive one: a blurred layer on a long feed is a render pass per row, and
@@ -34,23 +45,45 @@ import com.anisequel.ui.components.expressive.ExpressiveMotion
  * without a mask, and they are drawn in the draw phase, so the fade costs no
  * recomposition and no layout.
  *
- * The value starts at rest for a row that is not the target, which is every row but
+ * The value stays at zero for a row that is not the target, which is every row but
  * one, so the common path allocates an [Animatable] that never runs.
  */
 @Composable
 internal fun rememberNotificationGlow(highlighted: Boolean): Animatable<Float, AnimationVector1D> {
     val glow = remember { Animatable(0f) }
     LaunchedEffect(highlighted) {
-        if (!highlighted) {
-            glow.snapTo(0f)
-            return@LaunchedEffect
-        }
-        glow.snapTo(1f)
-        // A settle, not a bounce: light fading out does not overshoot, and this
-        // token is already the app's "arrives and stays" spring.
-        glow.animateTo(0f, ExpressiveMotion.SettleSpatial)
+        val target = if (highlighted) 1f else 0f
+        // Every other row sitting at rest would otherwise start a coroutine per
+        // recomposition to animate zero to zero.
+        if (glow.value == target) return@LaunchedEffect
+        // The effects token in both directions: this value only ever becomes an
+        // opacity, and the spatial tokens are authored for distance. It also does
+        // not overshoot, which matters because a strength below zero is not "a
+        // fainter ring" to the draw code - it is the early return above.
+        glow.animateTo(target, ExpressiveMotion.FastEffects)
     }
     return glow
+}
+
+/**
+ * Ends the mark the first time the reader touches the card that wears it.
+ *
+ * The press comes from the card's own `clickable` interaction source rather than a
+ * second `pointerInput`: the source already reports a press on pointer-down and
+ * cancels it when the gesture becomes a scroll, so a drag across the glow does not
+ * take the mark away from a reader who was only scrolling past it.
+ */
+@Composable
+internal fun DismissGlowOnTouch(
+    highlighted: Boolean,
+    interactionSource: InteractionSource,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(highlighted, interactionSource) {
+        if (!highlighted) return@LaunchedEffect
+        interactionSource.interactions.first { it is PressInteraction.Press }
+        onDismiss()
+    }
 }
 
 /**

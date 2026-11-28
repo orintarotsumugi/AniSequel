@@ -26,6 +26,13 @@ import kotlinx.coroutines.sync.withLock
  * post, tray ids are derived from group keys, and [runLock] keeps a manual
  * check from racing the periodic one inside this process. A retry therefore
  * continues from the same cursor instead of replaying history.
+ *
+ * The schedule belongs to the app, not to a run of this worker. Only the app's own
+ * state changes - signing out, switching account, alerts switched off - cancel the
+ * unique request. A run that cannot verify the session skips its turn, and one
+ * whose retries are spent fails instead of succeeding quietly; both used to cancel
+ * or short-circuit the check in ways that stopped the alerts for good with nothing
+ * on screen to say why.
  */
 class NotificationCheckWorker(
     appContext: Context,
@@ -43,8 +50,17 @@ class NotificationCheckWorker(
 
         val authRepository = application.authRepository
         if (authRepository.getAccessToken().isNullOrBlank()) {
+            // Deliberately no cancel here. This run cannot tell a reader who
+            // signed out from one whose token the device could not read at this
+            // moment - the app woken for a scheduled job, a keystore still
+            // opening, a DataStore read that failed. Cancelling the unique
+            // request on that guess removed every future check, so the alerts
+            // stopped arriving with the schedule gone and nothing on screen to
+            // say why. Signing out is the app's own signal and
+            // NotificationAlertSchedulingEffect cancels there; this worker only
+            // skips its turn, on the same reasoning as the permission branch
+            // below.
             Log.d(TAG, "skip: no stored session")
-            NotificationAlertsScheduler.cancel(applicationContext)
             return Result.success()
         }
 
@@ -62,13 +78,6 @@ class NotificationCheckWorker(
             // permission later should not throw them away. Re-enabling is also
             // what triggers the immediate catch-up check in Settings.
             Log.d(TAG, "skip: Android permission or channel is off")
-            return Result.success()
-        }
-
-        if (runAttemptCount >= MAX_ATTEMPTS) {
-            // WorkManager's backoff would otherwise keep a broken session
-            // retrying forever. The next period starts with a fresh count.
-            Log.d(TAG, "giving up after $runAttemptCount attempts")
             return Result.success()
         }
 
@@ -104,14 +113,7 @@ class NotificationCheckWorker(
         Log.d(TAG, "check account=$accountId outcome=$outcome")
 
         return when (outcome) {
-            is NotificationCheckOutcome.Failed -> if (outcome.retryable) {
-                Result.retry()
-            } else {
-                // A dead session cannot be fixed by retrying; the app will show
-                // its own sign-in notice when it is next opened.
-                NotificationAlertsScheduler.cancel(applicationContext)
-                Result.success()
-            }
+            is NotificationCheckOutcome.Failed -> retryOrGiveUp(outcome.retryable)
 
             else -> Result.success()
         }
@@ -125,8 +127,33 @@ class NotificationCheckWorker(
                 Result.success()
             }
 
-            else -> Result.retry()
+            else -> retryOrGiveUp(retryable = true)
         }
+    }
+
+    /**
+     * Retries a temporary failure, and stops retrying once [MAX_ATTEMPTS] are spent.
+     *
+     * This used to be a guard at the top of [check] that returned success once the
+     * count was reached, so a period whose retries ran out did not fail - it skipped
+     * the check itself, posted nothing and recorded nothing. A background check that
+     * silently stops checking is indistinguishable from an AniList account with no
+     * new activity. For a periodic worker [Result.failure] ends this run and the next
+     * period is scheduled anyway (periodic work is only ever cancelled, never
+     * finished), and for the manual one-shot it ends the retry chain the reader
+     * asked for.
+     */
+    private fun retryOrGiveUp(retryable: Boolean): Result = when {
+        !retryable -> {
+            // A dead session cannot be fixed by retrying; the app will show its
+            // own sign-in notice when it is next opened.
+            NotificationAlertsScheduler.cancel(applicationContext)
+            Result.success()
+        }
+
+        runAttemptCount + 1 >= MAX_ATTEMPTS -> Result.failure()
+
+        else -> Result.retry()
     }
 
     private companion object {
